@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 import httpx
 from datacloud_data_sdk.context import get_current_context
@@ -10,6 +11,16 @@ from datacloud_data_sdk.file_storage import LocalResultFileStorage, ResultFileSt
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_skill_workspace_dir() -> str:
+    """从 InvocationContext.extras 取 skill_workspace_dir；非 skill 请求返回空字符串。"""
+    try:
+        ctx = get_current_context()
+        extras = getattr(ctx, "extras", None) or {}
+        return str(extras.get("skill_workspace_dir") or "").strip()
+    except DatacloudError:
+        return ""
 
 
 def _resolve_workspace_dir() -> str:
@@ -60,6 +71,31 @@ async def read_file(
     不传 ``begin_line`` 和 ``end_line`` 则返回文件全部内容。
     """
     logger.info("read_file called: path=%r begin_line=%d end_line=%d", path, begin_line, end_line)
+
+    # skill 路径分支：直接读本地磁盘
+    skill_workspace_dir = _resolve_skill_workspace_dir()
+    if skill_workspace_dir:
+        skill_dir = Path(skill_workspace_dir).resolve()  # noqa: ASYNC240
+        target = Path(path) if Path(path).is_absolute() else (skill_dir / path)  # noqa: ASYNC240
+        try:
+            target = target.resolve()
+            target.relative_to(skill_dir)  # 路径安全校验：必须在 skill_workspace_dir 内
+        except ValueError:
+            return f"错误：路径 {path} 超出 skill 工作目录范围"
+        if not target.exists():
+            return f"错误：文件不存在 {path}"
+        try:
+            content = target.read_text(encoding="utf-8")
+            if begin_line <= 0 and end_line < 0:
+                return content
+            lines = content.splitlines()
+            start = max(begin_line, 0)
+            stop = len(lines) if end_line < 0 else min(end_line, len(lines))
+            return "\n".join(lines[start:stop])
+        except OSError as exc:
+            return f"错误：读取失败 {exc}"
+
+    # 原有逻辑（不变）
     storage = _resolve_storage()
     try:
         content = storage.read_text(path, begin_line=begin_line, end_line=end_line)

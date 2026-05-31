@@ -297,6 +297,44 @@ def _validate_fields_format(fields: list[dict[str, Any]]) -> list[str]:
 
 # ── OntologyBuildSession ──────────────────────────────────────────────────────
 
+_OBJ_FIELDS_CACHE_TTL = 86400 * 30  # 30 天
+
+
+def _obj_fields_cache_key(prefix: str, object_code: str) -> str:
+    return f"{prefix}_obj_fields_{object_code}"
+
+
+def _cache_obj_fields(
+    store: object, prefix: str, object_code: str, fields: list[dict[str, Any]]
+) -> None:
+    """缓存对象字段定义，供视图收集时自动展开。"""
+    store.save(_obj_fields_cache_key(prefix, object_code), {"fields": fields}, ttl=_OBJ_FIELDS_CACHE_TTL)
+
+
+def _load_obj_fields_from_cache(
+    store: object, prefix: str, object_codes: list[str]
+) -> list[dict[str, Any]]:
+    """从缓存中加载指定对象的所有字段定义，去重并标注来源对象。"""
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for obj_code in object_codes:
+        cached = store.load(_obj_fields_cache_key(prefix, obj_code))
+        for f in cached.get("fields", []):
+            code = f.get("property_code", "")
+            if not code:
+                continue
+            if code in seen:
+                continue
+            seen.add(code)
+            result.append({
+                "property_code": code,
+                "property_name": f.get("property_name", code),
+                "data_type": f.get("data_type", "STRING"),
+                "ext_property": f.get("ext_property", {}),
+                "_source_object_code": obj_code,
+            })
+    return result
+
 
 class OntologyBuildSession:
     """以 session_id + entity_code / view_code 为唯一键，管理本体构建的暂存状态。
@@ -382,10 +420,14 @@ class OntologyBuildSession:
         view_desc: str = "",
         object_codes: list[str] | None = None,
         object_relations: list[dict[str, Any]] | None = None,
+        fields: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """收集本体视图信息，合并到暂存状态，返回当前完整状态。
 
         view_code 会自动拼上工号和随机后缀，保证全局唯一。
+        object_codes 传入后自动从对象字段缓存加载字段定义；
+        fields 可用于追加计算属性或覆盖自动加载的字段（按 property_code 合并，
+        传入的同名覆盖，不重复的自动保留）。
         """
         user_code = os.environ.get("USER_CODE", "")
 
@@ -409,6 +451,11 @@ class OntologyBuildSession:
             state["view_desc"] = view_desc
         if object_codes:
             state["object_codes"] = object_codes
+            # 从对象字段缓存自动加载（首次 collect 时）
+            if not state.get("fields"):
+                auto_fields = _load_obj_fields_from_cache(store, prefix, object_codes)
+                if auto_fields:
+                    state["fields"] = auto_fields
 
         if object_relations:
 
@@ -427,6 +474,18 @@ class OntologyBuildSession:
                 existing_rels[_rel_key(rel)] = {**existing_rels.get(_rel_key(rel), {}), **rel}
             state["object_relations"] = list(existing_rels.values())
 
+        # 用户传入的 fields 覆盖/追加（同名覆盖，新字段追加）
+        if fields:
+            existing: dict[str, dict[str, Any]] = {
+                f["property_code"]: f for f in state.get("fields", [])
+            }
+            for field in fields:
+                existing[field["property_code"]] = {
+                    **existing.get(field["property_code"], {}),
+                    **field,
+                }
+            state["fields"] = list(existing.values())
+
         store.save(key, state, ttl=3600)
 
         missing: list[str] = []
@@ -434,6 +493,8 @@ class OntologyBuildSession:
             missing.append("view_name")
         if not state.get("object_relations"):
             missing.append("object_relations")
+        if not state.get("object_codes"):
+            missing.append("object_codes")
 
         return {**state, "missing": missing}
 
@@ -559,6 +620,9 @@ class OntologyBuildSession:
             logger.warning("术语入库失败（OWL 已上传）: %s", terms_result.get("error"))
 
         store.delete(key)
+        # 缓存对象字段定义（供视图自动展开使用，TTL=30天）
+        _cache_obj_fields(store, prefix, actual_entity_code, state.get("fields", []))
+
         resource_id = upload_result.get("resourceId") or upload_result.get("resource_id", "")
         return {
             "ok": True,
@@ -594,6 +658,8 @@ class OntologyBuildSession:
             missing.append("view_name")
         if not state.get("object_relations"):
             missing.append("object_relations")
+        if not state.get("object_codes"):
+            missing.append("object_codes")
         if missing:
             return {"ok": False, "missing": missing}
 

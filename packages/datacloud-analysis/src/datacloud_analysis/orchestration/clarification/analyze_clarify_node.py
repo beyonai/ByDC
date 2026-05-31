@@ -42,6 +42,7 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
                 "tool_name": tool_name,
                 "structured_input": structured_input,
                 "operation_form": operation_form,
+                "operation_form_contexts": list(ctx.get("operation_form_contexts") or []),
                 "operation_confirm_context": dict(ctx.get("operation_confirm_context") or {}),
                 "react_round_idx": ctx.get("react_round_idx"),
             },

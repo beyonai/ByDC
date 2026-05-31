@@ -609,6 +609,9 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
     object_codes: list[str] = state.get("object_codes", [])
     raw_relations: list[dict[str, Any]] = state.get("object_relations", [])
 
+    if not object_codes:
+        raise ValueError(f"视图 {view_code} 生成失败：object_codes 不能为空，请确保 collect 时传入 object_codes")
+
     object_relations: list[ObjectRelation] = []
     for i, rel in enumerate(raw_relations):
         src = rel.get("source_object_code", "")
@@ -654,6 +657,7 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
                         field_role = FieldRole(
                             property_role=ext["property_role"],
                             rule_type=ext.get("rule_type", "description"),
+                            formula=ext.get("formula", ""),
                         )
                     break
             field_mappings.append(
@@ -665,6 +669,35 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
                     role=field_role,
                 )
             )
+
+    # 展开 state["fields"] 中有来源标注的非关联键字段（auto_expand 或手动传入的）
+    for f in state.get("fields", []):
+        code = f.get("property_code", "")
+        if not code:
+            continue
+        source_obj = f.get("_source_object_code", "")
+        # 有来源的用 (source_obj, code) 去重，无来源的（计算字段）用 code 本身去重
+        key: tuple[str, ...] = (source_obj, code) if source_obj else (f"__computed__{code}",)
+        if key in seen_fields:
+            continue
+        seen_fields.add(key)
+        ext = (f.get("ext_property") or {}).get("property_role_rule", {})
+        field_role = default_role
+        if ext.get("property_role"):
+            field_role = FieldRole(
+                property_role=ext["property_role"],
+                rule_type=ext.get("rule_type", "description"),
+                formula=ext.get("formula", ""),
+            )
+        field_mappings.append(
+            ViewFieldMapping(
+                property_code=code,
+                property_name=f.get("property_name", code),
+                source_object_code=source_obj,
+                source_object_column_code=code if source_obj else "",
+                role=field_role,
+            )
+        )
 
     view = ViewConfig(
         view_code=view_code,

@@ -53,6 +53,7 @@ class HookContext(TypedDict, total=False):
     checkpoint_ns: str | None
     todo_id: str | None
     react_step_id: str | None
+    tool_call_id: str | None
     tool_name: str
     tool_params: dict[str, Any]
     user_query: str

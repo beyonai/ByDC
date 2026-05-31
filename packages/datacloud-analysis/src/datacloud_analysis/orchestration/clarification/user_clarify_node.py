@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+from types import SimpleNamespace
 from typing import Any
 
 from datacloud_knowledge.provider import finalize_query_clarification
@@ -106,16 +107,105 @@ def _operation_form_from_context(
     return dict(form) if isinstance(form, dict) else {}
 
 
+def _operation_contexts_from_state(
+    ctx: dict[str, Any],
+    analyze_result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    contexts = ctx.get("operation_form_contexts") or analyze_result.get("operation_form_contexts")
+    if isinstance(contexts, list):
+        return [dict(item) for item in contexts if isinstance(item, dict)]
+    return []
+
+
+def _normalize_operation_form(
+    operation_form: dict[str, Any],
+    *,
+    tool_name: str,
+    tool_call_id: str,
+) -> dict[str, Any]:
+    """Normalize legacy single-action form into the batch actions[] protocol."""
+    actions_raw = operation_form.get("actions")
+    if isinstance(actions_raw, list):
+        actions = [dict(item) for item in actions_raw if isinstance(item, dict)]
+        return {
+            **operation_form,
+            "actions": [_normalize_operation_action_for_frontend(action) for action in actions],
+        }
+
+    action = {
+        "toolCallId": tool_call_id,
+        "toolName": tool_name,
+        "actionCode": str(operation_form.get("actionCode") or tool_name),
+        "actionName": str(
+            operation_form.get("actionName") or operation_form.get("actionCode") or tool_name
+        ),
+        "title": str(operation_form.get("title") or ""),
+        "description": str(operation_form.get("description") or ""),
+        "rule": list(operation_form.get("rule") or []),
+    }
+    return {
+        "schemaVersion": str(operation_form.get("schemaVersion") or "1.0"),
+        "formId": str(operation_form.get("formId") or ""),
+        "title": str(operation_form.get("title") or ""),
+        "description": str(operation_form.get("description") or ""),
+        "actions": [action],
+    }
+
+
 def _normalize_operation_resume(
     resume_value: Any,
     operation_form: dict[str, Any],
 ) -> dict[str, Any]:
+    """Normalize frontend resume payload.
+
+    New clients return the whole batch form with actions[].confirmed and edited fieldValue values.
+    Legacy clients may return top-level confirmed/rule for a single pending action.
+    """
     payload = dict(resume_value) if isinstance(resume_value, dict) else {}
-    if "formId" not in payload and operation_form.get("formId"):
-        payload["formId"] = operation_form.get("formId")
-    if "rule" not in payload and isinstance(operation_form.get("rule"), list):
-        payload["rule"] = operation_form.get("rule")
-    return payload
+    actions = payload.get("actions")
+    if isinstance(actions, list):
+        return {
+            **operation_form,
+            **payload,
+            "actions": [dict(a) for a in actions if isinstance(a, dict)],
+        }
+
+    pending_actions = list(operation_form.get("actions") or [])
+    if len(pending_actions) == 1 and isinstance(pending_actions[0], dict):
+        action = dict(pending_actions[0])
+        action["confirmed"] = bool(payload.get("confirmed"))
+        if payload.get("reason"):
+            action["reason"] = str(payload.get("reason") or "")
+        if isinstance(payload.get("rule"), list):
+            action["rule"] = payload["rule"]
+        return {**operation_form, "actions": [action]}
+
+    return {**operation_form, "actions": []}
+
+
+def _same_operation_form(existing: dict[str, Any] | None, operation_form: dict[str, Any]) -> bool:
+    return (
+        isinstance(existing, dict)
+        and str(existing.get("interrupt_type") or "") == _OPERATION_FORM_INTERRUPT_TYPE
+        and str(existing.get("formId") or "") == str(operation_form.get("formId") or "")
+    )
+
+
+def _operation_action_tool_call_id(action: dict[str, Any]) -> str:
+    return str(action.get("tool_call_id") or action.get("toolCallId") or "")
+
+
+def _operation_action_tool_name(action: dict[str, Any]) -> str:
+    return str(action.get("tool_name") or action.get("toolName") or "")
+
+
+def _normalize_operation_action_for_frontend(action: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(action)
+    normalized["toolCallId"] = _operation_action_tool_call_id(normalized)
+    normalized["toolName"] = _operation_action_tool_name(normalized)
+    normalized.pop("tool_call_id", None)
+    normalized.pop("tool_name", None)
+    return normalized
 
 
 def _find_operation_action(config: RunnableConfig, tool_name: str) -> Any | None:
@@ -131,6 +221,29 @@ def _find_operation_action(config: RunnableConfig, tool_name: str) -> Any | None
     return find_operation_action(loader, tool_name)
 
 
+def _operation_action_meta_from_context(context: dict[str, Any]) -> Any | None:
+    confirm_context = context.get("operation_confirm_context")
+    if not isinstance(confirm_context, dict):
+        return None
+    action_family = str(confirm_context.get("actionFamily") or "").strip().lower()
+    if action_family == "insert":
+        return SimpleNamespace(action_family=action_family)
+    structured_input = context.get("structured_input")
+    if (
+        action_family == "write"
+        and isinstance(structured_input, dict)
+        and isinstance(structured_input.get("records"), list)
+    ):
+        return SimpleNamespace(action_family=action_family)
+    if action_family:
+        logger.debug(
+            "[user_clarify] skip thin action meta fallback for non-record operation family=%s",
+            action_family,
+        )
+        return None
+    return None
+
+
 async def _handle_operation_form_clarify(
     *,
     ctx: dict[str, Any],
@@ -138,11 +251,23 @@ async def _handle_operation_form_clarify(
     tool_name: str,
     config: RunnableConfig,
 ) -> dict[str, Any]:
-    operation_form = _operation_form_from_context(ctx, analyze_result)
+    raw_form = _operation_form_from_context(ctx, analyze_result)
+    operation_form = _normalize_operation_form(
+        raw_form,
+        tool_name=tool_name,
+        tool_call_id=str(ctx.get("tool_call_id") or analyze_result.get("tool_call_id") or ""),
+    )
+    operation_contexts = _operation_contexts_from_state(ctx, analyze_result)
+    context_by_id = {
+        str(item.get("tool_call_id") or ""): item
+        for item in operation_contexts
+        if str(item.get("tool_call_id") or "")
+    }
     logger.info(
-        "[user_clarify] operation_form suspend tool=%s form_id=%s",
+        "[user_clarify] operation_form suspend tool=%s form_id=%s actions=%d",
         tool_name,
         operation_form.get("formId"),
+        len(operation_form.get("actions") or []),
     )
     resume_value = interrupt(
         {
@@ -153,54 +278,99 @@ async def _handle_operation_form_clarify(
         }
     )
     payload = _normalize_operation_resume(resume_value, operation_form)
-    confirmed = bool(payload.get("confirmed"))
     form_id = str(payload.get("formId") or operation_form.get("formId") or "")
-    if not confirmed:
-        reason = str(payload.get("reason") or "用户取消操作")
-        logger.info(
-            "[user_clarify] operation_form cancelled tool=%s form_id=%s reason=%s",
-            tool_name,
-            form_id,
-            reason,
-        )
-        return {
-            "clarification_formatted_params": {
-                "tool_name": tool_name,
-                "interrupt_type": _OPERATION_FORM_INTERRUPT_TYPE,
-                "formId": form_id,
-                "confirmed": False,
-                "reason": reason,
-                "rule": payload.get("rule") or operation_form.get("rule") or [],
-                "params": {},
-            },
-            "clarify_abort": True,
-            "execution_status": "cancelled",
-            "final_answer": "已取消本次操作。",
-        }
-
-    rule = payload.get("rule") or operation_form.get("rule") or []
-    action = _find_operation_action(config, tool_name)
-    params = restore_action_params(
-        list(rule) if isinstance(rule, list) else [],
-        action=action,
-        original_params=dict(
-            analyze_result.get("structured_input") or ctx.get("structured_input") or {}
-        ),
-    )
-    params["userConfirmed"] = True
-    params["_operationConfirm"] = {
-        "formId": form_id,
-        "confirmed": True,
+    pending_actions = [dict(a) for a in operation_form.get("actions") or [] if isinstance(a, dict)]
+    resume_action_list = [dict(a) for a in payload.get("actions") or [] if isinstance(a, dict)]
+    resume_actions = {
+        _operation_action_tool_call_id(action): action
+        for action in resume_action_list
+        if _operation_action_tool_call_id(action)
     }
-    logger.info("[user_clarify] operation_form confirmed tool=%s form_id=%s", tool_name, form_id)
+    formatted_actions: list[dict[str, Any]] = []
+    params_by_tool_call_id: dict[str, dict[str, Any]] = {}
+
+    for index, pending_action in enumerate(pending_actions):
+        current_tool_call_id = _operation_action_tool_call_id(pending_action)
+        current_tool_name = _operation_action_tool_name(pending_action) or tool_name
+        resume_action = resume_actions.get(current_tool_call_id)
+        action_returned = resume_action is not None
+        if resume_action is None and index < len(resume_action_list):
+            candidate_action = resume_action_list[index]
+            candidate_tool_call_id = _operation_action_tool_call_id(candidate_action)
+            if (
+                not candidate_tool_call_id
+                or candidate_tool_call_id == current_tool_call_id
+                or len(resume_action_list) == len(pending_actions)
+            ):
+                resume_action = candidate_action
+                action_returned = True
+        if resume_action is None:
+            resume_action = {}
+        confirmed = (
+            bool(resume_action.get("confirmed"))
+            if "confirmed" in resume_action
+            else action_returned
+        )
+        rule_raw = resume_action.get("rule")
+        if not isinstance(rule_raw, list):
+            rule_raw = pending_action.get("rule") or []
+        rule = list(rule_raw) if isinstance(rule_raw, list) else []
+        reason = str(resume_action.get("reason") or "用户取消操作")
+
+        action_result: dict[str, Any] = {
+            "tool_call_id": current_tool_call_id,
+            "tool_name": current_tool_name,
+            "formId": form_id,
+            "confirmed": confirmed,
+            "reason": "" if confirmed else reason,
+            "rule": rule,
+            "params": {},
+        }
+        if confirmed:
+            action_meta = _find_operation_action(config, current_tool_name)
+            context = context_by_id.get(current_tool_call_id, {})
+            if action_meta is None:
+                action_meta = _operation_action_meta_from_context(context)
+            params = restore_action_params(
+                rule,
+                action=action_meta,
+                original_params=dict(
+                    context.get("structured_input")
+                    or analyze_result.get("structured_input")
+                    or ctx.get("structured_input")
+                    or {}
+                ),
+            )
+            params["userConfirmed"] = True
+            params["_operationConfirm"] = {
+                "formId": form_id,
+                "toolCallId": current_tool_call_id,
+                "confirmed": True,
+            }
+            action_result["params"] = params
+        formatted_actions.append(action_result)
+        if current_tool_call_id:
+            params_by_tool_call_id[current_tool_call_id] = action_result
+
+    first_action = formatted_actions[0] if formatted_actions else {}
+    logger.info(
+        "[user_clarify] operation_form resumed form_id=%s actions=%d confirmed=%d",
+        form_id,
+        len(formatted_actions),
+        sum(1 for action in formatted_actions if action.get("confirmed")),
+    )
     return {
         "clarification_formatted_params": {
-            "tool_name": tool_name,
             "interrupt_type": _OPERATION_FORM_INTERRUPT_TYPE,
             "formId": form_id,
-            "confirmed": True,
-            "rule": rule,
-            "params": params,
+            "actions": formatted_actions,
+            "params_by_tool_call_id": params_by_tool_call_id,
+            # Legacy single-action compatibility.
+            "tool_name": first_action.get("tool_name", tool_name),
+            "confirmed": bool(first_action.get("confirmed")),
+            "reason": str(first_action.get("reason") or ""),
+            "rule": first_action.get("rule") or [],
+            "params": first_action.get("params") or {},
         },
         "clarify_abort": False,
     }
@@ -237,6 +407,28 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             _results[0] if _results else None,
         )
 
+    if _is_operation_form_context(ctx, analyze_result):
+        raw_form = _operation_form_from_context(ctx, analyze_result)
+        operation_form = _normalize_operation_form(
+            raw_form,
+            tool_name=tool_name,
+            tool_call_id=str(ctx.get("tool_call_id") or analyze_result.get("tool_call_id") or ""),
+        )
+        existing = state.get("clarification_formatted_params")
+        if _same_operation_form(existing, operation_form):
+            logger.warning(
+                "[user_clarify] DUPLICATE GUARD: same operation form already formatted"
+                " → aborting duplicate path form_id=%s",
+                operation_form.get("formId"),
+            )
+            return {"clarify_abort": True}
+        return await _handle_operation_form_clarify(
+            ctx=ctx,
+            analyze_result=analyze_result,
+            tool_name=tool_name,
+            config=config,
+        )
+
     # ── 重复路径中止守卫 ──────────────────────────────────────────────────────────────────────────
     # 当 OpenGauss checkpoint blob 丢失时，tools 节点被错误激活 → ClarificationNeededError →
     # analyze_clarify → user_clarify，走到这里时 clarification_formatted_params 已由并发恢复路径写入。
@@ -250,14 +442,6 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             tool_name,
         )
         return {"clarify_abort": True}
-
-    if _is_operation_form_context(ctx, analyze_result):
-        return await _handle_operation_form_clarify(
-            ctx=ctx,
-            analyze_result=analyze_result,
-            tool_name=tool_name,
-            config=config,
-        )
 
     if not paradigm_list:
         # _route_after_analyze 已将空 paradigm_list 路由到 tool_dispatcher；

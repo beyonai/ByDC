@@ -65,20 +65,50 @@ class OperationFormField:
     is_hidden: bool = False
     default_files: list[str] = dc_field(default_factory=list)
     term: dict[str, Any] | None = None
+    term_resolve_notice: dict[str, Any] | None = None
 
 
 @dataclass
-class OperationForm:
-    """操作确认表单，rule 使用二维字段数组表达一组或多组表单。"""
+class OperationFormAction:
+    """操作确认表单中的单个 action。"""
 
-    schema_version: str
-    form_id: str
+    tool_call_id: str
+    tool_name: str
     action_code: str
     action_name: str = ""
     title: str = ""
     description: str = ""
+    confirmed: bool | None = None
+    reason: str = ""
     rule: list[list[OperationFormField]] = dc_field(default_factory=list)
     raw: dict[str, Any] = dc_field(default_factory=dict)
+
+
+@dataclass
+class OperationForm:
+    """操作确认表单，actions 表达单个或多个工具调用表单。"""
+
+    schema_version: str
+    form_id: str
+    title: str = ""
+    description: str = ""
+    actions: list[OperationFormAction] = dc_field(default_factory=list)
+    raw: dict[str, Any] = dc_field(default_factory=dict)
+
+    @property
+    def action_code(self) -> str:
+        """Compatibility accessor for legacy single-action callers."""
+        return self.actions[0].action_code if self.actions else ""
+
+    @property
+    def action_name(self) -> str:
+        """Compatibility accessor for legacy single-action callers."""
+        return self.actions[0].action_name if self.actions else ""
+
+    @property
+    def rule(self) -> list[list[OperationFormField]]:
+        """Compatibility accessor for legacy single-action callers."""
+        return self.actions[0].rule if self.actions else []
 
 
 @dataclass
@@ -350,13 +380,33 @@ def _interrupt_value_to_paradigm_list(
 
 def _operation_form_from_payload(payload: dict[str, Any]) -> OperationForm:
     """将 operation_form 原始 dict 转为 SDK 公开的轻量强类型结构。"""
+    actions_raw = payload.get("actions")
+    actions = (
+        [_operation_action_from_payload(item) for item in actions_raw if isinstance(item, dict)]
+        if isinstance(actions_raw, list)
+        else [_operation_action_from_payload(payload)]
+    )
     return OperationForm(
         schema_version=str(payload.get("schemaVersion") or ""),
         form_id=str(payload.get("formId") or ""),
+        title=str(payload.get("title") or ""),
+        description=str(payload.get("description") or ""),
+        actions=actions,
+        raw=dict(payload),
+    )
+
+
+def _operation_action_from_payload(payload: dict[str, Any]) -> OperationFormAction:
+    confirmed_raw = payload.get("confirmed")
+    return OperationFormAction(
+        tool_call_id=str(payload.get("tool_call_id") or payload.get("toolCallId") or ""),
+        tool_name=str(payload.get("tool_name") or payload.get("toolName") or ""),
         action_code=str(payload.get("actionCode") or ""),
         action_name=str(payload.get("actionName") or ""),
         title=str(payload.get("title") or ""),
         description=str(payload.get("description") or ""),
+        confirmed=confirmed_raw if isinstance(confirmed_raw, bool) else None,
+        reason=str(payload.get("reason") or ""),
         rule=_operation_rule_from_payload(payload.get("rule")),
         raw=dict(payload),
     )
@@ -381,6 +431,7 @@ def _operation_field_from_payload(payload: dict[str, Any]) -> OperationFormField
         [str(item) for item in default_files_raw] if isinstance(default_files_raw, list) else []
     )
     term_raw = payload.get("term")
+    term_resolve_notice_raw = payload.get("termResolveNotice")
     children = _operation_rule_from_payload(payload.get("children"))
     return OperationFormField(
         form_type=str(payload.get("formType") or ""),
@@ -398,6 +449,9 @@ def _operation_field_from_payload(payload: dict[str, Any]) -> OperationFormField
         is_hidden=bool(payload.get("isHidden")),
         default_files=default_files,
         term=dict(term_raw) if isinstance(term_raw, dict) else None,
+        term_resolve_notice=dict(term_resolve_notice_raw)
+        if isinstance(term_resolve_notice_raw, dict)
+        else None,
     )
 
 
@@ -477,7 +531,8 @@ class OntologyAgent:
         user_input:
           - str：文本回复（ASK_USER 场景）
           - ParadigmAnswer：维度选择（PARADIGM_CLARIFICATION 场景）
-          - dict：结构化恢复值，如操作确认表单 operation_form 场景
+          - dict：结构化恢复值，如操作确认表单 operation_form 场景；操作表单应传回完整
+            batch form 原结构，仅修改字段 fieldValue 并在每个 actions[] 下写 confirmed
         user_code / session_id: 同 ask()。
         """
         return self._iter_events(
@@ -632,6 +687,14 @@ class OntologyAgent:
                 question, workspace_dir=self._config.workspace_dir
             )
             graph_input["prompts_overwrite"] = {"locale": effective_locale}
+            # 注入 skill task_prompt（请求级，不影响图缓存）
+            _task_prompt = str((extras or {}).get("task_prompt") or "").strip()
+            if _task_prompt:
+                graph_input["prompts_overwrite"]["task_prompt"] = _task_prompt
+            # 注入 skill_workspace_dir 供 read_file tool 使用
+            _skill_ws = str((extras or {}).get("skill_workspace_dir") or "").strip()
+            if _skill_ws:
+                graph_input["prompts_overwrite"]["skill_workspace_dir"] = _skill_ws
             if target_tool:
                 graph_input["target_tool"] = target_tool
         elif isinstance(resume_input, str | dict):

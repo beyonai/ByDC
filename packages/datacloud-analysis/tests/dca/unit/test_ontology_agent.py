@@ -181,6 +181,12 @@ async def test_ask_yields_interrupt_event_with_operation_form() -> None:
                                 "fieldName": "附件文件名",
                                 "fieldType": "string",
                                 "fieldValue": "需求文档.docx",
+                                "termResolveNotice": {
+                                    "status": "recommended",
+                                    "originalValue": "需求文档",
+                                    "recommendedValue": "DOC001",
+                                    "recommendedLabel": "需求文档.docx",
+                                },
                             }
                         ]
                     ],
@@ -221,7 +227,69 @@ async def test_ask_yields_interrupt_event_with_operation_form() -> None:
     assert files_field.children is not None
     assert files_field.children[0][0].field_code == "fileName"
     assert files_field.children[0][0].field_value == "需求文档.docx"
+    assert files_field.children[0][0].term_resolve_notice == {
+        "status": "recommended",
+        "originalValue": "需求文档",
+        "recommendedValue": "DOC001",
+        "recommendedLabel": "需求文档.docx",
+    }
     assert ie.paradigm_list is None
+
+
+async def test_ask_yields_interrupt_event_with_batch_operation_form() -> None:
+    operation_form = {
+        "schemaVersion": "1.0",
+        "formId": "op_form_batch_1",
+        "title": "确认执行 2 个操作",
+        "actions": [
+            {
+                "toolCallId": "call_1",
+                "toolName": "create_by_rd_task",
+                "actionCode": "create_by_rd_task",
+                "actionName": "新增研发任务",
+                "title": "确认执行：新增研发任务",
+                "rule": [
+                    [{"fieldCode": "taskName", "fieldName": "任务名称", "fieldType": "string"}]
+                ],
+            },
+            {
+                "toolCallId": "call_2",
+                "toolName": "delete_customer",
+                "actionCode": "delete_customer",
+                "actionName": "删除客户",
+                "title": "确认执行：删除客户",
+                "rule": [[{"fieldCode": "customerId", "fieldName": "客户", "fieldType": "string"}]],
+            },
+        ],
+    }
+    mock_interrupt = MagicMock()
+    mock_interrupt.value = {
+        "reason_code": "OPERATION_FORM_CONFIRMATION",
+        "prompt": "请确认操作表单。",
+        "interrupt_type": "operation_form",
+        "operation_form": operation_form,
+    }
+    compiled = _make_mock_compiled(interrupts=[mock_interrupt])
+
+    agent = OntologyAgent(_CONFIG)
+    with patch.object(agent, "_get_or_build_graph", return_value=compiled):
+        events: list[OntologyAgentEvent] = []
+        async for ev in agent.ask(
+            question="新增任务并删除客户",
+            object_codes=_OBJ_CODES,
+            thread_id=_THREAD_ID,
+        ):
+            events.append(ev)
+
+    interrupt_events = [e for e in events if isinstance(e, InterruptEvent)]
+    assert len(interrupt_events) == 1
+    operation_event = interrupt_events[0].operation_form
+    assert operation_event is not None
+    assert operation_event.form_id == "op_form_batch_1"
+    assert [action.tool_call_id for action in operation_event.actions] == ["call_1", "call_2"]
+    assert operation_event.action_code == "create_by_rd_task"
+    assert operation_event.rule[0][0].field_code == "taskName"
+    assert operation_event.raw == operation_form
 
 
 # ── TC-T3-4: resume() 在恢复后 yield AnswerEvent ────────────────────────────

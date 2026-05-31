@@ -323,6 +323,19 @@ def test_kb_write_schema_content_description_requires_full_text() -> None:
     assert "不得摘要" in description
 
 
+def test_kb_write_schema_supports_batch_records() -> None:
+    """KB write schema 支持 records 批量写入，且保留单条写入兼容入口。"""
+    schema = build_kb_write_schema("知识库对象", KB_FIELDS)
+    record_schema = schema["properties"]["records"]["items"]
+
+    assert schema["anyOf"] == [{"required": ["source_path", "content"]}, {"required": ["records"]}]
+    assert record_schema["required"] == ["source_path", "content"]
+    assert "source_path" in schema["properties"]
+    assert "content" in schema["properties"]
+    assert record_schema["properties"]["labels"]["properties"]["status"]["type"] == "string"
+    assert "doc_id" not in record_schema["properties"]["labels"]["properties"]
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # D 系列：description 文本
 # ─────────────────────────────────────────────────────────────────────────────

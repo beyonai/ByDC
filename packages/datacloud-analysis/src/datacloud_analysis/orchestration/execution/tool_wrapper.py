@@ -631,6 +631,7 @@ async def dispatch_tool(
 
     # --- 构建 HookContext ---
     ctx: HookContext = {
+        "tool_call_id": tool_call_id,
         "tool_name": tool_name,
         "tool_params": dict(raw_params),
         "session_id": str(state.get("agent_id") or ""),

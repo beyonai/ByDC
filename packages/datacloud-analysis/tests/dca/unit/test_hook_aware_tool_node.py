@@ -68,6 +68,17 @@ def _state_with_tool_call(
     return state
 
 
+def _state_with_tool_calls(tool_calls: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "messages": [
+            HumanMessage(content="新增两个任务"),
+            AIMessage(content="", tool_calls=tool_calls),
+        ],
+        "react_round_idx": 1,
+        "user_query": "新增两个任务",
+    }
+
+
 def _make_mock_manager(
     patched_tool_params: dict[str, Any] | None = None,
     clarification_error: ClarificationNeededError | None = None,
@@ -194,6 +205,60 @@ async def test_han3_clarification_needed_returns_command() -> None:
         f"pending_clarification_context.tool_name 应为 mock_query_tool，实际: {ctx.get('tool_name')}"
     )
     assert ctx.get("field") == "query", "exc.context 应被合并到 pending_clarification_context"
+
+
+async def test_operation_form_interrupt_batches_multiple_tool_calls() -> None:
+    """多个操作工具同轮触发表单时，应合并为一个 batch operation_form。"""
+    node = HookAwareToolNode([mock_query_tool])
+    tool_calls = [
+        {"name": "mock_query_tool", "id": "call_1", "args": {"query": "a"}},
+        {"name": "mock_query_tool", "id": "call_2", "args": {"query": "b"}},
+    ]
+    state = _state_with_tool_calls(tool_calls)
+
+    async def _run_before(ctx: dict[str, Any]) -> tuple[dict[str, Any], None]:
+        tool_call_id = str(ctx.get("tool_call_id") or "")
+        raise ClarificationNeededError(
+            {
+                "interrupt_type": "operation_form",
+                "tool_call_id": tool_call_id,
+                "tool_name": "mock_query_tool",
+                "structured_input": dict(ctx.get("tool_params") or {}),
+                "operation_form_action": {
+                    "toolCallId": tool_call_id,
+                    "toolName": "mock_query_tool",
+                    "actionCode": "mock_query_tool",
+                    "actionName": "模拟工具",
+                    "title": "确认执行：模拟工具",
+                    "description": "请确认。",
+                    "rule": [[{"fieldCode": "query", "fieldValue": tool_call_id}]],
+                },
+            }
+        )
+
+    manager = MagicMock()
+    manager.run_before = _run_before
+    manager.run_after = AsyncMock()
+
+    with (
+        patch(
+            "datacloud_analysis.orchestration.execution.hook_aware_tool_node.get_tool_hook_plugin_manager",
+            return_value=manager,
+        ),
+        patch.object(ToolNode, "ainvoke", new_callable=AsyncMock) as super_mock,
+    ):
+        result = await node.ainvoke(state, None)
+
+    super_mock.assert_not_called()
+    assert isinstance(result, Command)
+    update = dict(result.update or {})
+    pending = update.get("pending_clarification_context") or {}
+    form = pending.get("operation_form") or {}
+    actions = list(form.get("actions") or [])
+    assert [action.get("toolCallId") for action in actions] == ["call_1", "call_2"]
+    assert all("tool_call_id" not in action for action in actions)
+    assert all("tool_name" not in action for action in actions)
+    assert pending.get("interrupt_type") == "operation_form"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

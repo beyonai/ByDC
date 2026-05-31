@@ -8,6 +8,8 @@ import logging
 from copy import deepcopy
 from typing import Any
 
+from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
+
 from datacloud_analysis.tool_hook_plugins.types import (
     ClarificationNeededError,
     HookContext,
@@ -44,6 +46,7 @@ _LOCATION_SCHEMA_KEYS: dict[str, str] = {
 }
 _FIELD_NAME_OVERRIDES: dict[str, str] = {
     "labels": "知识库属性标签",
+    "records": "批量记录",
     "values": "修改字段",
     "filters": "过滤条件",
     "filter_relation": "过滤条件连接方式",
@@ -66,15 +69,18 @@ logger = logging.getLogger(__name__)
 async def before_call_back(ctx: HookContext) -> HookDecision | None:
     """Interrupt operation tool calls before execution and resume with confirmed params."""
     tool_name = str(ctx.get("tool_name") or "")
+    tool_call_id = str(ctx.get("tool_call_id") or "")
     tool_params = dict(ctx.get("tool_params") or {})
     metadata = dict(ctx.get("metadata") or {})
     state = metadata.get("state")
     state_dict = state if isinstance(state, dict) else {}
-    action = find_operation_action(metadata.get("loader"), tool_name)
+    loader = metadata.get("loader")
+    action = find_operation_action(loader, tool_name)
     if action is None:
         return None
+    term_loader = _term_loader_from_loader(loader)
 
-    formatted_params = _get_operation_formatted_params(state_dict, tool_name)
+    formatted_params = _get_operation_formatted_params(state_dict, tool_name, tool_call_id)
     if formatted_params is not None:
         if not bool(formatted_params.get("confirmed")):
             return {
@@ -85,7 +91,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                         "message": str(formatted_params.get("reason") or "用户取消操作"),
                         "retryable": False,
                         "hint": "用户已取消本次操作，不再执行业务提交。",
-                        "context": {"tool_name": tool_name},
+                        "context": {"tool_name": tool_name, "tool_call_id": tool_call_id},
                     }
                 },
             }
@@ -99,23 +105,34 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         patched[_CONFIRM_PARAM] = True
         patched[_OPERATION_CONFIRM_PARAM] = {
             "formId": str(formatted_params.get("formId") or ""),
+            "toolCallId": tool_call_id,
             "confirmed": True,
         }
         logger.info("[operation_confirmation] resume patch tool=%s", tool_name)
         return {"action": "patch", "patch": {"tool_params": patched}}
 
-    operation_form = build_operation_form(action, tool_params)
-    form_id = str(operation_form.get("formId") or "")
+    operation_form = build_operation_form(action, tool_params, term_loader=term_loader)
+    operation_form_action = build_operation_action_form(
+        action,
+        tool_params,
+        tool_call_id=tool_call_id,
+        tool_name=tool_name,
+        term_loader=term_loader,
+    )
+    form_id = str(operation_form_action.get("formId") or operation_form.get("formId") or "")
     logger.info("[operation_confirmation] interrupt tool=%s form_id=%s", tool_name, form_id)
     raise ClarificationNeededError(
         {
             "interrupt_type": _INTERRUPT_TYPE,
+            "tool_call_id": tool_call_id,
             "tool_name": tool_name,
             "structured_input": deepcopy(tool_params),
             "operation_form": operation_form,
+            "operation_form_action": operation_form_action,
             "operation_confirm_context": {
                 "formId": form_id,
                 "actionCode": str(getattr(action, "action_code", tool_name) or tool_name),
+                "actionFamily": str(getattr(action, "action_family", "") or ""),
                 "originalParamsHash": _stable_hash(tool_params),
             },
         }
@@ -140,12 +157,17 @@ def find_operation_action(loader: Any, tool_name: str) -> Any | None:
     return None
 
 
-def build_operation_form(action: Any, tool_params: dict[str, Any]) -> dict[str, Any]:
+def build_operation_form(
+    action: Any,
+    tool_params: dict[str, Any],
+    *,
+    term_loader: Any | None = None,
+) -> dict[str, Any]:
     """Build frontend operation confirmation form from action metadata and params."""
     form_id = _build_form_id(action, tool_params)
     action_code = str(getattr(action, "action_code", "") or "")
     action_name = str(getattr(action, "action_name", "") or action_code)
-    rule = _build_top_level_rule(action, tool_params, form_id=form_id)
+    rule = _build_top_level_rule(action, tool_params, form_id=form_id, term_loader=term_loader)
     return {
         "schemaVersion": "1.0",
         "formId": form_id,
@@ -155,6 +177,96 @@ def build_operation_form(action: Any, tool_params: dict[str, Any]) -> dict[str, 
         "description": "请确认以下表单信息，确认后将继续执行。",
         "rule": rule,
     }
+
+
+def build_operation_action_form(
+    action: Any,
+    tool_params: dict[str, Any],
+    *,
+    tool_call_id: str,
+    tool_name: str,
+    term_loader: Any | None = None,
+) -> dict[str, Any]:
+    """Build one action item for a batch operation confirmation form."""
+    form = build_operation_form(action, tool_params, term_loader=term_loader)
+    return {
+        "formId": str(form.get("formId") or ""),
+        "toolCallId": tool_call_id,
+        "toolName": tool_name,
+        "actionCode": str(form.get("actionCode") or tool_name),
+        "actionName": str(form.get("actionName") or form.get("actionCode") or tool_name),
+        "title": str(form.get("title") or ""),
+        "description": str(form.get("description") or ""),
+        "rule": list(form.get("rule") or []),
+    }
+
+
+def build_batch_operation_form(operation_contexts: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build a batch operation form from collected operation interruption contexts."""
+    actions: list[dict[str, Any]] = []
+    for context in operation_contexts:
+        action_form = context.get("operation_form_action")
+        if isinstance(action_form, dict):
+            action = dict(action_form)
+        else:
+            legacy_form = dict(context.get("operation_form") or {})
+            action = {
+                "formId": str(legacy_form.get("formId") or ""),
+                "toolCallId": str(context.get("tool_call_id") or ""),
+                "toolName": str(context.get("tool_name") or ""),
+                "actionCode": str(legacy_form.get("actionCode") or context.get("tool_name") or ""),
+                "actionName": str(
+                    legacy_form.get("actionName")
+                    or legacy_form.get("actionCode")
+                    or context.get("tool_name")
+                    or ""
+                ),
+                "title": str(legacy_form.get("title") or ""),
+                "description": str(legacy_form.get("description") or ""),
+                "rule": list(legacy_form.get("rule") or []),
+            }
+        action = _normalize_frontend_action_keys(action)
+        actions.append(action)
+
+    form_id = _build_batch_form_id(actions)
+    for action in actions:
+        action.pop("formId", None)
+    return {
+        "schemaVersion": "1.0",
+        "formId": form_id,
+        "title": f"确认执行 {len(actions)} 个操作" if len(actions) > 1 else "确认执行操作",
+        "description": "请确认以下表单信息，确认后将继续执行。",
+        "actions": actions,
+    }
+
+
+def _build_batch_form_id(actions: list[dict[str, Any]]) -> str:
+    source = json.dumps(
+        [
+            {
+                "toolCallId": action.get("toolCallId") or action.get("tool_call_id"),
+                "actionCode": action.get("actionCode"),
+                "rule": action.get("rule"),
+            }
+            for action in actions
+        ],
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    return f"op_form_batch_{hashlib.sha256(source.encode()).hexdigest()[:16]}"
+
+
+def _normalize_frontend_action_keys(action: dict[str, Any]) -> dict[str, Any]:
+    """Expose operation action identity fields with frontend camelCase keys."""
+    normalized = dict(action)
+    normalized["toolCallId"] = str(
+        normalized.get("toolCallId") or normalized.get("tool_call_id") or ""
+    )
+    normalized["toolName"] = str(normalized.get("toolName") or normalized.get("tool_name") or "")
+    normalized.pop("tool_call_id", None)
+    normalized.pop("tool_name", None)
+    return normalized
 
 
 def restore_action_params(
@@ -169,7 +281,9 @@ def restore_action_params(
         return dict(original_params or {})
 
     action_family = str(getattr(action, "action_family", "") or "").lower() if action else ""
-    if action_family == "insert":
+    if action_family == "insert" or (
+        action_family == "write" and isinstance((original_params or {}).get("records"), list)
+    ):
         return {"records": [_fields_to_object(row) for row in rule_rows]}
 
     params: dict[str, Any] = dict(original_params or {})
@@ -185,12 +299,35 @@ def restore_action_params(
 def _get_operation_formatted_params(
     state: dict[str, Any],
     tool_name: str,
+    tool_call_id: str = "",
 ) -> dict[str, Any] | None:
     formatted = state.get("clarification_formatted_params")
     if not isinstance(formatted, dict):
         return None
     if str(formatted.get("interrupt_type") or "") != _INTERRUPT_TYPE:
         return None
+
+    by_tool_call_id = formatted.get("params_by_tool_call_id")
+    if tool_call_id and isinstance(by_tool_call_id, dict):
+        matched = by_tool_call_id.get(tool_call_id)
+        if isinstance(matched, dict):
+            result = dict(matched)
+            result.setdefault("formId", formatted.get("formId"))
+            return result
+
+    actions = formatted.get("actions")
+    if tool_call_id and isinstance(actions, list):
+        for item in actions:
+            if (
+                isinstance(item, dict)
+                and str(item.get("tool_call_id") or item.get("toolCallId") or "") == tool_call_id
+            ):
+                result = dict(item)
+                result.setdefault("formId", formatted.get("formId"))
+                return result
+    if tool_call_id and (isinstance(by_tool_call_id, dict) or isinstance(actions, list)):
+        return None
+
     if str(formatted.get("tool_name") or "") != tool_name:
         return None
     return formatted
@@ -217,6 +354,14 @@ def _iter_loader_actions(loader: Any) -> list[tuple[Any, Any]]:
     return actions
 
 
+def _term_loader_from_loader(loader: Any) -> Any | None:
+    config = getattr(loader, "_config", None)
+    term_loader = getattr(config, "term_loader", None)
+    if term_loader is not None:
+        return term_loader
+    return getattr(loader, "term_loader", None)
+
+
 def _is_confirmable_action(action: Any) -> bool:
     action_type = str(getattr(action, "action_type", "") or "").lower()
     action_family = str(getattr(action, "action_family", "") or "").lower()
@@ -228,26 +373,33 @@ def _build_top_level_rule(
     tool_params: dict[str, Any],
     *,
     form_id: str,
+    term_loader: Any | None = None,
 ) -> list[list[dict[str, Any]]]:
     action_family = str(getattr(action, "action_family", "") or "").lower()
     field_meta = _action_field_meta(action)
     param_meta = _action_param_meta(action)
     if action_family == "insert" and isinstance(tool_params.get("records"), list):
-        return [
-            _build_fields_from_schema(
-                _get_records_item_schema(action),
-                record if isinstance(record, dict) else {},
-                item_id=_build_item_id(form_id, index),
-                field_meta=field_meta,
-                param_meta=param_meta,
-            )
-            for index, record in enumerate(tool_params.get("records") or [], start=1)
-        ]
+        return _build_records_rule(
+            action,
+            tool_params,
+            form_id=form_id,
+            field_meta=field_meta,
+            param_meta=param_meta,
+            term_loader=term_loader,
+        )
 
-    schema, values, parent_path = _display_schema_and_values(
-        _get_action_input_schema(action),
-        tool_params,
-    )
+    if action_family == "write" and isinstance(tool_params.get("records"), list):
+        return _build_records_rule(
+            action,
+            tool_params,
+            form_id=form_id,
+            field_meta=field_meta,
+            param_meta=param_meta,
+            term_loader=term_loader,
+        )
+
+    input_schema = _schema_for_single_action_display(_get_action_input_schema(action), tool_params)
+    schema, values, parent_path = _display_schema_and_values(input_schema, tool_params)
     row = _build_fields_from_schema(
         schema,
         values,
@@ -255,6 +407,7 @@ def _build_top_level_rule(
         parent_path=parent_path,
         field_meta=field_meta,
         param_meta=param_meta,
+        term_loader=term_loader,
     )
     if row:
         return [row]
@@ -266,9 +419,40 @@ def _build_top_level_rule(
     ]
     return [
         [
-            _build_field_from_param(param, tool_params, first=index == 1, form_id=form_id)
+            _build_field_from_param(
+                param,
+                tool_params,
+                first=index == 1,
+                form_id=form_id,
+                term_loader=term_loader,
+            )
             for index, param in enumerate(params, start=1)
         ]
+    ]
+
+
+def _build_records_rule(
+    action: Any,
+    tool_params: dict[str, Any],
+    *,
+    form_id: str,
+    field_meta: dict[str, Any],
+    param_meta: dict[str, Any],
+    term_loader: Any | None = None,
+) -> list[list[dict[str, Any]]]:
+    records = tool_params.get("records")
+    if not isinstance(records, list):
+        return []
+    return [
+        _build_fields_from_schema(
+            _get_records_item_schema(action),
+            record if isinstance(record, dict) else {},
+            item_id=_build_item_id(form_id, index),
+            field_meta=field_meta,
+            param_meta=param_meta,
+            term_loader=term_loader,
+        )
+        for index, record in enumerate(records, start=1)
     ]
 
 
@@ -364,6 +548,24 @@ def _get_records_item_schema(action: Any) -> dict[str, Any]:
     return item_schema if isinstance(item_schema, dict) else {"type": "object", "properties": {}}
 
 
+def _schema_for_single_action_display(
+    schema: dict[str, Any],
+    values: dict[str, Any],
+) -> dict[str, Any]:
+    if isinstance(values.get("records"), list):
+        return schema
+
+    properties = schema.get("properties")
+    if not isinstance(properties, dict) or "records" not in properties:
+        return schema
+
+    display_schema = deepcopy(schema)
+    display_properties = display_schema.get("properties")
+    if isinstance(display_properties, dict):
+        display_properties.pop("records", None)
+    return display_schema
+
+
 def _display_schema_and_values(
     schema: dict[str, Any],
     values: dict[str, Any],
@@ -393,6 +595,7 @@ def _build_fields_from_schema(
     parent_path: str = "",
     field_meta: dict[str, Any] | None = None,
     param_meta: dict[str, Any] | None = None,
+    term_loader: Any | None = None,
 ) -> list[dict[str, Any]]:
     properties = schema.get("properties")
     if not isinstance(properties, dict):
@@ -427,6 +630,7 @@ def _build_fields_from_schema(
                     parent_path=field_path,
                     field_meta=field_meta,
                     param_meta=param_meta,
+                    term_loader=term_loader,
                 )
             ]
         elif normalized_field_type == "array":
@@ -443,6 +647,7 @@ def _build_fields_from_schema(
                         parent_path=field_path,
                         field_meta=field_meta,
                         param_meta=param_meta,
+                        term_loader=term_loader,
                     )
                     for index, item in enumerate(item_values, start=1)
                 ]
@@ -469,6 +674,7 @@ def _build_fields_from_schema(
                 or _term_from_field_meta(meta)
             ),
             optional=_schema_options(property_schema),
+            term_loader=term_loader,
         )
         filter_options = _filter_condition_options(property_schema)
         if filter_options:
@@ -485,6 +691,7 @@ def _build_field_from_param(
     *,
     first: bool,
     form_id: str,
+    term_loader: Any | None = None,
 ) -> dict[str, Any]:
     code = str(getattr(param, "param_code", "") or "")
     field = _build_field(
@@ -498,6 +705,7 @@ def _build_field_from_param(
         required=bool(getattr(param, "required", False)),
         term=_term_from_param(param),
         optional=[],
+        term_loader=term_loader,
     )
     if first:
         field["itemId"] = _build_item_id(form_id, 1)
@@ -516,6 +724,7 @@ def _build_field(
     required: bool,
     term: dict[str, Any] | None,
     optional: list[str],
+    term_loader: Any | None = None,
 ) -> dict[str, Any]:
     field: dict[str, Any] = {
         "formType": _field_form_type(field_type, term, optional),
@@ -533,7 +742,15 @@ def _build_field(
     if children is not None:
         field["children"] = children
     else:
-        field["fieldValue"] = field_value
+        resolved_value, notice = _resolve_term_field_value(
+            field_value,
+            term=term,
+            term_loader=term_loader,
+            field_name=field_name,
+        )
+        field["fieldValue"] = resolved_value
+        if notice:
+            field["termResolveNotice"] = notice
     if term:
         field["term"] = term
     if optional:
@@ -561,6 +778,231 @@ def _field_form_type(
         "object": "object",
         "array": "array",
     }.get(field_type, "input")
+
+
+def _resolve_term_field_value(
+    value: Any,
+    *,
+    term: dict[str, Any] | None,
+    term_loader: Any | None,
+    field_name: str,
+) -> tuple[Any, dict[str, Any] | None]:
+    if term_loader is None or not term or _is_empty_term_value(value):
+        return value, None
+    if isinstance(value, (list, tuple)):
+        resolved_items: list[Any] = []
+        notices: list[dict[str, Any]] = []
+        changed = False
+        for item in value:
+            resolved_item, notice = _resolve_single_term_value(
+                item,
+                term=term,
+                term_loader=term_loader,
+                field_name=field_name,
+            )
+            resolved_items.append(resolved_item)
+            changed = changed or resolved_item != item
+            if notice:
+                notices.append(notice)
+        if not notices:
+            return resolved_items if changed else value, None
+        return resolved_items, {"status": "list_resolved", "items": notices}
+    return _resolve_single_term_value(
+        value, term=term, term_loader=term_loader, field_name=field_name
+    )
+
+
+def _resolve_single_term_value(
+    value: Any,
+    *,
+    term: dict[str, Any],
+    term_loader: Any,
+    field_name: str,
+) -> tuple[Any, dict[str, Any] | None]:
+    raw_value = str(value).strip()
+    if not raw_value:
+        return value, None
+    try:
+        term_loader.resolve_value(
+            str(term.get("termSet") or ""),
+            raw_value,
+            term_field="code",
+            dataset_id=_term_dataset_id(term),
+            term_type_code=str(term.get("termTypeCode") or "") or None,
+            keyword=raw_value,
+            param_name=field_name,
+        )
+    except TermAmbiguousError as exc:
+        recommendation = _first_term_entry(exc.matches)
+        if recommendation is None:
+            return None, _build_term_resolve_notice(
+                status="ambiguous",
+                original_value=raw_value,
+                recommended_value="",
+                recommended_label="",
+            )
+        return _recommended_term_value(
+            raw_value,
+            recommendation,
+            status="ambiguous_recommended",
+            candidates=_term_notice_candidates(exc.matches),
+        )
+    except TermNotFoundError as exc:
+        recommendation = _recommend_term_entry(term_loader, term, raw_value, exc.available_entries)
+        if recommendation is None:
+            return None, _build_term_resolve_notice(
+                status="not_found",
+                original_value=raw_value,
+                recommended_value="",
+                recommended_label="",
+            )
+        return _recommended_term_value(raw_value, recommendation, status="recommended")
+    except (AttributeError, ImportError, RuntimeError, ValueError):
+        recommendation = _recommend_term_entry(term_loader, term, raw_value, None)
+        if recommendation is not None:
+            return _recommended_term_value(raw_value, recommendation, status="recommended")
+        logger.debug(
+            "failed to resolve operation form term value: term=%s value=%s",
+            term.get("termSet"),
+            raw_value,
+            exc_info=True,
+        )
+        return value, None
+
+    return value, None
+
+
+def _recommended_term_value(
+    original_value: str,
+    recommendation: dict[str, str],
+    *,
+    status: str,
+    candidates: list[dict[str, str]] | None = None,
+) -> tuple[str, dict[str, Any]]:
+    recommended_value = str(recommendation.get("code") or recommendation.get("value") or "")
+    recommended_label = str(recommendation.get("label") or recommendation.get("name") or "")
+    notice = _build_term_resolve_notice(
+        status=status,
+        original_value=original_value,
+        recommended_value=recommended_value,
+        recommended_label=recommended_label,
+        candidates=candidates,
+    )
+    return recommended_value, notice
+
+
+def _recommend_term_entry(
+    term_loader: Any,
+    term: dict[str, Any],
+    raw_value: str,
+    available_entries: list[dict[str, str]] | None,
+) -> dict[str, str] | None:
+    recommendation = _first_term_entry(available_entries)
+    if recommendation is not None:
+        return recommendation
+    try:
+        entries, _total = term_loader.get_entries_page(
+            str(term.get("termSet") or ""),
+            dataset_id=_term_dataset_id(term),
+            term_type_code=str(term.get("termTypeCode") or "") or None,
+            keyword=raw_value,
+            limit=1,
+            offset=0,
+        )
+    except AttributeError:
+        entries = term_loader.get_entries(
+            str(term.get("termSet") or ""),
+            dataset_id=_term_dataset_id(term),
+            term_type_code=str(term.get("termTypeCode") or "") or None,
+            keyword=raw_value,
+        )
+    except (ImportError, RuntimeError, ValueError):
+        logger.debug(
+            "failed to recommend operation form term value: term=%s value=%s",
+            term.get("termSet"),
+            raw_value,
+            exc_info=True,
+        )
+        return None
+    return _first_term_entry(list(entries or []))
+
+
+def _first_term_entry(entries: list[dict[str, str]] | None) -> dict[str, str] | None:
+    if not entries:
+        return None
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        code = str(entry.get("code") or entry.get("value") or "").strip()
+        if code:
+            return {
+                "code": code,
+                "label": str(entry.get("label") or entry.get("name") or "").strip(),
+            }
+    return None
+
+
+def _term_notice_candidates(entries: list[dict[str, str]] | None) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    if not entries:
+        return candidates
+    for entry in entries:
+        normalized = _first_term_entry([entry])
+        if normalized is not None:
+            candidates.append(
+                {
+                    "value": normalized["code"],
+                    "label": normalized["label"],
+                }
+            )
+    return candidates
+
+
+def _build_term_resolve_notice(
+    *,
+    status: str,
+    original_value: str,
+    recommended_value: str,
+    recommended_label: str,
+    candidates: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    display = recommended_label or recommended_value
+    if status == "ambiguous_recommended" and recommended_value:
+        message = (
+            f"模型识别为“{original_value}”，匹配到多个，已默认选择“{display}”"
+            f"（code: {recommended_value}），请确认或重新选择。"
+        )
+    elif status == "recommended" and recommended_value:
+        message = (
+            f"模型识别为“{original_value}”，未精确命中，已推荐“{display}”"
+            f"（code: {recommended_value}），请确认或重新选择。"
+        )
+    else:
+        message = f"模型识别为“{original_value}”，未能找到可推荐值，请重新选择。"
+    notice: dict[str, Any] = {
+        "status": status,
+        "originalValue": original_value,
+        "recommendedValue": recommended_value,
+        "recommendedLabel": recommended_label,
+        "message": message,
+    }
+    if candidates:
+        notice["candidates"] = candidates
+    return notice
+
+
+def _term_dataset_id(term: dict[str, Any]) -> int | None:
+    dataset_id = term.get("datasetId")
+    if dataset_id is None:
+        return None
+    try:
+        return int(dataset_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_empty_term_value(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and value.strip() == "")
 
 
 def _field_readonly(field_code: str, optional: list[str]) -> bool:

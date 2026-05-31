@@ -92,3 +92,9 @@ def test_inject_virtual_actions_adds_kb_write_action() -> None:
     )
     write_schema = write_action.input_schema or {}
     assert write_schema["properties"]["labels"]["properties"]["status"]["type"] == "string"
+    assert (
+        write_schema["properties"]["records"]["items"]["properties"]["labels"]["properties"][
+            "status"
+        ]["type"]
+        == "string"
+    )

@@ -96,6 +96,7 @@ def make_tool_dispatcher_node(
                     "execution_status": "clarify_needed",
                     "pending_clarification_context": {
                         **exc.context,
+                        "tool_call_id": str(tc.get("id") or ""),
                         "tool_name": tool_name,
                         # react_messages_log 已 checkpoint，无需 snapshot
                         "react_round_idx": int(state.get("react_round_idx") or 1) - 1,

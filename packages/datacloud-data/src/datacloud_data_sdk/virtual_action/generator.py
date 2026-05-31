@@ -402,34 +402,49 @@ def build_kb_write_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
         _fc(field): _field_value_property(field)
         for field in _writable_fields(fields, include_primary_key=False)
     }
+    single_record_properties = {
+        "labels": {
+            "type": "object",
+            "additionalProperties": False,
+            "description": "知识库属性标签，键必须是对象属性编码；主键字段不在此处填写。",
+            "properties": label_properties,
+        },
+        "source_path": {
+            "type": "string",
+            "description": "上传到知识库后的文件全路径，以 / 开头，不包括知识库名称。",
+        },
+        "content": {
+            "type": "string",
+            "description": "源文件完整正文文本，必须包含原文全部内容，不得摘要、截断、删减或改写。",
+        },
+        "file_description": {"type": "string", "description": "文件描述。"},
+    }
+    record_item_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": single_record_properties,
+        "required": ["source_path", "content"],
+    }
     return {
         "type": "object",
         "additionalProperties": False,
         "description": (
-            f"写入{scope_name}知识库文档。content 必须提供完整正文，"
+            f"写入{scope_name}知识库文档。支持 records 批量写入；content 必须提供完整正文，"
             "不得摘要、截断、删减或改写。主键字段由最终生成的 .md 文件名自动生成，"
             "不需要也不允许在 labels 中显式传入。"
         ),
         "x-dc-action-family": "write",
         "x-dc-scope-type": "object",
         "properties": {
-            "labels": {
-                "type": "object",
-                "additionalProperties": False,
-                "description": "知识库属性标签，键必须是对象属性编码；主键字段不在此处填写。",
-                "properties": label_properties,
+            **single_record_properties,
+            "records": {
+                "type": "array",
+                "minItems": 1,
+                "items": record_item_schema,
+                "description": "待写入文档列表；批量写入时优先使用 records。",
             },
-            "source_path": {
-                "type": "string",
-                "description": "上传到知识库后的文件全路径，以 / 开头，不包括知识库名称。",
-            },
-            "content": {
-                "type": "string",
-                "description": "源文件完整正文文本，必须包含原文全部内容，不得摘要、截断、删减或改写。",
-            },
-            "file_description": {"type": "string", "description": "文件描述。"},
         },
-        "required": ["source_path", "content"],
+        "anyOf": [{"required": ["source_path", "content"]}, {"required": ["records"]}],
     }
 
 
