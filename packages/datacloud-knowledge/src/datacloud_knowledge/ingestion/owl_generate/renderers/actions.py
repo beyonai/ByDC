@@ -161,7 +161,7 @@ def write_action_files(
     table_code: str,
     table_name: str,
 ) -> int:
-    """渲染并写入 Action OWL 文件到 output_dir/actions/ 子目录。
+    """渲染并写入 Action OWL 文件到 output_dir/object/{table_code}/actions/ 子目录。
 
     文件命名：{action_code}.owl
 
@@ -171,7 +171,7 @@ def write_action_files(
     if not graphs:
         return 0
 
-    actions_dir = config.output_dir / "actions"
+    actions_dir = config.output_dir / "object" / table_code / "actions"
     actions_dir.mkdir(parents=True, exist_ok=True)
 
     file_count = 0
