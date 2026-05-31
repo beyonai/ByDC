@@ -346,7 +346,7 @@ class OntologyToolLoader:
             # 显式传入 loader（可为 None，保持旧的 skip-on-None 行为）
             self._loader: Any = loader
         elif ontology_path is not None:
-            self._loader = self._build_loader(Path(str(ontology_path)))
+            self._loader = self._build_loader(Path(str(ontology_path)), mounted_objects)
         else:
             raise ValueError("必须提供 loader 或 ontology_path 之一")
 
@@ -435,7 +435,7 @@ class OntologyToolLoader:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_loader(ontology_path: Path) -> Any:
+    def _build_loader(ontology_path: Path, mounted_objects:list[str] | None = None) -> Any:
         """自建 OntologyLoader：加载 OWL 文件并注入虚拟动作。
 
         仅在 agent 侧通过 ontology_path 构建时调用；
@@ -447,7 +447,7 @@ class OntologyToolLoader:
         )
 
         loader = OntologyLoader()
-        loader.load_from_owl_directory(str(ontology_path))
+        loader.load_from_owl_resource_directory(str(ontology_path), mounted_objects, mounted_objects)
         inject_virtual_actions(loader)
         return loader
 
