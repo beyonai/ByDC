@@ -9,7 +9,10 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
+from datacloud_knowledge.ingestion.ontology_build import (
+    OntologyBuildSession,
+    _cache_obj_fields,
+)
 from datacloud_knowledge.ingestion.workspace_store import LocalFileWorkspaceStore
 
 # ── Fixture ────────────────────────────────────────────────────────────────────
@@ -157,7 +160,7 @@ class TestCollectObjectInfo:
 class TestCollectViewInfo:
     def test_first_call_returns_view_code(self, session: OntologyBuildSession) -> None:
         result = session.collect_view_info(view_code="v_test")
-        assert result["view_code"] == "v_test"
+        assert result["view_code"].startswith("pv_v_test_")
 
     def test_missing_view_name_and_relations_on_first_call(
         self, session: OntologyBuildSession
@@ -165,6 +168,7 @@ class TestCollectViewInfo:
         result = session.collect_view_info(view_code="v_test")
         assert "view_name" in result["missing"]
         assert "object_relations" in result["missing"]
+        assert "object_codes" in result["missing"]
 
     def test_view_name_filled_removes_from_missing(self, session: OntologyBuildSession) -> None:
         result = session.collect_view_info(view_code="v_test", view_name="任务视图")
@@ -206,9 +210,189 @@ class TestCollectViewInfo:
             }
         ]
         result = session.collect_view_info(
-            view_code="v_test", view_name="视图", object_relations=rels
+            view_code="v_test",
+            view_name="视图",
+            object_codes=["by_task", "by_user"],
+            object_relations=rels,
         )
         assert result["missing"] == []
+
+    def test_fields_with_formula_stored_in_state(self, session: OntologyBuildSession) -> None:
+        """fields 含 formula 时正确存储到状态。"""
+        rels = [
+            {
+                "source_object_code": "by_product",
+                "source_object_field_code": "product_code",
+                "target_object_code": "by_order",
+                "target_object_field_code": "product_code",
+                "relation_type": "ONE_TO_MANY",
+            }
+        ]
+        fields = [
+            {
+                "property_code": "order_total",
+                "property_name": "订单总金额",
+                "data_type": "FLOAT",
+                "ext_property": {
+                    "property_role_rule": {
+                        "property_role": "MEASURE",
+                        "rule_type": "derived_metric",
+                        "formula": "quantity * unit_price",
+                    }
+                },
+            }
+        ]
+        result = session.collect_view_info(
+            view_code="v_test",
+            view_name="产品订单视图",
+            object_relations=rels,
+            fields=fields,
+        )
+        stored_fields = result.get("fields", [])
+        assert len(stored_fields) == 1
+        f = stored_fields[0]
+        assert f["property_code"] == "order_total"
+        role_rule = f["ext_property"]["property_role_rule"]
+        assert role_rule["property_role"] == "MEASURE"
+        assert role_rule["rule_type"] == "derived_metric"
+        assert role_rule["formula"] == "quantity * unit_price"
+
+    def test_fields_upsert_by_property_code(self, session: OntologyBuildSession) -> None:
+        """视图 fields 按 property_code upsert，新增+修改都正确。"""
+        f1 = [
+            {
+                "property_code": "order_total",
+                "property_name": "总额",
+                "data_type": "FLOAT",
+                "ext_property": {},
+            }
+        ]
+        session.collect_view_info(
+            view_code="v_test",
+            view_name="视图",
+            object_codes=["by_product", "by_order"],
+            object_relations=[],
+            fields=f1,
+        )
+        f2 = [
+            {
+                "property_code": "order_total",
+                "property_name": "订单总金额",
+                "data_type": "FLOAT",
+                "ext_property": {
+                    "property_role_rule": {
+                        "property_role": "MEASURE",
+                        "rule_type": "derived_metric",
+                        "formula": "quantity * unit_price",
+                    }
+                },
+            },
+            {
+                "property_code": "avg_price",
+                "property_name": "均价",
+                "data_type": "FLOAT",
+                "ext_property": {},
+            },
+        ]
+        result = session.collect_view_info(view_code="v_test", fields=f2)
+        codes = [f["property_code"] for f in result["fields"]]
+        assert "order_total" in codes
+        assert "avg_price" in codes
+        total_field = next(f for f in result["fields"] if f["property_code"] == "order_total")
+        assert total_field["property_name"] == "订单总金额"
+        role_rule = total_field["ext_property"]["property_role_rule"]
+        assert role_rule["formula"] == "quantity * unit_price"
+
+    def test_auto_expand_loads_fields_from_cache(self, session: OntologyBuildSession) -> None:
+        """object_codes 传入时自动从缓存加载字段。"""
+        store = LocalFileWorkspaceStore()
+        _cache_obj_fields(
+            store, "", "by_product",
+            [
+                {"property_code": "product_code", "property_name": "产品编码", "data_type": "STRING",
+                 "ext_property": {}},
+                {"property_code": "product_name", "property_name": "产品名称", "data_type": "STRING",
+                 "ext_property": {}},
+            ],
+        )
+        _cache_obj_fields(
+            store, "", "by_order",
+            [
+                {"property_code": "order_code", "property_name": "订单编码", "data_type": "STRING",
+                 "ext_property": {}},
+                {"property_code": "quantity", "property_name": "数量", "data_type": "INTEGER",
+                 "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "count"}}},
+            ],
+        )
+
+        result = session.collect_view_info(
+            view_code="v_auto",
+            view_name="自动展开视图",
+            object_codes=["by_product", "by_order"],
+            object_relations=[],
+        )
+        stored = result.get("fields", [])
+        codes = {f["property_code"] for f in stored}
+        assert "product_code" in codes
+        assert "product_name" in codes
+        assert "order_code" in codes
+        assert "quantity" in codes
+        assert len(stored) == 4
+        qty = next(f for f in stored if f["property_code"] == "quantity")
+        assert qty["_source_object_code"] == "by_order"
+
+    def test_user_fields_override_auto_expand(self, session: OntologyBuildSession) -> None:
+        """用户 fields 覆盖自动加载的同名字段，新字段追加。"""
+        store = LocalFileWorkspaceStore()
+        _cache_obj_fields(
+            store, "", "by_product",
+            [
+                {"property_code": "product_code", "property_name": "产品编码", "data_type": "STRING",
+                 "ext_property": {}},
+                {"property_code": "unit_price", "property_name": "单价", "data_type": "FLOAT",
+                 "ext_property": {}},
+            ],
+        )
+        _cache_obj_fields(
+            store, "", "by_order",
+            [
+                {"property_code": "quantity", "property_name": "数量", "data_type": "INTEGER",
+                 "ext_property": {}},
+            ],
+        )
+
+        result = session.collect_view_info(
+            view_code="v_merge",
+            view_name="合并视图",
+            object_codes=["by_product", "by_order"],
+            object_relations=[],
+            fields=[
+                # 覆盖自动加载的 product_code（改名称）
+                {"property_code": "product_code", "property_name": "产品编号",
+                 "data_type": "STRING", "ext_property": {}},
+                # 新增计算字段（不在缓存中）
+                {"property_code": "order_total", "property_name": "订单总金额",
+                 "data_type": "FLOAT",
+                 "ext_property": {"property_role_rule": {
+                     "property_role": "MEASURE", "rule_type": "derived_metric",
+                     "formula": "quantity * unit_price",
+                 }}},
+            ],
+        )
+        stored = result.get("fields", [])
+        codes = {f["property_code"] for f in stored}
+        # 自动展开的三个 + 用户新增的一个 = 4 个（product_code 去重）
+        assert "product_code" in codes
+        assert "unit_price" in codes
+        assert "quantity" in codes
+        assert "order_total" in codes
+        assert len(stored) == 4
+        # product_code 以用户传入为准
+        pc = next(f for f in stored if f["property_code"] == "product_code")
+        assert pc["property_name"] == "产品编号"
+        # order_total 含 formula
+        ot = next(f for f in stored if f["property_code"] == "order_total")
+        assert ot["ext_property"]["property_role_rule"]["formula"] == "quantity * unit_price"
 
 
 # ── list_bindable_term_types ───────────────────────────────────────────────────
@@ -429,6 +613,7 @@ class TestSubmitView:
         result = session.submit_view("v_test")
         assert result["ok"] is False
         assert "object_relations" in result["missing"]
+        assert "object_codes" in result["missing"]
 
     def test_workspace_cleared_after_view_submit_success(
         self, session: OntologyBuildSession, tmp_path: Path
@@ -442,7 +627,12 @@ class TestSubmitView:
                 "relation_type": "MANY_TO_ONE",
             }
         ]
-        session.collect_view_info(view_code="v_test", view_name="任务视图", object_relations=rels)
+        session.collect_view_info(
+            view_code="v_test",
+            view_name="任务视图",
+            object_codes=["by_task", "by_user"],
+            object_relations=rels,
+        )
         with (
             patch("datacloud_knowledge.ingestion.ontology_build.generate_from_definition"),
             patch("datacloud_knowledge.ingestion.ontology_build._import_view_zip") as mock_upload,
@@ -465,7 +655,12 @@ class TestSubmitView:
                 "relation_type": "MANY_TO_ONE",
             }
         ]
-        session.collect_view_info(view_code="v_test", view_name="任务视图", object_relations=rels)
+        session.collect_view_info(
+            view_code="v_test",
+            view_name="任务视图",
+            object_codes=["by_task", "by_user"],
+            object_relations=rels,
+        )
         with (
             patch("datacloud_knowledge.ingestion.ontology_build.generate_from_definition"),
             patch("datacloud_knowledge.ingestion.ontology_build._import_view_zip") as mock_upload,
@@ -476,6 +671,61 @@ class TestSubmitView:
             mock_upload.return_value = {"ok": True, "resource_id": "view-002"}
             session.submit_view("v_test")
         mock_create_table.assert_not_called()
+
+    def test_formula_fields_passed_to_generator(self, session: OntologyBuildSession) -> None:
+        """提交时含 formula 的 fields 被传入 generate_from_definition。"""
+        rels = [
+            {
+                "source_object_code": "by_product",
+                "source_object_field_code": "product_code",
+                "target_object_code": "by_order",
+                "target_object_field_code": "product_code",
+                "relation_type": "ONE_TO_MANY",
+            }
+        ]
+        fields = [
+            {
+                "property_code": "order_total",
+                "property_name": "订单总金额",
+                "data_type": "FLOAT",
+                "ext_property": {
+                    "property_role_rule": {
+                        "property_role": "MEASURE",
+                        "rule_type": "derived_metric",
+                        "formula": "quantity * unit_price",
+                    }
+                },
+            }
+        ]
+        session.collect_view_info(
+            view_code="v_test",
+            view_name="产品订单视图",
+            object_codes=["by_product", "by_order"],
+            object_relations=rels,
+            fields=fields,
+        )
+        with (
+            patch(
+                "datacloud_knowledge.ingestion.ontology_build.generate_from_definition"
+            ) as mock_gen,
+            patch(
+                "datacloud_knowledge.ingestion.ontology_build._import_view_zip"
+            ) as mock_upload,
+        ):
+            mock_upload.return_value = {"ok": True, "resource_id": "view-003"}
+            session.submit_view("v_test")
+
+        mock_gen.assert_called_once()
+        _args, kwargs = mock_gen.call_args
+        workspace_state = kwargs["workspace_state"] if "workspace_state" in kwargs else (
+            _args[0] if _args else {}
+        )
+        state_fields = workspace_state.get("fields", [])
+        assert len(state_fields) == 1
+        f = state_fields[0]
+        assert f["property_code"] == "order_total"
+        role_rule = f["ext_property"]["property_role_rule"]
+        assert role_rule["formula"] == "quantity * unit_price"
 
 
 # ── delete_owl_scope ───────────────────────────────────────────────────────────
@@ -800,7 +1050,12 @@ class TestSubmitViewCallsBuildTerms:
                 "relation_type": "MANY_TO_ONE",
             }
         ]
-        session.collect_view_info(view_code="v_test", view_name="任务视图", object_relations=rels)
+        session.collect_view_info(
+            view_code="v_test",
+            view_name="任务视图",
+            object_codes=["by_task", "by_user"],
+            object_relations=rels,
+        )
         with (
             patch("datacloud_knowledge.ingestion.ontology_build.generate_from_definition"),
             patch("datacloud_knowledge.ingestion.ontology_build._import_view_zip") as mock_upload,
@@ -825,7 +1080,12 @@ class TestSubmitViewCallsBuildTerms:
                 "relation_type": "MANY_TO_ONE",
             }
         ]
-        session.collect_view_info(view_code="v_test", view_name="任务视图", object_relations=rels)
+        session.collect_view_info(
+            view_code="v_test",
+            view_name="任务视图",
+            object_codes=["by_task", "by_user"],
+            object_relations=rels,
+        )
         with (
             patch("datacloud_knowledge.ingestion.ontology_build.generate_from_definition"),
             patch("datacloud_knowledge.ingestion.ontology_build._import_view_zip") as mock_upload,

@@ -1,6 +1,6 @@
 ---
 name: CRM 综合能力演示
-description: CRM 数据查询、统计分析、歧义追问、数据操作（周报生成→信息抽取→客户录入→商机任务创建）、结构化本体创建与视图、非结构化本体管理的综合演示。Use this skill whenever the user mentions CRM 演示、百应数据查询、客户查询、商机统计、项目管理、本体对象、视图管理、新手引导、产品演示、产品理念，or asks「什么是对象/视图」「查询快在哪里」「本体解决了什么问题」「结构化+非结构化融合」「多跳数据查询」「数据安全怎么做」— even if they don't say "演示" explicitly.
+description: CRM 数据查询、统计分析、歧义处理、数据操作（周报生成→信息抽取→客户录入→商机任务创建）、结构化本体创建与视图、非结构化本体管理的综合演示。Use this skill whenever the user mentions CRM 演示、百应数据查询、客户查询、商机统计、项目管理、本体对象、视图管理、新手引导、产品演示、产品理念，or asks「什么是对象/视图」「查询快在哪里」「本体解决了什么问题」「结构化+非结构化融合」「多跳数据查询」「数据安全怎么做」「解决口语表达的歧义」— even if they don't say "演示" explicitly.
 allowed-tools: baiying_call, Bash
 ---
 
@@ -12,16 +12,16 @@ allowed-tools: baiying_call, Bash
 
 Agent 打开本文件后，先根据用户意图匹配下表，找到对应的演示项和工具。
 
-| 序号 | 演示项 | 触发条件 | 工具 | 详细定义 |
-|:----:|--------|---------|------|---------|
-| 1 | 数据查询 | "查客户""查字段" | baiying_call | [01-data-query.md](demos/01-data-query.md) |
-| 2 | 数据统计 | "按x统计""前N名" | baiying_call | [02-data-statistics.md](demos/02-data-statistics.md) |
-| 3 | 歧义处理 | 字段不存在或含义不清 | baiying_call + 追问 | [03-ambiguity-handling.md](demos/03-ambiguity-handling.md) |
-| 4 | 数据操作 | "录入客户""创建商机""生成周报" | baiying_call | [04-data-operations.md](demos/04-data-operations.md) |
-| 5 | 结构化本体 | "创建对象""创建视图""挂载本体" | exec(脚本) | [05-structured-ontology.md](demos/05-structured-ontology.md) |
-| 6 | 非结构化本体 | "创建会议纪要""查会议纪要" | exec(脚本) | [06-unstructured-ontology.md](demos/06-unstructured-ontology.md) |
+| 序号 | 演示项 | 说明 |
+|:----:|--------|------|
+| 1 | [数据查询](demos/01-data-query.md) | 自然语言到结构化数据，一句话问到数据无需 SQL |
+| 2 | [数据统计](demos/02-data-statistics.md) | 聚合、排序、分组 — 不需要写函数，说出来就行 |
+| 3 | [歧义处理](demos/03-ambiguity-handling.md) | 能确定的不问，不确定的要问 — 智能消歧义 |
+| 4 | [数据操作](demos/04-data-operations.md) | 非结构化文本进去，结构化数据出来，中间有人确认 |
+| 5 | [结构化本体](demos/05-structured-ontology.md) | 自己建模自己查询 — 对象即表、视图即关联、挂载即生效 |
+| 6 | [非结构化本体](demos/06-unstructured-ontology.md) | 给文档打上结构化标签，检索就像查数据库一样精准 |
 
-> 用户说"新手引导""给我演示一下"时，按序号 1→6 逐项执行，每项完成后等用户回应再继续。
+> 用户说"新手引导""给我演示一下"时，先列出全部能力清单等用户回应再继续。
 
 ---
 
@@ -77,11 +77,12 @@ bash scripts/setup.sh
 
 ### resource_id 获取
 
-`baiying_call` 的 `resource_id` 是**数字型 ID**，通过 `list_resources.py` 运行时动态获取，**不可硬编码**：
+`baiying_call` 的 `resource_id` 是**数字型 ID**，通过 `list_mounted_resources.py` 运行时动态获取，**不可硬编码**：
 
 ```bash
-/tmp/ont_env/bin/python scripts/ontology/structured/list_resources.py \
-  '{"keyword": "<中文名称>"}'
+# 提取 Agent 的 resource_id（从编码中的数字后缀，如 agent-10014603 → 10014603）
+/tmp/ont_env/bin/python scripts/ontology/structured/list_mounted_resources.py \
+  '{"resource_id": <Agent的resource_id>, "keyword": "<中文名称>"}'
 ```
 
 从返回 JSON 的 `data` 数组中提取数字 `resourceId`。各 demo 步骤中注明了对应的 keyword。
@@ -92,7 +93,7 @@ bash scripts/setup.sh
 
 ### 挂载生命周期
 
-演示 5/6 中创建的视图/对象挂载后，同样需要结束本轮等待生效。规则同上 Step 3。
+演示 5/6 中创建的视图/对象挂载后，属于非首次挂载，无需结束本轮等待生效。规则同上 Step 3。
 
 > Python 环境详情见 [Python 环境搭建](references/python-env.md)。
 
@@ -104,11 +105,11 @@ bash scripts/setup.sh
 
 | 参数 | 说明 |
 |------|------|
-| `resource_id` | 数字型 ID，不同资源 ID 不同。通过 `list_resources.py`（查询可用资源）或 `list_mounted_resources.py`（查询已挂载资源）获取，不可硬编码 |
+| `resource_id` | 数字型 ID，不同资源 ID 不同。通过 `list_mounted_resources.py`（查询已挂载资源）获取，不可硬编码 |
 | `resource_type` | `VIEW`（查询）或 `OBJECT`（写入），必须大写 |
 | `query` | 自然语言，用户想做什么就写什么 |
 
-> **获取 resource_id**：执行 `list_resources.py`。不传参数默认查全部（个人+企业、OBJECT+VIEW）。可按 `keyword` 中文名称筛选，从返回结果中获取数字 `resourceId`。
+> **获取 resource_id**：执行 `list_mounted_resources.py`。不传参数默认查全部（个人+企业、OBJECT+VIEW）。可按 `keyword` 中文名称筛选，从返回结果中获取数字 `resourceId`。
 
 ### 挂载生命周期
 
@@ -201,7 +202,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
   '{"agent_id": <Agent 编码里的数字后缀>, "resource_code": "scene_sales_management"}'
 ```
 
-> `list_resources.py` 返回个人和企业资源列表（含平台级资源）。`list_mounted_resources.py` 用于检查某资源是否已挂载到当前 Agent。
+> `list_mounted_resources.py` 用于检查某资源是否已挂载到当前 Agent。
 
 ### 脚本路径速查
 
@@ -210,7 +211,6 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 | 脚本 | 用途 |
 |------|------|
 | `scripts/ontology/structured/list_mounted_resources.py` | 查询 Agent 已挂载的资源 |
-| `scripts/ontology/structured/list_resources.py` | 查询资源列表 |
 | `scripts/ontology/structured/create_object.py` | 创建结构化对象（collect → submit） |
 | `scripts/ontology/structured/create_view.py` | 创建本体视图 |
 | `scripts/ontology/structured/delete_object.py` | 删除结构化对象 |
@@ -218,12 +218,12 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 | `scripts/ontology/structured/mount_resource.py` | 挂载视图到当前 Agent |
 | `scripts/ontology/structured/list_term_types.py` | 查询可绑定的术语类型 |
 | `scripts/ontology/structured/get_term_type_values.py` | 查询术语类型的值列表 |
-| `scripts/ontology/unstructured/list_resources.py` | 查询非结构化对象列表 |
 | `scripts/ontology/unstructured/list_knowledge_bases.py` | 查询可用知识库 |
 | `scripts/ontology/unstructured/list_kb_directories.py` | 查询知识库目录 |
 | `scripts/ontology/unstructured/create_object.py` | 创建非结构化对象（collect → submit） |
 | `scripts/ontology/unstructured/delete_object.py` | 删除非结构化对象 |
 | `scripts/ontology/unstructured/mount_resource.py` | 挂载非结构化对象到 Agent |
+| `scripts/ontology/unstructured/list_mounted_resources.py` | 查询 Agent 已挂载的非结构化对象 |
 | `scripts/meeting-minutes/generate_meeting_minutes.py` | 生成模拟会议纪要 |
 | `scripts/weekly-report/generate_weekly_report.py` | 生成模拟周报 |
 
