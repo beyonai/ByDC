@@ -1,6 +1,6 @@
 ---
 name: CRM 综合能力演示
-description: CRM 数据查询、统计分析、歧义追问、数据操作（周报生成→信息抽取→客户录入→商机任务创建）、结构化本体创建与视图、非结构化本体管理的综合演示。Use this skill whenever the user mentions CRM 演示、百应数据查询、客户查询、商机统计、项目管理、本体对象、视图管理、新手引导、产品演示、产品理念，or asks「什么是对象/视图」「查询快在哪里」「本体解决了什么问题」「结构化+非结构化融合」「多跳数据查询」「数据安全怎么做」— even if they don't say "演示" explicitly.
+description: CRM 数据查询、统计分析、歧义处理、数据操作（周报生成→信息抽取→客户录入→商机任务创建）、结构化本体创建与视图、非结构化本体管理的综合演示。Use this skill whenever the user mentions CRM 演示、百应数据查询、客户查询、商机统计、项目管理、本体对象、视图管理、新手引导、产品演示、产品理念，or asks「什么是对象/视图」「查询快在哪里」「本体解决了什么问题」「结构化+非结构化融合」「多跳数据查询」「数据安全怎么做」「解决口语表达的歧义」— even if they don't say "演示" explicitly.
 allowed-tools: baiying_call, Bash
 ---
 
@@ -16,7 +16,7 @@ Agent 打开本文件后，先根据用户意图匹配下表，找到对应的�
 |:----:|--------|---------|------|---------|
 | 1 | 数据查询 | "查客户""查字段" | baiying_call | [01-data-query.md](demos/01-data-query.md) |
 | 2 | 数据统计 | "按x统计""前N名" | baiying_call | [02-data-statistics.md](demos/02-data-statistics.md) |
-| 3 | 歧义处理 | 字段不存在或含义不清 | baiying_call + 追问 | [03-ambiguity-handling.md](demos/03-ambiguity-handling.md) |
+| 3 | 歧义处理 | "处理口语表达里的歧义" 字段不存在或含义不清 | baiying_call | [03-ambiguity-handling.md](demos/03-ambiguity-handling.md) |
 | 4 | 数据操作 | "录入客户""创建商机""生成周报" | baiying_call | [04-data-operations.md](demos/04-data-operations.md) |
 | 5 | 结构化本体 | "创建对象""创建视图""挂载本体" | exec(脚本) | [05-structured-ontology.md](demos/05-structured-ontology.md) |
 | 6 | 非结构化本体 | "创建会议纪要""查会议纪要" | exec(脚本) | [06-unstructured-ontology.md](demos/06-unstructured-ontology.md) |
