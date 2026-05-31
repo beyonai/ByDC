@@ -171,7 +171,7 @@ def parse_analytic_role(ext_property_json: str | None) -> tuple[str | None, str 
     rule_type = rule.get("rule_type", "")
     role = _ROLE_MAP.get(property_role)
     kind = _KIND_MAP.get(rule_type)
-    # MEASURE 字段的 rule_type 未知时，默认当作 raw_number， 
+    # MEASURE 字段的 rule_type 未知时，默认当作 raw_number，
     # 避免 _KIND_MAP 缺少映射（如 count/amount）导致 aggregate_ops 为空、compute 工具不生成。
     if role == "measure" and kind is None:
         kind = "raw_number"
