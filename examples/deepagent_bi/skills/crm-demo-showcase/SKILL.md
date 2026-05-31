@@ -12,16 +12,16 @@ allowed-tools: baiying_call, Bash
 
 Agent 打开本文件后，先根据用户意图匹配下表，找到对应的演示项和工具。
 
-| 序号 | 演示项 | 触发条件 | 工具 | 详细定义 |
-|:----:|--------|---------|------|---------|
-| 1 | 数据查询 | "查客户""查字段" | baiying_call | [01-data-query.md](demos/01-data-query.md) |
-| 2 | 数据统计 | "按x统计""前N名" | baiying_call | [02-data-statistics.md](demos/02-data-statistics.md) |
-| 3 | 歧义处理 | "处理口语表达里的歧义" 字段不存在或含义不清 | baiying_call | [03-ambiguity-handling.md](demos/03-ambiguity-handling.md) |
-| 4 | 数据操作 | "录入客户""创建商机""生成周报" | baiying_call | [04-data-operations.md](demos/04-data-operations.md) |
-| 5 | 结构化本体 | "创建对象""创建视图""挂载本体" | exec(脚本) | [05-structured-ontology.md](demos/05-structured-ontology.md) |
-| 6 | 非结构化本体 | "创建会议纪要""查会议纪要" | exec(脚本) | [06-unstructured-ontology.md](demos/06-unstructured-ontology.md) |
+| 序号 | 演示项 | 说明 |
+|:----:|--------|------|
+| 1 | [数据查询](demos/01-data-query.md) | 自然语言到结构化数据，一句话问到数据无需 SQL |
+| 2 | [数据统计](demos/02-data-statistics.md) | 聚合、排序、分组 — 不需要写函数，说出来就行 |
+| 3 | [歧义处理](demos/03-ambiguity-handling.md) | 能确定的不问，不确定的要问 — 智能消歧义 |
+| 4 | [数据操作](demos/04-data-operations.md) | 非结构化文本进去，结构化数据出来，中间有人确认 |
+| 5 | [结构化本体](demos/05-structured-ontology.md) | 自己建模自己查询 — 对象即表、视图即关联、挂载即生效 |
+| 6 | [非结构化本体](demos/06-unstructured-ontology.md) | 给文档打上结构化标签，检索就像查数据库一样精准 |
 
-> 用户说"新手引导""给我演示一下"时，按序号 1→6 逐项执行，每项完成后等用户回应再继续。
+> 用户说"新手引导""给我演示一下"时，先列出全部能力清单等用户回应再继续。
 
 ---
 
