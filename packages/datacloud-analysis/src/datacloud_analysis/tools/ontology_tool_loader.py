@@ -447,7 +447,7 @@ class OntologyToolLoader:
         )
 
         loader = OntologyLoader()
-        loader.load_from_owl_resource_directory(str(ontology_path), mounted_objects, mounted_objects)
+        loader.load_from_owl_resource_directory(str(ontology_path), object_codes=mounted_objects, view_codes=mounted_objects)
         inject_virtual_actions(loader)
         return loader
 
