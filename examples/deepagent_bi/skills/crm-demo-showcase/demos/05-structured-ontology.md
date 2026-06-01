@@ -39,19 +39,33 @@
 
 #### 3.1 插入产品数据
 
-通过 `baiying_call`（`resource_type=OBJECT`，resource_id=第 2 步获取的 product 的 ID）逐条插入 3 条产品数据，query 描述各字段值：
+通过 `baiying_call`批量插入 3 条产品数据，query 描述各字段值：
 - `P001` / 数据工厂 / 数据平台 / 在售 / 150000.00
 - `P002` / 智能分析平台 / 分析工具 / 在售 / 80000.00
 - `P003` / 客户画像系统 / 数据应用 / 预研 / 120000.00
 
+```
+baiying_call(
+    resource_type=OBJECT,
+    resource_id=<第 2 步获取的 product 的 ID>,
+    query="新建产品：[3条产品数据]"
+)
+```
 - **成功标志**：每条插入返回成功
 
 #### 3.2 插入订单数据
 
-通过 `baiying_call`（`resource_type=OBJECT`，resource_id=第 2 步获取的 order 的 ID）逐条插入 2 条订单数据，query 描述各字段值：
+通过 `baiying_call`批量插入 2 条订单数据，query 描述各字段值：
 - `O001` / 广州国投-数据工厂采购 / `P001` / 广州国投中债 / 2026-03-15 / 已完成 / 2 / 300000.00
 - `O002` / 深圳创新-分析平台采购 / `P002` / 深圳创新科技 / 2026-04-20 / 待处理 / 1 / 80000.00
 
+```
+baiying_call(
+    resource_type=OBJECT,
+    resource_id=<第 2 步获取的 order 的 ID>,
+    query="新建订单：[2条订单数据]"
+)
+```
 - **成功标志**：每条插入返回成功
 
 > **注意**：产品数据必须先于订单数据插入，因为订单通过 `product_code` 关联产品。

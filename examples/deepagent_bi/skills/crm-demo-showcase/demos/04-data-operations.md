@@ -44,15 +44,37 @@
 
 以表格预览待录入数据（含"待录入客户信息"表 + 备注列），等待用户确认。
 
-### 第 5 步：客户录入
+### 第 5 步：挂载对象 — by_customer + by_opp_task
 
-用户确认后，通过 baiying_call（`resource_type=OBJECT`，resource_id 通过 `list_mounted_resources.py` 查询 `by_customer` 获取）新增客户数据。
+`baiying_call` 必须挂载资源后才可用。插入数据前，先将客户对象和商机任务对象挂载到当前 Agent：
 
-- **成功标志**：返回成功
+通过 `mount_resource.py` 分别挂载resource_code 为 `by_customer` 和 `by_opp_task` 的对象到当前 Agent
 
-### 第 6 步：商机任务创建
+- **成功标志**：挂载成功返回
 
-用户确认后，通过 baiying_call（`resource_type=OBJECT`，resource_id 通过 `list_mounted_resources.py` 查询 `by_opp_task` 获取）创建商机任务。
+### 第 6 步：客户录入
+
+用户确认后，通过 baiying_call新增客户数据。
+```
+baiying_call(
+    resource_type=OBJECT,
+    resource_id=<通过 `list_mounted_resources.py` 查询 `by_customer` 获取>,
+    query="新建客户：[前面步骤的客户信息]"
+)
+```
+
+- **成功标志**：返回创建成功
+
+### 第 7 步：商机任务创建
+
+用户确认后，通过 baiying_call创建商机任务。
+```
+baiying_call(
+    resource_type=OBJECT,
+    resource_id=<通过 `list_mounted_resources.py` 查询 `by_opp_task` 获取>,
+    query="新建商机任务：[前面步骤的商机任务信息]"
+)
+```
 
 - **成功标志**：返回创建成功
 

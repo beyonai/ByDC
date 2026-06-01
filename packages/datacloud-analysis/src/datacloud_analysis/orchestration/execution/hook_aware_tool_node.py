@@ -244,7 +244,8 @@ class HookAwareToolNode(ToolNode):
             patched_calls.append({**tc, "args": tp})
 
         if operation_contexts:
-            batch_form = build_batch_operation_form(operation_contexts)
+            locale = str(((config or {}).get("configurable") or {}).get("locale") or "zh_CN")
+            batch_form = build_batch_operation_form(operation_contexts, locale=locale)
             logger.info(
                 "[HookAwareToolNode] operation_form batch interrupt actions=%d form_id=%s",
                 len(batch_form.get("actions") or []),

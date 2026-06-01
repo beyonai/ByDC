@@ -317,6 +317,7 @@ class GraphBuilder:
 
         # 关系元数据
         self._add_literal(uri, self._ns.relationName, rel.relation_name)
+        self._add_literal(uri, self._ns.relation_name, rel.relation_name)
         self._add_literal(uri, self._ns.relationCategory, rel.relation_category)
         self._add_literal(uri, self._ns.cardinality, rel.cardinality)
 
@@ -366,10 +367,20 @@ class GraphBuilder:
         self._graph.add((uri, self._RDF.type, self._ns.ActionDefinition))
 
         self._add_literal(uri, self._ns.actionCode, action.action_code)
+        self._add_literal(uri, self._ns.action_code, action.action_code)
         self._add_literal(uri, self._ns.actionName, action.action_name)
+        self._add_literal(uri, self._ns.action_name, action.action_name)
         self._add_literal(uri, self._ns.actionType, action.action_type)
+        self._add_literal(uri, self._ns.action_type, action.action_type)
         self._add_literal(uri, self._ns.requestUrl, action.request_url)
+        self._add_literal(uri, self._ns.request_url, action.request_url)
         self._add_literal(uri, self._ns.requestMethod, action.request_method)
+        self._add_literal(uri, self._ns.request_method, action.request_method)
+
+        # Agent Parser compatibility defaults
+        self._add_literal(uri, self._ns.function_refs, "[]")
+        self._add_literal(uri, self._ns.belong_entity, "[]")
+        self._add_literal(uri, self._ns.script, "")
 
         for param in action.request_params:
             self._add_action_param(uri, param, "RequestParameter")
@@ -394,6 +405,13 @@ class GraphBuilder:
             self._ns.isRequired,
             _serialize_truthy(param.is_required),
         )
+
+        # Agent Parser compatibility aliases
+        if param_type == "RequestParameter":
+            self._add_literal(param_uri, self._ns.type, param.param_type)
+        elif param_type == "ResponseParameter":
+            self._add_literal(param_uri, self._ns.fieldCode, param.param_code)
+            self._add_literal(param_uri, self._ns.fieldType, param.param_type)
 
     # ── KnowledgePackage ─────────────────────────────────────────────────────
 

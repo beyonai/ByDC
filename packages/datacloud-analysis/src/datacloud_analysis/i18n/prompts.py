@@ -330,6 +330,46 @@ _UI_TEXT: dict[str, dict[str, str]] = {
         "zh_CN": "查询条件存在歧义，请确认查询维度",
         "en_US": "The query has ambiguous terms — please clarify the selections below",
     },
+    "operation_form_title": {
+        "zh_CN": "确认执行：{action_name}",
+        "en_US": "Confirm execution: {action_name}",
+    },
+    "operation_form_description": {
+        "zh_CN": "请确认以下表单信息，确认后将继续执行。",
+        "en_US": "Please confirm the form below. Execution will continue after confirmation.",
+    },
+    "operation_batch_title": {
+        "zh_CN": "确认执行 {count} 个操作",
+        "en_US": "Confirm {count} operations",
+    },
+    "operation_batch_single_title": {
+        "zh_CN": "确认执行操作",
+        "en_US": "Confirm operation",
+    },
+    "operation_form_interrupt_prompt": {
+        "zh_CN": "请确认操作表单。",
+        "en_US": "Please confirm the operation form.",
+    },
+    "operation_cancelled_reason": {
+        "zh_CN": "用户取消操作",
+        "en_US": "Operation cancelled by user",
+    },
+    "operation_cancelled_hint": {
+        "zh_CN": "用户已取消本次操作，不再执行业务提交。",
+        "en_US": "The user cancelled this operation. The business submission will not run.",
+    },
+    "operation_term_ambiguous_recommended": {
+        "zh_CN": "模型识别为“{original}”，匹配到多个，已默认选择“{display}”（code: {code}），请确认或重新选择。",
+        "en_US": 'The model recognized "{original}" and found multiple matches. "{display}" (code: {code}) was selected by default. Please confirm or choose again.',
+    },
+    "operation_term_recommended": {
+        "zh_CN": "模型识别为“{original}”，未精确命中，已推荐“{display}”（code: {code}），请确认或重新选择。",
+        "en_US": 'The model recognized "{original}" but did not find an exact match. "{display}" (code: {code}) is recommended. Please confirm or choose again.',
+    },
+    "operation_term_not_found": {
+        "zh_CN": "模型识别为“{original}”，未能找到可推荐值，请重新选择。",
+        "en_US": 'The model recognized "{original}", but no recommended value was found. Please choose again.',
+    },
 }
 
 

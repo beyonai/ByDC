@@ -307,21 +307,43 @@ class TestCollectViewInfo:
         """object_codes 传入时自动从缓存加载字段。"""
         store = LocalFileWorkspaceStore()
         _cache_obj_fields(
-            store, "", "by_product",
+            store,
+            "",
+            "by_product",
             [
-                {"property_code": "product_code", "property_name": "产品编码", "data_type": "STRING",
-                 "ext_property": {}},
-                {"property_code": "product_name", "property_name": "产品名称", "data_type": "STRING",
-                 "ext_property": {}},
+                {
+                    "property_code": "product_code",
+                    "property_name": "产品编码",
+                    "data_type": "STRING",
+                    "ext_property": {},
+                },
+                {
+                    "property_code": "product_name",
+                    "property_name": "产品名称",
+                    "data_type": "STRING",
+                    "ext_property": {},
+                },
             ],
         )
         _cache_obj_fields(
-            store, "", "by_order",
+            store,
+            "",
+            "by_order",
             [
-                {"property_code": "order_code", "property_name": "订单编码", "data_type": "STRING",
-                 "ext_property": {}},
-                {"property_code": "quantity", "property_name": "数量", "data_type": "INTEGER",
-                 "ext_property": {"property_role_rule": {"property_role": "MEASURE", "rule_type": "count"}}},
+                {
+                    "property_code": "order_code",
+                    "property_name": "订单编码",
+                    "data_type": "STRING",
+                    "ext_property": {},
+                },
+                {
+                    "property_code": "quantity",
+                    "property_name": "数量",
+                    "data_type": "INTEGER",
+                    "ext_property": {
+                        "property_role_rule": {"property_role": "MEASURE", "rule_type": "count"}
+                    },
+                },
             ],
         )
 
@@ -345,19 +367,35 @@ class TestCollectViewInfo:
         """用户 fields 覆盖自动加载的同名字段，新字段追加。"""
         store = LocalFileWorkspaceStore()
         _cache_obj_fields(
-            store, "", "by_product",
+            store,
+            "",
+            "by_product",
             [
-                {"property_code": "product_code", "property_name": "产品编码", "data_type": "STRING",
-                 "ext_property": {}},
-                {"property_code": "unit_price", "property_name": "单价", "data_type": "FLOAT",
-                 "ext_property": {}},
+                {
+                    "property_code": "product_code",
+                    "property_name": "产品编码",
+                    "data_type": "STRING",
+                    "ext_property": {},
+                },
+                {
+                    "property_code": "unit_price",
+                    "property_name": "单价",
+                    "data_type": "FLOAT",
+                    "ext_property": {},
+                },
             ],
         )
         _cache_obj_fields(
-            store, "", "by_order",
+            store,
+            "",
+            "by_order",
             [
-                {"property_code": "quantity", "property_name": "数量", "data_type": "INTEGER",
-                 "ext_property": {}},
+                {
+                    "property_code": "quantity",
+                    "property_name": "数量",
+                    "data_type": "INTEGER",
+                    "ext_property": {},
+                },
             ],
         )
 
@@ -368,15 +406,25 @@ class TestCollectViewInfo:
             object_relations=[],
             fields=[
                 # 覆盖自动加载的 product_code（改名称）
-                {"property_code": "product_code", "property_name": "产品编号",
-                 "data_type": "STRING", "ext_property": {}},
+                {
+                    "property_code": "product_code",
+                    "property_name": "产品编号",
+                    "data_type": "STRING",
+                    "ext_property": {},
+                },
                 # 新增计算字段（不在缓存中）
-                {"property_code": "order_total", "property_name": "订单总金额",
-                 "data_type": "FLOAT",
-                 "ext_property": {"property_role_rule": {
-                     "property_role": "MEASURE", "rule_type": "derived_metric",
-                     "formula": "quantity * unit_price",
-                 }}},
+                {
+                    "property_code": "order_total",
+                    "property_name": "订单总金额",
+                    "data_type": "FLOAT",
+                    "ext_property": {
+                        "property_role_rule": {
+                            "property_role": "MEASURE",
+                            "rule_type": "derived_metric",
+                            "formula": "quantity * unit_price",
+                        }
+                    },
+                },
             ],
         )
         stored = result.get("fields", [])
@@ -708,17 +756,17 @@ class TestSubmitView:
             patch(
                 "datacloud_knowledge.ingestion.ontology_build.generate_from_definition"
             ) as mock_gen,
-            patch(
-                "datacloud_knowledge.ingestion.ontology_build._import_view_zip"
-            ) as mock_upload,
+            patch("datacloud_knowledge.ingestion.ontology_build._import_view_zip") as mock_upload,
         ):
             mock_upload.return_value = {"ok": True, "resource_id": "view-003"}
             session.submit_view("v_test")
 
         mock_gen.assert_called_once()
         _args, kwargs = mock_gen.call_args
-        workspace_state = kwargs["workspace_state"] if "workspace_state" in kwargs else (
-            _args[0] if _args else {}
+        workspace_state = (
+            kwargs["workspace_state"]
+            if "workspace_state" in kwargs
+            else (_args[0] if _args else {})
         )
         state_fields = workspace_state.get("fields", [])
         assert len(state_fields) == 1
