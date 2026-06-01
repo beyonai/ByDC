@@ -435,7 +435,7 @@ class OntologyToolLoader:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_loader(ontology_path: Path, mounted_objects:list[str] | None = None) -> Any:
+    def _build_loader(ontology_path: Path, mounted_objects: list[str] | None = None) -> Any:
         """自建 OntologyLoader：加载 OWL 文件并注入虚拟动作。
 
         仅在 agent 侧通过 ontology_path 构建时调用；
@@ -447,7 +447,9 @@ class OntologyToolLoader:
         )
 
         loader = OntologyLoader()
-        loader.load_from_owl_resource_directory(str(ontology_path), object_codes=mounted_objects, view_codes=mounted_objects)
+        loader.load_from_owl_resource_directory(
+            str(ontology_path), object_codes=mounted_objects, view_codes=mounted_objects
+        )
         inject_virtual_actions(loader)
         return loader
 

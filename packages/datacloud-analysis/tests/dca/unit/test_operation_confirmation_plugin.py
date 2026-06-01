@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin import (
     before_call_back,
+    build_batch_operation_form,
     build_operation_form,
     restore_action_params,
 )
@@ -151,6 +152,52 @@ async def test_operation_before_call_raises_form_interrupt() -> None:
     assert status_field["term"]["termSet"] == "customer_status.code"
 
 
+def test_operation_form_uses_locale_for_visible_text() -> None:
+    action = _Action()
+
+    form = build_operation_form(
+        action,
+        {"records": [{"customerId": "C001", "status": "TODO"}]},
+        locale="en_US",
+    )
+    batch_form = build_batch_operation_form(
+        [
+            {
+                "operation_form_action": {
+                    "toolCallId": "call-1",
+                    "toolName": "insert_customer",
+                    "actionCode": "insert_customer",
+                    "actionName": "Add customer",
+                    "title": "Confirm execution: Add customer",
+                    "description": "Please confirm the form below.",
+                    "rule": [],
+                }
+            },
+            {
+                "operation_form_action": {
+                    "toolCallId": "call-2",
+                    "toolName": "insert_customer",
+                    "actionCode": "insert_customer",
+                    "actionName": "Add customer",
+                    "title": "Confirm execution: Add customer",
+                    "description": "Please confirm the form below.",
+                    "rule": [],
+                }
+            },
+        ],
+        locale="en_US",
+    )
+
+    assert form["title"] == "Confirm execution: 新增客户"
+    assert form["description"] == (
+        "Please confirm the form below. Execution will continue after confirmation."
+    )
+    assert batch_form["title"] == "Confirm 2 operations"
+    assert batch_form["description"] == (
+        "Please confirm the form below. Execution will continue after confirmation."
+    )
+
+
 async def test_operation_form_keeps_unique_term_value_without_notice() -> None:
     action = _Action()
     term_loader = KbTermLoader.from_config(
@@ -209,6 +256,42 @@ async def test_operation_form_recommends_first_term_when_value_not_found() -> No
     assert notice["originalValue"] == "待办中"
     assert notice["recommendedValue"] == "TODO"
     assert notice["recommendedLabel"] == "待处理"
+
+
+async def test_operation_form_uses_locale_for_term_notice() -> None:
+    action = _Action()
+    term_loader = KbTermLoader.from_config(
+        {
+            "mapping": {
+                "customer_status.code": [
+                    {"code": "TODO", "label": "To do"},
+                    {"code": "DONE", "label": "Done"},
+                ]
+            }
+        }
+    )
+    ctx: HookContext = {
+        "tool_name": "insert_customer",
+        "tool_params": {
+            "records": [{"customerId": "C001", "status": "todo-ish"}],
+        },
+        "metadata": {
+            "loader": _Loader(action, term_loader=term_loader),
+            "state": {},
+            "configurable": {"locale": "en_US"},
+        },
+    }
+
+    with pytest.raises(ClarificationNeededError) as exc_info:
+        await before_call_back(ctx)
+
+    status_field = exc_info.value.context["operation_form_action"]["rule"][0][1]
+    notice = status_field["termResolveNotice"]
+    assert status_field["fieldValue"] == "TODO"
+    assert notice["message"] == (
+        'The model recognized "todo-ish" but did not find an exact match. '
+        '"To do" (code: TODO) is recommended. Please confirm or choose again.'
+    )
 
 
 async def test_operation_form_defaults_first_value_when_term_is_ambiguous() -> None:

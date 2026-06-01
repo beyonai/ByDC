@@ -10,6 +10,7 @@ from typing import Any
 
 from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
 
+from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.tool_hook_plugins.types import (
     ClarificationNeededError,
     HookContext,
@@ -75,6 +76,7 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     state = metadata.get("state")
     state_dict = state if isinstance(state, dict) else {}
     loader = metadata.get("loader")
+    locale = _locale_from_metadata(metadata)
     action = find_operation_action(loader, tool_name)
     if action is None:
         return None
@@ -88,9 +90,12 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 "result": {
                     "tool_error": {
                         "error_type": "OperationCancelled",
-                        "message": str(formatted_params.get("reason") or "用户取消操作"),
+                        "message": str(
+                            formatted_params.get("reason")
+                            or get_ui_text("operation_cancelled_reason", locale)
+                        ),
                         "retryable": False,
-                        "hint": "用户已取消本次操作，不再执行业务提交。",
+                        "hint": get_ui_text("operation_cancelled_hint", locale),
                         "context": {"tool_name": tool_name, "tool_call_id": tool_call_id},
                     }
                 },
@@ -111,13 +116,19 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         logger.info("[operation_confirmation] resume patch tool=%s", tool_name)
         return {"action": "patch", "patch": {"tool_params": patched}}
 
-    operation_form = build_operation_form(action, tool_params, term_loader=term_loader)
+    operation_form = build_operation_form(
+        action,
+        tool_params,
+        term_loader=term_loader,
+        locale=locale,
+    )
     operation_form_action = build_operation_action_form(
         action,
         tool_params,
         tool_call_id=tool_call_id,
         tool_name=tool_name,
         term_loader=term_loader,
+        locale=locale,
     )
     form_id = str(operation_form_action.get("formId") or operation_form.get("formId") or "")
     logger.info("[operation_confirmation] interrupt tool=%s form_id=%s", tool_name, form_id)
@@ -162,19 +173,27 @@ def build_operation_form(
     tool_params: dict[str, Any],
     *,
     term_loader: Any | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     """Build frontend operation confirmation form from action metadata and params."""
     form_id = _build_form_id(action, tool_params)
     action_code = str(getattr(action, "action_code", "") or "")
     action_name = str(getattr(action, "action_name", "") or action_code)
-    rule = _build_top_level_rule(action, tool_params, form_id=form_id, term_loader=term_loader)
+    rule = _build_top_level_rule(
+        action,
+        tool_params,
+        form_id=form_id,
+        term_loader=term_loader,
+        locale=locale,
+    )
+    display_action_name = action_name or action_code
     return {
         "schemaVersion": "1.0",
         "formId": form_id,
         "actionCode": action_code,
         "actionName": action_name,
-        "title": f"确认执行：{action_name or action_code}",
-        "description": "请确认以下表单信息，确认后将继续执行。",
+        "title": get_ui_text("operation_form_title", locale, action_name=display_action_name),
+        "description": get_ui_text("operation_form_description", locale),
         "rule": rule,
     }
 
@@ -186,9 +205,10 @@ def build_operation_action_form(
     tool_call_id: str,
     tool_name: str,
     term_loader: Any | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     """Build one action item for a batch operation confirmation form."""
-    form = build_operation_form(action, tool_params, term_loader=term_loader)
+    form = build_operation_form(action, tool_params, term_loader=term_loader, locale=locale)
     return {
         "formId": str(form.get("formId") or ""),
         "toolCallId": tool_call_id,
@@ -201,7 +221,11 @@ def build_operation_action_form(
     }
 
 
-def build_batch_operation_form(operation_contexts: list[dict[str, Any]]) -> dict[str, Any]:
+def build_batch_operation_form(
+    operation_contexts: list[dict[str, Any]],
+    *,
+    locale: str | None = None,
+) -> dict[str, Any]:
     """Build a batch operation form from collected operation interruption contexts."""
     actions: list[dict[str, Any]] = []
     for context in operation_contexts:
@@ -234,8 +258,10 @@ def build_batch_operation_form(operation_contexts: list[dict[str, Any]]) -> dict
     return {
         "schemaVersion": "1.0",
         "formId": form_id,
-        "title": f"确认执行 {len(actions)} 个操作" if len(actions) > 1 else "确认执行操作",
-        "description": "请确认以下表单信息，确认后将继续执行。",
+        "title": get_ui_text("operation_batch_title", locale, count=len(actions))
+        if len(actions) > 1
+        else get_ui_text("operation_batch_single_title", locale),
+        "description": get_ui_text("operation_form_description", locale),
         "actions": actions,
     }
 
@@ -362,6 +388,17 @@ def _term_loader_from_loader(loader: Any) -> Any | None:
     return getattr(loader, "term_loader", None)
 
 
+def _locale_from_metadata(metadata: dict[str, Any]) -> str | None:
+    configurable = metadata.get("configurable")
+    if isinstance(configurable, dict):
+        locale = str(configurable.get("locale") or "").strip()
+        if locale:
+            return locale
+    gateway_context = metadata.get("gateway_context")
+    locale = str(getattr(gateway_context, "locale", "") or "").strip()
+    return locale or None
+
+
 def _is_confirmable_action(action: Any) -> bool:
     action_type = str(getattr(action, "action_type", "") or "").lower()
     action_family = str(getattr(action, "action_family", "") or "").lower()
@@ -374,6 +411,7 @@ def _build_top_level_rule(
     *,
     form_id: str,
     term_loader: Any | None = None,
+    locale: str | None = None,
 ) -> list[list[dict[str, Any]]]:
     action_family = str(getattr(action, "action_family", "") or "").lower()
     field_meta = _action_field_meta(action)
@@ -386,6 +424,7 @@ def _build_top_level_rule(
             field_meta=field_meta,
             param_meta=param_meta,
             term_loader=term_loader,
+            locale=locale,
         )
 
     if action_family == "write" and isinstance(tool_params.get("records"), list):
@@ -396,6 +435,7 @@ def _build_top_level_rule(
             field_meta=field_meta,
             param_meta=param_meta,
             term_loader=term_loader,
+            locale=locale,
         )
 
     input_schema = _schema_for_single_action_display(_get_action_input_schema(action), tool_params)
@@ -408,6 +448,7 @@ def _build_top_level_rule(
         field_meta=field_meta,
         param_meta=param_meta,
         term_loader=term_loader,
+        locale=locale,
     )
     if row:
         return [row]
@@ -425,6 +466,7 @@ def _build_top_level_rule(
                 first=index == 1,
                 form_id=form_id,
                 term_loader=term_loader,
+                locale=locale,
             )
             for index, param in enumerate(params, start=1)
         ]
@@ -439,6 +481,7 @@ def _build_records_rule(
     field_meta: dict[str, Any],
     param_meta: dict[str, Any],
     term_loader: Any | None = None,
+    locale: str | None = None,
 ) -> list[list[dict[str, Any]]]:
     records = tool_params.get("records")
     if not isinstance(records, list):
@@ -451,6 +494,7 @@ def _build_records_rule(
             field_meta=field_meta,
             param_meta=param_meta,
             term_loader=term_loader,
+            locale=locale,
         )
         for index, record in enumerate(records, start=1)
     ]
@@ -596,6 +640,7 @@ def _build_fields_from_schema(
     field_meta: dict[str, Any] | None = None,
     param_meta: dict[str, Any] | None = None,
     term_loader: Any | None = None,
+    locale: str | None = None,
 ) -> list[dict[str, Any]]:
     properties = schema.get("properties")
     if not isinstance(properties, dict):
@@ -631,6 +676,7 @@ def _build_fields_from_schema(
                     field_meta=field_meta,
                     param_meta=param_meta,
                     term_loader=term_loader,
+                    locale=locale,
                 )
             ]
         elif normalized_field_type == "array":
@@ -648,6 +694,7 @@ def _build_fields_from_schema(
                         field_meta=field_meta,
                         param_meta=param_meta,
                         term_loader=term_loader,
+                        locale=locale,
                     )
                     for index, item in enumerate(item_values, start=1)
                 ]
@@ -675,6 +722,7 @@ def _build_fields_from_schema(
             ),
             optional=_schema_options(property_schema),
             term_loader=term_loader,
+            locale=locale,
         )
         filter_options = _filter_condition_options(property_schema)
         if filter_options:
@@ -692,6 +740,7 @@ def _build_field_from_param(
     first: bool,
     form_id: str,
     term_loader: Any | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     code = str(getattr(param, "param_code", "") or "")
     field = _build_field(
@@ -706,6 +755,7 @@ def _build_field_from_param(
         term=_term_from_param(param),
         optional=[],
         term_loader=term_loader,
+        locale=locale,
     )
     if first:
         field["itemId"] = _build_item_id(form_id, 1)
@@ -725,6 +775,7 @@ def _build_field(
     term: dict[str, Any] | None,
     optional: list[str],
     term_loader: Any | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     field: dict[str, Any] = {
         "formType": _field_form_type(field_type, term, optional),
@@ -747,6 +798,7 @@ def _build_field(
             term=term,
             term_loader=term_loader,
             field_name=field_name,
+            locale=locale,
         )
         field["fieldValue"] = resolved_value
         if notice:
@@ -786,6 +838,7 @@ def _resolve_term_field_value(
     term: dict[str, Any] | None,
     term_loader: Any | None,
     field_name: str,
+    locale: str | None = None,
 ) -> tuple[Any, dict[str, Any] | None]:
     if term_loader is None or not term or _is_empty_term_value(value):
         return value, None
@@ -799,6 +852,7 @@ def _resolve_term_field_value(
                 term=term,
                 term_loader=term_loader,
                 field_name=field_name,
+                locale=locale,
             )
             resolved_items.append(resolved_item)
             changed = changed or resolved_item != item
@@ -808,7 +862,7 @@ def _resolve_term_field_value(
             return resolved_items if changed else value, None
         return resolved_items, {"status": "list_resolved", "items": notices}
     return _resolve_single_term_value(
-        value, term=term, term_loader=term_loader, field_name=field_name
+        value, term=term, term_loader=term_loader, field_name=field_name, locale=locale
     )
 
 
@@ -818,6 +872,7 @@ def _resolve_single_term_value(
     term: dict[str, Any],
     term_loader: Any,
     field_name: str,
+    locale: str | None = None,
 ) -> tuple[Any, dict[str, Any] | None]:
     raw_value = str(value).strip()
     if not raw_value:
@@ -840,12 +895,14 @@ def _resolve_single_term_value(
                 original_value=raw_value,
                 recommended_value="",
                 recommended_label="",
+                locale=locale,
             )
         return _recommended_term_value(
             raw_value,
             recommendation,
             status="ambiguous_recommended",
             candidates=_term_notice_candidates(exc.matches),
+            locale=locale,
         )
     except TermNotFoundError as exc:
         recommendation = _recommend_term_entry(term_loader, term, raw_value, exc.available_entries)
@@ -855,12 +912,17 @@ def _resolve_single_term_value(
                 original_value=raw_value,
                 recommended_value="",
                 recommended_label="",
+                locale=locale,
             )
-        return _recommended_term_value(raw_value, recommendation, status="recommended")
+        return _recommended_term_value(
+            raw_value, recommendation, status="recommended", locale=locale
+        )
     except (AttributeError, ImportError, RuntimeError, ValueError):
         recommendation = _recommend_term_entry(term_loader, term, raw_value, None)
         if recommendation is not None:
-            return _recommended_term_value(raw_value, recommendation, status="recommended")
+            return _recommended_term_value(
+                raw_value, recommendation, status="recommended", locale=locale
+            )
         logger.debug(
             "failed to resolve operation form term value: term=%s value=%s",
             term.get("termSet"),
@@ -878,6 +940,7 @@ def _recommended_term_value(
     *,
     status: str,
     candidates: list[dict[str, str]] | None = None,
+    locale: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     recommended_value = str(recommendation.get("code") or recommendation.get("value") or "")
     recommended_label = str(recommendation.get("label") or recommendation.get("name") or "")
@@ -887,6 +950,7 @@ def _recommended_term_value(
         recommended_value=recommended_value,
         recommended_label=recommended_label,
         candidates=candidates,
+        locale=locale,
     )
     return recommended_value, notice
 
@@ -965,20 +1029,27 @@ def _build_term_resolve_notice(
     recommended_value: str,
     recommended_label: str,
     candidates: list[dict[str, str]] | None = None,
+    locale: str | None = None,
 ) -> dict[str, Any]:
     display = recommended_label or recommended_value
     if status == "ambiguous_recommended" and recommended_value:
-        message = (
-            f"模型识别为“{original_value}”，匹配到多个，已默认选择“{display}”"
-            f"（code: {recommended_value}），请确认或重新选择。"
+        message = get_ui_text(
+            "operation_term_ambiguous_recommended",
+            locale,
+            original=original_value,
+            display=display,
+            code=recommended_value,
         )
     elif status == "recommended" and recommended_value:
-        message = (
-            f"模型识别为“{original_value}”，未精确命中，已推荐“{display}”"
-            f"（code: {recommended_value}），请确认或重新选择。"
+        message = get_ui_text(
+            "operation_term_recommended",
+            locale,
+            original=original_value,
+            display=display,
+            code=recommended_value,
         )
     else:
-        message = f"模型识别为“{original_value}”，未能找到可推荐值，请重新选择。"
+        message = get_ui_text("operation_term_not_found", locale, original=original_value)
     notice: dict[str, Any] = {
         "status": status,
         "originalValue": original_value,

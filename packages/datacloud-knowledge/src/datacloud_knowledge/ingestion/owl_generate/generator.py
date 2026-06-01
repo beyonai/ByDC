@@ -610,7 +610,9 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
     raw_relations: list[dict[str, Any]] = state.get("object_relations", [])
 
     if not object_codes:
-        raise ValueError(f"视图 {view_code} 生成失败：object_codes 不能为空，请确保 collect 时传入 object_codes")
+        raise ValueError(
+            f"视图 {view_code} 生成失败：object_codes 不能为空，请确保 collect 时传入 object_codes"
+        )
 
     object_relations: list[ObjectRelation] = []
     for i, rel in enumerate(raw_relations):
@@ -632,7 +634,7 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
 
     # 从 object_relations 构建视图字段映射（每个关联字段对生成两个 SceneField）
     field_mappings: list[ViewFieldMapping] = []
-    seen_fields: set[tuple[str, str]] = set()
+    seen_fields: set[tuple[str, ...]] = set()
     default_role = FieldRole(property_role="DIMENSION", rule_type="description")
     for rel in raw_relations:
         src_obj = rel.get("source_object_code", "")
@@ -677,10 +679,10 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
             continue
         source_obj = f.get("_source_object_code", "")
         # 有来源的用 (source_obj, code) 去重，无来源的（计算字段）用 code 本身去重
-        key: tuple[str, ...] = (source_obj, code) if source_obj else (f"__computed__{code}",)
-        if key in seen_fields:
+        field_key = (source_obj, code) if source_obj else (f"__computed__{code}",)
+        if field_key in seen_fields:
             continue
-        seen_fields.add(key)
+        seen_fields.add(field_key)
         ext = (f.get("ext_property") or {}).get("property_role_rule", {})
         field_role = default_role
         if ext.get("property_role"):

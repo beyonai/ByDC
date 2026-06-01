@@ -28,6 +28,12 @@ class _ScopeDeletingReader(Protocol):
     def delete_scope(self, scope: str) -> dict[str, Any]: ...
 
 
+class _ObjectFieldsStore(Protocol):
+    def save(self, key: str, state: dict[str, Any], ttl: int = 3600) -> None: ...
+
+    def load(self, key: str) -> dict[str, Any]: ...
+
+
 # ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
 
 
@@ -305,14 +311,16 @@ def _obj_fields_cache_key(prefix: str, object_code: str) -> str:
 
 
 def _cache_obj_fields(
-    store: object, prefix: str, object_code: str, fields: list[dict[str, Any]]
+    store: _ObjectFieldsStore, prefix: str, object_code: str, fields: list[dict[str, Any]]
 ) -> None:
     """缓存对象字段定义，供视图收集时自动展开。"""
-    store.save(_obj_fields_cache_key(prefix, object_code), {"fields": fields}, ttl=_OBJ_FIELDS_CACHE_TTL)
+    store.save(
+        _obj_fields_cache_key(prefix, object_code), {"fields": fields}, ttl=_OBJ_FIELDS_CACHE_TTL
+    )
 
 
 def _load_obj_fields_from_cache(
-    store: object, prefix: str, object_codes: list[str]
+    store: _ObjectFieldsStore, prefix: str, object_codes: list[str]
 ) -> list[dict[str, Any]]:
     """从缓存中加载指定对象的所有字段定义，去重并标注来源对象。"""
     result: list[dict[str, Any]] = []
@@ -326,13 +334,15 @@ def _load_obj_fields_from_cache(
             if code in seen:
                 continue
             seen.add(code)
-            result.append({
-                "property_code": code,
-                "property_name": f.get("property_name", code),
-                "data_type": f.get("data_type", "STRING"),
-                "ext_property": f.get("ext_property", {}),
-                "_source_object_code": obj_code,
-            })
+            result.append(
+                {
+                    "property_code": code,
+                    "property_name": f.get("property_name", code),
+                    "data_type": f.get("data_type", "STRING"),
+                    "ext_property": f.get("ext_property", {}),
+                    "_source_object_code": obj_code,
+                }
+            )
     return result
 
 

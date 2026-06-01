@@ -250,6 +250,7 @@ async def _handle_operation_form_clarify(
     analyze_result: dict[str, Any],
     tool_name: str,
     config: RunnableConfig,
+    language: str,
 ) -> dict[str, Any]:
     raw_form = _operation_form_from_context(ctx, analyze_result)
     operation_form = _normalize_operation_form(
@@ -271,7 +272,7 @@ async def _handle_operation_form_clarify(
     )
     resume_value = interrupt(
         {
-            "prompt": "请确认操作表单。",
+            "prompt": get_ui_text("operation_form_interrupt_prompt", language),
             "reason_code": "OPERATION_FORM_CONFIRMATION",
             "interrupt_type": _OPERATION_FORM_INTERRUPT_TYPE,
             "operation_form": operation_form,
@@ -315,7 +316,9 @@ async def _handle_operation_form_clarify(
         if not isinstance(rule_raw, list):
             rule_raw = pending_action.get("rule") or []
         rule = list(rule_raw) if isinstance(rule_raw, list) else []
-        reason = str(resume_action.get("reason") or "用户取消操作")
+        reason = str(
+            resume_action.get("reason") or get_ui_text("operation_cancelled_reason", language)
+        )
 
         action_result: dict[str, Any] = {
             "tool_call_id": current_tool_call_id,
@@ -427,6 +430,7 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
             analyze_result=analyze_result,
             tool_name=tool_name,
             config=config,
+            language=language,
         )
 
     # ── 重复路径中止守卫 ──────────────────────────────────────────────────────────────────────────
