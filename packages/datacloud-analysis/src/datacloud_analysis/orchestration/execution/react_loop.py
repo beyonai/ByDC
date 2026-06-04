@@ -1520,9 +1520,40 @@ async def run_react_loop(
                 logger.info("[react_loop] saved checkpoint to state before delegate tool")
 
             try:
+                _tool_name = str(tc.get("name") or "")
+                _tool_args = dict(tc.get("args") or {})
+                _lf_span_start = time.monotonic()
                 tool_id, result = await dispatch_tool(
                     tc, tools_map, state, gateway_context=gateway_context, loader=loader
                 )
+                # Langfuse 工具调用收集（非 finish_react 工具）
+                if _tool_name and _tool_name != "finish_react":
+                    try:
+                        import datetime as _dt  # noqa: PLC0415
+                        from datacloud_analysis.langfuse_handler import (  # noqa: PLC0415
+                            current_tool_spans,
+                        )
+
+                        _spans_list = current_tool_spans.get()
+                        if _spans_list is not None:
+                            _now = _dt.datetime.now(_dt.timezone.utc)
+                            _elapsed = time.monotonic() - _lf_span_start
+                            _start_iso = (
+                                _now - _dt.timedelta(seconds=_elapsed)
+                            ).isoformat()
+                            _result_str = (
+                                result if isinstance(result, str)
+                                else str(result) if result is not None else ""
+                            )
+                            _spans_list.append({
+                                "name": _tool_name,
+                                "input": _tool_args,
+                                "output": _result_str[:2000],
+                                "start_time": _start_iso,
+                                "end_time": _now.isoformat(),
+                            })
+                    except Exception:
+                        pass
             except GraphBubbleUp:
                 # 方案 B：将中断上下文写入 LangGraph State（由 checkpoint 跨实例/重启持久化）
                 _pending = list(ai_msg.tool_calls[tc_idx:])

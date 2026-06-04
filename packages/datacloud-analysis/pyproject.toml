@@ -30,6 +30,7 @@ dependencies = [
     "datacloud-data[sql]",
     "pyyaml>=6.0.3",
     "deepagents>=0.4.7",
+    "langfuse>=2.0.0",
 ]
 
 [dependency-groups]

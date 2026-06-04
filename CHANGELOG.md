@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- 接入 Langfuse 追踪：通过环境变量 `LANGFUSE_SECRET_KEY` / `LANGFUSE_PUBLIC_KEY` 启用，自动追踪 LLM 调用、工具调用和图节点执行
 - 知识库对象新增"查询 chunk 内容"虚拟动作
 - `build_terms` 支持自动回填 `name_keywords` tsvector 及向量字段，并为所有字段创建 prop 术语
 - `build_terms` 支持显式参数覆盖 embedding 回填配置

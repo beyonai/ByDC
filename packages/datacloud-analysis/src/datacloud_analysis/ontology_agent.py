@@ -682,6 +682,22 @@ class OntologyAgent:
             "recursion_limit": 100,
         }
 
+        from datacloud_analysis.langfuse_handler import get_langfuse_callback  # noqa: PLC0415
+
+        _lf_handler = get_langfuse_callback()
+        if _lf_handler is not None:
+            run_config["callbacks"] = [_lf_handler]
+            # SDK 4.x 通过 run_config["metadata"] 传递 trace 级属性
+            run_config["metadata"] = {
+                "langfuse_user_id": user_code,
+                "langfuse_session_id": session_id or thread_id,
+                "langfuse_trace_name": "datacloud-ontology-agent",
+                "langfuse_tags": [f"model:{self._config.model}"],
+                "thread_id": thread_id,
+                "view_codes": view_codes or [],
+                "object_codes": object_codes or [],
+            }
+
         if resume_input is None:
             graph_input: Any = _build_input_payload(
                 question, workspace_dir=self._config.workspace_dir
