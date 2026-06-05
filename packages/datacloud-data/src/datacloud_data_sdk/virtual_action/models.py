@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT, MAX_SQL_QUERY_LIMIT
+
 
 @dataclass
 class VirtualActionProfile:
@@ -28,8 +30,8 @@ class VirtualActionProfile:
     scope_type: str  # "object" | "view"
     scope_code: str  # 对象编码或视图编码
     exposure_policy: str = "direct"
-    default_limit: int = 100
-    max_limit: int = 1000
+    default_limit: int = DEFAULT_SQL_QUERY_LIMIT
+    max_limit: int = MAX_SQL_QUERY_LIMIT
     required_filters: list[str] = field(default_factory=list)
     dimension_fields: list[str] = field(default_factory=list)
     measure_fields: list[str] = field(default_factory=list)

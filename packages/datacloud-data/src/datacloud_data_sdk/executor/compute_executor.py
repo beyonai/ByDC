@@ -12,7 +12,7 @@
   "filters":  [{"field": "field_code", "op": "...", "value": ...}],
   "having":   [{"field": "metrics.as 别名", "op": "...", "value": ...}],
   "order_by": [{"field": "metrics.as 别名 或维度field_code", "direction": "asc|desc"}],
-  "limit":    100
+  "limit":    1000
 }
 
 特点：
@@ -31,6 +31,7 @@ import re
 from typing import Any, cast
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.executor.time_grouping import build_time_group_expr
 from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -134,7 +135,15 @@ def _build_filters_where(
                 )
                 continue
             vf_col_expr = _resolve_col_expr(vf, value_field)
-            op_map = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            op_map = {
+                "eq": "=",
+                "ne": "!=",
+                "neq": "!=",
+                "gt": ">",
+                "gte": ">=",
+                "lt": "<",
+                "lte": "<=",
+            }
             sql_op = op_map.get(op)
             if not sql_op:
                 _logger.warning(
@@ -165,7 +174,15 @@ def _build_filters_where(
             clauses.append(f"{col} LIKE :{pkey}")
             params[pkey] = like_val
         else:
-            op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            op_map = {
+                "eq": "=",
+                "ne": "!=",
+                "neq": "!=",
+                "gt": ">",
+                "gte": ">=",
+                "lt": "<",
+                "lte": "<=",
+            }
             clauses.append(f"{col} {op_map.get(op, '=')} :{pkey}")
             params[pkey] = coerce_sql_param(value, f)
 
@@ -303,7 +320,7 @@ class ComputeExecutor:
         filters = arguments.get("filters") or []
         having_list = arguments.get("having") or []
         order_by = arguments.get("order_by") or []
-        limit = int(arguments.get("limit") or 100)
+        limit = int(arguments.get("limit") or DEFAULT_SQL_QUERY_LIMIT)
 
         select_parts: list[str] = []
         group_by_parts: list[str] = []
@@ -400,7 +417,15 @@ class ComputeExecutor:
                 params[f"{pkey}_0"] = vals[0]
                 params[f"{pkey}_1"] = vals[1]
             else:
-                op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+                op_map = {
+                    "eq": "=",
+                    "ne": "!=",
+                    "neq": "!=",
+                    "gt": ">",
+                    "gte": ">=",
+                    "lt": "<",
+                    "lte": "<=",
+                }
                 having_clauses.append(f"{expr} {op_map.get(hop, '>')} :{pkey}")
                 params[pkey] = hval
 

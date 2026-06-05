@@ -23,6 +23,7 @@ import re
 from typing import Any
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.result_term_converter import ResultTermConverter
@@ -111,7 +112,15 @@ def _build_where(
                 )
                 continue
             vf_col_expr = _resolve_col_expr(vf)
-            op_map = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            op_map = {
+                "eq": "=",
+                "ne": "!=",
+                "neq": "!=",
+                "gt": ">",
+                "gte": ">=",
+                "lt": "<",
+                "lte": "<=",
+            }
             sql_op = op_map.get(op)
             if not sql_op:
                 _logger.warning("_build_where: op %r not supported for value_field, skipping", op)
@@ -140,7 +149,15 @@ def _build_where(
             clauses.append(f"{col} LIKE :{pkey}")
             params[pkey] = like_val
         else:
-            op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            op_map = {
+                "eq": "=",
+                "ne": "!=",
+                "neq": "!=",
+                "gt": ">",
+                "gte": ">=",
+                "lt": "<",
+                "lte": "<=",
+            }
             clauses.append(f"{col} {op_map.get(op, '=')} :{pkey}")
             params[pkey] = coerce_sql_param(value, f)
 
@@ -232,7 +249,7 @@ class QueryExecutor:
             col = _resolve_col_expr(f) if f else fc
             order_clauses.append(f"{col} {direction}")
 
-        limit = int(arguments.get("limit") or 100)
+        limit = int(arguments.get("limit") or DEFAULT_SQL_QUERY_LIMIT)
         offset = int(arguments.get("offset") or 0)
 
         sql = f"SELECT {select_exprs} FROM {_quote(table, db_type)}"

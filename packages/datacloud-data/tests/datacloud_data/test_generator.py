@@ -63,6 +63,8 @@ class _F:
         property_kind: str = "physical",
         required_filter_group: str | None = None,
         secondary_role: str | None = None,
+        term_set: str | None = None,
+        term_type: str | None = None,
     ) -> None:
         self.field_code = field_code
         self.field_name = field_name
@@ -75,6 +77,8 @@ class _F:
         self.property_kind = property_kind
         self.required_filter_group = required_filter_group
         self.secondary_role = secondary_role
+        self.term_set = term_set
+        self.term_type = term_type
         self.is_primary_key = False
 
 
@@ -104,8 +108,18 @@ _REVENUE = _F(
     filter_ops=["eq", "gt", "gte", "lt", "lte"],
     aggregate_ops=["sum", "avg", "min", "max"],
 )
+_STATUS = _F(
+    "status",
+    "状态",
+    analytic_role="dimension",
+    analytic_kind="name",
+    filter_ops=["eq", "in", "is_null", "is_not_null"],
+    group_ops=["self"],
+    term_set="status.code",
+    term_type="enum",
+)
 
-FIELDS = [_REGION, _PERIOD, _REVENUE]
+FIELDS = [_REGION, _PERIOD, _REVENUE, _STATUS]
 KB_FIELDS = [
     _F("doc_id", "文档主键", property_kind="physical"),
     _F("status", "状态", property_kind="physical"),
@@ -154,6 +168,17 @@ def _collect_metric_field_codes(schema: dict[str, Any]) -> list[str]:
     return codes
 
 
+def _find_filter_item(schema: dict[str, Any], field_code: str) -> dict[str, Any]:
+    """从 filters schema 中按 field_code 查找单字段过滤条目。"""
+    items = schema.get("properties", {}).get("filters", {}).get("items", {})
+    for one_of_item in items.get("oneOf", []):
+        field_prop = one_of_item.get("properties", {}).get("field", {})
+        if field_prop.get("enum") == [field_code]:
+            return one_of_item
+    msg = f"filters oneOf 缺少字段 {field_code}"
+    raise AssertionError(msg)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Q 系列：build_query_schema
 # ─────────────────────────────────────────────────────────────────────────────
@@ -189,6 +214,18 @@ def test_q2_filter_field_enum_uses_field_code(query_schema: dict[str, Any]) -> N
     assert "region_name" in codes, f"缺少 region_name，实际 codes={codes}"
     assert "period" in codes, f"缺少 period，实际 codes={codes}"
     assert "revenue" in codes, f"缺少 revenue，实际 codes={codes}"
+
+
+def test_q2_term_filter_description_includes_field_type_and_dict_term_hint(
+    query_schema: dict[str, Any],
+) -> None:
+    """Q2: 绑定 dict 术语的字段，过滤条目描述应保留字段类型与术语提示。"""
+    status_item = _find_filter_item(query_schema, "status")
+    description = status_item.get("description", "")
+
+    assert "[dimension-name]" in description
+    assert "术语" in description
+    assert "字典" in description
 
 
 def test_q3_order_by_field_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
@@ -228,6 +265,11 @@ def test_x1_select_catalog_code_is_field_code(query_schema: dict[str, Any]) -> N
         )
 
 
+def test_query_schema_default_limit_is_1000(query_schema: dict[str, Any]) -> None:
+    """query SQL 工具默认返回 1000 条。"""
+    assert query_schema["properties"]["limit"]["default"] == 1000
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # C 系列：build_compute_schema
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,8 +288,11 @@ def test_c1_dimension_field_enum_uses_field_code(compute_schema: dict[str, Any])
         assert not any(ch > "\x7f" for ch in c), (
             f"dimensions field.enum '{c}' 含中文，应为 field_code"
         )
-    assert "region_name" in codes, f"缺少 region_name，实际：{codes}"
-    assert "period" in codes, f"缺少 period，实际：{codes}"
+
+
+def test_compute_schema_default_limit_is_1000(compute_schema: dict[str, Any]) -> None:
+    """compute SQL 工具默认返回 1000 条。"""
+    assert compute_schema["properties"]["limit"]["default"] == 1000
 
 
 def test_c2_metric_field_enum_uses_field_code(compute_schema: dict[str, Any]) -> None:

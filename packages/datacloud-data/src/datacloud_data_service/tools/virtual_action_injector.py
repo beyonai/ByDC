@@ -37,6 +37,7 @@ def inject_virtual_actions(loader: object) -> None:
 
     registry = get_registry()
     registry.clear()
+    term_loader = getattr(getattr(loader, "_config", None), "term_loader", None)
 
     # ── 1. 对象级虚拟动作 ─────────────────────────────────────────────────────
     for cls in loader._classes.values():
@@ -48,6 +49,7 @@ def inject_virtual_actions(loader: object) -> None:
 
         # 确保字段已填充 analytic 元数据（OWL 解析时已做，这里做兜底）
         _ensure_analytic_meta(cls.fields)
+        _attach_term_values(cls.fields, term_loader)
 
         if cls.source_type == "DB":
             _inject_db_object_actions(cls, existing_codes, registry)
@@ -66,6 +68,38 @@ def inject_virtual_actions(loader: object) -> None:
 
 
 # ── 内部辅助 ──────────────────────────────────────────────────────────────────
+
+
+def _term_type_code(term_set: str | None) -> str | None:
+    """从 term_set 推导术语类型编码。"""
+    if not term_set or "." not in term_set:
+        return None
+    return term_set.split(".", 1)[0]
+
+
+def _attach_term_values(fields: list, term_loader: Any | None) -> None:
+    """将 enum/dict 术语标签值挂到字段上，供虚拟动作 schema 暴露给模型。"""
+    if term_loader is None:
+        return
+    for field in fields:
+        term_set = getattr(field, "term_set", None)
+        if not term_set or getattr(field, "term_type", None) != "enum":
+            continue
+        try:
+            values = term_loader.get_available_values(
+                term_set,
+                dataset_id=getattr(field, "dataset_id", None),
+                term_type_code=_term_type_code(term_set),
+            )
+        except Exception:
+            logger.debug(
+                "读取术语值失败: field=%s term_set=%s",
+                getattr(field, "field_code", ""),
+                term_set,
+            )
+            continue
+        if values:
+            field.term_values = values
 
 
 def _ensure_analytic_meta(fields: list) -> None:
@@ -415,6 +449,7 @@ def _inject_view_actions(loader, registry) -> None:
 
     settings = get_settings()
     scenes = getattr(loader, "_scenes", {})
+    term_loader = getattr(getattr(loader, "_config", None), "term_loader", None)
     for view_id, scene in scenes.items():
         # 只处理 DB 视图（有对象列表的场景）
         raw_objects = (
@@ -450,6 +485,7 @@ def _inject_view_actions(loader, registry) -> None:
         else:
             # 回写标准化后的视图字段，保证 View.fields 与工具 schema 一致
             scene["fields"] = view_fields
+        _attach_term_values(view_fields, term_loader)
 
         view_name = scene.get("view_name") or scene.get("name") or view_id
         view_desc = scene.get("description") or ""

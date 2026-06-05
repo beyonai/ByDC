@@ -442,11 +442,14 @@ class OntologyToolLoader:
         外部传入 loader 时不经过此方法。
         """
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
+        from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
         from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
             inject_virtual_actions,
         )
 
         loader = OntologyLoader()
+        term_loader = TermLoader.from_config({})
+        loader.configure(term_loader=term_loader)
         loader.load_from_owl_resource_directory(
             str(ontology_path), object_codes=mounted_objects, view_codes=mounted_objects
         )
