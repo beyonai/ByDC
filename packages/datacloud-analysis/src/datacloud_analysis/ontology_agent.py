@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from collections import OrderedDict
 from collections.abc import AsyncGenerator
@@ -692,7 +693,10 @@ class OntologyAgent:
                 "langfuse_user_id": user_code,
                 "langfuse_session_id": session_id or thread_id,
                 "langfuse_trace_name": "datacloud-ontology-agent",
-                "langfuse_tags": [f"model:{self._config.model}"],
+                "langfuse_tags": [
+                    f"worker:{os.getenv('DATACLOUD_GATEWAY_WORKER_ID', '')}",
+                    f"env:{os.getenv('HOST', '')}",
+                ],
                 "thread_id": thread_id,
                 "view_codes": view_codes or [],
                 "object_codes": object_codes or [],

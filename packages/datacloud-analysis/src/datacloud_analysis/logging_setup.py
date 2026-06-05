@@ -14,22 +14,19 @@ by_framework 或其他第三方库已安装的 root handler。
         error_backup_count=90,
     )
 
-Per-request 隔离日志（解决并发时日志混淆问题）：
+日志格式符合 OTLP 标准：有活跃 OTel span 时自动注入 trace_id / span_id：
 
-    from datacloud_analysis.logging_setup import attach_request_log, detach_request_log
+    2026-06-05 17:26:57 [INFO ] [tid=4b5205a0... sid=9ab1ee3c] byclaw_data.worker: ...
+    2026-06-05 17:26:57 [INFO ] byclaw_data.worker: startup message ...
 
-    request_id = attach_request_log(request_id="abc123")   # 返回实际使用的 request_id
-    try:
+日志仅写入本地文件（app.log / error.log）和 console，不推送到远端。
+排查时拿 Langfuse 的 trace_id 到本地 grep：
+    grep "4b5205a019afa300" logs/app.log
+
+request_log_context() 保留为兼容 shim，调用方无需修改：
+
+    async with request_log_context(trace_id) as rid:
         ...
-    finally:
-        detach_request_log(request_id)
-
-    # 或使用上下文管理器：
-    async with request_log_context("abc123"):
-        ...
-
-每次调用生成独立日志文件：logs/requests/20260526_143022_abc123.log
-并发 N 个请求 → N 个独立文件，互不干扰。
 
 仅供测试使用的重置接口：
 
@@ -45,21 +42,16 @@ import logging
 import logging.handlers
 import os
 import shutil
-import uuid
 from collections.abc import AsyncGenerator
-from contextvars import ContextVar
-from datetime import datetime
 from pathlib import Path
 
 _SETUP_DONE: bool = False
 _CONFIGURED_NAMESPACES: list[str] = []
 
 _FMT_CONSOLE = "%(asctime)s [%(levelname)-5s] %(name)s: %(message)s"
-_FMT_CONSOLE_RID = "%(asctime)s [rid=%(rid)s] [%(levelname)-5s] %(name)s: %(message)s"
+_FMT_CONSOLE_OTEL = "%(asctime)s [%(levelname)-5s] [tid=%(otelTraceID)s sid=%(otelSpanID)s] %(name)s: %(message)s"
 _FMT_FILE = "%(asctime)s [%(levelname)-5s] %(process)d %(name)s: %(message)s"
-_FMT_FILE_RID = "%(asctime)s [rid=%(rid)s] [%(levelname)-5s] %(process)d %(name)s: %(message)s"
-_FMT_REQUEST = "%(asctime)s [%(levelname)-5s] %(name)s: %(message)s"
-_FMT_REQUEST_RID = "%(asctime)s [rid=%(rid)s] [%(levelname)-5s] %(name)s: %(message)s"
+_FMT_FILE_OTEL = "%(asctime)s [%(levelname)-5s] %(process)d [tid=%(otelTraceID)s sid=%(otelSpanID)s] %(name)s: %(message)s"
 _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 
 # 日志配置覆盖的命名空间（不触碰 root logger）
@@ -76,33 +68,41 @@ _NOISY_LOGGERS = (
 )
 
 
-class _RequestIdFilter(logging.Filter):
-    """向每条 LogRecord 注入当前协程的 request_id（来自 ContextVar）。
+class _OtelContextFilter(logging.Filter):
+    """向每条 LogRecord 注入当前 OTel span 的 trace_id / span_id。
 
-    有 request 上下文时 record.rid = rid 字符串；
-    无上下文时 record.rid = None，Formatter 据此选择不含 rid 的格式。
+    有活跃 span 时 record.otelTraceID / record.otelSpanID 为 32/16 位 hex 字符串；
+    无 span 时为空字符串，Formatter 据此选择不含 tid/sid 的格式。
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        ctx = _current_request.get()
-        record.rid = ctx[0] if ctx is not None else None  # type: ignore[attr-defined]
+        try:
+            from opentelemetry import trace as _otel_trace  # noqa: PLC0415
+
+            ctx = _otel_trace.get_current_span().get_span_context()
+            if ctx.is_valid:
+                record.otelTraceID = format(ctx.trace_id, "032x")  # type: ignore[attr-defined]
+                record.otelSpanID = format(ctx.span_id, "016x")  # type: ignore[attr-defined]
+            else:
+                record.otelTraceID = ""  # type: ignore[attr-defined]
+                record.otelSpanID = ""  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001
+            record.otelTraceID = ""  # type: ignore[attr-defined]
+            record.otelSpanID = ""  # type: ignore[attr-defined]
         return True
 
 
-class _OptionalRidFormatter(logging.Formatter):
-    """有 rid 时在时间戳后插入 [rid=xxx]，无 rid 时格式与原来完全一致。
+class _OptionalOtelFormatter(logging.Formatter):
+    """有活跃 OTel span 时插入 [tid=xxx sid=xxx]，无 span 时格式保持干净。"""
 
-    避免 rid=None 被打印成字面量 "None"。
-    """
-
-    def __init__(self, fmt_with_rid: str, fmt_without_rid: str, **kwargs: object) -> None:
-        super().__init__(fmt_with_rid, **kwargs)
-        self._fmt_with = fmt_with_rid
-        self._fmt_without = fmt_without_rid
+    def __init__(self, fmt_with_otel: str, fmt_without_otel: str, **kwargs: object) -> None:
+        super().__init__(fmt_with_otel, **kwargs)
+        self._fmt_with = fmt_with_otel
+        self._fmt_without = fmt_without_otel
 
     def format(self, record: logging.LogRecord) -> str:
         self._style._fmt = (  # type: ignore[attr-defined]
-            self._fmt_with if getattr(record, "rid", None) else self._fmt_without
+            self._fmt_with if getattr(record, "otelTraceID", "") else self._fmt_without
         )
         return super().format(record)
 
@@ -145,7 +145,7 @@ def _make_timed_handler(
     handler.namer = _gz_namer
     handler.rotator = _gzip_rotator
     handler.setLevel(level)
-    handler.setFormatter(_OptionalRidFormatter(_FMT_FILE_RID, _FMT_FILE, datefmt=_DATE_FMT))
+    handler.setFormatter(_OptionalOtelFormatter(_FMT_FILE_OTEL, _FMT_FILE, datefmt=_DATE_FMT))
     return handler
 
 
@@ -155,7 +155,6 @@ def setup_logging(
     level: str | None = None,
     app_backup_count: int | None = None,
     error_backup_count: int | None = None,
-    request_keep_days: int | None = None,
     enable_console: bool = True,
     extra_namespaces: tuple[str, ...] = (),
 ) -> None:
@@ -168,12 +167,14 @@ def setup_logging(
         DATACLOUD_LOG_LEVEL            日志级别，默认 INFO
         DATACLOUD_LOG_APP_KEEP         app.log 保留天数，默认 30
         DATACLOUD_LOG_ERROR_KEEP       error.log 保留天数，默认 90
-        DATACLOUD_LOG_REQUEST_KEEP     requests/*.log 保留天数，默认 7
+
+    日志格式：遵循 OTLP 标准，有活跃 OTel span 时自动注入 trace_id/span_id。
+    日志仅写入本地文件和 console，不推送到远端。
 
     Args:
         extra_namespaces: 调用方追加的额外命名空间（如落地项目的包名）。
     """
-    global _SETUP_DONE, _CONFIGURED_NAMESPACES, _log_dir_for_requests, _request_keep_days
+    global _SETUP_DONE, _CONFIGURED_NAMESPACES
     if _SETUP_DONE:
         return
     _SETUP_DONE = True
@@ -195,31 +196,25 @@ def setup_logging(
         if error_backup_count is not None
         else os.environ.get("DATACLOUD_LOG_ERROR_KEEP", "90")
     )
-    _request_keep_days = int(
-        request_keep_days
-        if request_keep_days is not None
-        else os.environ.get("DATACLOUD_LOG_REQUEST_KEEP", "7")
-    )
-    _log_dir_for_requests = _log_dir
 
     _log_dir.mkdir(parents=True, exist_ok=True)
+
+    otel_filter = _OtelContextFilter()
 
     # ── 共享 Handler（两个命名空间复用同一对文件）──────────────────────────
     app_handler = _make_timed_handler(_log_dir / "app.log", _level, _app_keep)
     err_handler = _make_timed_handler(_log_dir / "error.log", logging.ERROR, _error_keep)
-
-    rid_filter = _RequestIdFilter()
-    app_handler.addFilter(rid_filter)
-    err_handler.addFilter(rid_filter)
+    app_handler.addFilter(otel_filter)
+    err_handler.addFilter(otel_filter)
 
     console_handler: logging.StreamHandler | None = None  # type: ignore[type-arg]
     if enable_console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(_level)
         console_handler.setFormatter(
-            _OptionalRidFormatter(_FMT_CONSOLE_RID, _FMT_CONSOLE, datefmt=_DATE_FMT)
+            _OptionalOtelFormatter(_FMT_CONSOLE_OTEL, _FMT_CONSOLE, datefmt=_DATE_FMT)
         )
-        console_handler.addFilter(rid_filter)
+        console_handler.addFilter(otel_filter)
 
     # ── 按命名空间配置，不触碰 root logger ──────────────────────────────────
     for ns in _CONFIGURED_NAMESPACES:
@@ -261,218 +256,30 @@ def reset_logging() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Per-request 隔离日志
+# request_log_context — 兼容 shim
 # ---------------------------------------------------------------------------
-# 设计原则：
-#   logging 的 Handler 挂在 logger 对象上，是进程级全局状态。
-#   如果每个请求各自 addHandler/removeHandler，并发时多个 handler 同时在线，
-#   每条日志会被所有在线 handler 写入，导致串台。
-#
-#   正确方案：
-#   1. 进程启动时挂一个共享的 PerRequestRouter（单例），永不移除。
-#   2. 每个请求通过 ContextVar 注册自己的 (request_id, file_path)。
-#   3. PerRequestRouter.emit() 读取当前协程的 ContextVar，只写入当前请求的文件。
-#   4. 并发 N 个请求 → N 个独立文件，互不串台。
+# per-request 隔离文件机制已移除（日志通过 app.log + OTLP 统一输出，
+# trace_id 由 OTel span context 自动注入）。
+# 此 shim 保持接口兼容，调用方（worker.py）无需修改。
 # ---------------------------------------------------------------------------
-
-# ContextVar：当前协程绑定的 (request_id, log_file_path)
-# None 表示当前协程不在任何 request_log_context 内
-_current_request: ContextVar[tuple[str, Path] | None] = ContextVar("_current_request", default=None)
-
-_log_dir_for_requests: Path = Path("logs")
-
-# 共享 router 单例（进程级，挂载一次）
-_per_request_router: _PerRequestRouter | None = None
-_router_namespaces: list[str] = []
-_request_keep_days: int = 7  # requests/*.log 默认保留7天
-_detach_counter: int = 0  # 每 _CLEANUP_INTERVAL 次 detach 触发一次清理
-_CLEANUP_INTERVAL: int = 100
-
-
-class _PerRequestRouter(logging.Handler):
-    """进程级共享 handler，按 ContextVar 把日志路由到当前请求的独立文件。
-
-    并发时每个协程各自读取 _current_request，只写入自己的文件，不会串台。
-    文件 handle 按 request_id 缓存，detach 时关闭。
-    """
-
-    def __init__(self, level: int = logging.DEBUG) -> None:
-        super().__init__(level)
-        self._files: dict[str, tuple[Path, logging.FileHandler]] = {}
-        self._lock = __import__("threading").Lock()
-
-    def emit(self, record: logging.LogRecord) -> None:
-        ctx = _current_request.get()
-        if ctx is None:
-            return
-        rid, log_path = ctx
-        fh = self._get_or_open(rid, log_path)
-        fh.emit(record)
-
-    def _get_or_open(self, rid: str, log_path: Path) -> logging.FileHandler:
-        with self._lock:
-            if rid not in self._files:
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                fh = logging.FileHandler(str(log_path), encoding="utf-8")
-                fh.setLevel(self.level)
-                fh.setFormatter(self.formatter)
-                self._files[rid] = (log_path, fh)
-            return self._files[rid][1]
-
-    def close_request(self, rid: str) -> None:
-        with self._lock:
-            entry = self._files.pop(rid, None)
-        if entry:
-            _, fh = entry
-            fh.flush()
-            fh.close()
-
-
-def _ensure_router_installed(
-    extra_namespaces: tuple[str, ...] = (),
-    level: int = logging.DEBUG,
-) -> _PerRequestRouter:
-    """确保 PerRequestRouter 已挂载到所有目标命名空间（幂等）。"""
-    global _per_request_router, _router_namespaces
-
-    all_ns: list[str] = list(_CONFIGURED_NAMESPACES)
-    for ns in extra_namespaces:
-        if ns not in all_ns:
-            all_ns.append(ns)
-
-    if _per_request_router is None:
-        router = _PerRequestRouter(level=level)
-        router.setFormatter(
-            _OptionalRidFormatter(_FMT_REQUEST_RID, _FMT_REQUEST, datefmt=_DATE_FMT)
-        )
-        router.addFilter(_RequestIdFilter())
-        _per_request_router = router
-    else:
-        router = _per_request_router
-
-    # 把 router 挂到尚未挂载的命名空间
-    for ns in all_ns:
-        lg = logging.getLogger(ns)
-        if router not in lg.handlers:
-            lg.addHandler(router)
-            if ns not in _router_namespaces:
-                _router_namespaces.append(ns)
-
-    return router
-
-
-def _get_request_log_dir() -> Path:
-    return _log_dir_for_requests / "requests"
-
-
-def _make_request_id(hint: str | None) -> str:
-    """生成 request_id，格式：{日期}_{时间}_{trace_id 或 uuid8}。
-
-    trace_id 内部的 _ 替换为 - 避免与外层分隔符混淆，不截断保留完整值。
-    示例：20260526_100848_10012478-10012480
-    """
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005
-    raw = (hint or "").strip()
-    short = raw.replace("_", "-") if raw else uuid.uuid4().hex[:8]
-    return f"{ts}_{short}"
-
-
-def _cleanup_old_request_logs(keep_days: int) -> None:
-    """删除 requests/ 目录下超过 keep_days 天的 .log 文件。"""
-    log_dir = _get_request_log_dir()
-    if not log_dir.exists():
-        return
-    cutoff = datetime.now().timestamp() - keep_days * 86400  # noqa: DTZ005
-    for f in log_dir.glob("*.log"):
-        try:
-            if f.stat().st_mtime < cutoff:
-                f.unlink()
-        except OSError:
-            pass
-
-
-def attach_request_log(
-    request_id: str | None = None,
-    *,
-    level: int | None = None,
-    extra_namespaces: tuple[str, ...] = (),
-) -> str:
-    """为当前协程绑定一个独立日志文件，返回实际使用的 request_id。
-
-    底层使用单个共享 PerRequestRouter + ContextVar 路由，并发请求互不串台。
-
-    Args:
-        request_id: 外部传入的请求标识（如 trace_id），None 时自动生成。
-        level: 日志级别，默认 DEBUG。
-        extra_namespaces: 除 _CONFIGURED_NAMESPACES 外，额外需要捕获的 logger 命名空间，
-            例如 "by-framework"、"byclaw_data"。
-
-    Returns:
-        实际使用的 request_id（用于传给 detach_request_log）。
-    """
-    rid = _make_request_id(request_id)
-    log_path = _get_request_log_dir() / f"{rid}.log"
-
-    _ensure_router_installed(
-        extra_namespaces=extra_namespaces,
-        level=level or logging.DEBUG,
-    )
-
-    # 绑定到当前协程的 ContextVar
-    _current_request.set((rid, log_path))
-
-    logging.getLogger(__name__).debug("attach_request_log: rid=%s path=%s", rid, log_path)
-    return rid
-
-
-def detach_request_log(request_id: str) -> None:
-    """解除当前协程的 request 绑定，关闭对应的日志文件。
-
-    应在 finally 块中调用，确保文件句柄不泄漏。
-    每 100 次调用触发一次过期文件清理（基于 _request_keep_days）。
-    """
-    global _detach_counter
-    _current_request.set(None)
-
-    if _per_request_router is not None:
-        _per_request_router.close_request(request_id)
-
-    _detach_counter += 1
-    if _detach_counter % _CLEANUP_INTERVAL == 0:
-        _cleanup_old_request_logs(_request_keep_days)
-
-    logging.getLogger(__name__).debug("detach_request_log: rid=%s closed", request_id)
-
 
 @contextlib.asynccontextmanager
 async def request_log_context(
     request_id: str | None = None,
-    *,
-    level: int | None = None,
-    extra_namespaces: tuple[str, ...] = (),
+    **_kwargs: object,
 ) -> AsyncGenerator[str, None]:
-    """异步上下文管理器，自动 attach/detach per-request 日志文件。
+    """兼容 shim：原 per-request 隔离日志已由 OTLP trace_id 注入替代。
 
-    并发安全：每个协程通过 ContextVar 独立路由，不会互相串台。
-
-    用法::
-
-        async with request_log_context(
-            trace_id,
-            extra_namespaces=("by-framework", "byclaw_data"),
-        ) as rid:
-            logger.info("只写入当前请求的 requests/{rid}.log")
-
-    Args:
-        request_id: 外部传入的请求标识，None 时自动生成。
-        level: 日志级别，默认 DEBUG。
-        extra_namespaces: 额外需要捕获的 logger 命名空间。
-
-    Yields:
-        实际使用的 request_id。
+    调用方行为不变，request_id 直接透传返回供外部标识使用。
     """
-    rid = attach_request_log(request_id, level=level, extra_namespaces=extra_namespaces)
-    try:
-        yield rid
-    finally:
-        detach_request_log(rid)
+    yield request_id or ""
+
+
+# 保留供可能存在的直接调用方使用，均为无操作
+def attach_request_log(request_id: str | None = None, **_kwargs: object) -> str:
+    """兼容 shim，无操作。"""
+    return request_id or ""
+
+
+def detach_request_log(request_id: str, **_kwargs: object) -> None:  # noqa: ARG001
+    """兼容 shim，无操作。"""

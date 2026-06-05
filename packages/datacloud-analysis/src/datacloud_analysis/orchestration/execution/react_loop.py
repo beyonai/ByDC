@@ -1538,20 +1538,23 @@ async def run_react_loop(
                         if _spans_list is not None:
                             _now = _dt.datetime.now(_dt.timezone.utc)
                             _elapsed = time.monotonic() - _lf_span_start
-                            _start_iso = (
-                                _now - _dt.timedelta(seconds=_elapsed)
-                            ).isoformat()
+                            _start_iso = (_now - _dt.timedelta(seconds=_elapsed)).isoformat()
                             _result_str = (
-                                result if isinstance(result, str)
-                                else str(result) if result is not None else ""
+                                result
+                                if isinstance(result, str)
+                                else str(result)
+                                if result is not None
+                                else ""
                             )
-                            _spans_list.append({
-                                "name": _tool_name,
-                                "input": _tool_args,
-                                "output": _result_str[:2000],
-                                "start_time": _start_iso,
-                                "end_time": _now.isoformat(),
-                            })
+                            _spans_list.append(
+                                {
+                                    "name": _tool_name,
+                                    "input": _tool_args,
+                                    "output": _result_str[:2000],
+                                    "start_time": _start_iso,
+                                    "end_time": _now.isoformat(),
+                                }
+                            )
                     except Exception:
                         pass
             except GraphBubbleUp:

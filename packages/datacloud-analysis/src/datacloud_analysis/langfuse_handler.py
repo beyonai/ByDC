@@ -49,6 +49,10 @@ def get_langfuse_callback() -> Any | None:
 
     _handler_init_attempted = True
 
+    from datacloud_analysis.otel_handler import init_otel  # noqa: PLC0415
+
+    init_otel()
+
     if not os.getenv("LANGFUSE_SECRET_KEY"):
         logger.debug("langfuse: LANGFUSE_SECRET_KEY 未设置，跳过追踪")
         return None
