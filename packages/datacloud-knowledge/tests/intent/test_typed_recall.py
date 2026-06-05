@@ -96,6 +96,18 @@ class TestKtypeCategoryMap:
 class TestSingleCharFallback:
     """单字符兜底召回只在常规召回全空时启用。"""
 
+    def test_bm25_and_tsquery_keeps_unique_cjk_chars_only(self) -> None:
+        from datacloud_knowledge.retrieval.recall import _paths as recall_paths
+
+        assert (
+            recall_paths._single_char_and_tsquery("省级 “专精特新” 中小企业")
+            == "省 & 级 & 专 & 精 & 特 & 新 & 中 & 小 & 企 & 业"
+        )
+        assert recall_paths._single_char_and_tsquery('国家专精特新"小巨人"企业') == (
+            "国 & 家 & 专 & 精 & 特 & 新 & 小 & 巨 & 人 & 企 & 业"
+        )
+        assert recall_paths._single_char_and_tsquery("task_status") == ""
+
     def test_single_char_tsquery_keeps_unique_cjk_chars_only(self) -> None:
         from datacloud_knowledge.retrieval import recall as batch_recall
 
