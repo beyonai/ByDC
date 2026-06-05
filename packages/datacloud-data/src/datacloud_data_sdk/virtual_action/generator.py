@@ -11,7 +11,37 @@ from __future__ import annotations
 
 from typing import Any
 
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT, MAX_SQL_QUERY_LIMIT
+
 # ── 描述文档生成（§6 / §7 模板）────────────────────────────────────────────────
+
+
+def _field_term_values(f: Any) -> list[str]:
+    """读取字段上预填充的术语标签值。"""
+    raw_values = getattr(f, "term_values", None) or getattr(f, "term_labels", None)
+    if not isinstance(raw_values, list):
+        return []
+    values: list[str] = []
+    seen: set[str] = set()
+    for raw_value in raw_values:
+        value = str(raw_value).strip()
+        if value and value not in seen:
+            values.append(value)
+            seen.add(value)
+    return values
+
+
+def _field_special_note(f: Any) -> str:
+    """生成字段能力表的特殊说明。"""
+    notes: list[str] = []
+    if getattr(f, "required_filter_group", None):
+        notes.append("必须过滤")
+    term_values = _field_term_values(f)
+    if term_values:
+        notes.append(f"可选术语值：{', '.join(term_values)}")
+    elif getattr(f, "term_set", None):
+        notes.append("术语字段")
+    return "；".join(notes)
 
 
 def _field_table_row(f: Any) -> str:
@@ -23,8 +53,8 @@ def _field_table_row(f: Any) -> str:
     filter_ops = "/".join(getattr(f, "filter_ops", []) or []) or "-"
     group_ops = "/".join(getattr(f, "group_ops", []) or []) or "-"
     agg_ops = "/".join(getattr(f, "aggregate_ops", []) or []) or "-"
-    req = "必须过滤" if getattr(f, "required_filter_group", None) else ""
-    return f"| {fc} | {fn} | {role} | {kind} | {filter_ops} | {group_ops} | {agg_ops} | {req} |"
+    note = _field_special_note(f)
+    return f"| {fc} | {fn} | {role} | {kind} | {filter_ops} | {group_ops} | {agg_ops} | {note} |"
 
 
 def _required_restrictions(required_filter_groups: list[str]) -> str:
@@ -65,7 +95,9 @@ def build_search_description(
             fc = f.field_code if hasattr(f, "field_code") else f.property_code
             fn = f.field_name if hasattr(f, "field_name") else getattr(f, "property_name", fc)
             ops = "/".join(getattr(f, "filter_ops", []))
-            lines.append(f"| {fc} | {fn} | {ops} |")
+            note = _field_special_note(f)
+            suffix = f"；{note}" if note else ""
+            lines.append(f"| {fc} | {fn} | {ops}{suffix} |")
 
     lines.append("")
     lines.append("**常见错误**：")
@@ -105,6 +137,19 @@ def _value_schema_for_field(f: Any) -> dict[str, Any]:
     """根据字段类型构建 value JSON Schema（用于 filters 条目）。"""
     term_set = getattr(f, "term_set", None)
     if term_set:
+        term_values = _field_term_values(f)
+        if term_values:
+            description = (
+                "eq/in 时填写术语值；in 传数组；is_null/is_not_null 不需要。"
+                f"可选术语值：{', '.join(term_values)}"
+            )
+            return {
+                "description": description,
+                "oneOf": [
+                    {"type": "string", "enum": term_values},
+                    {"type": "array", "items": {"type": "string", "enum": term_values}},
+                ],
+            }
         return {
             "description": "eq/in 时填写术语值；in 传数组；is_null/is_not_null 不需要",
             "oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}],
@@ -147,6 +192,19 @@ def _field_code_enum_property(fields: list[Any], description: str) -> dict[str, 
     }
 
 
+def _term_description_hint(f: Any) -> str:
+    """生成字段术语绑定提示。"""
+    term_set = getattr(f, "term_set", None)
+    if not term_set:
+        return ""
+    term_type = getattr(f, "term_type", None)
+    term_values = _field_term_values(f)
+    term_label = "字典术语" if term_type == "enum" else "术语"
+    if term_values:
+        return f"{term_label}字段，可选术语值：{', '.join(term_values)}。"
+    return f"{term_label}字段；eq/in 的 value 填写术语值。"
+
+
 def _filter_item_schema(f: Any, *, strict_field_code: bool) -> dict[str, Any]:
     """为单字段生成 filters 数组元素 schema。"""
     field_code = f.field_code if hasattr(f, "field_code") else f.property_code
@@ -157,10 +215,13 @@ def _filter_item_schema(f: Any, *, strict_field_code: bool) -> dict[str, Any]:
     role = getattr(f, "analytic_role", None)
     kind = getattr(f, "analytic_kind", None)
     role_hint = f"[{role}-{kind}]" if role else ""
+    term_hint = _term_description_hint(f)
+    term_description = f"{term_hint}" if term_hint else ""
     return {
         "type": "object",
         "description": (
             f"{field_name}({field_code}){role_hint}过滤条件。"
+            f"{term_description}"
             "若需与另一字段比较(如'实际上线日期晚于计划上线日期')，"
             "用 value_field 填目标字段编码，不要填 value。"
         ),
@@ -597,7 +658,12 @@ def build_query_schema(
                     "required": ["field"],
                 },
             },
-            "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_SQL_QUERY_LIMIT,
+                "default": DEFAULT_SQL_QUERY_LIMIT,
+            },
             "offset": {"type": "integer", "minimum": 0, "default": 0},
         },
     }
@@ -869,7 +935,12 @@ def build_compute_schema(
                     "required": ["field"],
                 },
             },
-            "limit": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
+            "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": MAX_SQL_QUERY_LIMIT,
+                "default": DEFAULT_SQL_QUERY_LIMIT,
+            },
             "filter_relation": {
                 "type": "string",
                 "enum": ["AND", "OR"],

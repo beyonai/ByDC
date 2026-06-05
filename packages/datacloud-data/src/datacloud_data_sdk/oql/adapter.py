@@ -18,6 +18,7 @@ if sys.version_info >= (3, 8):
 else:
     pass
 
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT
 from datacloud_data_sdk.executor.models import ApiExecTask, SqlExecTask
 from datacloud_data_sdk.oql.models import OQLError, OQLErrorCode
 
@@ -945,7 +946,11 @@ def build_aggregate_sql(oql_params: dict, cls: Any, db_type: str, registry) -> t
         where_clause,
         group_by_clause,
         having_clause,
-        build_limit_clause(oql_params.get("limit", 100), oql_params.get("offset"), db_type),
+        build_limit_clause(
+            oql_params.get("limit", DEFAULT_SQL_QUERY_LIMIT),
+            oql_params.get("offset"),
+            db_type,
+        ),
     ]
 
     sql = "\n".join(c for c in clauses if c)
@@ -1055,7 +1060,7 @@ class OqlAdapter:
 
         # LIMIT 子句
         limit_clause = build_limit_clause(
-            oql_params.get("limit", 100), oql_params.get("offset", 0), db_type
+            oql_params.get("limit", DEFAULT_SQL_QUERY_LIMIT), oql_params.get("offset", 0), db_type
         )
 
         # 组装 SQL

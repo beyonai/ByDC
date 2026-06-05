@@ -180,7 +180,15 @@ def build_filters_where(
                 continue
             vf_alias, vf_col = resolved_vf
             vf_expr = f"{vf_alias}.{quote_identifier(vf_col, db_type)}"
-            op_map = {"eq": "=", "neq": "!=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            op_map = {
+                "eq": "=",
+                "ne": "!=",
+                "neq": "!=",
+                "gt": ">",
+                "gte": ">=",
+                "lt": "<",
+                "lte": "<=",
+            }
             sql_op = op_map.get(op)
             if not sql_op:
                 logger.warning(
@@ -211,7 +219,15 @@ def build_filters_where(
             clauses.append(f"{col_expr} LIKE :{param_key}")
             params[param_key] = like_value
         else:
-            op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            op_map = {
+                "eq": "=",
+                "ne": "!=",
+                "neq": "!=",
+                "gt": ">",
+                "gte": ">=",
+                "lt": "<",
+                "lte": "<=",
+            }
             clauses.append(f"{col_expr} {op_map.get(op, '=')} :{param_key}")
             params[param_key] = coerce_sql_param(value, param_field)
 

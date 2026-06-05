@@ -13,6 +13,7 @@ from datacloud_data_sdk.executor.analyze_executor import (
     _range_case_expr,
     _safe_pkey,
 )
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT
 from datacloud_data_sdk.executor.time_grouping import build_time_group_expr
 from datacloud_data_sdk.executor.view_executor_support import (
     build_filters_where,
@@ -136,7 +137,7 @@ class ViewAnalyzeExecutor:
         filters = arguments.get("filters") or []
         having_list = arguments.get("having") or []
         order_by = arguments.get("order_by") or []
-        limit = int(arguments.get("limit") or 100)
+        limit = int(arguments.get("limit") or DEFAULT_SQL_QUERY_LIMIT)
 
         # SELECT + GROUP BY
         select_parts: list[str] = []
@@ -250,7 +251,15 @@ class ViewAnalyzeExecutor:
                 params[f"{pkey}_0"] = vals[0]
                 params[f"{pkey}_1"] = vals[1]
             else:
-                op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+                op_map = {
+                    "eq": "=",
+                    "ne": "!=",
+                    "neq": "!=",
+                    "gt": ">",
+                    "gte": ">=",
+                    "lt": "<",
+                    "lte": "<=",
+                }
                 having_clauses.append(f"{expr} {op_map.get(hop, '>')} :{pkey}")
                 params[pkey] = hval
 

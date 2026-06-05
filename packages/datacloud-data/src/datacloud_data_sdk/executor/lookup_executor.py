@@ -5,7 +5,7 @@
   "select": ["field_code", ...],          // 可选
   "filters": [{"field": "...", "op": "...", "value": ...}],
   "order_by": [{"field": "...", "direction": "asc|desc"}],
-  "limit": 100,
+  "limit": 1000,
   "offset": 0
 }
 """
@@ -16,6 +16,7 @@ import re
 from typing import Any
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.result_term_converter import ResultTermConverter
@@ -95,8 +96,16 @@ def _build_filters_from_list(
             clauses.append(f"{q(col)} LIKE :{pkey}")
             params[pkey] = like_val
         else:
-            # eq / gt / gte / lt / lte
-            op_map = {"eq": "=", "gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+            # eq / neq / gt / gte / lt / lte
+            op_map = {
+                "eq": "=",
+                "ne": "!=",
+                "neq": "!=",
+                "gt": ">",
+                "gte": ">=",
+                "lt": "<",
+                "lte": "<=",
+            }
             clauses.append(f"{q(col)} {op_map.get(op, '=')} :{pkey}")
             params[pkey] = coerce_sql_param(value, field_map.get(fc))
 
@@ -171,7 +180,7 @@ class LookupExecutor:
             order_clauses.append(f"{q(col)} {direction}")
 
         # LIMIT / OFFSET
-        limit = int(arguments.get("limit") or 100)
+        limit = int(arguments.get("limit") or DEFAULT_SQL_QUERY_LIMIT)
         offset = int(arguments.get("offset") or 0)
 
         # 构建 SQL

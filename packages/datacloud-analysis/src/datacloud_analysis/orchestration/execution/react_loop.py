@@ -1530,13 +1530,14 @@ async def run_react_loop(
                 if _tool_name and _tool_name != "finish_react":
                     try:
                         import datetime as _dt  # noqa: PLC0415
+
                         from datacloud_analysis.langfuse_handler import (  # noqa: PLC0415
                             current_tool_spans,
                         )
 
                         _spans_list = current_tool_spans.get()
                         if _spans_list is not None:
-                            _now = _dt.datetime.now(_dt.timezone.utc)
+                            _now = _dt.datetime.now(_dt.UTC)
                             _elapsed = time.monotonic() - _lf_span_start
                             _start_iso = (_now - _dt.timedelta(seconds=_elapsed)).isoformat()
                             _result_str = (

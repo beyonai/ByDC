@@ -212,6 +212,33 @@ async def test_basic_physical_query(executor_with_data: QueryExecutor) -> None:
     assert result["meta"]["object_code"] == "enterprise_base"
 
 
+async def test_query_default_limit_returns_more_than_100(loader: OntologyLoader) -> None:
+    """不传 limit 时默认返回 1000 条，而不是旧的 100 条。"""
+    ds = DataSourceManager(loader._config.datasource_configs)
+    conn = ds.get_connector("test_db")
+    await conn.execute(
+        "CREATE TABLE enterprise_tbl "
+        "(eid INTEGER, ent_name TEXT, region TEXT, period TEXT, "
+        "revenue REAL, scale TEXT, total_tax REAL, total_revenue REAL)"
+    )
+    for idx in range(150):
+        await conn.execute(
+            "INSERT INTO enterprise_tbl VALUES "
+            f"({idx},'企业{idx}','亦庄','2026-01',100.0,'L',1.0,100.0)"
+        )
+
+    result = await QueryExecutor(loader, ds_manager=ds).execute(
+        "enterprise_base",
+        {
+            "select": ["enterprise_name"],
+            "filters": [{"field": "period", "op": "eq", "value": "2026-01"}],
+            "order_by": [{"field": "enterprise_id"}],
+        },
+    )
+
+    assert result["total"] == 150
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 用例2：空 select 返回全部非 linked 字段
 # ─────────────────────────────────────────────────────────────────────────────

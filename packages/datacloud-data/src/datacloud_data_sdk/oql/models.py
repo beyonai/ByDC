@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT
+
 if sys.version_info >= (3, 8):
     from typing import Literal
 else:
@@ -123,7 +125,7 @@ class OQLRequest:
     group_by: list[str] | None = None
     having: list[OQLCondition] | None = None
     order_by: list[dict[str, str]] | None = None  # [{field: str, direction: "asc"|"desc"}]
-    limit: int = 100
+    limit: int = DEFAULT_SQL_QUERY_LIMIT
     offset: int = 0
     execution_strategy: Literal["auto", "single_source", "cross_source", "pipeline"] | None = "auto"
 
@@ -160,7 +162,7 @@ class PipelineStep:
     include_links: list[OQLIncludeLink] | None = None
     metrics: list[OQLMetric] | None = None
     group_by: list[str] | None = None
-    limit: int = 100
+    limit: int = DEFAULT_SQL_QUERY_LIMIT
     offset: int = 0
 
 

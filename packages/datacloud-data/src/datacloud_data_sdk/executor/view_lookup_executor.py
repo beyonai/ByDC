@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from datacloud_data_sdk.executor.limits import DEFAULT_SQL_QUERY_LIMIT
 from datacloud_data_sdk.executor.view_executor_support import (
     build_filters_where as _support_build_filters_where,
 )
@@ -171,7 +172,7 @@ class ViewLookupExecutor:
             collect_required_objects(view, context.field_to_object_code, required_fields),
         )
 
-        limit = int(arguments.get("limit") or 100)
+        limit = int(arguments.get("limit") or DEFAULT_SQL_QUERY_LIMIT)
         offset = int(arguments.get("offset") or 0)
 
         # 拼接 SQL

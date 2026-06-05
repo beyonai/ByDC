@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -25,6 +26,7 @@ _COLUMN_CAPS_CACHE: dict[str, bool] = {}
 
 _TABLE = "term_name"
 _TSV_COLUMN = "name_keywords"
+_CJK_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +139,18 @@ def _run_search(
     ]
 
 
+def _build_char_tsquery(query_text: str, *, ts_operator: str) -> str:
+    """构建安全的中文单字 tsquery。"""
+    seen: set[str] = set()
+    chars: list[str] = []
+    for char in query_text.strip():
+        if char in seen or not _CJK_CHAR_RE.fullmatch(char):
+            continue
+        seen.add(char)
+        chars.append(char)
+    return f" {ts_operator} ".join(chars)
+
+
 def _search(
     session: Session,
     query_text: str,
@@ -149,7 +163,9 @@ def _search(
     if not query_text or not query_text.strip():
         return []
 
-    tsquery = f" {ts_operator} ".join(list(query_text.strip()))
+    tsquery = _build_char_tsquery(query_text, ts_operator=ts_operator)
+    if not tsquery:
+        return []
     if not _has_name_keywords_column(session):
         message = (
             "BM25 requires term_name.name_keywords column. "
@@ -282,7 +298,9 @@ def bm25_search_partitioned(
     """按 type_code 分区取 top-N 的 BM25 AND 搜索。"""
     if not query_text or not query_text.strip() or not term_type_codes:
         return []
-    tsquery = " & ".join(list(query_text.strip()))
+    tsquery = _build_char_tsquery(query_text, ts_operator="&")
+    if not tsquery:
+        return []
     if not _has_name_keywords_column(session):
         return []
     try:
@@ -309,7 +327,9 @@ def bm25_search_with_or_partitioned(
     """按 type_code 分区取 top-N 的 BM25 OR 搜索。"""
     if not query_text or not query_text.strip() or not term_type_codes:
         return []
-    tsquery = " | ".join(list(query_text.strip()))
+    tsquery = _build_char_tsquery(query_text, ts_operator="|")
+    if not tsquery:
+        return []
     if not _has_name_keywords_column(session):
         return []
     try:

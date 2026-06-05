@@ -10,9 +10,21 @@ from concurrent.futures import ThreadPoolExecutor
 from datacloud_knowledge.adapters.opengauss.engine import PostgresSearchEngine
 from datacloud_knowledge.retrieval.tokenizers import create_tokenizer
 
-from ._models import _VECTOR_MIN_SIMILARITY, PreparedBatch, RecallRequest
+from ._models import _CJK_CHAR_RE, _VECTOR_MIN_SIMILARITY, PreparedBatch, RecallRequest
 
 log = logging.getLogger(__name__)
+
+
+def _single_char_and_tsquery(keyword: str) -> str:
+    """将 keyword 转换为安全的中文单字 AND tsquery。"""
+    seen: set[str] = set()
+    chars: list[str] = []
+    for char in keyword.strip():
+        if char in seen or not _CJK_CHAR_RE.fullmatch(char):
+            continue
+        seen.add(char)
+        chars.append(char)
+    return " & ".join(chars)
 
 
 def _jieba_tsquery(text: str) -> str:
@@ -82,7 +94,7 @@ def _batch_bm25_and(
         per_type_requests=batch.per_type_requests,
         top_k=top_k,
         column_name="name_keywords",
-        tokenizer=lambda keyword: " & ".join(list(keyword)),
+        tokenizer=_single_char_and_tsquery,
     )
 
     log.info(

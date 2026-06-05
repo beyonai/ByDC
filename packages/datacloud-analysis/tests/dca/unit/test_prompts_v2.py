@@ -72,3 +72,27 @@ def test_T3_5_field_passthrough_independent_from_complex_conditions() -> None:
     assert "独立规则" in prompt or "不触发 complex_conditions" in prompt, (
         "Prompt 未明确说明字段透传与 complex_conditions 的独立性"
     )
+
+
+def test_term_filter_eq_in_value_must_use_listed_term_values() -> None:
+    """术语字段 eq/in 过滤值必须来自字段描述或 Schema 给出的具体术语值。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+
+    assert "filters.op 为 eq 或 in" in prompt
+    assert "字段描述/Schema 中列出的具体术语值" in prompt
+    assert "禁止填写未出现在术语值列表中的同义词、口语词、编码或自造值" in prompt
+
+
+def test_query_limit_is_omitted_without_explicit_user_count() -> None:
+    """用户未明确查询条数时，提示词要求不要填写 limit。"""
+    from datacloud_analysis.i18n.prompts import get_execution_prompt
+
+    prompt = get_execution_prompt("zh_CN")
+
+    assert "用户没有明确要求返回条数时，不要填写 limit" in prompt
+    assert (
+        "只有用户明确提出前 N 条、最多 N 条、返回 N 条、limit N 或分页大小时，才填写 limit"
+        in prompt
+    )

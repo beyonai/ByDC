@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.models import OntologyClass, OntologyField
+from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
 
 
@@ -46,6 +47,64 @@ def test_inject_virtual_actions_adds_dynamic_table_write_actions() -> None:
     insert_schema = insert_action.input_schema or {}
     record_schema = insert_schema["properties"]["records"]["items"]
     assert "id" not in record_schema["properties"]
+
+
+def test_inject_virtual_actions_adds_dict_term_values_to_filter_schema() -> None:
+    """虚拟查询动作的 dict 术语字段应把具体术语值给到模型。"""
+    loader = OntologyLoader()
+    loader.configure(
+        term_loader=KbTermLoader(
+            {
+                "status.code": [
+                    {"code": "TODO", "label": "待办"},
+                    {"code": "DONE", "label": "已完成"},
+                ]
+            }
+        )
+    )
+    loader._classes["todo_item"] = OntologyClass(
+        object_code="todo_item",
+        object_name="待办事项",
+        description="",
+        source_type="DB",
+        datasource_alias="main",
+        table_name="todo_item",
+        fields=[
+            OntologyField("id", "ID", "INTEGER", is_primary_key=True),
+            OntologyField(
+                "status",
+                "状态",
+                "STRING",
+                term_set="status.code",
+                term_type="enum",
+                analytic_role="dimension",
+                analytic_kind="name",
+                filter_ops=["eq", "in", "is_null", "is_not_null"],
+            ),
+        ],
+        actions=[],
+    )
+
+    inject_virtual_actions(loader)
+
+    cls = loader.get_ontology_class("todo_item")
+    query_action = next(action for action in cls.actions if action.action_code == "query_todo_item")
+    query_schema = query_action.input_schema or {}
+    filter_items = query_schema["properties"]["filters"]["items"]["oneOf"]
+    status_item = next(
+        item for item in filter_items if item["properties"]["field"].get("enum") == ["status"]
+    )
+    value_schema = status_item["properties"]["value"]
+
+    assert "待办" in query_action.description
+    assert "已完成" in query_action.description
+    assert "待办" in value_schema["description"]
+    assert "已完成" in value_schema["description"]
+    assert {"type": "string", "enum": ["待办", "已完成"]} in value_schema["oneOf"]
+    assert {
+        "type": "array",
+        "items": {"type": "string", "enum": ["待办", "已完成"]},
+    } in value_schema["oneOf"]
 
 
 def test_inject_virtual_actions_adds_kb_write_action() -> None:
