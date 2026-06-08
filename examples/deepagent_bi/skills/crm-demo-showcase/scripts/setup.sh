@@ -36,8 +36,7 @@ if command -v uv &>/dev/null; then
     ok "uv 已安装: $(uv --version 2>&1)"
 else
     info "安装中 ..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.local/bin:$PATH"
+    pip install uv
     if command -v uv &>/dev/null; then
         ok "uv 安装成功: $(uv --version 2>&1)"
     else
