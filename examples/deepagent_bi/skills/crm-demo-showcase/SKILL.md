@@ -1,5 +1,5 @@
 ---
-name: CRM 综合能力演示
+name: crm-demo-showcase
 description: CRM 数据查询、统计分析、歧义处理、数据操作（周报生成→信息抽取→客户录入→商机任务创建）、结构化本体创建与视图、非结构化本体管理的综合演示。Use this skill whenever the user mentions CRM 演示、百应数据查询、客户查询、商机统计、项目管理、本体对象、视图管理、新手引导、产品演示、产品理念，or asks「什么是对象/视图」「查询快在哪里」「本体解决了什么问题」「结构化+非结构化融合」「多跳数据查询」「数据安全怎么做」「解决口语表达的歧义」— even if they don't say "演示" explicitly.
 allowed-tools: baiying_call, Bash
 ---
@@ -215,14 +215,16 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 | `scripts/ontology/structured/create_view.py` | 创建本体视图 |
 | `scripts/ontology/structured/delete_object.py` | 删除结构化对象 |
 | `scripts/ontology/structured/delete_view.py` | 删除本体视图 |
-| `scripts/ontology/structured/mount_resource.py` | 挂载视图到当前 Agent |
+| `scripts/ontology/structured/mount_resource.py` | 挂载资源到当前 Agent |
+| `scripts/ontology/structured/unmount_resource.py` | 将当前 Agent资源卸载 |
 | `scripts/ontology/structured/list_term_types.py` | 查询可绑定的术语类型 |
 | `scripts/ontology/structured/get_term_type_values.py` | 查询术语类型的值列表 |
 | `scripts/ontology/unstructured/list_knowledge_bases.py` | 查询可用知识库 |
 | `scripts/ontology/unstructured/list_kb_directories.py` | 查询知识库目录 |
 | `scripts/ontology/unstructured/create_object.py` | 创建非结构化对象（collect → submit） |
 | `scripts/ontology/unstructured/delete_object.py` | 删除非结构化对象 |
-| `scripts/ontology/unstructured/mount_resource.py` | 挂载非结构化对象到 Agent |
+| `scripts/ontology/unstructured/mount_resource.py` | 挂载非结构化资源到 Agent |
+| `scripts/ontology/unstructured/unmount_resource.py` | 将Agent的非结构化资源卸载 |
 | `scripts/ontology/unstructured/list_mounted_resources.py` | 查询 Agent 已挂载的非结构化对象 |
 | `scripts/meeting-minutes/generate_meeting_minutes.py` | 生成模拟会议纪要 |
 | `scripts/weekly-report/generate_weekly_report.py` | 生成模拟周报 |
