@@ -11,7 +11,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-from datacloud_knowledge.retrieval.recall import ScopeRecallLayer
+from datacloud_knowledge.adapters.opengauss.recall import ScopeRecallLayer
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ class TestBuildScopeRecallLayers:
     """build_scope_recall_layers returns per-type scope stacks."""
 
     def test_returns_tuple_of_field_and_value_layers(self) -> None:
-        from datacloud_knowledge.retrieval._recall import build_scope_recall_layers
+        from datacloud_knowledge.adapters.opengauss.recall._recall import build_scope_recall_layers
 
         field_layers, value_layers = build_scope_recall_layers(
             "by_rd_task", _make_confirmed(), _make_confirmed()
@@ -72,7 +72,7 @@ class TestBuildScopeRecallLayers:
         assert isinstance(value_layers, list)
 
     def test_no_confirmed_fields_returns_base_only_for_both(self) -> None:
-        from datacloud_knowledge.retrieval._recall import build_scope_recall_layers
+        from datacloud_knowledge.adapters.opengauss.recall._recall import build_scope_recall_layers
 
         field_layers, value_layers = build_scope_recall_layers(
             "by_rd_task", _make_confirmed(), _make_confirmed()
@@ -81,9 +81,9 @@ class TestBuildScopeRecallLayers:
         assert field_layers == b
         assert value_layers == b
 
-    @patch("datacloud_knowledge.retrieval._recall._collect_joinkey_related_objects")
+    @patch("datacloud_knowledge.adapters.opengauss.recall._recall._collect_joinkey_related_objects")
     def test_field_layers_base_only(self, mock_collect: MagicMock) -> None:
-        from datacloud_knowledge.retrieval._recall import build_scope_recall_layers
+        from datacloud_knowledge.adapters.opengauss.recall._recall import build_scope_recall_layers
 
         mock_collect.return_value = ["po_users"]
         field_layers, _value = build_scope_recall_layers(
@@ -92,9 +92,9 @@ class TestBuildScopeRecallLayers:
         assert len(field_layers) == 1
         assert field_layers[0].scope_code == "by_rd_task"
 
-    @patch("datacloud_knowledge.retrieval._recall._collect_joinkey_related_objects")
+    @patch("datacloud_knowledge.adapters.opengauss.recall._recall._collect_joinkey_related_objects")
     def test_value_layers_include_joinkey_objects(self, mock_collect: MagicMock) -> None:
-        from datacloud_knowledge.retrieval._recall import build_scope_recall_layers
+        from datacloud_knowledge.adapters.opengauss.recall._recall import build_scope_recall_layers
 
         mock_collect.return_value = ["po_users"]
         _field, value_layers = build_scope_recall_layers(
@@ -105,9 +105,9 @@ class TestBuildScopeRecallLayers:
         assert value_layers[1].weight == 0.7
         assert value_layers[1].label == "joinkey_object"
 
-    @patch("datacloud_knowledge.retrieval._recall._collect_joinkey_related_objects")
+    @patch("datacloud_knowledge.adapters.opengauss.recall._recall._collect_joinkey_related_objects")
     def test_joinkey_duplicate_scope_skipped(self, mock_collect: MagicMock) -> None:
-        from datacloud_knowledge.retrieval._recall import build_scope_recall_layers
+        from datacloud_knowledge.adapters.opengauss.recall._recall import build_scope_recall_layers
 
         mock_collect.return_value = ["by_rd_task", "po_users"]
         _field, value_layers = build_scope_recall_layers(
@@ -116,9 +116,9 @@ class TestBuildScopeRecallLayers:
         scopes = [layer.scope_code for layer in value_layers]
         assert scopes == ["by_rd_task", "po_users"]  # no duplicate by_rd_task
 
-    @patch("datacloud_knowledge.retrieval._recall._collect_joinkey_related_objects")
+    @patch("datacloud_knowledge.adapters.opengauss.recall._recall._collect_joinkey_related_objects")
     def test_no_joinkeys_value_layers_base_only(self, mock_collect: MagicMock) -> None:
-        from datacloud_knowledge.retrieval._recall import build_scope_recall_layers
+        from datacloud_knowledge.adapters.opengauss.recall._recall import build_scope_recall_layers
 
         mock_collect.return_value = []
         _field, value_layers = build_scope_recall_layers(
@@ -137,12 +137,16 @@ class TestCollectJoinkeyRelatedObjects:
     """_collect_joinkey_related_objects filters by joinkeys.sourceField."""
 
     def test_empty_field_codes_returns_empty(self) -> None:
-        from datacloud_knowledge.retrieval._recall import _collect_joinkey_related_objects
+        from datacloud_knowledge.adapters.opengauss.recall._recall import (
+            _collect_joinkey_related_objects,
+        )
 
         assert _collect_joinkey_related_objects("by_rd_task", []) == []
 
     def test_matching_source_field_returns_target(self) -> None:
-        from datacloud_knowledge.retrieval._recall import _collect_joinkey_related_objects
+        from datacloud_knowledge.adapters.opengauss.recall._recall import (
+            _collect_joinkey_related_objects,
+        )
 
         with _mock_db_rows(
             (
@@ -154,7 +158,9 @@ class TestCollectJoinkeyRelatedObjects:
         assert result == ["po_users"]
 
     def test_non_matching_source_field_returns_empty(self) -> None:
-        from datacloud_knowledge.retrieval._recall import _collect_joinkey_related_objects
+        from datacloud_knowledge.adapters.opengauss.recall._recall import (
+            _collect_joinkey_related_objects,
+        )
 
         with _mock_db_rows(
             ("by_project", {"joinkeys": [{"sourceField": "id", "targetField": "opp_id"}]}),
@@ -165,7 +171,9 @@ class TestCollectJoinkeyRelatedObjects:
         assert result == []
 
     def test_multiple_relations_only_one_matches(self) -> None:
-        from datacloud_knowledge.retrieval._recall import _collect_joinkey_related_objects
+        from datacloud_knowledge.adapters.opengauss.recall._recall import (
+            _collect_joinkey_related_objects,
+        )
 
         with _mock_db_rows(
             ("po_users", {"joinkeys": [{"sourceField": "initiator_user_id"}]}),
@@ -176,7 +184,9 @@ class TestCollectJoinkeyRelatedObjects:
         assert result == ["po_users"]
 
     def test_multiple_matching_objects(self) -> None:
-        from datacloud_knowledge.retrieval._recall import _collect_joinkey_related_objects
+        from datacloud_knowledge.adapters.opengauss.recall._recall import (
+            _collect_joinkey_related_objects,
+        )
 
         with _mock_db_rows(
             ("po_users", {"joinkeys": [{"sourceField": "handler_user_id"}]}),
@@ -186,7 +196,9 @@ class TestCollectJoinkeyRelatedObjects:
         assert sorted(result) == ["po_org", "po_users"]
 
     def test_none_ext_attrs_skipped(self) -> None:
-        from datacloud_knowledge.retrieval._recall import _collect_joinkey_related_objects
+        from datacloud_knowledge.adapters.opengauss.recall._recall import (
+            _collect_joinkey_related_objects,
+        )
 
         with _mock_db_rows(
             ("po_users", None),  # skipped — not a dict
@@ -196,7 +208,9 @@ class TestCollectJoinkeyRelatedObjects:
         assert result == ["po_org"]
 
     def test_db_exception_returns_empty(self) -> None:
-        from datacloud_knowledge.retrieval._recall import _collect_joinkey_related_objects
+        from datacloud_knowledge.adapters.opengauss.recall._recall import (
+            _collect_joinkey_related_objects,
+        )
 
         bad = MagicMock()
         bad.__enter__.side_effect = RuntimeError("db down")
@@ -216,7 +230,7 @@ class TestUnifiedRecallSplitScope:
     """unified_recall sends whereValue to value_layers, others to field_layers."""
 
     def test_wherevalue_uses_value_layers(self) -> None:
-        from datacloud_knowledge.retrieval._recall import unified_recall
+        from datacloud_knowledge.adapters.opengauss.recall._recall import unified_recall
 
         fl = [ScopeRecallLayer(scope_code="by_rd_task", weight=1.0, label="ontology")]
         vl = [
@@ -225,7 +239,7 @@ class TestUnifiedRecallSplitScope:
         ]
 
         with patch(
-            "datacloud_knowledge.retrieval._recall.typed_multi_recall_with_session",
+            "datacloud_knowledge.adapters.opengauss.recall._recall.typed_multi_recall_with_session",
             return_value={},
         ) as mock_recall:
             unified_recall(
@@ -240,7 +254,7 @@ class TestUnifiedRecallSplitScope:
         assert [layer.scope_code for layer in layers] == ["by_rd_task", "po_users"]
 
     def test_select_uses_field_layers(self) -> None:
-        from datacloud_knowledge.retrieval._recall import unified_recall
+        from datacloud_knowledge.adapters.opengauss.recall._recall import unified_recall
 
         fl = [ScopeRecallLayer(scope_code="by_opportunity", weight=1.0, label="ontology")]
         vl = [
@@ -249,7 +263,7 @@ class TestUnifiedRecallSplitScope:
         ]
 
         with patch(
-            "datacloud_knowledge.retrieval._recall.typed_multi_recall_with_session",
+            "datacloud_knowledge.adapters.opengauss.recall._recall.typed_multi_recall_with_session",
             return_value={},
         ) as mock_recall:
             unified_recall(
@@ -264,13 +278,13 @@ class TestUnifiedRecallSplitScope:
         assert [layer.scope_code for layer in layers] == ["by_opportunity"]
 
     def test_mixed_terms_separate_layers(self) -> None:
-        from datacloud_knowledge.retrieval._recall import unified_recall
+        from datacloud_knowledge.adapters.opengauss.recall._recall import unified_recall
 
         fl = [ScopeRecallLayer(scope_code="by_rd_task", weight=1.0)]
         vl = [fl[0], ScopeRecallLayer(scope_code="po_users", weight=0.7)]
 
         with patch(
-            "datacloud_knowledge.retrieval._recall.typed_multi_recall_with_session",
+            "datacloud_knowledge.adapters.opengauss.recall._recall.typed_multi_recall_with_session",
             return_value={},
         ) as mock_recall:
             unified_recall(
@@ -290,12 +304,12 @@ class TestUnifiedRecallSplitScope:
         assert mock_recall.call_args_list[1].kwargs["scope_layers"] == vl
 
     def test_falls_back_to_scope_layers_when_field_value_none(self) -> None:
-        from datacloud_knowledge.retrieval._recall import unified_recall
+        from datacloud_knowledge.adapters.opengauss.recall._recall import unified_recall
 
         legacy = [ScopeRecallLayer(scope_code="by_rd_task", weight=1.0)]
 
         with patch(
-            "datacloud_knowledge.retrieval._recall.typed_multi_recall_with_session",
+            "datacloud_knowledge.adapters.opengauss.recall._recall.typed_multi_recall_with_session",
             return_value={},
         ) as mock_recall:
             unified_recall(
@@ -312,18 +326,18 @@ class TestUnifiedRecallSplitScope:
             assert call.kwargs["scope_layers"] == legacy
 
     def test_vector_only_terms_skip_typed_recall(self) -> None:
-        from datacloud_knowledge.retrieval._recall import unified_recall
+        from datacloud_knowledge.adapters.opengauss.recall._recall import unified_recall
 
         terms = [_extracted_term("stat_date", "select", vector_only=True)]
         fl = [ScopeRecallLayer(scope_code="by_rd_task", weight=1.0)]
 
         with (
             patch(
-                "datacloud_knowledge.retrieval._recall.typed_multi_recall_with_session",
+                "datacloud_knowledge.adapters.opengauss.recall._recall.typed_multi_recall_with_session",
                 return_value={},
             ) as mock_recall,
             patch(
-                "datacloud_knowledge.retrieval._recall._vector_only_recall",
+                "datacloud_knowledge.adapters.opengauss.recall._recall._vector_only_recall",
                 return_value={"select:stat_date": []},
             ) as mock_vector,
         ):
@@ -333,13 +347,13 @@ class TestUnifiedRecallSplitScope:
         mock_vector.assert_called_once()
 
     def test_duplicate_terms_deduped(self) -> None:
-        from datacloud_knowledge.retrieval._recall import unified_recall
+        from datacloud_knowledge.adapters.opengauss.recall._recall import unified_recall
 
         fl = [ScopeRecallLayer(scope_code="by_rd_task", weight=1.0)]
         vl = [fl[0], ScopeRecallLayer(scope_code="po_users", weight=0.7)]
 
         with patch(
-            "datacloud_knowledge.retrieval._recall.typed_multi_recall_with_session",
+            "datacloud_knowledge.adapters.opengauss.recall._recall.typed_multi_recall_with_session",
             return_value={},
         ) as mock_recall:
             unified_recall(

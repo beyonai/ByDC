@@ -16,12 +16,12 @@ class TestRRFFuse:
     """rrf_fuse 纯函数测试。"""
 
     def test_empty_input_returns_empty(self) -> None:
-        from datacloud_knowledge.retrieval.rrf import rrf_fuse
+        from datacloud_knowledge.adapters.opengauss.recall.rrf import rrf_fuse
 
         assert rrf_fuse([]) == []
 
     def test_single_list_preserves_order(self) -> None:
-        from datacloud_knowledge.retrieval.rrf import rrf_fuse
+        from datacloud_knowledge.adapters.opengauss.recall.rrf import rrf_fuse
 
         ranked = [
             ("T1", "企业综合分析表", "N1", "object"),
@@ -35,7 +35,7 @@ class TestRRFFuse:
         assert result[0].rrf_score > result[1].rrf_score
 
     def test_two_lists_boost_shared_candidate(self) -> None:
-        from datacloud_knowledge.retrieval.rrf import rrf_fuse
+        from datacloud_knowledge.adapters.opengauss.recall.rrf import rrf_fuse
 
         list_a = [
             ("T1", "高风险", "N1", "risk_level_name"),
@@ -50,7 +50,7 @@ class TestRRFFuse:
         assert result[0].term_id == "T2"
 
     def test_top_n_truncation(self) -> None:
-        from datacloud_knowledge.retrieval.rrf import rrf_fuse
+        from datacloud_knowledge.adapters.opengauss.recall.rrf import rrf_fuse
 
         ranked = [
             ("T1", "A", "N1", "x"),
@@ -68,27 +68,27 @@ class TestKtypeCategoryMap:
     """验证 KTYPE_CATEGORY_MAP 定义完整且值合理。"""
 
     def test_all_ktypes_have_mapping(self) -> None:
-        from datacloud_knowledge.retrieval._recall_common import KTYPE_CATEGORY_MAP
+        from datacloud_knowledge.adapters.opengauss.recall._recall_common import KTYPE_CATEGORY_MAP
 
         expected_ktypes = {"select", "groupBy", "whereKey", "whereValue", "orderBy", "aggregation"}
         assert set(KTYPE_CATEGORY_MAP.keys()) == expected_ktypes
 
     def test_where_value_maps_to_list_and_dict_categories(self) -> None:
-        from datacloud_knowledge.retrieval._recall_common import KTYPE_CATEGORY_MAP
+        from datacloud_knowledge.adapters.opengauss.recall._recall_common import KTYPE_CATEGORY_MAP
 
         wv_cats = KTYPE_CATEGORY_MAP["whereValue"]
         assert wv_cats is not None
         assert wv_cats == {1, 2}, "whereValue should map to LIST_TERM(1) + DICT_TERM(2)"
 
     def test_select_maps_to_ontology_category(self) -> None:
-        from datacloud_knowledge.retrieval._recall_common import KTYPE_CATEGORY_MAP
+        from datacloud_knowledge.adapters.opengauss.recall._recall_common import KTYPE_CATEGORY_MAP
 
         sel_cats = KTYPE_CATEGORY_MAP["select"]
         assert sel_cats is not None
         assert sel_cats == {3}, "select should map to ONTOLOGY_TERM(3)"
 
     def test_aggregation_is_none(self) -> None:
-        from datacloud_knowledge.retrieval._recall_common import KTYPE_CATEGORY_MAP
+        from datacloud_knowledge.adapters.opengauss.recall._recall_common import KTYPE_CATEGORY_MAP
 
         assert KTYPE_CATEGORY_MAP["aggregation"] is None
 
@@ -97,7 +97,7 @@ class TestSingleCharFallback:
     """单字符兜底召回只在常规召回全空时启用。"""
 
     def test_bm25_and_tsquery_keeps_unique_cjk_chars_only(self) -> None:
-        from datacloud_knowledge.retrieval.recall import _paths as recall_paths
+        from datacloud_knowledge.adapters.opengauss.recall import _paths as recall_paths
 
         assert (
             recall_paths._single_char_and_tsquery("省级 “专精特新” 中小企业")
@@ -109,14 +109,14 @@ class TestSingleCharFallback:
         assert recall_paths._single_char_and_tsquery("task_status") == ""
 
     def test_single_char_tsquery_keeps_unique_cjk_chars_only(self) -> None:
-        from datacloud_knowledge.retrieval import recall as batch_recall
+        from datacloud_knowledge.adapters.opengauss import recall as batch_recall
 
         assert batch_recall._single_char_fallback_tsquery("黄升") == "黄 | 升"
         assert batch_recall._single_char_fallback_tsquery("黄黄A&升!") == "黄 | 升"
         assert batch_recall._single_char_fallback_tsquery("task_status") == ""
 
     def test_fallback_batch_keeps_only_requests_empty_in_all_paths(self) -> None:
-        from datacloud_knowledge.retrieval import recall as batch_recall
+        from datacloud_knowledge.adapters.opengauss import recall as batch_recall
 
         empty_request = batch_recall.RecallRequest(
             map_key="whereValue:黄升",
@@ -162,7 +162,7 @@ class TestSingleCharFallback:
         assert fallback_batch.per_type_requests == ()
 
     def test_fallback_dedupes_ranked_rows_by_term_name(self) -> None:
-        from datacloud_knowledge.retrieval import recall as batch_recall
+        from datacloud_knowledge.adapters.opengauss import recall as batch_recall
 
         results = {
             "whereValue:黄升": [
@@ -182,7 +182,7 @@ class TestSingleCharFallback:
         }
 
     def test_candidate_dedupe_preserves_first_display_name_rank(self) -> None:
-        from datacloud_knowledge.retrieval import recall as batch_recall
+        from datacloud_knowledge.adapters.opengauss import recall as batch_recall
 
         candidates = [
             {"term_id": "t1", "term_name": "王重阳"},

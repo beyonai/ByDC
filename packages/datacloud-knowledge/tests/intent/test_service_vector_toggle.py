@@ -4,7 +4,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from datacloud_knowledge.adapters.opengauss.vector_validation import TermVectorValidationError
+from datacloud_knowledge.adapters.opengauss.vector_validation import (
+    TermVectorValidationError,
+    get_validated_embedding_service,
+)
 
 
 def _get_service_module() -> Any:
@@ -15,11 +18,10 @@ def _get_service_module() -> Any:
 
 @pytest.mark.intent
 def test_search_candidates_runs_vector_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When an embedding_service is passed, strict→bm25→vector pipeline runs."""
     service = _get_service_module()
     monkeypatch.delenv("DATACLOUD_INTENT_ENABLE_VECTOR", raising=False)
     monkeypatch.setattr(service, "_build_global_name_index", dict)
-    monkeypatch.setattr(service, "validate_term_vector_readiness", lambda *_args: None)
-    monkeypatch.setattr(service, "get_embedding_service", object)
 
     vector_candidate = SimpleNamespace(
         term_id="TERM_001",
@@ -63,14 +65,19 @@ def test_search_candidates_runs_vector_by_default(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(service, "match_mentions_with_search", _fake_match)
     monkeypatch.setattr(service, "_convert_hits", _fake_convert_hits)
 
-    out = service.search_all_candidates_with_name_id(["企业综合分析表"])
+    # Pass a dummy embedding service so vector path is taken.
+    out = service.search_all_candidates_with_name_id(
+        ["企业综合分析表"],
+        embedding_service=object(),
+    )
 
     assert search_modes == ["strict", "bm25", "vector"]
     assert out["企业综合分析表"][0]["match_type"] == "vector"
 
 
 @pytest.mark.intent
-def test_search_candidates_skips_vector_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_search_candidates_skips_vector_when_no_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When embedding_service is None, vector recall is skipped entirely."""
     service = _get_service_module()
     monkeypatch.setenv("DATACLOUD_INTENT_ENABLE_VECTOR", "0")
     monkeypatch.setattr(service, "_build_global_name_index", dict)
@@ -86,48 +93,43 @@ def test_search_candidates_skips_vector_when_disabled(monkeypatch: pytest.Monkey
         search_modes.append(mode)
         return {m.text: () for m in mentions}
 
-    get_svc_called = {"value": False}
-
-    def _track_get_svc() -> Any:
-        get_svc_called["value"] = True
-        raise AssertionError("embedding service should not be requested when vector is disabled")
-
     monkeypatch.setattr(service, "match_mentions_with_search", _fake_match)
-    monkeypatch.setattr(service, "get_embedding_service", _track_get_svc)
 
+    # embedding_service defaults to None — vector should be skipped.
     out = service.search_all_candidates_with_name_id(["企业综合分析表"])
 
     assert out == {"企业综合分析表": []}
     assert search_modes == ["strict", "bm25"]
-    assert get_svc_called["value"] is False
 
 
 @pytest.mark.intent
-def test_search_candidates_logs_error_when_vector_validation_fails(
+def test_get_validated_embedding_service_logs_on_validation_failure(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    service = _get_service_module()
-    monkeypatch.setattr(service, "_build_global_name_index", dict)
+    """get_validated_embedding_service logs an error when validation fails."""
+    monkeypatch.setenv("DATACLOUD_INTENT_ENABLE_VECTOR", "1")
+    # Ensure the env-check passes.
+    monkeypatch.setattr(
+        "datacloud_knowledge.adapters.opengauss.vector_validation.is_vector_recall_available",
+        lambda: True,
+    )
 
     def _raise_validation_error(*_args: Any) -> None:
         raise TermVectorValidationError("缺少必需列 whale_datacloud.term_name.name_embedding")
 
-    def _fake_match(
-        mentions: tuple[Any, ...],
-        _session: Any,
-        **kwargs: Any,
-    ) -> dict[str, tuple[Any, ...]]:
-        del kwargs
-        return {m.text: () for m in mentions}
-
-    monkeypatch.setattr(service, "validate_term_vector_readiness", _raise_validation_error)
-    monkeypatch.setattr(service, "match_mentions_with_search", _fake_match)
-    monkeypatch.setattr(service, "get_embedding_service", object)
+    monkeypatch.setattr(
+        "datacloud_knowledge.adapters.opengauss.vector_validation.validate_term_vector_readiness",
+        _raise_validation_error,
+    )
+    monkeypatch.setattr(
+        "datacloud_knowledge.adapters.opengauss.vector_validation.get_embedding_service",
+        object,
+    )
 
     with caplog.at_level("ERROR"):
-        out = service.search_all_candidates_with_name_id(["企业综合分析表"])
+        result = get_validated_embedding_service(None)
 
-    assert out == {"企业综合分析表": []}
+    assert result is None
     assert "知识库向量校验失败" in caplog.text
     assert "缺少必需列" in caplog.text
