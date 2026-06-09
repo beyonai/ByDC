@@ -1745,7 +1745,7 @@ class PostgresTermReader:
         dataset_ids: list[str] | None = None,
         keyword: str | None = None,
         term_name: str | None = None,
-        term_type: str | None = None,
+        term_type: str | list[str] | None = None,
         query_type: QueryType = "fulltext",
         parent_term_code: str | None = None,
         label_filters: list[LabelFilter] | None = None,
@@ -1771,8 +1771,12 @@ class PostgresTermReader:
                 # 构建基础过滤
                 filters: list[Any] = []
                 if term_type:
-                    canonical = self._normalize_type_code(term_type)
-                    filters.append(Term.term_type_code == canonical)
+                    if isinstance(term_type, list):
+                        normalized = [self._normalize_type_code(t) for t in term_type]
+                        filters.append(Term.term_type_code.in_(normalized))
+                    else:
+                        canonical = self._normalize_type_code(term_type)
+                        filters.append(Term.term_type_code == canonical)
                 if parent_term_code:
                     filters.append(Term.parent_term_id == parent_term_code)
                 if dataset_ids:

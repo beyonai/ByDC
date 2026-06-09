@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from sqlalchemy import text
 
@@ -12,6 +13,7 @@ from datacloud_knowledge.adapters.opengauss._db.url import (
     resolve_knowledge_schema,
     validate_schema_name,
 )
+from datacloud_knowledge.retrieval.embedding import get_embedding_service
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -291,3 +293,29 @@ def _load_top_vector_hit(
         name_text=str(row.name_text),
         similarity=float(row.similarity),
     )
+
+
+logger = logging.getLogger(__name__)
+
+
+def get_validated_embedding_service(session: Any) -> Any:
+    """Return a runtime-validated embedding service, or None on failure.
+
+    Checks env toggles and validates vector recall readiness with a smoke query.
+    Intended as the single entry-point for callers that need a verified embedding
+    service before passing it into vector-capable recall functions.
+    """
+    if not is_vector_recall_available():
+        logger.error("知识库向量召回被环境变量关闭或校验缓存标记为不可用，服务将降级运行")
+        return None
+
+    try:
+        embedding_svc = get_embedding_service()
+        validate_term_vector_readiness(session, embedding_svc)
+    except TermVectorValidationError as exc:
+        logger.error("知识库向量校验失败，向量召回将跳过: %s", exc)
+        return None
+    except Exception as exc:
+        logger.error("知识库向量服务初始化失败，向量召回将跳过: %s", exc)
+        return None
+    return embedding_svc

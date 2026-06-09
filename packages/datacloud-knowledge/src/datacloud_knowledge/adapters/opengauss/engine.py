@@ -1,6 +1,6 @@
 """PostgreSQL 术语搜索引擎实现。
 
-实现 TermSearchEngine 协议的三路召回策略：
+BM25 / 子串 / 向量三路召回策略：
 - BM25: PostgreSQL tsvector + ts_rank_cd 全文搜索
 - Substring: 双向子串匹配（术语名⊆查询 OR 查询⊆术语名）
 - Vector: pgvector HNSW 余弦相似度搜索
@@ -21,14 +21,13 @@ from sqlalchemy import bindparam, text
 
 from datacloud_knowledge.adapters.opengauss._db.connection import get_session
 from datacloud_knowledge.adapters.opengauss._db.url import resolve_knowledge_schema
-from datacloud_knowledge.contracts.protocols import TermSearchEngine
 from datacloud_knowledge.contracts.text import Tokenizer
 from datacloud_knowledge.contracts.types import BM25Result, SubstringResult, VectorResult
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from datacloud_knowledge.retrieval.recall._models import RecallRequest
+    from datacloud_knowledge.adapters.opengauss.recall._models import RecallRequest
 
 log = logging.getLogger(__name__)
 
@@ -370,8 +369,8 @@ def _build_vector_sql(
     return sql_obj
 
 
-class PostgresSearchEngine(TermSearchEngine):
-    """PostgreSQL 术语搜索引擎，实现 TermSearchEngine 协议。
+class PostgresSearchEngine:
+    """PostgreSQL 术语搜索引擎。
 
     整合 BM25（字级/词级/分区）、子串匹配、向量搜索三路召回。
     通过 Tokenizer 协议解耦分词策略，支持中英文等多种语言。
@@ -1237,7 +1236,7 @@ class PostgresSearchEngine(TermSearchEngine):
         per_type_limit: int = 0,
     ) -> dict[str, list[tuple[str, str, str, str, str]]]:
         """执行一条向量召回查询（scope / type_filter / per_type / type_code 支持）。"""
-        from datacloud_knowledge.retrieval.recall._models import _VECTOR_MIN_SIMILARITY
+        from datacloud_knowledge.adapters.opengauss.recall._models import _VECTOR_MIN_SIMILARITY
 
         params: dict[str, Any] = {
             "min_similarity": _VECTOR_MIN_SIMILARITY,
