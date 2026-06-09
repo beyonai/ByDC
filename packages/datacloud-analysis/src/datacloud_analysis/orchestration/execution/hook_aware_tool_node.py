@@ -229,6 +229,24 @@ class HookAwareToolNode(ToolNode):
                         ]
                     }
 
+            if _before_decision and str(_before_decision.get("action") or "") == "redirect":
+                redirect_tool_name = str(_before_decision.get("tool") or "")
+                redirect_params = dict(_before_decision.get("params") or {})
+                logger.info(
+                    "[HookAwareToolNode] before hook redirected tool=%s -> %s params_keys=%s",
+                    tool_name,
+                    redirect_tool_name,
+                    sorted(redirect_params.keys()),
+                )
+                patched_calls.append(
+                    {
+                        **tc,
+                        "name": redirect_tool_name,
+                        "args": redirect_params,
+                    }
+                )
+                continue
+
             # query_* 工具剥离 compute-only 字段，防止插件内部重新注入空列表
             tp = dict(ctx.get("tool_params") or {})
             if tool_name.startswith("query_"):
