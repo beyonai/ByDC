@@ -1,61 +1,58 @@
 """知识检索引擎 — 术语查找、别名消歧、全文召回。
 
-提供术语检索的完整业务逻辑层，依赖 adapters/ 层的后端实现：
-- term_search: 类型化术语搜索、字段别名消歧
+提供术语检索的完整业务逻辑层，所有函数注入 TermStore 实例：
+- _patterns: Layer 1 查询组合模式（纯函数）
+- term_search: 类型化术语搜索、降级编排
+- field_resolution: 字段别名消歧
+- enum_resolution: 枚举值查询
 - mention_matching: Mention 级术语匹配（exact/rapidfuzz/bm25/vector）
-- recall/: 多路批量召回（BM25 AND / jieba / 子串 / 向量） + RRF 融合
-- rrf: Reciprocal Rank Fusion 融合算法
+- name_cache: 用户名称缓存
 - dimension_values: 维度值辅助识别
+- owl_relation_resolver: OWL 关系遍历
 - tokenizers/: 中英文分词器
 - embedding/: 向量嵌入服务
 """
 
-# BM25/向量搜索 — 从 adapters 层重导出，供 matching 等检索模块使用
-from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search
-from datacloud_knowledge.adapters.opengauss.vector import vector_search
-
-from ._recall import build_scope_recall_layers, unified_recall
+from ._patterns import query_bound_values, query_scope_props, query_user_synonyms
 from .dimension_values import DimensionValueResolver
+from .enum_resolution import get_prop_enum_values
+from .field_resolution import resolve_field_aliases
 from .mention_matching import match_mentions, match_mentions_with_search
 from .name_cache import UserNameCache
 from .owl_relation_resolver import resolve_related_owl_terms
-from .recall import PreparedBatch, RecallRequest, ScopeRecallLayer, typed_multi_recall_batch
+
+# 保留 rrf 兼容层导出（过渡期）
 from .rrf import RRFCandidate, rrf_fuse
 from .term_search import (
     get_object_props,
-    get_prop_enum_values,
+    get_object_props_by_code,
     get_prop_values_with_aliases,
     get_term_ids,
     get_term_names,
-    resolve_field_aliases,
-    resolve_field_aliases_with_names,
     resolve_value_aliases,
     search_terms_by_type,
+    search_terms_with_fallback,
 )
 
 __all__ = [
     "DimensionValueResolver",
-    "PreparedBatch",
     "RRFCandidate",
-    "RecallRequest",
-    "ScopeRecallLayer",
     "UserNameCache",
-    "bm25_search",
-    "build_scope_recall_layers",
     "get_object_props",
+    "get_object_props_by_code",
     "get_prop_enum_values",
     "get_prop_values_with_aliases",
     "get_term_ids",
     "get_term_names",
     "match_mentions",
     "match_mentions_with_search",
+    "query_bound_values",
+    "query_scope_props",
+    "query_user_synonyms",
     "resolve_field_aliases",
-    "resolve_field_aliases_with_names",
     "resolve_related_owl_terms",
     "resolve_value_aliases",
     "rrf_fuse",
     "search_terms_by_type",
-    "typed_multi_recall_batch",
-    "unified_recall",
-    "vector_search",
+    "search_terms_with_fallback",
 ]
