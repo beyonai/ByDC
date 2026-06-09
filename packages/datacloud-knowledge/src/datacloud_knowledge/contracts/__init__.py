@@ -1,7 +1,7 @@
 """接口契约层 — 定义 SDK 的所有协议和共享类型。
 
 contracts/ 是 datacloud-knowledge 的基础抽象层，提供：
-- 协议接口：TermReader、TermSearchEngine、TermWriter
+- 协议接口：TermReader、TermWriter
 - 分词协议：Tokenizer、StopwordProvider
 - 共享类型：术语查询结果、别名消歧结果、搜索召回结果
 - 知识包契约（KPS）：KnowledgePackage 及 8 个实体 dataclass
@@ -19,7 +19,7 @@ from .kps import (
     TermDef,
     TermTypeDef,
 )
-from .protocols import TermReader, TermSearchEngine, TermWriter
+from .protocols import TermReader, TermWriter
 from .text import StopwordProvider, Tokenizer
 from .types import (
     AmbiguousCandidate,
@@ -73,7 +73,6 @@ __all__ = [
     "TermItem",
     "TermNameCreate",
     "TermReader",
-    "TermSearchEngine",
     "TermTypeDef",
     "TermWriter",
     "Tokenizer",

@@ -1,9 +1,10 @@
-"""公共协议 — 术语读取、搜索召回、术语写入。
+"""公共协议 — 术语读取、术语写入。
 
-定义数据中心知识服务的三层协议接口：
+定义数据中心知识服务的两层协议接口：
 - TermReader: 无状态纯查询操作（术语检索、别名消歧、属性查询）
-- TermSearchEngine: 文本/向量多路召回策略（BM25、子串、向量）
 - TermWriter: 有状态持久化操作（创建术语、名称、词汇）
+
+TermSearchEngine 已淘汰 — 召回引擎已收归 adapters/opengauss/ 内部实现。
 """
 
 from __future__ import annotations
@@ -21,22 +22,18 @@ from .term_provider_types import (
     TermDetail,
     TermUpdate,
 )
-from .text import Tokenizer
 from .types import (
-    BM25Result,
     DimensionValueItem,
     FieldResolutionResult,
     NameItem,
     PropItem,
     SearchTermsResult,
     ShortestPathNode,
-    SubstringResult,
     TagFilter,
     TermNameCreate,
     UserScopedNameItem,
     ValueResolutionResult,
     ValueWithAliases,
-    VectorResult,
 )
 
 
@@ -449,89 +446,6 @@ class TermReader(Protocol):
 
         Returns:
             QueryResult，其中 items 为 TermDetail 列表。
-        """
-        ...
-
-
-class TermSearchEngine(Protocol):
-    """文本召回引擎。每种策略独立暴露，由调用方控制策略组合和 RRF 融合。
-
-    三路核心召回策略：
-    - BM25: PostgreSQL tsvector + ts_rank_cd 全文搜索
-    - Substring: 双向子串匹配（术语名⊆查询 OR 查询⊆术语名）
-    - Vector: pgvector HNSW 余弦相似度搜索
-    """
-
-    def search_bm25(
-        self,
-        *,
-        query_text: str,
-        top_k: int = 10,
-        min_score: float = 0.01,
-        tokenizer: Tokenizer,
-        term_type_codes: Sequence[str] | None = None,
-        partitioned: bool = False,
-        per_type_limit: int = 3,
-    ) -> list[BM25Result]:
-        """使用 BM25 文本匹配搜索术语名称。
-
-        Args:
-            query_text: 查询文本（原始输入，由 tokenizer 分词后构建 tsquery）。
-            top_k: 返回结果数量上限。
-            min_score: 最小 BM25 分数阈值。
-            tokenizer: 分词器实例（负责分词和 tsquery 构建）。
-            term_type_codes: 可选术语类型白名单过滤。
-            partitioned: 是否按 term_type_code 分区取 top-N。
-            per_type_limit: 分区模式下每个类型的 top-N 数量。
-
-        Returns:
-            BM25Result 列表，按 score 降序。
-        """
-        ...
-
-    def search_substring(
-        self,
-        *,
-        query_text: str,
-        top_k: int = 20,
-        term_type_codes: Sequence[str] | None = None,
-        partitioned: bool = False,
-        per_type_limit: int = 3,
-    ) -> list[SubstringResult]:
-        """执行双向子串匹配召回。
-
-        匹配逻辑：
-        1. 术语名是查询文本的子串（term_name IN query_text）
-        2. 查询文本是术语名的子串（query_text IN term_name）
-
-        Args:
-            query_text: 用户输入的查询文本。
-            top_k: 最大返回数量。
-            term_type_codes: 可选术语类型白名单过滤。
-            partitioned: 是否按 term_type_code 分区取 top-N。
-            per_type_limit: 分区模式下每个类型的 top-N 数量。
-
-        Returns:
-            SubstringResult 列表，按名称长度降序。
-        """
-        ...
-
-    def search_vector(
-        self,
-        *,
-        query_vector: Sequence[float],
-        top_k: int = 10,
-        min_similarity: float = 0.5,
-    ) -> list[VectorResult]:
-        """使用预计算的向量进行语义搜索。
-
-        Args:
-            query_vector: 查询文本向量。
-            top_k: 返回结果数量上限。
-            min_similarity: 最小余弦相似度阈值（0-1）。
-
-        Returns:
-            VectorResult 列表，按 similarity 降序。
         """
         ...
 
