@@ -7,13 +7,17 @@ from __future__ import annotations
 
 import logging
 
-from datacloud_knowledge.adapters import create_reader
+from datacloud_knowledge.adapters import (
+    create_reader,
+    create_term_store,
+)  # TODO(T6): migrate resolve_field_aliases_with_names → retrieval layer; get_prop_type_map → TermStoreExtended
 from datacloud_knowledge.contracts.intent_types import (
     find_paired_where_key,
     is_field_code,
     term_key,
 )
 from datacloud_knowledge.contracts.types import ResolvedField
+from datacloud_knowledge.retrieval import enum_resolution as _enum_resolution
 
 from .models import ExtractedTerm, PreResolveResult
 
@@ -37,6 +41,7 @@ def pre_resolve_terms(
     Returns:
         PreResolveResult。
     """
+    store = create_term_store()
     confirmed: dict[str, ResolvedField] = {}  # keyed by path
     provenance: dict[str, str] = {}  # keyed by path
     value_enum_map: dict[str, list[str]] = {}  # keyed by path
@@ -91,7 +96,8 @@ def pre_resolve_terms(
 
     if confirmed_key_codes and scope_code:
         try:
-            enum_map = create_reader().get_prop_enum_values(
+            enum_map = _enum_resolution.get_prop_enum_values(
+                store,
                 scope_code=scope_code,
                 field_codes=confirmed_key_codes,
             )

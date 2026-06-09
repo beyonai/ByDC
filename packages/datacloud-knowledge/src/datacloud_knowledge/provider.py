@@ -8,7 +8,7 @@
 5. prepare_query_clarification   查询澄清分析
 6. finalize_query_clarification  澄清回填
 
-所有函数通过 PostgresTermReader 封装数据库会话，消费者无需管理 db_session。
+所有函数通过 TermStore 封装数据访问，消费者无需管理 db_session。
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from datacloud_knowledge.adapters import create_reader, create_writer
+from datacloud_knowledge.adapters import create_term_store
 from datacloud_knowledge.contracts.term_provider_types import (
     ImportResult,
     LabelCondition,
@@ -55,7 +55,14 @@ from datacloud_knowledge.intent.clarification.postprocess import (
 from datacloud_knowledge.intent.clarification.postprocess import (
     persist_confirmed_synonyms as _persist_confirmed_synonyms,
 )
-from datacloud_knowledge.retrieval.orchestration import search_terms_with_fallback
+from datacloud_knowledge.retrieval import enum_resolution as _enum_resolution
+from datacloud_knowledge.retrieval import field_resolution as _field_resolution
+from datacloud_knowledge.retrieval.term_search import (
+    get_object_props_by_code as _get_object_props_by_code,
+)
+from datacloud_knowledge.retrieval.term_search import (
+    search_terms_with_fallback,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,13 +132,13 @@ def resolve_field_aliases(
     Returns:
         FieldResolutionResult，含 resolved/ambiguous/unresolved 三类结果。
     """
-    reader = create_reader()
-    return reader.resolve_field_aliases(
+    reader = create_term_store()
+    # 通过 retrieval 层调用，忽略新函数不支持的参数
+    _ = (library_id, user_id, resolve_values, value_terms, language)
+    return _field_resolution.resolve_field_aliases(
+        reader,
         terms=list(terms),
         scope_code=scope_code,
-        library_id=library_id,
-        resolve_values=resolve_values,
-        value_terms=list(value_terms) if value_terms is not None else None,
     )
 
 
@@ -162,15 +169,15 @@ def search_terms_by_type(
         分页搜索结果。
     """
     del term_codes  # 预留参数，当前编排层未暴露 term_codes 过滤
-    reader = create_reader()
+    store = create_term_store()
     return search_terms_with_fallback(
+        store=store,
         term_type_code=term_type_code,
         keyword=keyword,
         tags=list(tags) if tags is not None else None,
         limit=limit,
         offset=offset,
         order_by=order_by,
-        reader=reader,
     )
 
 
@@ -309,8 +316,8 @@ def get_object_props_by_code(
         >>> for p in props:
         ...     print(f"{p.term_code}: {p.term_name}")
     """
-    reader = create_reader()
-    return reader.get_object_props_by_code(scope_code=scope_code)
+    store = create_term_store()
+    return _get_object_props_by_code(store, scope_code=scope_code)
 
 
 def get_prop_enum_values(
@@ -338,8 +345,10 @@ def get_prop_enum_values(
         >>> values["region"]   # → ["华东", "华南", "华北", ...]
         >>> values["level"]    # → ["高", "中", "低"]
     """
-    reader = create_reader()
-    return reader.get_prop_enum_values(scope_code=scope_code, field_codes=list(field_codes))
+    store = create_term_store()
+    return _enum_resolution.get_prop_enum_values(
+        store, scope_code=scope_code, field_codes=list(field_codes)
+    )
 
 
 # ── TermProvider 新增公开 API ─────────────────────────────────────────
@@ -380,8 +389,8 @@ def query_terms(
     Returns:
         QueryResult，包含 total 和 items（TermItem 列表）。
     """
-    reader = create_reader()
-    return reader.query_terms(
+    store = create_term_store()
+    return store.query_terms(
         dataset_ids=dataset_ids,
         keyword=keyword,
         term_name=term_name,
@@ -413,8 +422,8 @@ def get_term_detail(
     Returns:
         TermDetail，不存在返回 None。
     """
-    reader = create_reader()
-    return reader.get_term_detail(dataset_id=dataset_id, term_id=term_id)
+    store = create_term_store()
+    return store.get_term_detail(dataset_id=dataset_id, term_id=term_id)
 
 
 def list_terms(
@@ -440,8 +449,8 @@ def list_terms(
     Returns:
         QueryResult，其中 items 为 TermDetail 列表。
     """
-    reader = create_reader()
-    return reader.list_terms(
+    store = create_term_store()
+    return store.list_terms(
         dataset_id=dataset_id,
         term_type=term_type,
         term_type_no_eq=term_type_no_eq,
@@ -466,8 +475,8 @@ def import_terms(
     Returns:
         ImportResult，含创建数、term_id 列表和错误信息。
     """
-    with create_writer() as writer:
-        return writer.import_terms(dataset_id=dataset_id, terms=terms)
+    store = create_term_store()
+    return store.import_terms(dataset_id=dataset_id, terms=terms)
 
 
 def update_term(
@@ -488,8 +497,8 @@ def update_term(
     Raises:
         ValueError: 术语不存在。
     """
-    with create_writer() as writer:
-        writer.update_term(dataset_id=dataset_id, term_id=term_id, updates=updates)
+    store = create_term_store()
+    store.update_term(dataset_id=dataset_id, term_id=term_id, updates=updates)
 
 
 # ── 内部辅助函数 ───────────────────────────────────────────────────

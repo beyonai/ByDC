@@ -1,12 +1,17 @@
 """后端适配器层 — 工厂 + 注册表，内部模块通过字符串选择后端。
 
-不直接导出具体类。内部调用方通过 create_reader/create_engine/create_writer 获取实例：
+不直接导出具体类。内部调用方通过 create_term_store / create_reader 等获取实例：
 
-    from datacloud_knowledge.adapters import create_reader
-    reader = create_reader()           # 默认 "opengauss"
-    reader = create_reader("mysql")    # 🆕 新增后端
+    from datacloud_knowledge.adapters import create_term_store
+    store = create_term_store()           # 默认 "opengauss"
+    store = create_term_store("http")     # HTTP 后端
 
-新增后端：实现 contracts/ 中的协议，在此注册即可。
+    # 兼容旧接口（过渡期）
+    from datacloud_knowledge.adapters import create_reader, create_writer
+    reader = create_reader()
+    writer = create_writer()
+
+新增后端：实现 capabilities/ 中的 TermStore 协议，在此注册即可。
 
 
 Schema 管理 & Backfill（CLI 入口）：
@@ -25,7 +30,9 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-from datacloud_knowledge.contracts.protocols import TermReader, TermSearchEngine, TermWriter
+from datacloud_knowledge.capabilities.protocol import TermStore
+from datacloud_knowledge.capabilities.protocol_extended import TermStoreExtended
+from datacloud_knowledge.contracts.protocols import TermReader, TermWriter
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +67,7 @@ def _get_or_create_http_adapter() -> Any:
 # ── 注册表 — 新增后端在此添加 ─────────────────────────────────────────
 
 _reader_registry: dict[str, type[TermReader]] = {}
-_engine_registry: dict[str, type[TermSearchEngine]] = {}
+_engine_registry: dict[str, type[Any]] = {}
 _writer_registry: dict[str, type[TermWriter]] = {}
 
 
@@ -108,16 +115,19 @@ def create_reader(backend: str | None = None) -> TermReader:
 def create_engine(
     backend: str | None = None,
     session: Session | None = None,
-) -> TermSearchEngine:
-    """创建检索引擎实例。
+) -> Any:
+    """创建检索引擎实例（兼容旧接口）。
+
+    .. deprecated::
+        新代码应使用 :func:`create_term_store` 替代。
+        召回引擎已收归 opengauss 内部实现。
 
     Args:
-        backend: 后端标识（"opengauss"/"mysql"），默认读环境变量。
-        session: 可选，SQLAlchemy Session。传入时 engine 绑定该 session，
-            调用方负责事务管理。不传时 engine 自行管理 session 生命周期。
+        backend: 后端标识，默认读环境变量。
+        session: 可选，SQLAlchemy Session。
 
     Returns:
-        实现了 TermSearchEngine 协议的检索引擎实例。
+        检索引擎实例。
     """
     resolved = _resolve_backend(backend)
     if resolved not in _engine_registry:
@@ -126,7 +136,7 @@ def create_engine(
     if cls is None:
         available = sorted(_engine_registry)
         raise ValueError(f"不支持的后端: {resolved!r}，可用: {available}")
-    factory = cast(Callable[..., TermSearchEngine], cls)
+    factory = cast(Callable[..., Any], cls)
     return factory(session=session) if session is not None else factory()
 
 
@@ -155,6 +165,71 @@ def create_writer(
         raise ValueError(f"不支持的后端: {resolved!r}，可用: {available}")
     factory = cast(Callable[..., TermWriter], cls)
     return factory(session=session) if session is not None else factory()
+
+
+# ── 能力矩阵 ───────────────────────────────────────────────────────────
+
+CAPABILITY_MATRIX: dict[str, set[str]] = {
+    "opengauss": {
+        "term_store",
+        "extended_store",
+        "bulk_import",
+        "schema_mgmt",
+        "backfill",
+        "graph_traversal",
+        "multi_recall",
+    },
+    "http": {"term_store"},
+}
+"""各后端支持的能力集合。
+
+opengauss: TermStore + TermStoreExtended + 批量导入 + schema 管理 + 多路召回
+http:      仅 TermStore（通过 HTTP API）
+"""
+
+
+# ── TermStore 工厂 ─────────────────────────────────────────────────────
+
+
+def create_term_store(backend: str | None = None) -> TermStore:
+    """创建 TermStore 实例。
+
+    Args:
+        backend: 后端标识（\"opengauss\"/\"http\"），默认读环境变量。
+
+    Returns:
+        实现了 TermStore 协议的存储实例。
+
+    Raises:
+        ValueError: 不支持的后端。
+    """
+    resolved = _resolve_backend(backend)
+    if resolved == "http":
+        return cast(TermStore, _get_or_create_http_adapter())
+    if resolved == "opengauss":
+        from datacloud_knowledge.adapters.opengauss.store import PostgresTermStore
+
+        return cast(TermStore, PostgresTermStore())
+    raise ValueError(f"不支持的后端: {resolved!r}，可用: opengauss, http")
+
+
+def create_extended_store(backend: str | None = None) -> TermStoreExtended | None:
+    """创建 TermStoreExtended 实例（仅 opengauss 支持）。
+
+    HTTP 后端不支持图谱遍历等扩展能力，返回 None。
+
+    Args:
+        backend: 后端标识（\"opengauss\"/\"http\"），默认读环境变量。
+
+    Returns:
+        TermStoreExtended 实例，不支持时返回 None。
+    """
+    resolved = _resolve_backend(backend)
+    if resolved == "opengauss":
+        from datacloud_knowledge.adapters.opengauss.store import PostgresTermStore
+
+        return cast(TermStoreExtended, PostgresTermStore())
+    return None
 
 
 def store_clarification_results(

@@ -18,7 +18,9 @@ from datacloud_knowledge.adapters import store_clarification_results
 from datacloud_knowledge.contracts.types import MatchCandidate, MatchResult, Mention
 from datacloud_knowledge.retrieval.candidate_search import search_all_candidates_with_name_id
 from datacloud_knowledge.retrieval.name_cache import UserNameCache
-from datacloud_knowledge.retrieval.typed_recall import typed_multi_recall_with_session
+from datacloud_knowledge.retrieval.typed_recall import (
+    typed_multi_recall_with_session,
+)
 
 from .clarification._expand_query import expand_query
 from .clarification.api import analyze_query_clarification
