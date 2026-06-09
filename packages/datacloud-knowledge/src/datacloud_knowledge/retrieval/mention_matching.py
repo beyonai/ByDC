@@ -3,19 +3,21 @@
 支持多种匹配模式：
 - strict: 精确匹配（全局名称索引 + 用户别名索引合并）
 - rapidfuzz: 字符串相似度匹配
-- bm25: PostgreSQL 全文搜索
-- vector: 向量语义相似度搜索
+- bm25: TermStore 全文搜索（query_terms fulltext）
+- vector: TermStore 语义向量搜索（query_terms embedding）
 
 原 intent/matching.py，下沉到 retrieval/ 作为检索层的 mention 级匹配能力。
+重构为注入 TermStore，移除对 adapters/ 内部模块的直接 import。
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 from rapidfuzz import fuzz, process
 
+from datacloud_knowledge.capabilities.protocol import TermStore
 from datacloud_knowledge.contracts.types import MatchCandidate, MatchResult, Mention
 
 if TYPE_CHECKING:
@@ -34,7 +36,7 @@ SearchMode = Literal["strict", "rapidfuzz", "bm25", "vector"]
 
 def match_mentions(
     mentions: tuple[Mention, ...],
-    session: Any,
+    store: TermStore | None = None,
     user_id: str | None = None,
     global_name_index: dict[str, list[tuple[str, str, str]]] | None = None,
     user_cache: UserNameCache | None = None,
@@ -44,12 +46,23 @@ def match_mentions(
     fuzzy_max_candidates: int = DEFAULT_FUZZY_MAX_CANDIDATES,
 ) -> MatchResult:
     """Match mentions against merged global/user name indexes.
+
     Algorithm B (matching recall) behavior:
     - Exact match from merged name index.
     - Confidence is based on original name type:
       - standard_name -> 1.0
       - alias -> 0.9
     - Fuzzy matching for unmatched mentions using rapidfuzz.
+
+    Args:
+        mentions: 术语提及列表。
+        store:    TermStore 实例（为快速匹配/精确匹配保留；bm25/vector 模式不经过这里）。
+        user_id:  用户 ID。
+        global_name_index: 全局名称索引。
+        user_cache: 用户缓存。
+        enable_fuzzy: 是否启用模糊匹配。
+        fuzzy_score_cutoff: 模糊匹配相似度阈值。
+        fuzzy_max_candidates: 模糊匹配最大候选数。
     """
     user_name_index: dict[str, list[tuple[str, str, str, float]]] | None = None
     if user_id is not None and user_cache is not None:
@@ -99,7 +112,7 @@ def match_mentions(
 
 def match_mentions_with_search(
     mentions: tuple[Mention, ...],
-    session: Any,
+    store: TermStore | None = None,
     user_id: str | None = None,
     global_name_index: dict[str, list[tuple[str, str, str]]] | None = None,
     user_cache: UserNameCache | None = None,
@@ -116,23 +129,23 @@ def match_mentions_with_search(
 
     支持三种模糊匹配模式：
     - rapidfuzz: 字符串相似度匹配
-    - bm25: PostgreSQL 全文搜索（基于单字分词）
-    - vector: 向量语义相似度搜索
+    - bm25: TermStore 全文搜索（query_terms fulltext）
+    - vector: TermStore 语义向量搜索（query_terms embedding）
 
     Args:
-        mentions: 术语提及列表
-        session: SQLAlchemy Session
-        user_id: 用户 ID
-        global_name_index: 全局名称索引
-        user_cache: 用户缓存
-        search_mode: 匹配模式 ("strict" | "rapidfuzz" | "bm25" | "vector")
-        embedding_service: Embedding 服务（vector 模式必需）
-        top_k: 返回候选数量
-        min_score: 最小分数阈值
-        fuzzy_score_cutoff: rapidfuzz 相似度阈值
+        mentions: 术语提及列表。
+        store:    TermStore 实例。
+        user_id:  用户 ID。
+        global_name_index: 全局名称索引。
+        user_cache: 用户缓存。
+        search_mode: 匹配模式 (\"strict\" | \"rapidfuzz\" | \"bm25\" | \"vector\")。
+        embedding_service: Embedding 服务（vector 模式必需）。
+        top_k: 返回候选数量。
+        min_score: 最小分数阈值。
+        fuzzy_score_cutoff: rapidfuzz 相似度阈值。
 
     Returns:
-        Result 包含精确匹配和模糊匹配结果
+        Result 包含精确匹配和模糊匹配结果。
     """
 
     result: dict[str, tuple[MatchCandidate, ...]] = {}
@@ -174,7 +187,7 @@ def match_mentions_with_search(
 
         elif search_mode == "bm25":
             fuzzy_candidates = _bm25_match(
-                session=session,
+                store=store,
                 query=mention.text,
                 top_k=top_k,
                 min_score=min_score,
@@ -182,18 +195,13 @@ def match_mentions_with_search(
             result[mention.text] = tuple(fuzzy_candidates)
 
         elif search_mode == "vector":
-            if embedding_service is None:
-                log.warning("Vector mode requires embedding_service, skipping")
-                result[mention.text] = ()
-            else:
-                fuzzy_candidates = _vector_match(
-                    session=session,
-                    query=mention.text,
-                    embedding_service=embedding_service,
-                    top_k=top_k,
-                    min_similarity=min_score,
-                )
-                result[mention.text] = tuple(fuzzy_candidates)
+            fuzzy_candidates = _vector_match(
+                store=store,
+                query=mention.text,
+                top_k=top_k,
+                min_similarity=min_score,
+            )
+            result[mention.text] = tuple(fuzzy_candidates)
         else:
             result[mention.text] = ()
 
@@ -242,29 +250,32 @@ def _fuzzy_match(
 
 
 def _bm25_match(
-    session: Any,
+    store: TermStore | None,
     query: str,
     top_k: int = 5,
     min_score: float = 0.01,
 ) -> list[MatchCandidate]:
-    """使用 BM25 全文搜索进行匹配。"""
-    from datacloud_knowledge.retrieval import bm25_search
-
-    if not query or not query.strip():
+    """使用 TermStore 全文搜索（query_terms fulltext）进行匹配。"""
+    if store is None or not query or not query.strip():
         return []
 
     try:
-        results = bm25_search(session, query, top_k=top_k, min_score=min_score)
+        result = store.query_terms(
+            keyword=query,
+            query_type="fulltext",
+            top_k=top_k,
+        )
         return [
             MatchCandidate(
-                term_id=r.term_id,
-                term_name=r.term_name,
-                term_type_code=r.term_type_code,
+                term_id=item.term_id,
+                term_name=item.term_name,
+                term_type_code=item.term_type,
                 match_type="bm25",
-                confidence=min(r.score, 1.0),
+                confidence=min(item.score or 0.0, 1.0),
                 score=0.0,
             )
-            for r in results
+            for item in result.items
+            if (item.score or 0.0) >= min_score
         ]
     except Exception as e:
         log.error("BM25 match failed: %s", e)
@@ -272,32 +283,32 @@ def _bm25_match(
 
 
 def _vector_match(
-    session: Any,
+    store: TermStore | None,
     query: str,
-    embedding_service: EmbeddingService,
     top_k: int = 5,
     min_similarity: float = 0.5,
 ) -> list[MatchCandidate]:
-    """使用向量语义搜索进行匹配。"""
-    from datacloud_knowledge.retrieval import vector_search
-
-    if not query or not query.strip():
+    """使用 TermStore 语义向量搜索（query_terms embedding）进行匹配。"""
+    if store is None or not query or not query.strip():
         return []
 
     try:
-        results = vector_search(
-            session, query, embedding_service, top_k=top_k, min_similarity=min_similarity
+        result = store.query_terms(
+            keyword=query,
+            query_type="embedding",
+            top_k=top_k,
         )
         return [
             MatchCandidate(
-                term_id=r.term_id,
-                term_name=r.term_name,
-                term_type_code=r.term_type_code,
+                term_id=item.term_id,
+                term_name=item.term_name,
+                term_type_code=item.term_type,
                 match_type="vector",
-                confidence=r.similarity,
+                confidence=item.score or 0.0,
                 score=0.0,
             )
-            for r in results
+            for item in result.items
+            if (item.score or 0.0) >= min_similarity
         ]
     except Exception as e:
         log.error("Vector match failed: %s", e)
