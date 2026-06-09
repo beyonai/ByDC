@@ -18,7 +18,7 @@ from ._paths import _batch_bm25_and, _batch_jieba_bm25, _batch_substring, _batch
 from ._scope import _normalize_scope_layers, _typed_multi_recall_layered
 
 if TYPE_CHECKING:
-    from datacloud_knowledge.retrieval._recall_common import CandidateDict
+    from ._recall_common import CandidateDict
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def _prepare_batch(
     scope_code: str | None = None,
 ) -> PreparedBatch:
     """将 TypedKeywordState 序列转换为 PreparedBatch（去重 + 类型过滤 + 分桶）。"""
-    from datacloud_knowledge.retrieval import _recall_common as serial_recall
+    from . import _recall_common as serial_recall
 
     requests: list[RecallRequest] = []
     seen: set[str] = set()

@@ -8,7 +8,6 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 from datacloud_knowledge.adapters.opengauss.engine import PostgresSearchEngine
-from datacloud_knowledge.retrieval.tokenizers import create_tokenizer
 
 from ._models import _CJK_CHAR_RE, _VECTOR_MIN_SIMILARITY, PreparedBatch, RecallRequest
 
@@ -32,6 +31,8 @@ def _jieba_tsquery(text: str) -> str:
 
     替代原 bm25 模块中的 ``_jieba_tokenize``，使用统一的 Tokenizer 协议。
     """
+    from datacloud_knowledge.retrieval.tokenizers import create_tokenizer  # deferred
+
     tok = create_tokenizer("zh_CN")
     tokens = tok.tokenize(text)
     if not tokens:

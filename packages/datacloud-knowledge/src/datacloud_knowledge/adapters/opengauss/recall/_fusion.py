@@ -20,7 +20,7 @@ from ._models import (
 from ._paths import _run_tsquery_batches
 
 if TYPE_CHECKING:
-    from datacloud_knowledge.retrieval._recall_common import CandidateDict
+    from ._recall_common import CandidateDict
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ def _fuse_and_shape(
     rrf_k: int,
 ) -> dict[str, list[CandidateDict]]:
     """对每条请求的各路召回结果进行 RRF 融合并整形为 CandidateDict。"""
-    from datacloud_knowledge.retrieval._recall_common import (
+    from ._recall_common import (
         _diversify_by_type,
         _shape_candidates,
     )

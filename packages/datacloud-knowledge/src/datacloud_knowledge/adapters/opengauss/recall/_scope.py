@@ -17,7 +17,7 @@ from ._models import (
 )
 
 if TYPE_CHECKING:
-    from datacloud_knowledge.retrieval._recall_common import CandidateDict
+    from ._recall_common import CandidateDict
 
 log = logging.getLogger(__name__)
 
