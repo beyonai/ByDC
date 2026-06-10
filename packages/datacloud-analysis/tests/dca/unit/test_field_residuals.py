@@ -89,14 +89,12 @@ def test_T11_2_msr_item_expr_description_no_bare_field() -> None:
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema("网格分析", _metric_fields())
-    metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
+    metric_item = schema["properties"]["metrics"]["items"]
 
-    items_with_expr = [item for item in metric_items if "expr" in item.get("properties", {})]
-    assert items_with_expr, "没有含 expr 的 MetricItem"
-
-    for item in items_with_expr:
-        expr_desc = item["properties"]["expr"].get("description", "")
-        assert "与 field 互斥" in expr_desc, f"expr description 未声明与 field 互斥: {expr_desc!r}"
+    props = metric_item.get("properties", {})
+    assert "expr" in props, "没有含 expr 的 MetricItem"
+    expr_desc = props["expr"].get("description", "")
+    assert "与 field 互斥" in expr_desc, f"expr description 未声明与 field 互斥: {expr_desc!r}"
 
 
 def test_T11_3_msr_item_filters_description_no_bare_field() -> None:
@@ -104,14 +102,12 @@ def test_T11_3_msr_item_filters_description_no_bare_field() -> None:
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema("网格分析", _metric_fields())
-    metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
+    metric_item = schema["properties"]["metrics"]["items"]
 
-    items_with_filters = [item for item in metric_items if "filters" in item.get("properties", {})]
-    assert items_with_filters, "没有含 filters 的 MetricItem"
-
-    for item in items_with_filters:
-        filters_desc = item["properties"]["filters"].get("description", "")
-        assert "field" in filters_desc, f"filters description 应包含 field: {filters_desc!r}"
+    props = metric_item.get("properties", {})
+    assert "filters" in props, "没有含 filters 的 MetricItem"
+    filters_desc = props["filters"].get("description", "")
+    assert "field" in filters_desc, f"filters description 应包含 field: {filters_desc!r}"
 
 
 @pytest.mark.skip(reason="断言字符串在 Windows 终端存在编码问题，需在 UTF-8 环境下运行")

@@ -143,15 +143,14 @@ def test_TC05_filters_relaxed_contains_catchall() -> None:
         "description", ""
     ), f"relaxed filters description 应含字段中文名说明，实际: {filters.get('description')!r}"
 
-    # anyOf / oneOf 末尾有 catch-all（field 无 enum 约束）
-    one_of: list[dict[str, Any]] = filters.get("items", {}).get("oneOf", [])
-    assert one_of, "relaxed filters 应有 items.oneOf"
-    has_catchall = any("enum" not in item.get("properties", {}).get("field", {}) for item in one_of)
-    assert has_catchall, "relaxed filters 应含无 enum 约束的 catch-all item"
+    filter_item = filters.get("items", {})
+    assert "oneOf" not in filter_item
+    field_prop = filter_item.get("properties", {}).get("field", {})
+    assert "enum" not in field_prop, "relaxed filters.field 不应强制 enum"
 
 
 def test_TC05_catchall_field_description_contains_yuanci() -> None:
-    """TC-05（续）：catch-all item 的 field.description 含"原词"字样。"""
+    """TC-05（续）：relaxed filters.field.description 含"原词"字样。"""
     from datacloud_analysis.tools.ontology_tool_loader import OntologyToolLoader
     from datacloud_data_sdk.virtual_action.generator import build_query_schema
 
@@ -161,12 +160,13 @@ def test_TC05_catchall_field_description_contains_yuanci() -> None:
     sut = OntologyToolLoader(mounted_objects=["enterprise"], loader=_make_mock_loader(fields))
     patched = sut._apply_agent_schema_patches("enterprise", strict_schema)  # type: ignore[attr-defined]
 
-    one_of: list[dict[str, Any]] = patched["properties"]["filters"]["items"]["oneOf"]
-    catchall = next(
-        item for item in one_of if "enum" not in item.get("properties", {}).get("field", {})
+    field_desc = (
+        patched["properties"]["filters"]["items"]
+        .get("properties", {})
+        .get("field", {})
+        .get("description", "")
     )
-    field_desc = catchall["properties"]["field"].get("description", "")
-    assert "原词" in field_desc, f"catch-all field description 应含'原词'，实际: {field_desc!r}"
+    assert "原词" in field_desc, f"relaxed filters.field description 应含'原词'，实际: {field_desc!r}"
 
 
 # ---------------------------------------------------------------------------

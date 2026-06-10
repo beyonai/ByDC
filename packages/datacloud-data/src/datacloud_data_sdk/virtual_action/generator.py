@@ -304,9 +304,57 @@ def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False)
     filterable = [f for f in fields if getattr(f, "filter_ops", [])]
     if not filterable:
         return {"type": "array", "items": {"type": "object"}, "description": "过滤条件列表"}
-    items = [_filter_item_schema(f, strict_field_code=strict_field_code) for f in filterable]
-    if not strict_field_code:
-        items.append(_FILTER_CATCHALL_SCHEMA)
+
+    field_codes = [_fc(f) for f in filterable]
+    ops = list(
+        dict.fromkeys(
+            str(op)
+            for f in filterable
+            for op in (getattr(f, "filter_ops", []) or [])
+            if op
+        )
+    )
+    field_schema: dict[str, Any] = {
+        "type": "string",
+        "description": "属性编码，只允许使用当前工具列出的可过滤属性编码。",
+    }
+    if strict_field_code:
+        field_schema["enum"] = field_codes
+    else:
+        field_schema["description"] = (
+            "字段中文名或字段编码，系统自动识别映射；优先使用当前工具列出的属性编码；"
+            "若无法精确对应，可填写用户原词。"
+        )
+
+    value_field_schema: dict[str, Any] = {
+        "type": "string",
+        "description": "字段引用比较；填写目标字段属性编码，与 value 互斥。",
+    }
+    if strict_field_code:
+        value_field_schema["enum"] = field_codes
+
+    item_schema = {
+        "type": "object",
+        "description": "过滤条件；field 填属性编码，op 填字段支持的过滤操作符。",
+        "properties": {
+            "field": field_schema,
+            "op": {"type": "string", "enum": ops, "description": "过滤操作符"},
+            "value": {
+                "description": "过滤值；in 传数组，between 传 [from, to]，is_null/is_not_null 可不填。",
+                "oneOf": [
+                    {"type": "string"},
+                    {"type": "number"},
+                    {"type": "boolean"},
+                    {
+                        "type": "array",
+                        "items": {"oneOf": [{"type": "string"}, {"type": "number"}]},
+                    },
+                ],
+            },
+            "value_field": value_field_schema,
+        },
+        "required": ["field", "op"],
+    }
     description = (
         "过滤条件列表，field 统一填写属性编码；"
         "若需比较两个字段(如'实际上线日期 > 计划上线日期')，用 value_field 填目标字段编码，不填 value"
@@ -317,7 +365,7 @@ def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False)
     return {
         "type": "array",
         "description": description,
-        "items": {"oneOf": items},
+        "items": item_schema,
     }
 
 
@@ -756,91 +804,134 @@ def build_compute_schema(
     ]
     filters_schema = _build_filters_schema(fields, strict_field_code=True)
 
-    def _dim_item(f: Any) -> dict[str, Any]:
-        fcode = _fc(f)
-        fname = _fn(f)
-        kind = getattr(f, "analytic_kind", None)
-        gops = getattr(f, "group_ops", [])
-        item: dict[str, Any] = {
-            "type": "object",
-            "description": f"{fname}（{fcode}）[{getattr(f, 'analytic_role', '')}-{kind}] 分组维度",
-            "properties": {
-                "field": {
-                    **_field_code_property(fcode, fname),
-                },
-                "group_op": {"type": "string", "enum": gops, "description": "分组方式"},
-            },
-            "required": ["field", "group_op"],
-        }
-        if "range" in gops:
-            item["properties"]["buckets"] = {
-                "type": "array",
-                "description": "range 分组时必填，定义分桶区间",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "from": {
-                            "type": "number",
-                            "nullable": True,
-                            "description": "区间起始（含），null 表示无下限",
-                        },
-                        "to": {
-                            "type": "number",
-                            "nullable": True,
-                            "description": "区间终止（不含），null 表示无上限",
-                        },
-                        "label": {"type": "string", "description": "桶标签"},
-                    },
-                    "required": ["label"],
-                },
-            }
-        return item
+    def _unique(values: list[str]) -> list[str]:
+        return list(dict.fromkeys(v for v in values if v))
 
-    def _msr_item(f: Any) -> dict[str, Any]:
-        fcode = _fc(f)
-        fname = _fn(f)
-        agg_ops = getattr(f, "aggregate_ops", []) or ["count", "count_distinct"]
+    def _flat_filter_item_schema(filter_fields: list[Any]) -> dict[str, Any]:
+        field_codes = [_fc(f) for f in filter_fields]
+        ops = _unique(
+            [
+                str(op)
+                for f in filter_fields
+                for op in (getattr(f, "filter_ops", []) or [])
+            ]
+        )
         return {
             "type": "object",
-            "description": (
-                f"{fname}（{fcode}）[{getattr(f, 'analytic_role', '')}-{getattr(f, 'analytic_kind', '')}] 统计指标"
-            ),
+            "description": "过滤条件；field 填属性编码，op 填字段支持的过滤操作符。",
             "properties": {
                 "field": {
-                    **_field_code_property(fcode, fname),
-                },
-                "expr": {
                     "type": "string",
-                    "description": "公式表达式（与 field 互斥），系统会基于属性编码生成 SQL。",
+                    "enum": field_codes,
+                    "description": "属性编码，只允许使用当前工具列出的可过滤属性编码。",
                 },
-                "filters": {
-                    "type": "array",
-                    "description": "条件聚合过滤（CASE WHEN），field 统一填写属性编码，规则同行级 filters。",
-                    "items": {"type": "object"},
+                "op": {"type": "string", "enum": ops, "description": "过滤操作符"},
+                "value": {
+                    "description": "过滤值；in 传数组，between 传 [from, to]，is_null/is_not_null 可不填。",
+                    "oneOf": [
+                        {"type": "string"},
+                        {"type": "number"},
+                        {"type": "boolean"},
+                        {
+                            "type": "array",
+                            "items": {"oneOf": [{"type": "string"}, {"type": "number"}]},
+                        },
+                    ],
                 },
-                "agg": {
+                "value_field": {
                     "type": "string",
-                    "enum": agg_ops,
-                    "description": (
-                        "聚合函数（协议键名必须为 agg，如 count_distinct；禁止使用 func 键）"
-                    ),
+                    "enum": field_codes,
+                    "description": "字段引用比较；填写目标字段属性编码，与 value 互斥。",
                 },
-                "as": {"type": "string", "description": "结果列别名，用于 having/order_by 引用"},
             },
-            "required": ["field", "agg", "as"],
+            "required": ["field", "op"],
         }
 
-    count_all_item: dict[str, Any] = {
+    def _bucket_item_schema() -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "number",
+                    "nullable": True,
+                    "description": "区间起始（含），null 表示无下限",
+                },
+                "to": {
+                    "type": "number",
+                    "nullable": True,
+                    "description": "区间终止（不含），null 表示无上限",
+                },
+                "label": {"type": "string", "description": "桶标签"},
+            },
+            "required": ["label"],
+        }
+
+    filterable_fields = [f for f in fields if getattr(f, "filter_ops", [])]
+    dim_field_codes = [_fc(f) for f in dim_fields]
+    dim_group_ops = _unique(
+        [str(op) for f in dim_fields for op in (getattr(f, "group_ops", []) or [])]
+    )
+    metric_field_codes = [_fc(f) for f in msr_fields]
+    metric_agg_ops = _unique(
+        [
+            str(op)
+            for f in msr_fields
+            for op in (getattr(f, "aggregate_ops", []) or ["count", "count_distinct"])
+        ]
+        + ["count_all"]
+    )
+
+    dimension_item: dict[str, Any] = {
         "type": "object",
-        "description": '统计总行数（COUNT(*)），格式固定为 {"agg": "count_all", "as": "别名"}，不需要也不能填 field',
+        "description": "分组维度项；field 填属性编码，group_op 填该字段支持的分组方式。",
         "properties": {
-            "agg": {"type": "string", "enum": ["count_all"]},
-            "as": {"type": "string", "description": "结果列别名"},
+            "field": {
+                "type": "string",
+                "enum": dim_field_codes,
+                "description": "属性编码，只允许使用当前工具列出的可分组属性编码。",
+            },
+            "group_op": {"type": "string", "enum": dim_group_ops, "description": "分组方式"},
+            "buckets": {
+                "type": "array",
+                "description": "range 分组时必填，定义分桶区间",
+                "items": _bucket_item_schema(),
+            },
+        },
+        "required": ["field", "group_op"],
+    }
+    metric_filter_item = (
+        _flat_filter_item_schema(filterable_fields) if filterable_fields else {"type": "object"}
+    )
+    metric_item: dict[str, Any] = {
+        "type": "object",
+        "description": (
+            "统计指标项；普通聚合填 field + agg + as，count_all 只填 agg=count_all + as，"
+            "自定义公式可填 expr + agg + as。"
+        ),
+        "properties": {
+            "field": {
+                "type": "string",
+                "enum": metric_field_codes,
+                "description": "度量属性编码；agg=count_all 时不需要填写。",
+            },
+            "expr": {
+                "type": "string",
+                "description": "公式表达式（与 field 互斥），系统会基于属性编码生成 SQL。",
+            },
+            "filters": {
+                "type": "array",
+                "description": "条件聚合过滤（CASE WHEN），field 统一填写属性编码，规则同行级 filters。",
+                "items": metric_filter_item,
+            },
+            "agg": {
+                "type": "string",
+                "enum": metric_agg_ops,
+                "description": "聚合函数（协议键名必须为 agg，如 count_distinct；禁止使用 func 键）。",
+            },
+            "as": {"type": "string", "description": "结果列别名，用于 having/order_by 引用"},
         },
         "required": ["agg", "as"],
     }
-
-    metrics_items = [_msr_item(f) for f in msr_fields] + [count_all_item]
     required_groups = required_filter_groups or []
     required_hint = f"；强制过滤字段：{', '.join(required_groups)}" if required_groups else ""
 
@@ -860,9 +951,7 @@ def build_compute_schema(
             "dimensions": {
                 "type": "array",
                 "description": "分组维度（field 统一填写属性编码；时间类须指定粒度；range 须带 buckets）",
-                "items": {"oneOf": [_dim_item(f) for f in dim_fields]}
-                if dim_fields
-                else {"type": "object"},
+                "items": dimension_item if dim_fields else {"type": "object"},
                 "example": [{"field": "enterprise_level_name", "group_op": "direct"}],
                 "x-dc-dimension-fields": [
                     {
@@ -877,7 +966,7 @@ def build_compute_schema(
             "metrics": {
                 "type": "array",
                 "description": "统计指标（field 统一填写属性编码；至少一个；可用 count_all 统计行数）",
-                "items": {"oneOf": metrics_items},
+                "items": metric_item,
                 "minItems": 1,
                 "example": [{"field": "total_revenue", "agg": "sum", "as": "total_revenue_sum"}],
                 "x-dc-measure-fields": [

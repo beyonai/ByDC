@@ -166,11 +166,19 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
                 list_constraints["min_length"] = min_items
             if isinstance(max_items, int):
                 list_constraints["max_length"] = max_items
+        json_schema_extra: dict[str, Any] = {}
+        if is_list_like and isinstance(field_schema.get("items"), dict):
+            json_schema_extra["items"] = field_schema["items"]
 
         if field_name in required_fields:
             pydantic_fields[field_name] = (
                 py_type,
-                Field(..., description=description, **list_constraints),
+                Field(
+                    ...,
+                    description=description,
+                    json_schema_extra=json_schema_extra or None,
+                    **list_constraints,
+                ),
             )
         else:
             # 为 dict/list 类型追加类型说明，提示 LLM 不需要时传 null 而非 ""
@@ -183,7 +191,12 @@ def _json_schema_to_pydantic(schema: dict[str, Any], model_name: str) -> type:
                 coerce_fields.add(field_name)
             pydantic_fields[field_name] = (
                 py_type | None,
-                Field(default=None, description=description, **list_constraints),
+                Field(
+                    default=None,
+                    description=description,
+                    json_schema_extra=json_schema_extra or None,
+                    **list_constraints,
+                ),
             )
 
     base = _make_coerce_base(frozenset(coerce_fields)) if coerce_fields else BaseModel
@@ -598,10 +611,7 @@ class OntologyToolLoader:
                     name=action.action_code,
                     description=action.description or action.action_name,
                     metadata={"title": action.action_name or action.action_code},
-                    args_schema=_json_schema_to_pydantic(
-                        view_schema,
-                        f"_{action.action_code}_Schema",
-                    ),
+                    args_schema=view_schema,
                     coroutine=_make_view_action_coroutine(
                         view_code, action.action_code, self._loader
                     ),
@@ -686,13 +696,6 @@ class OntologyToolLoader:
                     input_schema = self._apply_agent_schema_patches(
                         obj_code, input_schema, action_type=action_family
                     )
-                args_schema = input_schema
-                if is_virtual:
-                    args_schema = _json_schema_to_pydantic(
-                        input_schema,
-                        f"_{name}_Schema",
-                    )
-
                 try:
                     _raw_title = str(tool_def.get("title") or name)
                     if is_virtual and action_family in {"query", "compute"}:
@@ -703,7 +706,7 @@ class OntologyToolLoader:
                         name=name,
                         description=tool_def.get("description", name),
                         metadata={"title": _display_title},
-                        args_schema=args_schema,
+                        args_schema=input_schema,
                         coroutine=_make_object_action_coroutine(
                             obj_code, action_code, self._loader
                         ),
@@ -756,10 +759,7 @@ class OntologyToolLoader:
                 name=tool_def["name"],
                 description=tool_def.get("description", tool_def["name"]),
                 metadata={"title": str(tool_def.get("title") or tool_def["name"])},
-                args_schema=_json_schema_to_pydantic(
-                    tool_def.get("inputSchema", {}),
-                    f"_Query{obj_code}Schema",
-                ),
+                args_schema=tool_def.get("inputSchema", {}),
                 coroutine=_make_tool_coroutine(ont_action, self._loader),
             )
         except Exception as exc:  # noqa: BLE001
