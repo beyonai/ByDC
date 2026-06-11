@@ -870,6 +870,17 @@ class OwlParser:
                 # 传递 ext_property 供 loader 解析 analytic_role
                 if fld.ext_property:
                     field_dict["ext_property"] = fld.ext_property
+                    # 从 ext_property 提取 property_kind / derived_config，
+                    # 让 loader 无需额外 OWL 字段即可识别派生列
+                    try:
+                        import html as _html, json as _json  # noqa: PLC0415
+                        _ext = _json.loads(_html.unescape(fld.ext_property))
+                        if "property_kind" in _ext:
+                            field_dict["property_kind"] = _ext["property_kind"]
+                        if "derived_config" in _ext:
+                            field_dict["derived_config"] = _ext["derived_config"]
+                    except (ValueError, TypeError):
+                        pass
 
                 if fld.term_type_code_path:
                     term_meta = self._build_term_meta(fld)
