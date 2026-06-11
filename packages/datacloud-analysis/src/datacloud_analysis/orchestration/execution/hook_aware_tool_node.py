@@ -329,7 +329,10 @@ class HookAwareToolNode(ToolNode):
                 _gc_user_id = _resolve_gateway_user_id(_gw_ctx)
                 _gc_session_id = str(getattr(_gw_ctx, "session_id", "") or "")
                 _result_file_storage = getattr(self._loader, "result_file_storage", None)
-                _extras = getattr(_gw_ctx, "extras", None)
+                # extras 优先从 config["configurable"]["extras"] 读取（worker.py 写入 skill_catalog 等），
+                # 回退到 gateway_context.extras（动态路径 OntologyAgent 直接挂在 ctx 上的情况）。
+                _config_extras: dict | None = ((config or {}).get("configurable") or {}).get("extras")
+                _extras = _config_extras if _config_extras is not None else getattr(_gw_ctx, "extras", None)
                 _locale = str(((config or {}).get("configurable") or {}).get("locale") or "zh_CN")
                 _workspace_dir = str(
                     state_dict.get("workspace_dir")

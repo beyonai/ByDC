@@ -46,7 +46,11 @@ def scan_skill_catalog(
             continue
         scope = "personal" if idx > 0 else "agent"
         for skill_dir in sorted(skill_root.iterdir()):
-            if not skill_dir.is_dir():
+            try:
+                if not skill_dir.is_dir():
+                    continue
+            except OSError:
+                logger.warning("scan_skill_catalog: cannot access %s, skipping", skill_dir)
                 continue
             if rel_skills and skill_dir.name not in rel_skills:
                 continue
