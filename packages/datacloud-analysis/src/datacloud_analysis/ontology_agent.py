@@ -484,6 +484,8 @@ class OntologyAgent:
         locale: str | None = None,
         extras: dict[str, Any] | None = None,
         target_tool: str | None = None,
+        skill_dirs: list[str] | None = None,
+        rel_skills: set[str] | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """发起一次问答，流式返回事件。
 
@@ -512,6 +514,8 @@ class OntologyAgent:
             resume_input=None,
             extras=extras,
             target_tool=target_tool,
+            skill_dirs=skill_dirs,
+            rel_skills=rel_skills,
         )
 
     def resume(
@@ -612,14 +616,14 @@ class OntologyAgent:
         graph = build_analysis_graph(
             tools=tools, loader=loader, redirect_tools=redirect_tools or None
         )
-        return graph.compile(checkpointer=self._checkpointer)
+        return graph.compile(checkpointer=self._checkpointer), redirect_tools or {}
 
     def _get_or_build_graph(
         self,
         view_codes: list[str] | None,
         object_codes: list[str] | None,
-    ) -> Any:
-        """T6：带 LRU 缓存的图获取入口。"""
+    ) -> tuple[Any, dict[str, Any]]:
+        """T6：带 LRU 缓存的图获取入口，返回 (compiled_graph, tools_dict)。"""
         key = _make_cache_key(view_codes, object_codes)
         if key in self._graph_cache:
             self._graph_cache.move_to_end(key)
@@ -627,12 +631,12 @@ class OntologyAgent:
             return self._graph_cache[key]
 
         logger.debug("ontology_agent: graph cache miss, building key=%s", key)
-        compiled = self._build_and_compile(view_codes, object_codes)
-        self._graph_cache[key] = compiled
+        compiled, tools_dict = self._build_and_compile(view_codes, object_codes)
+        self._graph_cache[key] = (compiled, tools_dict)
         if len(self._graph_cache) > _CACHE_MAX:
             evicted = self._graph_cache.popitem(last=False)
             logger.debug("ontology_agent: evicted cache entry key=%s", evicted[0])
-        return compiled
+        return compiled, tools_dict
 
     async def _iter_events(  # type: ignore[return]
         self,
@@ -647,16 +651,38 @@ class OntologyAgent:
         resume_input: str | ParadigmAnswer | dict[str, Any] | None,
         extras: dict[str, Any] | None = None,
         target_tool: str | None = None,
+        skill_dirs: list[str] | None = None,
+        rel_skills: set[str] | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
         try:
-            compiled = self._get_or_build_graph(view_codes, object_codes)
+            compiled, tools_dict = self._get_or_build_graph(view_codes, object_codes)
         except Exception as exc:
             logger.exception("ontology_agent: failed to build graph")
             yield ErrorEvent(message=str(exc))
             return
 
         effective_locale = locale or self._config.locale
+
+        # 方案A：skill_dirs 由调用方直接传入，在创建 ctx_container 前完成 extras 合并，
+        # 确保 skill_catalog / tools_dict 随 extras 流入 InvocationContext
+        _effective_extras: dict[str, Any] = dict(extras or {})
+        if skill_dirs:
+            from datacloud_analysis.skills.catalog import (  # noqa: PLC0415
+                build_available_skills_xml,
+                scan_skill_catalog,
+            )
+
+            _catalog = scan_skill_catalog(
+                [str(d) for d in skill_dirs],
+                rel_skills=rel_skills or set(),
+            )
+            _xml = build_available_skills_xml(_catalog)
+            if _xml:
+                _effective_extras["available_skills"] = _xml
+                _effective_extras["skill_catalog"] = _catalog
+                _effective_extras["tools_dict"] = tools_dict
+
         # 无 Gateway 部署使用 NoOpExecutionReporter（实现 ExecutionReporter 协议），
         # 让 tool_wrapper.py 等业务代码不需感知是否有真实 Gateway。
         # 真实 Gateway（如 byclaw-data 的 AgentContext）走另一条路径直接被注入到
@@ -664,7 +690,7 @@ class OntologyAgent:
         ctx_container: Any = NoOpExecutionReporter(
             user_id=user_code or "",
             session_id=session_id or "",
-            extras=extras,
+            extras=_effective_extras or None,
         )
         run_config: dict[str, Any] = {
             "configurable": {
@@ -701,13 +727,17 @@ class OntologyAgent:
             )
             graph_input["prompts_overwrite"] = {"locale": effective_locale}
             # 注入 skill task_prompt（请求级，不影响图缓存）
-            _task_prompt = str((extras or {}).get("task_prompt") or "").strip()
+            _task_prompt = str(_effective_extras.get("task_prompt") or "").strip()
             if _task_prompt:
                 graph_input["prompts_overwrite"]["task_prompt"] = _task_prompt
             # 注入 skill_workspace_dir 供 read_file tool 使用
-            _skill_ws = str((extras or {}).get("skill_workspace_dir") or "").strip()
+            _skill_ws = str(_effective_extras.get("skill_workspace_dir") or "").strip()
             if _skill_ws:
                 graph_input["prompts_overwrite"]["skill_workspace_dir"] = _skill_ws
+            # 注入 available_skills XML（路径B via worker.py extras，或方案A via skill_dirs）
+            _available_skills = str(_effective_extras.get("available_skills") or "").strip()
+            if _available_skills:
+                graph_input["prompts_overwrite"]["available_skills"] = _available_skills
             if target_tool:
                 graph_input["target_tool"] = target_tool
         elif isinstance(resume_input, str | dict):
