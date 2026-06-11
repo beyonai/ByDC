@@ -104,6 +104,7 @@ def _log_create_agent_diagnostics(
     """打印建图时的「agent_id + 问题上下文 + 工具清单」，便于线上对照核查。"""
 
     tool_block = _format_tools_for_diag(merged_tools)
+    tool_names = sorted((merged_tools or {}).keys())
     logger.info(
         "[create_agent diagnostics] ----------\n"
         "agent_id=%s\n"
@@ -117,6 +118,60 @@ def _log_create_agent_diagnostics(
         len(merged_tools or {}),
         tool_block,
     )
+
+    # 同步写入当前 Langfuse span metadata，故障场景（tool_count=0）直接可见
+    try:
+        from langfuse import Langfuse  # noqa: PLC0415
+
+        _tool_count = len(merged_tools or {})
+        lf = Langfuse(
+            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+            host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+        )
+        api_key = os.getenv("DATACLOUD_LLM_API_KEY", "")
+        lf.update_current_span(
+            metadata={
+                "AgentDiag": {
+                    "agent_id": agent_id_display,
+                    "tool_count": _tool_count,
+                    "tool_names": tool_names[:50],
+                    "mounted_objects": list(mounted_objects or []),
+                },
+                "LLMConfig": {
+                    "model": os.getenv("DATACLOUD_LLM_MODEL", ""),
+                    "base_url": os.getenv("DATACLOUD_LLM_API_BASE", ""),
+                    "api_key_status": "present" if api_key else "missing",
+                },
+                "DatacloudConfig": {
+                    "ontology_path": os.getenv("DATACLOUD_ONTOLOGY_PATH", ""),
+                    "react_max_rounds": os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "30"),
+                    "history_message_limit": os.getenv("DATACLOUD_HISTORY_MESSAGE_LIMIT", "16"),
+                },
+                "DBConfig": {
+                    "db_host": os.getenv("DATACLOUD_DB_HOST", ""),
+                    "db_port": os.getenv("DATACLOUD_DB_PORT", ""),
+                    "db_schema": os.getenv("DATACLOUD_DB_SCHEMA", ""),
+                },
+                "MinioConfig": {
+                    "mid_ftp_path": os.getenv("DATACLOUD_MID_FTP_PATH", ""),
+                    "minio_mount_path": os.getenv("FILE_STORAGE_MINIO_MOUNT_PATH", ""),
+                },
+                "RedisConfig": {
+                    "redis_host": os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", ""),
+                    "redis_port": os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", ""),
+                },
+            }
+        )
+        # 工具挂载评分：tool_count=0 说明 OWL 路径配错或无本体，必然幻觉
+        lf.score_current_trace(
+            name="tool_mounted",
+            value=1.0 if _tool_count > 0 else 0.0,
+            data_type="BOOLEAN",
+            comment=f"tool_count={_tool_count}",
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def create_agent(

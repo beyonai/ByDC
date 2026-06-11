@@ -318,6 +318,24 @@ def _resolve_via_aliases(
             len(result.ambiguous),
             len(result.unresolved),
         )
+        # 写入当前 Langfuse span metadata，支持 BY_005/BY_007/BY_009 故障定位
+        try:
+            from langfuse import Langfuse  # noqa: PLC0415
+
+            Langfuse().update_current_span(
+                metadata={
+                    "TermResolution": {
+                        "scope_code": scope_code,
+                        "resolved": list(result.resolved.keys()),
+                        "resolved_count": len(result.resolved),
+                        "unresolved": list(result.unresolved),
+                        "ambiguous": list(result.ambiguous.keys()),
+                        "unresolved_count": len(unresolved),
+                    },
+                }
+            )
+        except Exception:  # noqa: BLE001
+            pass
         return result.resolved, unresolved
     except Exception:  # noqa: BLE001
         logger.warning(

@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from collections import OrderedDict
 from collections.abc import AsyncGenerator
@@ -683,20 +682,14 @@ class OntologyAgent:
             "recursion_limit": 100,
         }
 
-        from datacloud_analysis.langfuse_handler import get_langfuse_callback  # noqa: PLC0415
+        from datacloud_analysis.langfuse_handler import make_langfuse_callback  # noqa: PLC0415
 
-        _lf_handler = get_langfuse_callback()
+        # thread_id 通常为 UUID，去掉连字符得到合法 32位 hex trace_id
+        _lf_trace_id = thread_id.replace("-", "") if thread_id else None
+        _lf_handler = make_langfuse_callback(_lf_trace_id)
         if _lf_handler is not None:
             run_config["callbacks"] = [_lf_handler]
-            # SDK 4.x 通过 run_config["metadata"] 传递 trace 级属性
             run_config["metadata"] = {
-                "langfuse_user_id": user_code,
-                "langfuse_session_id": session_id or thread_id,
-                "langfuse_trace_name": "datacloud-ontology-agent",
-                "langfuse_tags": [
-                    f"worker:{os.getenv('DATACLOUD_GATEWAY_WORKER_ID', '')}",
-                    f"env:{os.getenv('HOST', '')}",
-                ],
                 "thread_id": thread_id,
                 "view_codes": view_codes or [],
                 "object_codes": object_codes or [],
