@@ -4,10 +4,9 @@
 未配置时返回 None，不影响正常运行。
 
 SDK 4.x 变更说明：
-  - CallbackHandler 不再接受 user_id/session_id/trace_name/metadata 构造参数。
-  - 请求级字段（user_id、session_id、trace_name 等）通过 run_config["metadata"]
-    以 "langfuse_*" 前缀传入，SDK 在 on_chain_start 时自动读取并绑定到 trace。
-  - 进程内共享单例，由 LangChain run_id 隔离不同请求的 trace。
+  - CallbackHandler 通过 trace_context=TraceContext(trace_id=...) 关联请求级 trace。
+  - 每次请求创建独立 CallbackHandler 实例，确保 session_id / user_id 正确隔离。
+  - 进程级可用性检测缓存，避免每次请求都重试初始化。
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ from __future__ import annotations
 import contextvars
 import logging
 import os
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -29,45 +29,71 @@ current_tool_spans: contextvars.ContextVar[list[dict[str, Any]] | None] = contex
     "langfuse_current_tool_spans", default=None
 )
 
-# 进程级单例，避免每次请求都重复初始化
-_handler_instance: Any | None = None
-_handler_init_attempted: bool = False
+# 进程级可用性缓存：None=未检测，True=可用，False=不可用
+_langfuse_available: bool | None = None
 
 
-def get_langfuse_callback() -> Any | None:
-    """返回进程级 LangfuseCallbackHandler 单例，未配置时返回 None。
+def _check_langfuse_available() -> bool:
+    """检测 Langfuse 是否可用（环境变量 + 依赖），结果进程级缓存。"""
+    global _langfuse_available  # noqa: PLW0603
+    if _langfuse_available is not None:
+        return _langfuse_available
 
-    请求级字段（user_id、session_id、trace_name 等）通过调用方写入
-    run_config["metadata"]（以 "langfuse_" 为前缀），SDK 4.x 会在链启动时自动读取。
+    if not os.getenv("LANGFUSE_SECRET_KEY"):
+        logger.debug("langfuse: LANGFUSE_SECRET_KEY 未设置，跳过追踪")
+        _langfuse_available = False
+        return False
+
+    try:
+        from langfuse.langchain import (
+            CallbackHandler,  # type: ignore[import-untyped]  # noqa: PLC0415, F401
+        )
+
+        _langfuse_available = True
+        logger.info("langfuse: SDK 可用，host=%s", os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"))
+    except ImportError:
+        logger.warning("langfuse 未安装，已跳过追踪。可通过 `pip install langfuse` 启用。")
+        _langfuse_available = False
+    except Exception:
+        logger.warning("langfuse 可用性检测失败，已跳过追踪", exc_info=True)
+        _langfuse_available = False
+
+    return _langfuse_available
+
+
+def make_langfuse_callback(lf_trace_id: str | None = None) -> Any | None:
+    """创建请求级 LangfuseCallbackHandler，未配置时返回 None。
+
+    Args:
+        lf_trace_id: Langfuse 合法 trace id（32位小写 hex）。
+                     提供时 CallbackHandler 挂载到该 trace；
+                     不提供时 SDK 自动生成新 trace。
 
     Returns:
         CallbackHandler 实例，或 None（langfuse 未安装 / 未配置时）。
     """
-    global _handler_instance, _handler_init_attempted  # noqa: PLW0603
-    if _handler_init_attempted:
-        return _handler_instance
+    if not _check_langfuse_available():
+        return None
 
-    _handler_init_attempted = True
+    try:
+        from langfuse.langchain import (
+            CallbackHandler,  # type: ignore[import-untyped]  # noqa: PLC0415
+        )
+        from langfuse.types import TraceContext  # noqa: PLC0415
 
+        _is_valid = bool(lf_trace_id and re.fullmatch(r"[0-9a-f]{32}", lf_trace_id))
+        trace_context = TraceContext(trace_id=lf_trace_id) if _is_valid else None
+
+        return CallbackHandler(trace_context=trace_context)
+    except Exception:
+        logger.warning("LangfuseCallbackHandler 创建失败，已跳过追踪", exc_info=True)
+        return None
+
+
+# 向后兼容：旧代码调用 get_langfuse_callback() 的地方不会报错
+def get_langfuse_callback() -> Any | None:
+    """兼容旧调用，新代码请使用 make_langfuse_callback(lf_trace_id)。"""
     from datacloud_analysis.otel_handler import init_otel  # noqa: PLC0415
 
     init_otel()
-
-    if not os.getenv("LANGFUSE_SECRET_KEY"):
-        logger.debug("langfuse: LANGFUSE_SECRET_KEY 未设置，跳过追踪")
-        return None
-
-    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
-    try:
-        from langfuse.langchain import (  # type: ignore[import-untyped]  # noqa: PLC0415
-            CallbackHandler,
-        )
-
-        _handler_instance = CallbackHandler()
-        logger.info("langfuse: CallbackHandler 单例创建成功 host=%s", host)
-    except ImportError:
-        logger.warning("langfuse 未安装，已跳过追踪。可通过 `pip install langfuse` 启用。")
-    except Exception:
-        logger.warning("Langfuse CallbackHandler 初始化失败，已跳过追踪", exc_info=True)
-
-    return _handler_instance
+    return make_langfuse_callback()

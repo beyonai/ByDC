@@ -1778,6 +1778,23 @@ class Action:
                 request_kwargs["json"] = request_parts["body"]
             resp = await client.request(method, url, **request_kwargs)
 
+        # 写入 Langfuse span，支持 BY_008 故障定位：Action API 调用结果
+        try:
+            from langfuse import Langfuse  # noqa: PLC0415
+
+            Langfuse().update_current_span(
+                metadata={
+                    "ActionCall": {
+                        "url": str(url),
+                        "method": str(method),
+                        "http_status": resp.status_code,
+                        "success": resp.status_code < 400,
+                    },
+                }
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
         if resp.status_code >= 400:
             raise ApiExecutionError(function_code, resp.status_code, resp.text)
 

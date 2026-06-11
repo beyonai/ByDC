@@ -91,6 +91,27 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
         len(clarify_knowledge),
     )
 
+    # 写入 Langfuse span，支持 BY_007 故障定位：为什么触发了澄清
+    try:
+        from langfuse import Langfuse  # noqa: PLC0415
+
+        Langfuse().update_current_span(
+            metadata={
+                "ClarifyContext": {
+                    "tool_name": tool_name,
+                    "query": query[:200],
+                    "interrupt_type": "paradigm",
+                    "paradigm_count": len(paradigm_list),
+                    "paradigm_names": [
+                        str(p.get("paradigm_name") or p.get("paradigmName") or "")
+                        for p in paradigm_list[:10]
+                    ],
+                },
+            }
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
     return {
         "clarification_analyze_result": analyze_result,
         # pending_clarification_context 已被消费，清除以防止 REPLAY GUARD 在下一轮再次触发

@@ -17,6 +17,7 @@ from datacloud_analysis.orchestration.execution.tool_wrapper import (
     is_delegate_wait_resume_command,
 )
 from datacloud_analysis.orchestration.state import AgentState
+from datacloud_analysis.tools.activate_skill import activate_skill
 from datacloud_analysis.tools.ask_user import ask_user
 from datacloud_analysis.tools.execute import execute
 from datacloud_analysis.tools.file_io import read_file
@@ -201,6 +202,7 @@ _BUILTIN_TOOLS: list[BaseTool] = [
     ask_user,
     read_file,
     execute,
+    activate_skill,
 ]
 
 

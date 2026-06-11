@@ -214,6 +214,9 @@ def _build_legacy_graph(
     system_parts = [custom_system if custom_system else base_system, base_execution]
     if custom_task:
         system_parts.append(custom_task)
+    _available_skills_xml = str(overwrite.get("available_skills") or "").strip()
+    if _available_skills_xml:
+        system_parts.append(_available_skills_xml)
     stable_system_prompt = "\n\n".join(p for p in system_parts if p)
 
     # ── 构建 tools_list ──────────────────────────────────────────────────────────
@@ -443,6 +446,9 @@ def _build_prebuilt_graph(
     system_parts = [custom_system if custom_system else base_system, base_execution]
     if custom_task:
         system_parts.append(custom_task)
+    _available_skills_xml_v04 = str(overwrite.get("available_skills") or "").strip()
+    if _available_skills_xml_v04:
+        system_parts.append(_available_skills_xml_v04)
     stable_system_prompt = "\n\n".join(p for p in system_parts if p)
 
     # ── tools_list（含 finish_react sentinel 工具）────────────────────────────────
