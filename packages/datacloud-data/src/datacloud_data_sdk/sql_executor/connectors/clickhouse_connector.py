@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from datacloud_data_sdk.exceptions import SqlExecutionError
@@ -14,6 +15,28 @@ def _build_clickhouse_url(params: dict[str, Any]) -> str:
     host = params.get("host", "localhost")
     port = params.get("port", 8123)
     return f"http://{host}:{port}/"
+
+
+def _inline_params(sql: str, params: dict[str, Any]) -> str:
+    """将 SQLAlchemy 风格的 :param_name 替换为 ClickHouse 可接受的字面值。
+
+    ClickHouse HTTP 接口不支持 :name 占位符，需要在发送前内联替换。
+    """
+    def _quote(val: Any) -> str:
+        if val is None:
+            return "NULL"
+        if isinstance(val, bool):
+            return "1" if val else "0"
+        if isinstance(val, (int, float)):
+            return str(val)
+        # 字符串：单引号转义
+        return "'" + str(val).replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+    def _replace(m: re.Match) -> str:
+        name = m.group(1)
+        return _quote(params[name]) if name in params else m.group(0)
+
+    return re.sub(r":([A-Za-z_][A-Za-z0-9_]*)", _replace, sql)
 
 
 class ClickHouseConnector(BaseSourceConnector):
@@ -59,6 +82,10 @@ class ClickHouseConnector(BaseSourceConnector):
     async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
             client = await self._get_client()
+            # ClickHouse HTTP 接口不支持 SQLAlchemy :name 占位符，内联替换后以纯 SQL 发送
+            if params:
+                sql = _inline_params(sql, params)
+                params = None
             rows = await client.fetch(sql, params=params or {})
             if not rows:
                 return []

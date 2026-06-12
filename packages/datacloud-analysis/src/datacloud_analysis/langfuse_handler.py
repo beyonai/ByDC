@@ -34,12 +34,21 @@ _langfuse_available: bool | None = None
 
 
 def _check_langfuse_available() -> bool:
-    """检测 Langfuse 是否可用（环境变量 + 依赖），结果进程级缓存。"""
+    """检测 Langfuse 是否可用（环境变量 + 依赖），结果进程级缓存。
+
+    同时初始化全局 Langfuse 单例（指定 base_url），确保 LangchainCallbackHandler
+    内部的 get_client() 拿到的是内网实例，而不是默认的 cloud.langfuse.com。
+    """
     global _langfuse_available  # noqa: PLW0603
     if _langfuse_available is not None:
         return _langfuse_available
 
-    if not os.getenv("LANGFUSE_SECRET_KEY"):
+    secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+    public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+    # LANGFUSE_BASE_URL 是 SDK 4.x 标准变量；LANGFUSE_HOST 为旧版兼容
+    base_url = os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST")
+
+    if not secret_key:
         logger.debug("langfuse: LANGFUSE_SECRET_KEY 未设置，跳过追踪")
         _langfuse_available = False
         return False
@@ -48,9 +57,19 @@ def _check_langfuse_available() -> bool:
         from langfuse.langchain import (
             CallbackHandler,  # type: ignore[import-untyped]  # noqa: PLC0415, F401
         )
+        from langfuse import Langfuse  # noqa: PLC0415
+
+        # 显式初始化单例，指定正确的 host，避免 get_client() 默认连公网
+        _init_kwargs: dict = {
+            "public_key": public_key,
+            "secret_key": secret_key,
+        }
+        if base_url:
+            _init_kwargs["host"] = base_url
+        Langfuse(**_init_kwargs)
 
         _langfuse_available = True
-        logger.info("langfuse: SDK 可用，host=%s", os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"))
+        logger.info("langfuse: SDK 可用，host=%s", base_url or "https://cloud.langfuse.com")
     except ImportError:
         logger.warning("langfuse 未安装，已跳过追踪。可通过 `pip install langfuse` 启用。")
         _langfuse_available = False
@@ -61,13 +80,18 @@ def _check_langfuse_available() -> bool:
     return _langfuse_available
 
 
-def make_langfuse_callback(lf_trace_id: str | None = None) -> Any | None:
+def make_langfuse_callback(
+    lf_trace_id: str | None = None,
+    parent_span_id: str | None = None,
+) -> Any | None:
     """创建请求级 LangfuseCallbackHandler，未配置时返回 None。
 
     Args:
         lf_trace_id: Langfuse 合法 trace id（32位小写 hex）。
                      提供时 CallbackHandler 挂载到该 trace；
                      不提供时 SDK 自动生成新 trace。
+        parent_span_id: 父 span id（16位小写 hex）。
+                     提供时 LangGraph 根节点挂在该 span 下，实现完整层级。
 
     Returns:
         CallbackHandler 实例，或 None（langfuse 未安装 / 未配置时）。
@@ -82,7 +106,13 @@ def make_langfuse_callback(lf_trace_id: str | None = None) -> Any | None:
         from langfuse.types import TraceContext  # noqa: PLC0415
 
         _is_valid = bool(lf_trace_id and re.fullmatch(r"[0-9a-f]{32}", lf_trace_id))
-        trace_context = TraceContext(trace_id=lf_trace_id) if _is_valid else None
+        if _is_valid:
+            tc: dict[str, str] = {"trace_id": lf_trace_id}
+            if parent_span_id and re.fullmatch(r"[0-9a-f]{1,32}", parent_span_id):
+                tc["parent_span_id"] = parent_span_id
+            trace_context = TraceContext(**tc)
+        else:
+            trace_context = None
 
         return CallbackHandler(trace_context=trace_context)
     except Exception:
