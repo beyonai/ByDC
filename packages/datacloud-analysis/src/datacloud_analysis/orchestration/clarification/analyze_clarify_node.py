@@ -97,6 +97,7 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
 
         Langfuse().update_current_span(
             metadata={
+                "object_type": "graph_node_span",
                 "ClarifyContext": {
                     "tool_name": tool_name,
                     "query": query[:200],

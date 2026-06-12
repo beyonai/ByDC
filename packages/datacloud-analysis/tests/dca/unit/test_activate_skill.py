@@ -18,9 +18,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-
 from datacloud_analysis.tools.activate_skill import activate_skill
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 辅助
@@ -32,9 +30,7 @@ def _make_skill_md(root: Path, name: str, body: str) -> Path:
     d = root / name
     d.mkdir(parents=True, exist_ok=True)
     skill_md = d / "SKILL.md"
-    skill_md.write_text(
-        f"---\nname: {name}\ndescription: 测试描述\n---\n{body}", encoding="utf-8"
-    )
+    skill_md.write_text(f"---\nname: {name}\ndescription: 测试描述\n---\n{body}", encoding="utf-8")
     return skill_md
 
 
@@ -106,7 +102,7 @@ class TestActivateSkill:
             "datacloud_analysis.tools.activate_skill.get_current_context",
             return_value=ctx,
         ):
-            first = await activate_skill.ainvoke({"name": "老鹰"})
+            _ = await activate_skill.ainvoke({"name": "老鹰"})
             second = await activate_skill.ainvoke({"name": "老鹰"})
 
         assert "战略" not in second or "已在本会话中激活" in second

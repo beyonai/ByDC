@@ -22,6 +22,7 @@ def _inline_params(sql: str, params: dict[str, Any]) -> str:
 
     ClickHouse HTTP 接口不支持 :name 占位符，需要在发送前内联替换。
     """
+
     def _quote(val: Any) -> str:
         if val is None:
             return "NULL"

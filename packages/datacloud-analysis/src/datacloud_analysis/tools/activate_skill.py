@@ -101,9 +101,7 @@ def _replace_placeholders(
         code = m.group(2)
 
         if kind in ("ontology", "view", "inference", "knowledge"):
-            warnings.append(
-                f"⚠️ 本体占位符 {{{{{kind}:{code}}}}} 暂未挂载，由后续本体推理模块填充"
-            )
+            warnings.append(f"⚠️ 本体占位符 {{{{{kind}:{code}}}}} 暂未挂载，由后续本体推理模块填充")
             return m.group(0)
 
         if kind == "action":

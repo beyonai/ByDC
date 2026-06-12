@@ -12,7 +12,9 @@ from langgraph.prebuilt import ToolNode
 
 
 @pytest.mark.asyncio
-async def test_hook_aware_tool_node_executes_redirect_target(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_hook_aware_tool_node_executes_redirect_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A before-hook redirect should execute the target tool with redirect params."""
     from datacloud_analysis.orchestration.execution import hook_aware_tool_node as module
     from datacloud_analysis.orchestration.execution.hook_aware_tool_node import HookAwareToolNode

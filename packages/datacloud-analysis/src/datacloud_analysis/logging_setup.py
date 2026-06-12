@@ -49,7 +49,9 @@ _SETUP_DONE: bool = False
 _CONFIGURED_NAMESPACES: list[str] = []
 
 _FMT_CONSOLE = "%(asctime)s [%(levelname)-5s] %(name)s: %(message)s"
-_FMT_CONSOLE_OTEL = "%(asctime)s [%(levelname)-5s] [tid=%(otelTraceID)s sid=%(otelSpanID)s] %(name)s: %(message)s"
+_FMT_CONSOLE_OTEL = (
+    "%(asctime)s [%(levelname)-5s] [tid=%(otelTraceID)s sid=%(otelSpanID)s] %(name)s: %(message)s"
+)
 _FMT_FILE = "%(asctime)s [%(levelname)-5s] %(process)d %(name)s: %(message)s"
 _FMT_FILE_OTEL = "%(asctime)s [%(levelname)-5s] %(process)d [tid=%(otelTraceID)s sid=%(otelSpanID)s] %(name)s: %(message)s"
 _DATE_FMT = "%Y-%m-%d %H:%M:%S"
@@ -262,6 +264,7 @@ def reset_logging() -> None:
 # trace_id 由 OTel span context 自动注入）。
 # 此 shim 保持接口兼容，调用方（worker.py）无需修改。
 # ---------------------------------------------------------------------------
+
 
 @contextlib.asynccontextmanager
 async def request_log_context(

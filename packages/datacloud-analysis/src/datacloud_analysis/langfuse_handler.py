@@ -54,10 +54,10 @@ def _check_langfuse_available() -> bool:
         return False
 
     try:
+        from langfuse import Langfuse  # noqa: PLC0415
         from langfuse.langchain import (
             CallbackHandler,  # type: ignore[import-untyped]  # noqa: PLC0415, F401
         )
-        from langfuse import Langfuse  # noqa: PLC0415
 
         # 显式初始化单例，指定正确的 host，避免 get_client() 默认连公网
         _init_kwargs: dict = {

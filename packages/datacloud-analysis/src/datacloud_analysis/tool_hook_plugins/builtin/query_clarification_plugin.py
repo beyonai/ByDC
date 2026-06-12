@@ -324,6 +324,7 @@ def _resolve_via_aliases(
 
             Langfuse().update_current_span(
                 metadata={
+                    "object_type": "tool_call_span",
                     "TermResolution": {
                         "scope_code": scope_code,
                         "resolved": list(result.resolved.keys()),
