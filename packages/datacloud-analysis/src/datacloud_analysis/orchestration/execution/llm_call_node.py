@@ -37,6 +37,31 @@ _DEFAULT_MAX_ROUNDS = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
 _LLM_CALL_TIMEOUT = float(os.getenv("DATACLOUD_LLM_CALL_TIMEOUT", "120"))
 
 
+# ── 附05 3.3 Todo 机制辅助函数 ─────────────────────────────────────────────────
+
+def _original_query_visible(messages: list[Any], user_query: str) -> bool:
+    """检查原始 user_query 是否仍在消息窗口内（裁剪后检查）。"""
+    for msg in messages:
+        content = str(getattr(msg, "content", "") or "")
+        if user_query in content:
+            return True
+    return False
+
+
+def _format_todo_snapshot(active_todos: list[dict[str, Any]], user_query: str) -> str:
+    """将 pending/in_progress 的 todos 格式化为消息快照。"""
+    status_mark = {"in_progress": "[>]", "pending": "[ ]"}
+    lines = ["[任务列表快照]"]
+    for i, t in enumerate(active_todos, 1):
+        mark = status_mark.get(t.get("status", ""), "[ ]")
+        content = t.get("content", "")
+        status_cn = "进行中" if t.get("status") == "in_progress" else "待执行"
+        lines.append(f"- {mark} {i}. {content}（{status_cn}）")
+    if user_query:
+        lines.append(f"原始任务：{user_query}")
+    return "\n".join(lines)
+
+
 def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> str | None:
     """从 state 的 knowledge_snippets 和 gateway_context 构建每次请求的动态 prompt 部分。"""
     parts: list[str] = []
@@ -158,6 +183,15 @@ def make_llm_call_node(
         )
 
         tools_map = {t.name: t for t in tools_list}
+        # ★ 附05 3.2.3：从 TOOL_POOL 按名合并已解锁工具（active_tools 只存名字，TOOL_POOL 存对象）
+        try:
+            from datacloud_analysis.tools.tool_pool import (
+                get_tools as _get_unlocked,  # noqa: PLC0415
+            )
+            _active_names: list[str] = state.get("active_tools") or []
+            tools_map.update(_get_unlocked(_active_names))
+        except Exception:  # noqa: BLE001
+            pass  # TOOL_POOL 未初始化（非运维诊断 Agent）时静默跳过
         tools_map["finish_react"] = finish_react
         _llm_config: dict[str, Any] | None = (config.get("configurable") or {}).get("llm_config")
         llm = _build_llm(state, llm_config=_llm_config)
@@ -199,6 +233,19 @@ def make_llm_call_node(
 
         thinking_id = uuid.uuid4().hex[:12]
         messages_window = _trim_messages_window(messages)
+
+        # ★ 附05 3.3：user_query 强制锚定——裁剪后若原始任务丢失则重新插入
+        _user_query = str(state.get("user_query") or "")
+        if _user_query and not _original_query_visible(messages_window, _user_query):
+            anchor = HumanMessage(content=f"[任务锚定] 原始任务：{_user_query}")
+            messages_window.insert(1, anchor)
+
+        # ★ 附05 3.3：todos 快照注入——裁剪后追加 pending/in_progress 项（防止任务遗忘）
+        _todos: list[dict] = state.get("todos") or []
+        _active_todos = [t for t in _todos if t.get("status") in ("pending", "in_progress")]
+        if _active_todos:
+            _snapshot = _format_todo_snapshot(_active_todos, _user_query)
+            messages_window.append(HumanMessage(content=_snapshot))
         logger.debug(
             "[i18n-diag] llm_call_node messages_window: count=%d "
             "system_preview=%r "
@@ -244,6 +291,36 @@ def make_llm_call_node(
         calls = list(getattr(ai_msg, "tool_calls", None) or [])
         _usage = getattr(ai_msg, "usage_metadata", None) or {}
         _resp_meta = getattr(ai_msg, "response_metadata", None) or {}
+
+        # 将 token 用量写入 Langfuse span（兼容 MiniMax / OpenAI 等格式）
+        _input_tokens = (
+            _usage.get("input_tokens")
+            or _usage.get("prompt_tokens")
+            or (_resp_meta.get("token_usage") or {}).get("prompt_tokens", 0)
+        )
+        _output_tokens = (
+            _usage.get("output_tokens")
+            or _usage.get("completion_tokens")
+            or (_resp_meta.get("token_usage") or {}).get("completion_tokens", 0)
+        )
+        if _input_tokens or _output_tokens:
+            try:
+                from langfuse import Langfuse  # noqa: PLC0415
+                lf = Langfuse(
+                    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                    host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+                )
+                lf.update_current_span(
+                    usage={
+                        "input": _input_tokens,
+                        "output": _output_tokens,
+                        "total": _input_tokens + _output_tokens,
+                        "unit": "TOKENS",
+                    }
+                )
+            except Exception:  # noqa: BLE001
+                pass
         # 诊断：打印 finish_react 的 answer 参数，确认 LLM 用哪种语言回答
         for _tc in calls:
             if _tc.get("name") == "finish_react":

@@ -438,10 +438,126 @@ class HookAwareToolNode(ToolNode):
         if query_data is not None:
             result_dict["react_last_query_data"] = query_data
 
+        # ★ 附05 3.2.3：工具解锁 + 推理图谱写入
+        _extra_state: dict[str, Any] = {}
+        try:
+            import contextlib as _ctx  # noqa: PLC0415
+            import json as _json  # noqa: PLC0415
+
+            from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+                _get_object_code_by_tool,
+                get_relation_graph,
+                get_tools,
+            )
+
+            _relation_graph = get_relation_graph()
+            if _relation_graph is not None:
+                for _msg in result_dict.get("messages") or []:
+                    if not isinstance(_msg, ToolMessage):
+                        continue
+                    if (_msg.name or "") == "finish_react":
+                        continue
+
+                    _tool_name = _msg.name or ""
+                    _raw_content = str(_msg.content or "")
+                    _result: dict[str, Any] = {}
+                    with _ctx.suppress(Exception):
+                        _result = _json.loads(_raw_content) if _raw_content else {}
+
+                    # 1. 查关系图，获取下一步建议（无条件解锁）
+                    _source_obj = _get_object_code_by_tool(_tool_name)
+                    _suggestions = []
+                    if _source_obj:
+                        _suggestions = _relation_graph.get_next_objects(_source_obj)
+
+                    # 2. 去重过滤
+                    _existing = set(state_dict.get("active_tools") or [])
+                    _to_add = [s for s in _suggestions if s.tool not in _existing]
+
+                    # 3. 更新 active_tools 和 tools_by_name（当轮即可执行）
+                    if _to_add:
+                        _new_names = [s.tool for s in _to_add]
+                        self.tools_by_name.update(get_tools(_new_names))
+                        _extra_state["active_tools"] = list(_existing) + _new_names
+
+                    # 4. 更新 reasoning_graph
+                    _update_reasoning_graph(state_dict, _tool_name, _result, _to_add, _extra_state)
+        except Exception:  # noqa: BLE001
+            logger.debug("[HookAwareToolNode] tool_pool unlock failed", exc_info=True)
+
+        result_dict.update(_extra_state)
         return result_dict
 
 
 # ── 辅助函数 ───────────────────────────────────────────────────────────────────
+
+
+def _update_reasoning_graph(
+    state_dict: dict[str, Any],
+    tool_name: str,
+    result: dict[str, Any],
+    suggestions: list[Any],  # list[NextObjectSuggestion]
+    extra_updates: dict[str, Any],
+) -> None:
+    """工具调用完成后，追加一个推理节点到 reasoning_graph（附05 3.2.5-B）。
+
+    Args:
+        state_dict: 当前 AgentState 字典。
+        tool_name: 刚执行完的工具名。
+        result: 工具返回结果（已解析的 dict）。
+        suggestions: OntologyRelationGraph.get_next_objects() 返回的建议列表。
+        extra_updates: 待写回 result_dict 的更新字典，函数直接修改此字典。
+    """
+    try:
+        from datacloud_analysis.tools.tool_pool import _get_object_code_by_tool  # noqa: PLC0415
+
+        graph: dict[str, Any] = dict(
+            state_dict.get("reasoning_graph")
+            or {"nodes": {}, "current_node_id": "", "findings": []}
+        )
+        nodes: dict[str, Any] = dict(graph.get("nodes") or {})
+        node_id = f"n{len(nodes)}"
+
+        # 结果摘要
+        records = (result.get("records") or [])
+        result_summary = f"{len(records)}条记录"
+        if len(records) == 1 and records[0].get("text"):
+            result_summary = str(records[0]["text"])[:80]
+
+        # 解锁工具及原因（来自 OWL description）
+        unlocked_tools = [s.tool for s in suggestions]
+        unlock_reasons = {
+            s.tool: f"{s.relation_type}: {s.reason}" for s in suggestions
+        }
+        unlock_hints = {s.tool: s.hint for s in suggestions if s.hint}
+
+        # 当前全部工具快照
+        active = list(state_dict.get("active_tools") or [])
+        always_on = {
+            "get_spans", "find_error_spans", "get_agent_diag",
+            "search_by_tags", "match_by_symptom",
+            "get_reasoning_map", "add_finding", "finish_react",
+        }
+        snapshot = sorted(always_on | set(active) | set(unlocked_tools))
+
+        nodes[node_id] = {
+            "id": node_id,
+            "object_code": _get_object_code_by_tool(tool_name) or "",
+            "action": tool_name,
+            "params": {},
+            "result_summary": result_summary,
+            "unlocked_tools": unlocked_tools,
+            "unlock_reasons": unlock_reasons,
+            "unlock_hints": unlock_hints,
+            "enabled_tools_snapshot": snapshot,
+            "status": "done",
+        }
+        graph["nodes"] = nodes
+        graph["current_node_id"] = node_id
+        extra_updates["reasoning_graph"] = graph
+
+    except Exception:  # noqa: BLE001
+        logger.debug("[_update_reasoning_graph] failed", exc_info=True)
 
 
 def _is_operation_formatted_params(value: Any) -> bool:
