@@ -490,6 +490,10 @@ async def _stream_llm_call(
             _streamed_answer[:200],
         )
 
+    # 不在此处过滤 <think> 标签：LLM 中间推理步骤不应被截断，
+    # 否则会导致 content 为空、finish_react 无法触发。
+    # <think> 过滤只在最终用户输出层处理（finish_react / _summarize_last_output）。
+
     return full_msg, did_stream_text
 
 
@@ -729,6 +733,9 @@ async def finish_react(
             parsed_data = json.loads(data)
         except Exception:
             parsed_data = data
+    # 过滤 reasoning 模型的 <think>...</think> 标签（MiniMax / DeepSeek 等推理模型）
+    import re as _re  # noqa: PLC0415
+    answer = _re.sub(r"<think>.*?</think>", "", answer or "", flags=_re.DOTALL).strip()
     return {
         "__finish__": True,
         "answer": answer,
@@ -740,6 +747,7 @@ async def finish_react(
 
 def _summarize_last_output(messages: list) -> str:
     """从消息历史中提取最后一条有意义的输出作为兜底答案。"""
+    import re as _re  # noqa: PLC0415
     for msg in reversed(messages):
         if isinstance(msg, ToolMessage):
             content = str(msg.content or "")
@@ -747,8 +755,17 @@ def _summarize_last_output(messages: list) -> str:
                 return content[:2000]
         if isinstance(msg, AIMessage):
             content = str(msg.content or "")
-            if content:
-                return content[:2000]
+            if not content:
+                continue
+            # 过滤 reasoning 模型的 <think>...</think> 标签（只在最终输出层过滤）
+            filtered = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
+            if filtered:
+                return filtered[:2000]
+            # 过滤后为空：LLM 把答案完全写在 thinking 里（reasoning-only 模式）
+            # 提取 thinking 内容作为答案
+            thinking = _re.search(r"<think>(.*?)</think>", content, flags=_re.DOTALL)
+            if thinking:
+                return thinking.group(1).strip()[:2000]
     return "任务已执行完成，但未能生成明确结论。"
 
 
