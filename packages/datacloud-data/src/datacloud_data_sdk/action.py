@@ -1222,10 +1222,12 @@ class Action:
             normalized = self._convert_result_terms(normalized, term_loader)
             normalized.update(operation_result_extra)
             normalized = await self._attach_execution_steps(normalized, execution_steps)
+            # Script Action 可通过返回 "no_overflow": True 跳过分页（SpanSummary 等体积可控场景）
+            _effective_threshold = 0 if result.get("no_overflow") else threshold
             return build_query_response(
                 normalized,
                 csv_manager=csv_manager,
-                threshold=threshold,
+                threshold=_effective_threshold,
             )
         if self._action.function_refs:
             action_executing_data = self._describe_execution_mode()
@@ -1710,16 +1712,12 @@ class Action:
                     list(records[0].keys()) if records and isinstance(records[0], dict) else []
                 )
                 columns = _build_action_columns_meta(column_names, self._action.params)
-        else:
-            records = self._extract_records_fallback(result)
-            column_names = (
-                list(records[0].keys()) if records and isinstance(records[0], dict) else []
-            )
-            columns = _build_action_columns_meta(column_names, self._action.params)
         return {
             "records": records,
             "total": len(records),
             "meta": {"viewId": "auto_view", "columns": columns, "total": len(records)},
+            # 透传 Script 返回的扩展标记（如 no_overflow），供上层 build_query_response 使用
+            **{k: v for k, v in result.items() if k not in ("records", "total", "meta")},
         }
 
     async def _execute_api(self, params: dict[str, Any]) -> dict[str, Any]:

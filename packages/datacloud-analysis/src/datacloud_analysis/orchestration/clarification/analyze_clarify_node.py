@@ -92,23 +92,35 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
     )
 
     # 写入 Langfuse span，支持 BY_007 故障定位：为什么触发了澄清
+    # 使用 langfuse_handler 的当前 span 上下文，确保写入正确的 span
     try:
-        from langfuse import Langfuse  # noqa: PLC0415
+        from datacloud_analysis.langfuse_handler import lf  # noqa: PLC0415
 
-        Langfuse().update_current_span(
-            metadata={
-                "ClarifyContext": {
-                    "tool_name": tool_name,
-                    "query": query[:200],
-                    "interrupt_type": "paradigm",
-                    "paradigm_count": len(paradigm_list),
-                    "paradigm_names": [
-                        str(p.get("paradigm_name") or p.get("paradigmName") or "")
-                        for p in paradigm_list[:10]
-                    ],
-                },
-            }
-        )
+        _lf_span = getattr(lf, "_current_span", None) or getattr(lf, "get_current_span", lambda: None)()
+        _span_id = getattr(_lf_span, "id", None) if _lf_span else None
+
+        _meta = {
+            "object_type": "graph_node_span",
+            "ClarifyContext": {
+                "tool_name": tool_name,
+                "query": query[:200],
+                "interrupt_type": "paradigm",
+                "paradigm_count": len(paradigm_list),
+                "paradigm_names": [
+                    str(p.get("paradigm_name") or p.get("paradigmName") or "")
+                    for p in paradigm_list[:10]
+                ],
+            },
+        }
+
+        from langfuse import Langfuse  # noqa: PLC0415
+        _langfuse = Langfuse()
+        if _span_id:
+            # 显式传 span_id，避免异步 context 切换导致写入错误的 span
+            _langfuse.update_span(span_id=_span_id, metadata=_meta)
+        else:
+            # fallback：靠 current_span 上下文
+            _langfuse.update_current_span(metadata=_meta)
     except Exception:  # noqa: BLE001
         pass
 

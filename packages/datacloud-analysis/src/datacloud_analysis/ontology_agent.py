@@ -598,6 +598,7 @@ class OntologyAgent:
         object_codes: list[str] | None,
     ) -> Any:
         """构建并编译 LangGraph 图（无缓存层，供 T6 缓存逻辑调用）。"""
+        from datacloud_analysis.agent import _log_create_agent_diagnostics  # noqa: PLC0415
         from datacloud_analysis.orchestration.graph_builder import (  # noqa: PLC0415
             build_analysis_graph,
         )
@@ -613,6 +614,15 @@ class OntologyAgent:
         )
         tools = tool_loader.load()
         redirect_tools = tool_loader.build_all_nl_query_tools()
+
+        # 与 create_agent() 保持一致：写入 Langfuse span 的 AgentDiag / LLMConfig 等快照
+        _log_create_agent_diagnostics(
+            agent_id_display="(dynamic)",
+            question_context="(ontology_agent dynamic path)",
+            merged_tools=tools,
+            mounted_objects=list(mounted or []),
+        )
+
         graph = build_analysis_graph(
             tools=tools, loader=loader, redirect_tools=redirect_tools or None
         )

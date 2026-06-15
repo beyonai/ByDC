@@ -8,12 +8,7 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
-from typing import Any
-from unittest.mock import patch
-
-import pytest
 
 from datacloud_analysis.skills.catalog import (
     _SKILL_CATALOG_CACHE,
@@ -22,7 +17,6 @@ from datacloud_analysis.skills.catalog import (
     parse_skill_frontmatter,
     scan_skill_catalog,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 辅助
@@ -73,9 +67,7 @@ class TestParseSkillFrontmatter:
     def test_missing_name_returns_none(self, tmp_path: Path) -> None:
         d = tmp_path / "no-name"
         d.mkdir()
-        (d / "SKILL.md").write_text(
-            "---\ndescription: some desc\n---\nbody", encoding="utf-8"
-        )
+        (d / "SKILL.md").write_text("---\ndescription: some desc\n---\nbody", encoding="utf-8")
         assert parse_skill_frontmatter(d) is None
 
     def test_no_frontmatter_returns_none(self, tmp_path: Path) -> None:

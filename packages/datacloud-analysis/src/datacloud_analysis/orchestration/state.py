@@ -90,6 +90,11 @@ class AgentState(MessagesState):
     react_last_query_data: Annotated[dict[str, Any] | None, lambda a, b: b if b is not None else a]
     answer_streamed: bool | None  # llm_call_node 是否已流式输出 answer
 
+    # --- 附05 工具池 + State 驱动 ---
+    # active_tools: 已解锁的工具名列表（只存 str，checkpoint 安全；闲置字段，现已激活使用）
+    # reasoning_graph: 推理节点记录（附05 3.2.5，全 JSON 可序列化）
+    reasoning_graph: dict[str, Any] | None
+
     # --- 澄清插件 interrupt/resume 缓存（方案 A）---
     # interrupt 前写入，resume 后 format 完成时清除，避免 _analyze_clarification 被重复调用。
     _clarification_cache: dict[str, Any] | None

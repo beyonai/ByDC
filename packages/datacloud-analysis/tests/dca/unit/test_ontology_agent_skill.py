@@ -14,9 +14,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from datacloud_analysis.ontology_agent import OntologyAgent, OntologyAgentConfig
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 辅助
@@ -85,9 +83,7 @@ class TestSkillInjection:
         captured_inputs: list[Any] = []
         captured_configs: list[Any] = []
 
-        async def fake_astream_events(
-            graph_input: Any, config: Any = None, **kw: Any
-        ) -> Any:
+        async def fake_astream_events(graph_input: Any, config: Any = None, **kw: Any) -> Any:
             captured_inputs.append(graph_input)
             captured_configs.append(config)
             return
@@ -105,9 +101,7 @@ class TestSkillInjection:
         return agent, captured_inputs, captured_configs
 
     @pytest.mark.asyncio
-    async def test_available_skills_injected_into_prompts_overwrite(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_available_skills_injected_into_prompts_overwrite(self, tmp_path: Path) -> None:
         _write_skill(tmp_path, "老鹰", "战略分析，当用户需要全局分析时使用")
         fake_tools: dict[str, Any] = {"query_scene_crm": object()}
         agent, captured_inputs, _ = self._make_agent_with_fake_graph(fake_tools)

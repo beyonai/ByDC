@@ -132,6 +132,7 @@ def _log_create_agent_diagnostics(
         api_key = os.getenv("DATACLOUD_LLM_API_KEY", "")
         lf.update_current_span(
             metadata={
+                "object_type": "early_span",
                 "AgentDiag": {
                     "agent_id": agent_id_display,
                     "tool_count": _tool_count,

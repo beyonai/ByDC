@@ -82,6 +82,9 @@ def build_query_response(
     data.update(extra_fields)
 
     if threshold > 0 and total > threshold:
+        # Script Action 可返回 "no_overflow": True 跳过分页（数据已在 Script 内控制体积）
+        if raw_result.get("no_overflow"):
+            return data
         preview_limit = threshold
         # meta["columns"] 可能是字符串列表（ViewLookupExecutor / _normalize_to_unified_format
         # 生成的原始字段码）或字典列表（{"name": ..., "label": ...}），需兼容两种格式
