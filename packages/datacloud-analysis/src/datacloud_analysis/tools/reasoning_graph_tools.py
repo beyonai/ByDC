@@ -50,9 +50,14 @@ def make_reasoning_graph_tools(
             )
 
         always_on = {
-            "get_spans", "find_error_spans", "get_agent_diag",
-            "search_by_tags", "match_by_symptom",
-            "get_reasoning_map", "add_finding", "finish_react",
+            "get_spans",
+            "find_error_spans",
+            "get_agent_diag",
+            "search_by_tags",
+            "match_by_symptom",
+            "get_reasoning_map",
+            "add_finding",
+            "finish_react",
         }
         extra = [t for t in active_tools if t not in always_on]
         if extra:
@@ -84,9 +89,9 @@ def make_reasoning_graph_tools(
         if state is None:
             return f"已记录结论：{conclusion}"
 
-        rg: dict[str, Any] = dict(state.get("reasoning_graph") or {
-            "nodes": {}, "current_node_id": "", "findings": []
-        })
+        rg: dict[str, Any] = dict(
+            state.get("reasoning_graph") or {"nodes": {}, "current_node_id": "", "findings": []}
+        )
         findings: list[str] = list(rg.get("findings") or [])
         findings.append(conclusion)
         rg["findings"] = findings

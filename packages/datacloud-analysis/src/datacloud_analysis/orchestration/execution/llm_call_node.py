@@ -39,6 +39,7 @@ _LLM_CALL_TIMEOUT = float(os.getenv("DATACLOUD_LLM_CALL_TIMEOUT", "120"))
 
 # ── 附05 3.3 Todo 机制辅助函数 ─────────────────────────────────────────────────
 
+
 def _original_query_visible(messages: list[Any], user_query: str) -> bool:
     """检查原始 user_query 是否仍在消息窗口内（裁剪后检查）。"""
     for msg in messages:
@@ -188,6 +189,7 @@ def make_llm_call_node(
             from datacloud_analysis.tools.tool_pool import (
                 get_tools as _get_unlocked,  # noqa: PLC0415
             )
+
             _active_names: list[str] = state.get("active_tools") or []
             tools_map.update(_get_unlocked(_active_names))
         except Exception:  # noqa: BLE001
@@ -306,6 +308,7 @@ def make_llm_call_node(
         if _input_tokens or _output_tokens:
             try:
                 from langfuse import Langfuse  # noqa: PLC0415
+
                 lf = Langfuse(
                     secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
                     public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),

@@ -13,26 +13,22 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from unittest.mock import MagicMock
 
 # ── 3.2.1 state.py 新增 reasoning_graph 字段 ─────────────────────────────────
+
 
 def test_agent_state_has_reasoning_graph() -> None:
     from datacloud_analysis.orchestration.state import AgentState
 
     # reasoning_graph 字段必须存在于 AgentState 的类型注解里
     hints = AgentState.__annotations__
-    assert "reasoning_graph" in hints, (
-        "AgentState 缺少 reasoning_graph 字段，请在 state.py 中添加"
-    )
+    assert "reasoning_graph" in hints, "AgentState 缺少 reasoning_graph 字段，请在 state.py 中添加"
 
 
 def test_agent_state_reasoning_graph_type() -> None:
+
     from datacloud_analysis.orchestration.state import AgentState
-    import typing
 
     hints = AgentState.__annotations__
     rg_type = hints["reasoning_graph"]
@@ -44,6 +40,7 @@ def test_agent_state_reasoning_graph_type() -> None:
 
 
 # ── 3.2.2 llm_call_node 动态合并 active_tools ────────────────────────────────
+
 
 def test_llm_call_node_merges_active_tools(monkeypatch: Any) -> None:
     """llm_call_node 每轮应将 state.active_tools 的工具合并进 tools_map。"""
@@ -66,9 +63,13 @@ def test_llm_call_node_merges_active_tools(monkeypatch: Any) -> None:
 
 # ── 3.2.3 after_hook 解锁逻辑 ────────────────────────────────────────────────
 
+
 def test_update_reasoning_graph_creates_node() -> None:
-    from datacloud_analysis.tools.tool_pool import _get_object_code_by_tool, register_tool
-    from datacloud_analysis.tools.tool_pool import TOOL_POOL, TOOL_TO_OBJECT
+    from datacloud_analysis.tools.tool_pool import (
+        TOOL_POOL,
+        TOOL_TO_OBJECT,
+        register_tool,
+    )
 
     # 注册工具到反查表
     fake = MagicMock()
@@ -116,6 +117,7 @@ def test_update_reasoning_graph_creates_node() -> None:
 
 # ── 3.2.4 get_reasoning_map / add_finding 工具 ───────────────────────────────
 
+
 def test_make_reasoning_graph_tools_returns_two_tools() -> None:
     from datacloud_analysis.tools.reasoning_graph_tools import make_reasoning_graph_tools
 
@@ -125,9 +127,7 @@ def test_make_reasoning_graph_tools_returns_two_tools() -> None:
     assert "get_reasoning_map" in tool_names, (
         "make_reasoning_graph_tools 应返回 get_reasoning_map 工具"
     )
-    assert "add_finding" in tool_names, (
-        "make_reasoning_graph_tools 应返回 add_finding 工具"
-    )
+    assert "add_finding" in tool_names, "make_reasoning_graph_tools 应返回 add_finding 工具"
 
 
 def test_get_reasoning_map_returns_string() -> None:
@@ -178,9 +178,11 @@ def test_add_finding_writes_to_state() -> None:
 
 # ── 3.3 Todo 机制 ─────────────────────────────────────────────────────────────
 
+
 def test_llm_call_node_has_user_query_anchor_logic() -> None:
     """llm_call_node 应有 user_query 锚定逻辑（裁剪后检查并重新插入）。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import llm_call_node as m
 
     source = inspect.getsource(m)
@@ -192,6 +194,7 @@ def test_llm_call_node_has_user_query_anchor_logic() -> None:
 def test_llm_call_node_has_todo_snapshot_logic() -> None:
     """llm_call_node 应有 todos 快照注入逻辑（裁剪后追加 pending/in_progress 项）。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import llm_call_node as m
 
     source = inspect.getsource(m)

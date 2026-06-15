@@ -23,11 +23,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NextObjectSuggestion:
     """工具执行完后推荐跳转到的下一个对象和工具。"""
-    object_code: str        # 目标对象编码，如 "ops_early_span"
-    tool: str               # 目标工具名 = OntologyRelation.resolve_action_code
-    reason: str             # 解锁原因（给 LLM 看，注入 dynamic_prompt）
-    hint: str = ""          # 参数填写提示（给 LLM 看）
-    relation_type: str = "" # CONTAINS / DERIVES_FROM / VALIDATES / DIAGNOSE
+
+    object_code: str  # 目标对象编码，如 "ops_early_span"
+    tool: str  # 目标工具名 = OntologyRelation.resolve_action_code
+    reason: str  # 解锁原因（给 LLM 看，注入 dynamic_prompt）
+    hint: str = ""  # 参数填写提示（给 LLM 看）
+    relation_type: str = ""  # CONTAINS / DERIVES_FROM / VALIDATES / DIAGNOSE
 
 
 class OntologyRelationGraph:
@@ -90,14 +91,16 @@ class OntologyRelationGraph:
                 except (json.JSONDecodeError, TypeError, ValueError):
                     meta = {"unlock_reason": desc}
 
-            self._relations.append({
-                "source_object": source,
-                "target_object": getattr(rel, "target_class", ""),
-                "target_action": resolve_action,
-                "unlock_reason": meta.get("unlock_reason") or resolve_action,
-                "unlock_hint":   meta.get("unlock_hint", ""),
-                "relation_type": getattr(rel, "relation_type", ""),
-            })
+            self._relations.append(
+                {
+                    "source_object": source,
+                    "target_object": getattr(rel, "target_class", ""),
+                    "target_action": resolve_action,
+                    "unlock_reason": meta.get("unlock_reason") or resolve_action,
+                    "unlock_hint": meta.get("unlock_hint", ""),
+                    "relation_type": getattr(rel, "relation_type", ""),
+                }
+            )
 
         logger.debug(
             "OntologyRelationGraph: loaded %d ops_* relations",

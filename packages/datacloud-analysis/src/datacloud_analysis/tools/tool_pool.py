@@ -90,10 +90,9 @@ def _init_ops_tool_pool(
         return
 
     # 扫描所有 ops_* 前缀的对象目录
-    ops_codes = sorted([
-        d.name for d in object_dir.iterdir()
-        if d.is_dir() and d.name.startswith("ops_")
-    ])
+    ops_codes = sorted(
+        [d.name for d in object_dir.iterdir() if d.is_dir() and d.name.startswith("ops_")]
+    )
     if not ops_codes:
         logger.warning("TOOL_POOL init: no ops_* objects found in %s", object_dir)
         return
@@ -107,10 +106,9 @@ def _init_ops_tool_pool(
             from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
                 inject_virtual_actions,
             )
+
             loader = OntologyLoader()
-            loader.load_from_owl_resource_directory(
-                resource_path, object_codes=ops_codes
-            )
+            loader.load_from_owl_resource_directory(resource_path, object_codes=ops_codes)
             inject_virtual_actions(loader)
         except Exception:  # noqa: BLE001
             logger.warning("TOOL_POOL init: failed to create OntologyLoader", exc_info=True)
@@ -146,7 +144,9 @@ def _init_ops_tool_pool(
             )
             obj_tools: dict[str, Any] = single_loader.load()
         except Exception:  # noqa: BLE001
-            logger.warning("TOOL_POOL init: OntologyToolLoader failed for %s", obj_code, exc_info=True)
+            logger.warning(
+                "TOOL_POOL init: OntologyToolLoader failed for %s", obj_code, exc_info=True
+            )
             continue
         for tool_name, tool_obj in obj_tools.items():
             register_tool(tool_name, tool_obj, object_code=obj_code)
@@ -156,7 +156,8 @@ def _init_ops_tool_pool(
 
     logger.info(
         "TOOL_POOL init: registered %d tools from %d ops_* objects",
-        registered_total, len(ops_codes),
+        registered_total,
+        len(ops_codes),
     )
 
     # 构建 OntologyRelationGraph 单例（从 loader 内存读取，零额外 IO）
@@ -165,6 +166,7 @@ def _init_ops_tool_pool(
             from datacloud_analysis.tools.ontology_relation_graph import (  # noqa: PLC0415
                 OntologyRelationGraph,
             )
+
             _RELATION_GRAPH = OntologyRelationGraph(loader)
             logger.info(
                 "OntologyRelationGraph: built %d relations from OntologyLoader",

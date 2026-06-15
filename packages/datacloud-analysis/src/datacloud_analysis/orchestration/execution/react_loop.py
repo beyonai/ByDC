@@ -735,6 +735,7 @@ async def finish_react(
             parsed_data = data
     # 过滤 reasoning 模型的 <think>...</think> 标签（MiniMax / DeepSeek 等推理模型）
     import re as _re  # noqa: PLC0415
+
     answer = _re.sub(r"<think>.*?</think>", "", answer or "", flags=_re.DOTALL).strip()
     return {
         "__finish__": True,
@@ -748,6 +749,7 @@ async def finish_react(
 def _summarize_last_output(messages: list) -> str:
     """从消息历史中提取最后一条有意义的输出作为兜底答案。"""
     import re as _re  # noqa: PLC0415
+
     for msg in reversed(messages):
         if isinstance(msg, ToolMessage):
             content = str(msg.content or "")

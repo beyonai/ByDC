@@ -519,24 +519,27 @@ def _update_reasoning_graph(
         node_id = f"n{len(nodes)}"
 
         # 结果摘要
-        records = (result.get("records") or [])
+        records = result.get("records") or []
         result_summary = f"{len(records)}条记录"
         if len(records) == 1 and records[0].get("text"):
             result_summary = str(records[0]["text"])[:80]
 
         # 解锁工具及原因（来自 OWL description）
         unlocked_tools = [s.tool for s in suggestions]
-        unlock_reasons = {
-            s.tool: f"{s.relation_type}: {s.reason}" for s in suggestions
-        }
+        unlock_reasons = {s.tool: f"{s.relation_type}: {s.reason}" for s in suggestions}
         unlock_hints = {s.tool: s.hint for s in suggestions if s.hint}
 
         # 当前全部工具快照
         active = list(state_dict.get("active_tools") or [])
         always_on = {
-            "get_spans", "find_error_spans", "get_agent_diag",
-            "search_by_tags", "match_by_symptom",
-            "get_reasoning_map", "add_finding", "finish_react",
+            "get_spans",
+            "find_error_spans",
+            "get_agent_diag",
+            "search_by_tags",
+            "match_by_symptom",
+            "get_reasoning_map",
+            "add_finding",
+            "finish_react",
         }
         snapshot = sorted(always_on | set(active) | set(unlocked_tools))
 

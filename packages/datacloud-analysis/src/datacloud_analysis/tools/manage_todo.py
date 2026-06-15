@@ -115,9 +115,9 @@ def _validate_item(item: dict[str, Any]) -> dict[str, Any]:
     if status not in _VALID_STATUSES:
         status = "pending"
     return {
-        "id":      str(item.get("id", "")).strip(),
+        "id": str(item.get("id", "")).strip(),
         "content": str(item.get("content", "")).strip(),
-        "status":  status,
+        "status": status,
     }
 
 
