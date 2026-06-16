@@ -19,6 +19,86 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 logger = logging.getLogger(__name__)
 
 
+def _add_nodes_and_edges(
+    loader: OntologyLoader,
+    object_codes: list[str] | None,
+    depth: int | None,
+    nodes: dict[str, dict],
+    edges: list[dict],
+) -> None:
+    """Build nodes and edges from loader relations, populating nodes/edges in-place.
+
+    If object_codes is provided, filter to those objects.  If depth is provided,
+    BFS-expand from the seed objects up to depth hops to include connected objects.
+    """
+    # Build adjacency from relations
+    adj: dict[str, list[dict]] = {}
+    for rel in loader._relations:
+        s, t = rel.source_class, rel.target_class
+        edge_data = {
+            "source": s,
+            "target": t,
+            "relationCode": rel.relation_code,
+            "relationType": rel.relation_type,
+        }
+        adj.setdefault(s, []).append(edge_data)
+        adj.setdefault(t, []).append(
+            {
+                "source": t,
+                "target": s,
+                "relationCode": rel.relation_code,
+                "relationType": rel.relation_type,
+            }
+        )
+
+    # Determine seed object codes
+    seed_codes: set[str]
+    if object_codes:
+        seed_codes = set(object_codes)
+    else:
+        seed_codes = set(loader._classes.keys())
+
+    # Expand by depth if requested
+    effective_codes = seed_codes.copy()
+    if depth is not None:
+        frontier = seed_codes.copy()
+        for _ in range(depth):
+            next_frontier: set[str] = set()
+            for code in frontier:
+                for edge_data in adj.get(code, []):
+                    neighbor = edge_data["target"]
+                    if neighbor not in effective_codes:
+                        next_frontier.add(neighbor)
+                        effective_codes.add(neighbor)
+            frontier = next_frontier
+            if not frontier:
+                break
+
+    # Build nodes — only for objects that exist in loader._classes
+    for code in sorted(effective_codes):
+        if code not in loader._classes:
+            continue
+        cls = loader._classes[code]
+        nodes[code] = {
+            "code": cls.object_code,
+            "label": cls.object_name,
+            "description": cls.description,
+        }
+
+    # Build edges — only between objects in the effective set
+    seen_edges: set[tuple[str, str]] = set()
+    for code in effective_codes:
+        for edge_data in adj.get(code, []):
+            target = edge_data["target"]
+            if target not in effective_codes:
+                continue
+            key = (min(code, target), max(code, target))
+            if key in seen_edges:
+                continue
+            seen_edges.add(key)
+            edges.append(edge_data)
+
+
 class LocalOntologyAdapter:
     """Local ontology adapter - implements OntologyRepository via datacloud-data SDK.
 
@@ -115,22 +195,59 @@ class LocalOntologyAdapter:
         logger.warning("Object '%s' not found", object_code)
         return None
 
-    def get_views(self, base_id: str, _scene_id: str) -> list[dict]:
+    def get_views(self, base_id: str, scene_id: str) -> list[dict]:
         loader = self._get_loader(base_id)
-        return [
-            {
-                "viewCode": vid,
-                "viewName": scene.get("view_name", vid),
+        views: list[dict] = []
+        seen_codes: set[str] = set()
+
+        for vid, scene in loader._scenes.items():
+            views.append(
+                {
+                    "viewCode": vid,
+                    "viewName": scene.get("view_name", vid),
+                    "description": scene.get("description", ""),
+                    "objectCodes": self._extract_object_codes(scene),
+                }
+            )
+            seen_codes.add(vid)
+
+        scene_path = self._scene_path(base_id, scene_id)
+        views_dir = scene_path / "views"
+        if views_dir.exists():
+            for json_file in sorted(views_dir.glob("*.json")):
+                code = json_file.stem
+                if code not in seen_codes:
+                    data = _json.loads(json_file.read_text(encoding="utf-8"))
+                    views.append(data)
+                    seen_codes.add(code)
+
+        return views
+
+    def get_view_detail(self, base_id: str, scene_id: str, view_code: str) -> dict | None:
+        loader = self._get_loader(base_id)
+        if view_code in loader._scenes:
+            scene = loader._scenes[view_code]
+            return {
+                "viewCode": view_code,
+                "viewName": scene.get("view_name", view_code),
                 "description": scene.get("description", ""),
                 "objectCodes": self._extract_object_codes(scene),
             }
-            for vid, scene in loader._scenes.items()
-        ]
 
-    def get_relations(self, base_id: str, _scene_id: str) -> list[dict]:
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "views" / f"{view_code}.json"
+        if file_path.exists():
+            return _json.loads(file_path.read_text(encoding="utf-8"))
+
+        return None
+
+    def get_relations(self, base_id: str, scene_id: str) -> list[dict]:
         loader = self._get_loader(base_id)
-        return [
-            {
+        seen_codes: set[str] = set()
+        relations: list[dict] = []
+
+        for r in loader._relations:
+            rel = {
                 "relationCode": r.relation_code or "",
                 "relationName": getattr(r, "relation_name", ""),
                 "sourceClass": r.source_class,
@@ -138,8 +255,28 @@ class LocalOntologyAdapter:
                 "relationType": r.relation_type,
                 "joinKeys": r.join_keys,
             }
-            for r in loader._relations
-        ]
+            relations.append(rel)
+            if rel["relationCode"]:
+                seen_codes.add(rel["relationCode"])
+
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "relations.json"
+        if file_path.exists():
+            data = _json.loads(file_path.read_text(encoding="utf-8"))
+            for rel in data.get("relations", []):
+                code = rel.get("relationCode", "")
+                if code and code not in seen_codes:
+                    relations.append(rel)
+                    seen_codes.add(code)
+
+        return relations
+
+    def get_relation_detail(self, base_id: str, scene_id: str, rel_code: str) -> dict | None:
+        relations = self.get_relations(base_id, scene_id)
+        for r in relations:
+            if r.get("relationCode") == rel_code:
+                return r
+        return None
 
     # -- metadata: write --
 
@@ -164,14 +301,210 @@ class LocalOntologyAdapter:
         self.writer.delete_object(self._scene_path(base_id, scene_id), object_code)
         self._reload_loader(base_id)
 
-    # -- application services (stubs) --
+    def create_view(self, base_id: str, scene_id: str, view_data: dict) -> dict:
+        scene_path = self._scene_path(base_id, scene_id)
+        view_code = view_data.get("viewCode", view_data.get("view_id", ""))
+        file_path = scene_path / "views" / f"{view_code}.json"
+        if file_path.exists():
+            raise ValueError(f"View '{view_code}' already exists")
+        self.writer.write_view(scene_path, view_data)
+        self._reload_loader(base_id)
+        return view_data
 
-    def search_instances(self, _base_id: str, _query: dict) -> dict:
-        return {"data": [], "totalCount": 0}
+    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+        self.writer.delete_view(self._scene_path(base_id, scene_id), view_code)
+        self._reload_loader(base_id)
 
-    def search_ontology(
-        self, _base_id: str, _scene_id: str, request: dict
-    ) -> dict:
+    def create_relation(self, base_id: str, scene_id: str, rel_data: dict) -> dict:
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "relations.json"
+        existing: list[dict] = []
+        if file_path.exists():
+            existing = _json.loads(file_path.read_text(encoding="utf-8")).get("relations", [])
+        for r in existing:
+            if r.get("relationCode") == rel_data.get("relationCode"):
+                raise ValueError(f"Relation '{rel_data['relationCode']}' already exists")
+        existing.append(rel_data)
+        self.writer.write_relation(scene_path, existing)
+        self._reload_loader(base_id)
+        return rel_data
+
+    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "relations.json"
+        if not file_path.exists():
+            return
+        existing = _json.loads(file_path.read_text(encoding="utf-8")).get("relations", [])
+        filtered = [r for r in existing if r.get("relationCode") != rel_code]
+        self.writer.write_relation(scene_path, filtered)
+        self._reload_loader(base_id)
+
+    # -- datasource --
+
+    def get_datasources(self, base_id: str, scene_id: str) -> list[dict]:
+        scene_path = self._scene_path(base_id, scene_id)
+        ds_dir = scene_path / "datasources"
+        if not ds_dir.exists():
+            return []
+        result: list[dict] = []
+        for json_file in sorted(ds_dir.glob("*.json")):
+            result.append(_json.loads(json_file.read_text(encoding="utf-8")))
+        return result
+
+    def get_datasource_detail(self, base_id: str, scene_id: str, db_id: str) -> dict | None:
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "datasources" / f"{db_id}.json"
+        if file_path.exists():
+            return _json.loads(file_path.read_text(encoding="utf-8"))
+        return None
+
+    def create_datasource(self, base_id: str, scene_id: str, ds_data: dict) -> dict:
+        scene_path = self._scene_path(base_id, scene_id)
+        db_id = ds_data.get("dbId", ds_data.get("db_id", ""))
+        ds_dir = scene_path / "datasources"
+        self.writer.ensure_dir(ds_dir)
+        file_path = ds_dir / f"{db_id}.json"
+        if file_path.exists():
+            raise ValueError(f"Datasource '{db_id}' already exists")
+        self.writer._atomic_write(file_path, ds_data)
+        return ds_data
+
+    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "datasources" / f"{db_id}.json"
+        if file_path.exists():
+            file_path.unlink()
+
+    # -- action --\n\n    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]:\n        \"\"\"Get actions for an object.\"\"\"\n        obj = self.get_object_detail(base_id, scene_id, object_code)\n        if obj is None:\n            return []\n        return obj.get(\"actions\", [])\n\n    def get_action_detail(\n        self, base_id: str, scene_id: str, object_code: str, action_code: str\n    ) -> dict | None:\n        \"\"\"Get action detail.\"\"\"\n        actions = self.get_actions(base_id, scene_id, object_code)\n        for a in actions:\n            if a.get(\"actionCode\") == action_code:\n                return a\n        return None\n\n    def create_action(\n        self, base_id: str, scene_id: str, object_code: str, action_data: dict\n    ) -> dict:\n        \"\"\"Create an action on an object.\"\"\"\n        scene_path = self._scene_path(base_id, scene_id)\n        file_path = scene_path / \"objects\" / f\"{object_code}.json\"\n        if not file_path.exists():\n            raise KeyError(f\"Object '{object_code}' not found\")\n        obj = _json.loads(file_path.read_text(encoding=\"utf-8\"))\n        existing = obj.get(\"actions\", [])\n        for a in existing:\n            if a.get(\"actionCode\") == action_data.get(\"actionCode\"):\n                raise ValueError(\n                    f\"Action '{action_data['actionCode']}' already exists\"\n                )\n        existing.append(action_data)\n        obj[\"actions\"] = existing\n        self.writer._atomic_write(file_path, obj)  # noqa: SLF001\n        self._reload_loader(base_id)\n        return action_data\n\n    def delete_action(\n        self, base_id: str, scene_id: str, object_code: str, action_code: str\n    ) -> None:\n        \"\"\"Delete an action from an object.\"\"\"\n        scene_path = self._scene_path(base_id, scene_id)\n        file_path = scene_path / \"objects\" / f\"{object_code}.json\"\n        if not file_path.exists():\n            return\n        obj = _json.loads(file_path.read_text(encoding=\"utf-8\"))\n        existing = obj.get(\"actions\", [])\n        filtered = [a for a in existing if a.get(\"actionCode\") != action_code]\n        if len(filtered) == len(existing):\n            return  # action not found, no-op\n        obj[\"actions\"] = filtered\n        self.writer._atomic_write(file_path, obj)  # noqa: SLF001\n        self._reload_loader(base_id)\n\n    # -- OWL import --
+
+    def import_owl(self, base_id: str, scene_id: str, zip_bytes: bytes) -> dict:
+        """Import OWL definitions from a ZIP file.
+
+        Flow:
+            1. Unzip to temp directory
+            2. Parse OWL via OwlParser.parse_resource_directory()
+            3. Write objects/views/relations via JSONWriter
+            4. Reload loader
+
+        Returns:
+            {"objects": N, "views": N, "relations": N}
+        """
+        import io as _io
+        import tempfile as _tempfile
+        import zipfile as _zipfile
+
+        from datacloud_data_sdk.ontology.owl_parser import OwlParser
+
+        tmp_path = Path(_tempfile.mkdtemp(prefix="owl_import_"))
+        try:
+            with _zipfile.ZipFile(_io.BytesIO(zip_bytes)) as zf:
+                zf.extractall(tmp_path)
+
+            parser = OwlParser()
+            content = parser.parse_resource_directory(tmp_path)
+
+            scene_path = self._scene_path(base_id, scene_id)
+
+            # Write objects (parser uses snake_case, writer expects camelCase)
+            objects_count = 0
+            for obj in content.get("objects", []):
+                obj_data = self._parser_obj_to_writer(obj)
+                self.writer.write_object(scene_path, obj_data)
+                objects_count += 1
+
+            # Write views
+            views_count = 0
+            for view in content.get("views", []):
+                view_data = {
+                    "viewCode": view["view_id"],
+                    "viewName": view.get("view_name", view["view_id"]),
+                    "description": view.get("description", ""),
+                    "objectCodes": [
+                        obj.get("object_code", obj.get("objectCode", ""))
+                        for obj in view.get("objects", [])
+                    ],
+                }
+                self.writer.write_view(scene_path, view_data)
+                views_count += 1
+
+            # Write relations
+            relations = content.get("relations", [])
+            if relations:
+                self.writer.write_relation(scene_path, relations)
+
+            # Reload loader
+            self._reload_loader(base_id)
+
+            return {
+                "objects": objects_count,
+                "views": views_count,
+                "relations": len(relations),
+            }
+        finally:
+            import shutil as _shutil
+
+            _shutil.rmtree(tmp_path, ignore_errors=True)
+
+    # -- application services --
+
+    def search_instances(self, base_id: str, query: dict) -> dict:
+        """Search ontology objects by keyword.
+
+        Args:
+            base_id: Ontology base identifier.
+            query: {
+                "keyword": str,
+                "objectCode": str | None,   # optional: filter to single object
+                "page": int,                 # default 1
+                "pageSize": int,             # default 20
+            }
+
+        Returns:
+            {"data": [object_dict, ...], "totalCount": N}
+        """
+        loader = self._get_loader(base_id)
+        keyword = (query.get("keyword") or "").strip().lower()
+        filter_code = query.get("objectCode")
+        page = max(int(query.get("page", 1)), 1)
+        page_size = max(int(query.get("pageSize", 20)), 1)
+
+        if not keyword:
+            classes = list(loader._classes.values())
+            total = len(classes)
+            start = (page - 1) * page_size
+            data = [self._ontology_class_to_dict(c) for c in classes[start : start + page_size]]
+            return {"data": data, "totalCount": total}
+
+        matches: list[dict] = []
+        for cls in loader._classes.values():
+            if filter_code and cls.object_code != filter_code:
+                continue
+            if not self._class_matches_keyword(cls, keyword):
+                continue
+            matches.append(self._ontology_class_to_dict(cls))
+
+        total = len(matches)
+        start = (page - 1) * page_size
+        data = matches[start : start + page_size]
+        return {"data": data, "totalCount": total}
+
+    @staticmethod
+    def _class_matches_keyword(cls: object, keyword: str) -> bool:
+        """Check if OntologyClass matches a keyword (case-insensitive)."""
+        if keyword in cls.object_code.lower():
+            return True
+        if keyword in cls.object_name.lower():
+            return True
+        if keyword in cls.description.lower():
+            return True
+        for field in cls.fields:
+            if keyword in field.field_code.lower():
+                return True
+            if keyword in field.field_name.lower():
+                return True
+        return False
+
+    def search_ontology(self, _base_id: str, _scene_id: str, request: dict) -> dict:
         """Vector search across metadata and instance terms.
 
         Uses embedding model to encode keyword, then pgvector cosine distance.
@@ -268,8 +601,102 @@ class LocalOntologyAdapter:
 
         return result
 
-    def graph_query(self, _base_id: str, _scene_id: str, _query: dict) -> dict:
-        return {"nodes": [], "edges": []}
+    def graph_query(self, base_id: str, _scene_id: str, query: dict) -> dict:
+        """Build a graph of objects and their relations.
+
+        Args:
+            base_id: Ontology base identifier.
+            _scene_id: Scene identifier (unused in local adapter).
+            query: {
+                "objectCodes": list[str] | None,  # filter to these objects
+                "depth": int | None,              # maximum hop depth (BFS expansion)
+            }
+
+        Returns:
+            {"nodes": [{"code": str, "label": str, "description": str}, ...],
+             "edges": [{"source": str, "target": str, "relationCode": str,
+                        "relationType": str}, ...]}
+        """
+        loader = self._get_loader(base_id)
+        object_codes: list[str] | None = query.get("objectCodes")
+        depth: int | None = query.get("depth")
+
+        nodes: dict[str, dict] = {}
+        edges: list[dict] = []
+
+        _add_nodes_and_edges(loader, object_codes, depth, nodes, edges)
+
+        return {"nodes": list(nodes.values()), "edges": edges}
+
+    def graph_path(self, base_id: str, _scene_id: str, query: dict) -> dict:
+        """Find shortest path between two objects in the relation graph.
+
+        Args:
+            base_id: Ontology base identifier.
+            _scene_id: Scene identifier (unused in local adapter).
+            query: {
+                "sourceObjectCode": str,
+                "targetObjectCode": str,
+            }
+
+        Returns:
+            {"path": [str, ...], "edges": [...], "hops": int}
+            — hops == -1 when no path exists.
+        """
+        loader = self._get_loader(base_id)
+        source = query.get("sourceObjectCode", "")
+        target = query.get("targetObjectCode", "")
+
+        if not source or not target:
+            return {"path": [], "edges": [], "hops": -1}
+
+        # Build undirected adjacency
+        adj: dict[str, list[tuple[str, dict]]] = {}
+        for rel in loader._relations:
+            s, t = rel.source_class, rel.target_class
+            edge_data = {
+                "source": s,
+                "target": t,
+                "relationCode": rel.relation_code,
+                "relationType": rel.relation_type,
+            }
+            adj.setdefault(s, []).append((t, edge_data))
+            adj.setdefault(t, []).append((s, edge_data))
+
+        # Same node
+        if source == target:
+            return {"path": [source], "edges": [], "hops": 0}
+
+        # Source or target not in graph
+        if source not in adj or target not in adj:
+            return {"path": [], "edges": [], "hops": -1}
+
+        # BFS
+        from collections import deque
+
+        queue: deque[list[str]] = deque([[source]])
+        visited: set[str] = {source}
+        while queue:
+            path = queue.popleft()
+            node = path[-1]
+            if node == target:
+                # Reconstruct edges from path
+                hops = len(path) - 1
+                path_edges: list[dict] = []
+                for i in range(len(path) - 1):
+                    u, v = path[i], path[i + 1]
+                    # Find the matching edge
+                    for neighbor, edge_data in adj[u]:
+                        if neighbor == v:
+                            path_edges.append(edge_data)
+                            break
+                return {"path": path, "edges": path_edges, "hops": hops}
+            for neighbor, _edge_data in adj[node]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append([*path, neighbor])
+
+        return {"path": [], "edges": [], "hops": -1}
 
     # -- helpers --
 
@@ -437,3 +864,32 @@ class LocalOntologyAdapter:
             raise ValueError("objectCode is required")
         if "objectName" not in obj_data:
             raise ValueError("objectName is required")
+
+    @staticmethod
+    def _parser_obj_to_writer(obj: dict) -> dict:
+        """Convert OwlParser._build_content object dict (snake_case) to writer format (camelCase)."""
+        fields = [
+            {
+                "fieldCode": f.get("field_code", ""),
+                "fieldName": f.get("field_name", ""),
+                "fieldType": f.get("field_type", "STRING"),
+                "isPrimaryKey": f.get("is_primary_key", False),
+                "required": f.get("required", False),
+                "description": f.get("description", ""),
+                "sourceColumn": f.get("source_column"),
+                "dataFormat": f.get("data_format"),
+            }
+            for f in obj.get("fields", [])
+        ]
+        return {
+            "objectCode": obj.get("object_code", ""),
+            "objectName": obj.get("object_name", ""),
+            "description": obj.get("description", ""),
+            "sourceType": obj.get("source_type", ""),
+            "tableName": obj.get("table_name"),
+            "datasourceAlias": obj.get("datasource_alias"),
+            "sourceConfig": obj.get("source_config"),
+            "tags": obj.get("tags", []),
+            "fields": fields,
+            "actions": obj.get("actions", []),
+        }

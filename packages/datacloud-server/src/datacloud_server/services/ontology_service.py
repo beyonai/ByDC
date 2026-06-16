@@ -21,12 +21,33 @@ class OntologyRepository(Protocol):
     def get_objects(self, base_id: str, scene_id: str) -> list[dict]: ...
     def get_object_detail(self, base_id: str, scene_id: str, object_code: str) -> dict | None: ...
     def get_views(self, base_id: str, scene_id: str) -> list[dict]: ...
+    def get_view_detail(self, base_id: str, scene_id: str, view_code: str) -> dict | None: ...
+    def create_view(self, base_id: str, scene_id: str, view_data: dict) -> dict: ...
+    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None: ...
     def get_relations(self, base_id: str, scene_id: str) -> list[dict]: ...
+    def get_relation_detail(self, base_id: str, scene_id: str, rel_code: str) -> dict | None: ...
+    def create_relation(self, base_id: str, scene_id: str, rel_data: dict) -> dict: ...
+    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None: ...
+    def get_datasources(self, base_id: str, scene_id: str) -> list[dict]: ...
+    def get_datasource_detail(self, base_id: str, scene_id: str, db_id: str) -> dict | None: ...
+    def create_datasource(self, base_id: str, scene_id: str, ds_data: dict) -> dict: ...
+    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None: ...
+    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]: ...
+    def get_action_detail(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> dict | None: ...
+    def create_action(
+        self, base_id: str, scene_id: str, object_code: str, action_data: dict
+    ) -> dict: ...
+    def delete_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> None: ...
     def create_object(self, base_id: str, scene_id: str, obj_data: dict) -> dict: ...
     def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None: ...
     def search_instances(self, base_id: str, query: dict) -> dict: ...
     def search_ontology(self, base_id: str, scene_id: str, request: dict) -> dict: ...
     def graph_query(self, base_id: str, scene_id: str, query: dict) -> dict: ...
+    def graph_path(self, base_id: str, scene_id: str, query: dict) -> dict: ...
 
 
 class OntologyService:
@@ -100,7 +121,73 @@ class OntologyService:
         self._ensure_exists(base_id)
         return self._local.get_views(base_id, scene_id)
 
+    def get_view_detail(self, base_id: str, scene_id: str, view_code: str) -> dict | None:
+        self._ensure_exists(base_id)
+        return self._local.get_view_detail(base_id, scene_id, view_code)
+
+    def get_relations(self, base_id: str, scene_id: str) -> list[dict]:
+        self._ensure_exists(base_id)
+        return self._local.get_relations(base_id, scene_id)
+
+    def get_relation_detail(self, base_id: str, scene_id: str, rel_code: str) -> dict | None:
+        self._ensure_exists(base_id)
+        return self._local.get_relation_detail(base_id, scene_id, rel_code)
+
+    def get_datasources(self, base_id: str, scene_id: str) -> list[dict]:
+        self._ensure_exists(base_id)
+        return self._local.get_datasources(base_id, scene_id)
+
+    def get_datasource_detail(self, base_id: str, scene_id: str, db_id: str) -> dict | None:
+        self._ensure_exists(base_id)
+        return self._local.get_datasource_detail(base_id, scene_id, db_id)
+
+    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]:
+        self._ensure_exists(base_id)
+        return self._local.get_actions(base_id, scene_id, object_code)
+
+    def get_action_detail(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> dict | None:
+        self._ensure_exists(base_id)
+        return self._local.get_action_detail(base_id, scene_id, object_code, action_code)
+
     # -- metadata: write --
+
+    def create_view(self, base_id: str, scene_id: str, view_data: dict) -> dict:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        return self._local.create_view(base_id, scene_id, view_data)
+
+    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        self._local.delete_view(base_id, scene_id, view_code)
+
+    def create_relation(self, base_id: str, scene_id: str, rel_data: dict) -> dict:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        return self._local.create_relation(base_id, scene_id, rel_data)
+
+    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        self._local.delete_relation(base_id, scene_id, rel_code)
+
+    def create_datasource(self, base_id: str, scene_id: str, ds_data: dict) -> dict:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        return self._local.create_datasource(base_id, scene_id, ds_data)
+
+    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        self._local.delete_datasource(base_id, scene_id, db_id)
 
     def create_object(self, base_id: str, scene_id: str, obj_data: dict) -> dict:
         entry = self._ensure_exists(base_id)
@@ -113,6 +200,15 @@ class OntologyService:
         if entry.source_type == "REMOTE":
             raise PermissionError("Remote ontology base is read-only")
         self._local.delete_object(base_id, scene_id, object_code)
+
+    # -- OWL import --
+
+    def import_owl(self, base_id: str, scene_id: str, zip_bytes: bytes) -> dict:
+        """Import OWL definitions from a ZIP file (LOCAL only)."""
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        return self._local.import_owl(base_id, scene_id, zip_bytes)
 
     # -- helpers --
 
