@@ -51,7 +51,8 @@ dependencies = [
     "strawberry-graphql[fastapi]>=0.260",
     "python-multipart>=0.0.12",
     "uvicorn>=0.32.0",
-    "watchfiles>=1.0"
+    "watchfiles>=1.0",
+    "psycopg2-binary",
 ]
 
 [dependency-groups]
@@ -112,6 +113,7 @@ members = [
     "packages/datacloud-analysis",
     "packages/datacloud-data",
     "packages/datacloud-knowledge",
+    "packages/datacloud-server",
 ]
 
 [tool.uv.sources]
