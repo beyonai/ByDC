@@ -360,10 +360,10 @@ class LocalOntologyAdapter:
         return rows[0][0] if rows else ""  # type: ignore[no-any-return]
 
     @staticmethod
-    def _resolve_value_to_property(conn: object, term_id: str) -> dict:
-        """Resolve a value term_id to its owning property and object.
+    def _resolve_value_to_property(conn: object, value_term_id: str) -> dict:
+        """Resolve a value term to its owning property and object.
 
-        Uses HAS_TERM relation: value_term -> property_term -> parent object.
+        Chain: value_term ->(parent_term_id)-> type_root <-(HAS_TERM)- prop
         """
         from sqlalchemy import text
 
@@ -371,41 +371,25 @@ class LocalOntologyAdapter:
             text(
                 """SELECT t_prop.term_code AS property_code,
                           t_obj.term_code AS object_code
-                   FROM byai.term_relation tr
-                   JOIN byai.term t_val ON t_val.term_id = tr.source_term_id
-                   JOIN byai.term t_prop ON t_prop.term_id = tr.target_term_id
-                   JOIN byai.term t_obj ON t_obj.term_id = t_prop.parent_term_id
-                   WHERE t_val.term_id = :tid
-                     AND tr.relation_category = 'HAS_TERM'
-                     AND t_prop.term_type_code = 'prop'
-                     AND t_obj.term_type_code = 'object'
-                   LIMIT 1"""
-            ),
-            {"tid": term_id},
-        ).fetchall()
-
-        if rows:
-            return {"propertyCode": rows[0][0], "objectCode": rows[0][1]}  # type: ignore[no-any-return]
-
-        # Fallback: try parent_term_id of the value term itself
-        rows = conn.execute(
-            text(
-                """SELECT t_parent.term_code AS property_code,
-                          t_grand.term_code AS object_code
                    FROM byai.term t_val
-                   JOIN byai.term t_parent ON t_parent.term_id = t_val.parent_term_id
-                   JOIN byai.term t_grand ON t_grand.term_id = t_parent.parent_term_id
+                   JOIN byai.term t_root ON t_root.term_id = t_val.parent_term_id
+                   JOIN byai.term_relation tr
+                     ON tr.target_term_id = t_root.term_id
+                     AND tr.relation_category = 'HAS_TERM'
+                   JOIN byai.term t_prop
+                     ON t_prop.term_id = tr.source_term_id
+                     AND t_prop.term_type_code = 'prop'
+                   JOIN byai.term t_obj
+                     ON t_obj.term_id = t_prop.parent_term_id
+                     AND t_obj.term_type_code = 'object'
                    WHERE t_val.term_id = :tid
-                     AND t_parent.term_type_code = 'prop'
-                     AND t_grand.term_type_code = 'object'
                    LIMIT 1"""
             ),
-            {"tid": term_id},
+            {"tid": value_term_id},
         ).fetchall()
 
         if rows:
             return {"propertyCode": rows[0][0], "objectCode": rows[0][1]}  # type: ignore[no-any-return]
-
         return {"propertyCode": "", "objectCode": ""}
 
     @staticmethod
