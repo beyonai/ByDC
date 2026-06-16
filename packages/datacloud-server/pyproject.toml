@@ -9,6 +9,8 @@ dependencies = [
     "pydantic>=2.0",
     "fastapi>=0.115.0",
     "httpx>=0.27",
+    "datacloud-data",
+    "datacloud-knowledge",
 ]
 
 [project.optional-dependencies]
