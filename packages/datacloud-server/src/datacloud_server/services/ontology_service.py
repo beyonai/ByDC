@@ -201,6 +201,22 @@ class OntologyService:
             raise PermissionError("Remote ontology base is read-only")
         self._local.delete_object(base_id, scene_id, object_code)
 
+    def create_action(
+        self, base_id: str, scene_id: str, object_code: str, action_data: dict
+    ) -> dict:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        return self._local.create_action(base_id, scene_id, object_code, action_data)
+
+    def delete_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> None:
+        entry = self._ensure_exists(base_id)
+        if entry.source_type == "REMOTE":
+            raise PermissionError("Remote ontology base is read-only")
+        self._local.delete_action(base_id, scene_id, object_code, action_code)
+
     # -- OWL import --
 
     def import_owl(self, base_id: str, scene_id: str, zip_bytes: bytes) -> dict:
@@ -209,6 +225,24 @@ class OntologyService:
         if entry.source_type == "REMOTE":
             raise PermissionError("Remote ontology base is read-only")
         return self._local.import_owl(base_id, scene_id, zip_bytes)
+
+    # -- application services --
+
+    def search_instances(self, base_id: str, query: dict) -> dict:
+        self._ensure_exists(base_id)
+        return self._local.search_instances(base_id, query)
+
+    def search_ontology(self, base_id: str, scene_id: str, request: dict) -> dict:
+        self._ensure_exists(base_id)
+        return self._local.search_ontology(base_id, scene_id, request)
+
+    def graph_query(self, base_id: str, scene_id: str, query: dict) -> dict:
+        self._ensure_exists(base_id)
+        return self._local.graph_query(base_id, scene_id, query)
+
+    def graph_path(self, base_id: str, scene_id: str, query: dict) -> dict:
+        self._ensure_exists(base_id)
+        return self._local.graph_path(base_id, scene_id, query)
 
     # -- helpers --
 

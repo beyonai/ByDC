@@ -366,7 +366,7 @@ class LocalOntologyAdapter:
         file_path = ds_dir / f"{db_id}.json"
         if file_path.exists():
             raise ValueError(f"Datasource '{db_id}' already exists")
-        self.writer._atomic_write(file_path, ds_data)
+        self.writer._atomic_write(file_path, ds_data)  # noqa: SLF001
         return ds_data
 
     def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
@@ -375,7 +375,62 @@ class LocalOntologyAdapter:
         if file_path.exists():
             file_path.unlink()
 
-    # -- action --\n\n    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]:\n        \"\"\"Get actions for an object.\"\"\"\n        obj = self.get_object_detail(base_id, scene_id, object_code)\n        if obj is None:\n            return []\n        return obj.get(\"actions\", [])\n\n    def get_action_detail(\n        self, base_id: str, scene_id: str, object_code: str, action_code: str\n    ) -> dict | None:\n        \"\"\"Get action detail.\"\"\"\n        actions = self.get_actions(base_id, scene_id, object_code)\n        for a in actions:\n            if a.get(\"actionCode\") == action_code:\n                return a\n        return None\n\n    def create_action(\n        self, base_id: str, scene_id: str, object_code: str, action_data: dict\n    ) -> dict:\n        \"\"\"Create an action on an object.\"\"\"\n        scene_path = self._scene_path(base_id, scene_id)\n        file_path = scene_path / \"objects\" / f\"{object_code}.json\"\n        if not file_path.exists():\n            raise KeyError(f\"Object '{object_code}' not found\")\n        obj = _json.loads(file_path.read_text(encoding=\"utf-8\"))\n        existing = obj.get(\"actions\", [])\n        for a in existing:\n            if a.get(\"actionCode\") == action_data.get(\"actionCode\"):\n                raise ValueError(\n                    f\"Action '{action_data['actionCode']}' already exists\"\n                )\n        existing.append(action_data)\n        obj[\"actions\"] = existing\n        self.writer._atomic_write(file_path, obj)  # noqa: SLF001\n        self._reload_loader(base_id)\n        return action_data\n\n    def delete_action(\n        self, base_id: str, scene_id: str, object_code: str, action_code: str\n    ) -> None:\n        \"\"\"Delete an action from an object.\"\"\"\n        scene_path = self._scene_path(base_id, scene_id)\n        file_path = scene_path / \"objects\" / f\"{object_code}.json\"\n        if not file_path.exists():\n            return\n        obj = _json.loads(file_path.read_text(encoding=\"utf-8\"))\n        existing = obj.get(\"actions\", [])\n        filtered = [a for a in existing if a.get(\"actionCode\") != action_code]\n        if len(filtered) == len(existing):\n            return  # action not found, no-op\n        obj[\"actions\"] = filtered\n        self.writer._atomic_write(file_path, obj)  # noqa: SLF001\n        self._reload_loader(base_id)\n\n    # -- OWL import --
+    # -- action --
+
+    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]:
+        """Get actions for an object."""
+        obj = self.get_object_detail(base_id, scene_id, object_code)
+        if obj is None:
+            return []
+        return obj.get("actions", [])
+
+    def get_action_detail(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> dict | None:
+        """Get action detail."""
+        actions = self.get_actions(base_id, scene_id, object_code)
+        for a in actions:
+            if a.get("actionCode") == action_code:
+                return a
+        return None
+
+    def create_action(
+        self, base_id: str, scene_id: str, object_code: str, action_data: dict
+    ) -> dict:
+        """Create an action on an object."""
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "objects" / f"{object_code}.json"
+        if not file_path.exists():
+            raise KeyError(f"Object '{object_code}' not found")
+        obj = _json.loads(file_path.read_text(encoding="utf-8"))
+        existing = obj.get("actions", [])
+        for a in existing:
+            if a.get("actionCode") == action_data.get("actionCode"):
+                raise ValueError(f"Action '{action_data['actionCode']}' already exists")
+        existing.append(action_data)
+        obj["actions"] = existing
+        self.writer._atomic_write(file_path, obj)  # noqa: SLF001
+        self._reload_loader(base_id)
+        return action_data
+
+    def delete_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> None:
+        """Delete an action from an object."""
+        scene_path = self._scene_path(base_id, scene_id)
+        file_path = scene_path / "objects" / f"{object_code}.json"
+        if not file_path.exists():
+            return
+        obj = _json.loads(file_path.read_text(encoding="utf-8"))
+        existing = obj.get("actions", [])
+        filtered = [a for a in existing if a.get("actionCode") != action_code]
+        if len(filtered) == len(existing):
+            return  # action not found, no-op
+        obj["actions"] = filtered
+        self.writer._atomic_write(file_path, obj)  # noqa: SLF001
+        self._reload_loader(base_id)
+
+    # -- OWL import --
 
     def import_owl(self, base_id: str, scene_id: str, zip_bytes: bytes) -> dict:
         """Import OWL definitions from a ZIP file.
