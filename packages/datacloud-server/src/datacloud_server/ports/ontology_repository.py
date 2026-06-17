@@ -104,6 +104,15 @@ class OntologyRepository(Protocol):
         page_token: str | None = None,
     ) -> dict: ...
 
+    def search_ontology_batch(
+        self, base_id: str, scene_id: str, *,
+        keywords: list[str],
+        search_scope: str = "all",
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        result_per_type: int = 5,
+    ) -> list[dict]: ...
+
     def graph_query(
         self, base_id: str, scene_id: str, *,
         object_code: list[str],
