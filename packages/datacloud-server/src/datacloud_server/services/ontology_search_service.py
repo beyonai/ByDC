@@ -1,4 +1,4 @@
-"""OntologySearchService — instance search + graph query + unified search + OWL import (6 methods).
+"""OntologySearchService — instance search + graph query + unified search + OWL import (5 methods).
 
 Injects AdapterRouter only — no duplicated _get_adapter logic.
 """
@@ -32,20 +32,6 @@ class OntologySearchService:
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
-        result_per_type: int = 5,
-    ) -> dict:
-        return self._router.get(base_id).search_ontology(
-            base_id, scene_id,
-            keyword=keyword, query_type=query_type,
-            search_scope=search_scope, result_per_type=result_per_type,
-        )
-
-    def search_ontology_base(
-        self, base_id: str, *,
-        keyword: str,
-        scene_id: str = "-1",
-        query_type: str = "vector",
-        search_scope: str = "all",
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
@@ -53,12 +39,14 @@ class OntologySearchService:
         page_size: int = 20,
         page_token: str | None = None,
     ) -> dict:
-        return self._router.get(base_id).search_ontology_base(
-            base_id,
-            keyword=keyword, scene_id=scene_id, query_type=query_type,
-            search_scope=search_scope, object_code=object_code,
-            view_code=view_code, property_code=property_code,
-            result_per_type=result_per_type, page_size=page_size, page_token=page_token,
+        return self._router.get(base_id).search_ontology(
+            base_id, scene_id,
+            keyword=keyword, query_type=query_type,
+            search_scope=search_scope,
+            object_code=object_code, view_code=view_code,
+            property_code=property_code,
+            result_per_type=result_per_type,
+            page_size=page_size, page_token=page_token,
         )
 
     def graph_query(

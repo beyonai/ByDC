@@ -83,9 +83,7 @@ class _WriteRejectingFallback:
     # ── Search & Graph ──
     def search_instances(self, base_id: str, *, object_code: str, select: list[str] | None = None, where: dict | None = None) -> dict:
         return {"data": [], "totalCount": 0}
-    def search_ontology(self, base_id: str, scene_id: str, *, keyword: str, query_type: str = "vector", search_scope: str = "all", result_per_type: int = 5) -> dict:
-        return {"metadata": [], "instances": [], "totalCount": {"metadata": 0, "instances": 0}}
-    def search_ontology_base(self, base_id: str, *, keyword: str, scene_id: str = "-1", query_type: str = "vector", search_scope: str = "all", object_code: list[str] | None = None, view_code: list[str] | None = None, property_code: list[str] | None = None, result_per_type: int = 5, page_size: int = 20, page_token: str | None = None) -> dict:
+    def search_ontology(self, base_id: str, scene_id: str, *, keyword: str, query_type: str = "vector", search_scope: str = "all", object_code: list[str] | None = None, view_code: list[str] | None = None, property_code: list[str] | None = None, result_per_type: int = 5, page_size: int = 20, page_token: str | None = None) -> dict:
         return {"metadata": [], "instances": [], "totalCount": {"metadata": 0, "instances": 0}}
     def graph_query(self, base_id: str, scene_id: str, *, object_code: list[str], match_by: str = "name", values: list[str] | None = None, step: int = 1) -> dict:
         return {"nodes": [], "edges": []}

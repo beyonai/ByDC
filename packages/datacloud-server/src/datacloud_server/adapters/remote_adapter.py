@@ -272,29 +272,6 @@ class RemoteOntologyAdapter:
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
-        result_per_type: int = 5,
-    ) -> dict:
-        """等价转发: 不缓存，实时转发到 /search/ontology，注入 sceneId。"""
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        body: dict[str, Any] = {
-            "keyword": keyword,
-            "queryType": query_type,
-            "searchScope": search_scope,
-            "resultPerType": result_per_type,
-            "sceneId": scene_id,
-        }
-        url = f"{self._source_url}/search/ontology"
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        return response.json()  # type: ignore[no-any-return]
-
-    def search_ontology_base(
-        self, base_id: str, *,
-        keyword: str,
-        scene_id: str = "-1",
-        query_type: str = "vector",
-        search_scope: str = "all",
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
@@ -302,7 +279,7 @@ class RemoteOntologyAdapter:
         page_size: int = 20,
         page_token: str | None = None,
     ) -> dict:
-        """等价转发: 不缓存，实时转发到 /search/ontology。"""
+        """等价转发: 不缓存，实时转发到 /search/ontology，注入 sceneId。"""
         client = self._get_client()
         headers = self._build_auth_headers()
         body: dict[str, Any] = {

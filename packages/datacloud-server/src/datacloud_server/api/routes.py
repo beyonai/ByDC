@@ -515,10 +515,10 @@ def search_ontology_base(
     """Cross-scene ontology search. sceneId in body ('-1' for global)."""
     svc = get_search_service()
     try:
-        return ok(data=svc.search_ontology_base(
+        return ok(data=svc.search_ontology(
             base_id,
+            body.get("sceneId", "-1"),
             keyword=body.get("keyword", ""),
-            scene_id=body.get("sceneId", "-1"),
             query_type=body.get("queryType", "vector"),
             search_scope=body.get("searchScope", "all"),
             object_code=body.get("objectCode"),
@@ -542,7 +542,12 @@ def search_ontology(owner_type: str, base_id: str, scene_id: str, body: dict):
             keyword=body.get("keyword", ""),
             query_type=body.get("queryType", "vector"),
             search_scope=body.get("searchScope", "all"),
+            object_code=body.get("objectCode"),
+            view_code=body.get("viewCode"),
+            property_code=body.get("propertyCode"),
             result_per_type=body.get("resultPerType", 5),
+            page_size=body.get("pageSize", 20),
+            page_token=body.get("pageToken"),
         ))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

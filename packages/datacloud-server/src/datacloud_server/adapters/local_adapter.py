@@ -812,11 +812,37 @@ class LocalOntologyAdapter:
     def search_ontology(
         self, base_id: str, scene_id: str, *,
         keyword: str,
+        query_type: str = "vector",  # reserved: future search mode
+        search_scope: str = "all",
+        object_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        view_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        property_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        result_per_type: int = 5,  # reserved: future result count
+        page_size: int = 20,  # noqa: ARG002  # reserved: future paging
+        page_token: str | None = None,  # noqa: ARG002  # reserved: future pagination
+    ) -> dict:
+        """Unified search across single scene or all scenes (scene_id='-1')."""
+        if scene_id and scene_id != "-1":
+            return self._search_single_scene(
+                base_id, scene_id,
+                keyword=keyword, query_type=query_type,
+                search_scope=search_scope, result_per_type=result_per_type,
+            )
+        # Global search: iterate all scenes under the base
+        return self._search_all_scenes(
+            base_id,
+            keyword=keyword, query_type=query_type,
+            search_scope=search_scope, result_per_type=result_per_type,
+        )
+
+    def _search_single_scene(
+        self, base_id: str, scene_id: str, *,
+        keyword: str,
         query_type: str = "vector",  # noqa: ARG002  # reserved: future search mode
         search_scope: str = "all",
         result_per_type: int = 5,  # noqa: ARG002  # reserved: future result count
     ) -> dict:
-        """Vector search across metadata and instance terms.
+        """Vector search across metadata and instance terms within a single scene.
 
         Uses embedding model to encode keyword, then pgvector cosine distance.
         Returns per-resultType metadata fields and enriched instance hits.
@@ -945,32 +971,19 @@ class LocalOntologyAdapter:
 
         return result
 
-    def search_ontology_base(
+    def _search_all_scenes(
         self, base_id: str, *,
         keyword: str,
-        scene_id: str = "-1",
         query_type: str = "vector",
         search_scope: str = "all",
-        object_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
-        view_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
-        property_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
         result_per_type: int = 5,
-        page_size: int = 20,  # noqa: ARG002  # reserved: future paging
-        page_token: str | None = None,  # noqa: ARG002  # reserved: future pagination
     ) -> dict:
-        """Cross-scene search. If scene_id is '-1', search across all scenes."""
-        if scene_id and scene_id != "-1":
-            return self.search_ontology(
-                base_id, scene_id,
-                keyword=keyword, query_type=query_type,
-                search_scope=search_scope, result_per_type=result_per_type,
-            )
-        # Global search: iterate all scenes under the base
+        """Iterate all scenes under the base, merge results."""
         scenes = self.list_scenes(base_id)
         all_metadata: list[dict] = []
         all_instances: list[dict] = []
         for s in scenes:
-            result = self.search_ontology(
+            result = self._search_single_scene(
                 base_id, s.get("sceneId", ""),
                 keyword=keyword, query_type=query_type,
                 search_scope=search_scope, result_per_type=result_per_type,

@@ -96,15 +96,6 @@ class OntologyRepository(Protocol):
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
-        result_per_type: int = 5,
-    ) -> dict: ...
-
-    def search_ontology_base(
-        self, base_id: str, *,
-        keyword: str,
-        scene_id: str = "-1",
-        query_type: str = "vector",
-        search_scope: str = "all",
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
