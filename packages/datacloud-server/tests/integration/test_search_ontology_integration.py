@@ -128,9 +128,7 @@ class TestSearchOntologyInstance:
 
         assert len(rows) > 0
         all_names = [r[0] for r in rows]
-        financial_hits = [
-            n for n in all_names if any(kw in n for kw in ["银行", "金融", "分行"])
-        ]
+        financial_hits = [n for n in all_names if any(kw in n for kw in ["银行", "金融", "分行"])]
         assert len(financial_hits) > 0, f"No financial hits in: {all_names[:5]}"
         assert rows[0][3] > 0.5
 

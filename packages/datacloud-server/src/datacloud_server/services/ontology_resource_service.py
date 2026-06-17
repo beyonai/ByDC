@@ -33,7 +33,9 @@ class OntologyResourceService:
     def create_object(self, base_id: str, scene_id: str, obj: ObjectType) -> ObjectType:
         return self._router.get(base_id).create_object(base_id, scene_id, obj)
 
-    def update_object(self, base_id: str, scene_id: str, object_code: str, obj: ObjectType) -> ObjectType:
+    def update_object(
+        self, base_id: str, scene_id: str, object_code: str, obj: ObjectType
+    ) -> ObjectType:
         return self._router.get(base_id).update_object(base_id, scene_id, object_code, obj)
 
     def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
@@ -67,7 +69,9 @@ class OntologyResourceService:
     def create_relation(self, base_id: str, scene_id: str, rel: Relation) -> Relation:
         return self._router.get(base_id).create_relation(base_id, scene_id, rel)
 
-    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel: Relation) -> Relation:
+    def update_relation(
+        self, base_id: str, scene_id: str, rel_code: str, rel: Relation
+    ) -> Relation:
         return self._router.get(base_id).update_relation(base_id, scene_id, rel_code, rel)
 
     def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
@@ -93,29 +97,59 @@ class OntologyResourceService:
         return self._router.get(base_id).get_actions(base_id, scene_id, object_code)
 
     def get_action_detail(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
     ) -> dict | None:
         return self._router.get(base_id).get_action_detail(
-            base_id, scene_id, object_code, action_code,
+            base_id,
+            scene_id,
+            object_code,
+            action_code,
         )
 
     def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action: Action,
     ) -> Action:
         return self._router.get(base_id).create_action(
-            base_id, scene_id, object_code, action,
+            base_id,
+            scene_id,
+            object_code,
+            action,
         )
 
     def update_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        action: Action,
     ) -> Action:
         return self._router.get(base_id).update_action(
-            base_id, scene_id, object_code, action_code, action,
+            base_id,
+            scene_id,
+            object_code,
+            action_code,
+            action,
         )
 
     def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
     ) -> None:
         return self._router.get(base_id).delete_action(
-            base_id, scene_id, object_code, action_code,
+            base_id,
+            scene_id,
+            object_code,
+            action_code,
         )

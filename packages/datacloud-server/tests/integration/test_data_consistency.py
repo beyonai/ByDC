@@ -9,6 +9,7 @@ Validates:
 Scope: 6 CRM objects from owl_example.
   Excludes: po_users, po_organization (not in DB); HR/product objects (not in OWL).
 """
+
 from __future__ import annotations
 
 import os
@@ -110,9 +111,7 @@ class TestNameConsistency:
             ).fetchall()
             assert len(rows) > 0, f"{code}: no term_name record for object '{name}'"
             names = {r[0] for r in rows}
-            assert name in names, (
-                f"{code}: OWL name='{name}' not in term_name names={names}"
-            )
+            assert name in names, f"{code}: OWL name='{name}' not in term_name names={names}"
 
     def test_prop_names_exist_in_db(self, owl_data: dict, db_conn) -> None:
         """Every OWL field has at least one term_name record (exact name match optional)."""
@@ -326,6 +325,4 @@ class TestVectorSelfConsistency:
         for f in failures[:5]:
             print(f"    FAIL {f}")
 
-        assert passed / tested >= 0.5, (
-            f"Only {passed}/{tested} props passed self-consistency test"
-        )
+        assert passed / tested >= 0.5, f"Only {passed}/{tested} props passed self-consistency test"

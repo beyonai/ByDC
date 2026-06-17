@@ -41,7 +41,11 @@ class FakeOntologyRepository:
         if not keyword:
             return scenes
         kw = keyword.strip().lower()
-        return [s for s in scenes if kw in s.get("sceneName", "").lower() or kw in s.get("sceneCode", "").lower()]
+        return [
+            s
+            for s in scenes
+            if kw in s.get("sceneName", "").lower() or kw in s.get("sceneCode", "").lower()
+        ]
 
     def count_scenes(self, base_id: str, keyword: str | None) -> int:
         return len(self.query_scenes(base_id, keyword))
@@ -234,7 +238,10 @@ class FakeOntologyRepository:
         return {"data": [], "totalCount": 0}
 
     def search_ontology(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",

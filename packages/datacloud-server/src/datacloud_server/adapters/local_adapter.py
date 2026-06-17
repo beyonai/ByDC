@@ -177,7 +177,8 @@ class LocalOntologyAdapter:
             return scenes
         kw = keyword.strip().lower()
         return [
-            s for s in scenes
+            s
+            for s in scenes
             if kw in s.get("sceneName", "").lower() or kw in s.get("sceneCode", "").lower()
         ]
 
@@ -236,23 +237,28 @@ class LocalOntologyAdapter:
                 o for o in all_objects if o.get("objectCode") in affected_object_codes
             ]
             filtered_actions = [
-                a for a in all_actions
-                if a.get("belongObjectCode") in affected_object_codes
+                a for a in all_actions if a.get("belongObjectCode") in affected_object_codes
             ]
             filtered_relations = [
-                r for r in all_relations
+                r
+                for r in all_relations
                 if r.get("sourceObjectCode") in affected_object_codes
                 or r.get("targetObjectCode") in affected_object_codes
             ]
             # dbsources: keep those referenced by filtered objects' properties
-            filtered_dbsources = [
-                d for d in all_dbsources
-                if any(
-                    p.get("dbId") == d.get("db", [{}])[0].get("dbId")
-                    for o in filtered_objects
-                    for p in o.get("properties", [])
-                )
-            ] if any(o.get("properties") for o in filtered_objects) else all_dbsources
+            filtered_dbsources = (
+                [
+                    d
+                    for d in all_dbsources
+                    if any(
+                        p.get("dbId") == d.get("db", [{}])[0].get("dbId")
+                        for o in filtered_objects
+                        for p in o.get("properties", [])
+                    )
+                ]
+                if any(o.get("properties") for o in filtered_objects)
+                else all_dbsources
+            )
         else:
             filtered_objects = all_objects
             filtered_actions = all_actions
@@ -286,7 +292,8 @@ class LocalOntologyAdapter:
         if keyword:
             kw = keyword.strip().lower()
             objects = [
-                o for o in objects
+                o
+                for o in objects
                 if kw in o.get("objectName", "").lower()
                 or kw in o.get("objectCode", "").lower()
                 or kw in o.get("objectDesc", "").lower()
@@ -341,7 +348,12 @@ class LocalOntologyAdapter:
             ont_class = loader.get_ontology_class(object_code)
             return self._ontology_class_to_detail(ont_class)
         except Exception as e:
-            logger.debug("Object '%s' not found in loader, trying JSON: %s: %s", object_code, type(e).__name__, e)
+            logger.debug(
+                "Object '%s' not found in loader, trying JSON: %s: %s",
+                object_code,
+                type(e).__name__,
+                e,
+            )
 
         scene_path = self._scene_path(base_id, scene_id)
         file_path = scene_path / "objects" / f"{object_code}.json"
@@ -455,9 +467,15 @@ class LocalOntologyAdapter:
         return {
             "relationCode": rel.get("relationCode", rel.get("relation_code", "")),
             "relationName": rel.get("relationName", rel.get("relation_name", "")),
-            "sourceObjectCode": rel.get("sourceObjectCode", rel.get("sourceClass", rel.get("source_class", ""))),
-            "targetObjectCode": rel.get("targetObjectCode", rel.get("targetClass", rel.get("target_class", ""))),
-            "relationCardinality": rel.get("relationCardinality", rel.get("relationType", rel.get("relation_type", ""))),
+            "sourceObjectCode": rel.get(
+                "sourceObjectCode", rel.get("sourceClass", rel.get("source_class", ""))
+            ),
+            "targetObjectCode": rel.get(
+                "targetObjectCode", rel.get("targetClass", rel.get("target_class", ""))
+            ),
+            "relationCardinality": rel.get(
+                "relationCardinality", rel.get("relationType", rel.get("relation_type", ""))
+            ),
             "relationDesc": rel.get("relationDesc", rel.get("relation_desc")),
             "relationSceneType": rel.get("relationSceneType", rel.get("relation_scene_type")),
             "objectRelationId": rel.get("objectRelationId", rel.get("object_relation_id")),
@@ -485,7 +503,9 @@ class LocalOntologyAdapter:
         self._reload_loader(base_id)
         return obj
 
-    def update_object(self, base_id: str, scene_id: str, _object_code: str, obj: ObjectType) -> ObjectType:
+    def update_object(
+        self, base_id: str, scene_id: str, _object_code: str, obj: ObjectType
+    ) -> ObjectType:
         self._validate_object(obj)
         scene_path = self._scene_path(base_id, scene_id)
         obj_data = obj.model_dump(by_alias=True)
@@ -534,7 +554,9 @@ class LocalOntologyAdapter:
         self._reload_loader(base_id)
         return rel
 
-    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel: Relation) -> Relation:
+    def update_relation(
+        self, base_id: str, scene_id: str, rel_code: str, rel: Relation
+    ) -> Relation:
         scene_path = self._scene_path(base_id, scene_id)
         rel_data = rel.model_dump(by_alias=True)
         file_path = scene_path / "relations.json"
@@ -630,7 +652,11 @@ class LocalOntologyAdapter:
         return None
 
     def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action: Action,
     ) -> Action:
         """Create an action on an object."""
         scene_path = self._scene_path(base_id, scene_id)
@@ -650,7 +676,12 @@ class LocalOntologyAdapter:
         return action
 
     def update_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        action: Action,
     ) -> Action:
         """Update an action on an object."""
         scene_path = self._scene_path(base_id, scene_id)
@@ -756,7 +787,9 @@ class LocalOntologyAdapter:
     # -- application services --
 
     def search_instances(
-        self, base_id: str, *,
+        self,
+        base_id: str,
+        *,
         object_code: str,
         select: list[str] | None = None,  # noqa: ARG002  # reserved: future search filtering
         where: dict | None = None,
@@ -810,7 +843,10 @@ class LocalOntologyAdapter:
         return False
 
     def search_ontology(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keyword: str,
         query_type: str = "vector",  # reserved: future search mode
         search_scope: str = "all",
@@ -824,19 +860,27 @@ class LocalOntologyAdapter:
         """Unified search across single scene or all scenes (scene_id='-1')."""
         if scene_id and scene_id != "-1":
             return self._search_single_scene(
-                base_id, scene_id,
-                keyword=keyword, query_type=query_type,
-                search_scope=search_scope, result_per_type=result_per_type,
+                base_id,
+                scene_id,
+                keyword=keyword,
+                query_type=query_type,
+                search_scope=search_scope,
+                result_per_type=result_per_type,
             )
         # Global search: iterate all scenes under the base
         return self._search_all_scenes(
             base_id,
-            keyword=keyword, query_type=query_type,
-            search_scope=search_scope, result_per_type=result_per_type,
+            keyword=keyword,
+            query_type=query_type,
+            search_scope=search_scope,
+            result_per_type=result_per_type,
         )
 
     def _search_single_scene(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keyword: str,
         query_type: str = "vector",  # noqa: ARG002  # reserved: future search mode
         search_scope: str = "all",
@@ -934,7 +978,9 @@ class LocalOntologyAdapter:
                     property_code = prop_info.get("propertyCode", value_type)
 
                     # objectName: JOIN term table
-                    object_name = self._get_term_name(conn, object_code, "object") if object_code else ""
+                    object_name = (
+                        self._get_term_name(conn, object_code, "object") if object_code else ""
+                    )
 
                     # isEnumType: does this value's type_code also exist as an object type?
                     is_enum = self._check_is_enum_type(conn, value_type)
@@ -972,7 +1018,10 @@ class LocalOntologyAdapter:
         return result
 
     def search_ontology_batch(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keywords: list[str],
         search_scope: str = "all",
         object_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
@@ -1072,9 +1121,7 @@ class LocalOntologyAdapter:
                     prop_info = self._resolve_value_to_property(conn, value_term_id)
                     obj_code = prop_info.get("objectCode", "")
                     property_code = prop_info.get("propertyCode", value_type)
-                    object_name = (
-                        self._get_term_name(conn, obj_code, "object") if obj_code else ""
-                    )
+                    object_name = self._get_term_name(conn, obj_code, "object") if obj_code else ""
                     is_enum = self._check_is_enum_type(conn, value_type)
                     referenced_by: list[dict] = (
                         self._resolve_referenced_by_properties(conn, value_term_id)
@@ -1082,27 +1129,31 @@ class LocalOntologyAdapter:
                         else []
                     )
 
-                    hits.append({
-                        "sceneId": scene_id,
-                        "objectCode": obj_code,
-                        "objectName": object_name,
-                        "primaryKey": value_code,
-                        "matchedProperty": property_code,
-                        "matchedValue": value_name,
-                        "isEnumType": is_enum,
-                        "referencedByProperties": referenced_by,
-                        "score": score,
-                        "properties": {
-                            "matchedValue": value_name,
+                    hits.append(
+                        {
+                            "sceneId": scene_id,
+                            "objectCode": obj_code,
+                            "objectName": object_name,
+                            "primaryKey": value_code,
                             "matchedProperty": property_code,
-                        },
-                        "_keyword_index": row[0],
-                    })
+                            "matchedValue": value_name,
+                            "isEnumType": is_enum,
+                            "referencedByProperties": referenced_by,
+                            "score": score,
+                            "properties": {
+                                "matchedValue": value_name,
+                                "matchedProperty": property_code,
+                            },
+                            "_keyword_index": row[0],
+                        }
+                    )
 
         return hits
 
     def _search_all_scenes(
-        self, base_id: str, *,
+        self,
+        base_id: str,
+        *,
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
@@ -1114,9 +1165,12 @@ class LocalOntologyAdapter:
         all_instances: list[dict] = []
         for s in scenes:
             result = self._search_single_scene(
-                base_id, s.get("sceneId", ""),
-                keyword=keyword, query_type=query_type,
-                search_scope=search_scope, result_per_type=result_per_type,
+                base_id,
+                s.get("sceneId", ""),
+                keyword=keyword,
+                query_type=query_type,
+                search_scope=search_scope,
+                result_per_type=result_per_type,
             )
             all_metadata.extend(result.get("metadata", []))
             all_instances.extend(result.get("instances", []))
@@ -1130,7 +1184,10 @@ class LocalOntologyAdapter:
         }
 
     def graph_query(
-        self, base_id: str, _scene_id: str, *,
+        self,
+        base_id: str,
+        _scene_id: str,
+        *,
         object_code: list[str],
         match_by: str = "name",  # noqa: ARG002  # reserved: future match mode
         values: list[str] | None = None,  # noqa: ARG002  # reserved: future match values
@@ -1165,7 +1222,10 @@ class LocalOntologyAdapter:
         return {"nodes": list(nodes.values()), "edges": edges}
 
     def graph_path(
-        self, base_id: str, _scene_id: str, *,
+        self,
+        base_id: str,
+        _scene_id: str,
+        *,
         match_by: str = "name",  # noqa: ARG002  # reserved: future match mode
         start_node: str,
         end_node: str = "",
@@ -1538,7 +1598,7 @@ class LocalOntologyAdapter:
 
     @staticmethod
     def _ontology_class_to_detail(ont_class: object) -> dict:
-        """Convert OntologyClass to full ObjectType dict with properties[].terminology, actions[].params[]. """
+        """Convert OntologyClass to full ObjectType dict with properties[].terminology, actions[].params[]."""
         return {
             "objectCode": ont_class.object_code,
             "objectName": ont_class.object_name,
@@ -1627,7 +1687,9 @@ class LocalOntologyAdapter:
                 "propertyType": p.get("propertyType", p.get("property_type")),
                 "propertyTypeCode": p.get("propertyTypeCode", p.get("property_type_code")),
                 "propertySubType": p.get("propertySubType", p.get("property_sub_type")),
-                "propertySubTypeCode": p.get("propertySubTypeCode", p.get("property_sub_type_code")),
+                "propertySubTypeCode": p.get(
+                    "propertySubTypeCode", p.get("property_sub_type_code")
+                ),
                 "businessKey": p.get("businessKey", p.get("business_key", 0)),
                 "sortNo": p.get("sortNo", p.get("sort_no", 0)),
                 "status": p.get("status", 0),
@@ -1653,17 +1715,19 @@ class LocalOntologyAdapter:
                 }
                 for ap in action_params
             ]
-            normalized_actions.append({
-                "actionCode": a.get("actionCode", a.get("action_code", "")),
-                "actionName": a.get("actionName", a.get("action_name", "")),
-                "actionType": a.get("actionType", a.get("action_type")),
-                "belongObjectCode": a.get("belongObjectCode", a.get("belong_object_code", "")),
-                "actionDesc": a.get("actionDesc", a.get("action_desc")),
-                "params": normalized_params,
-                "requestUrl": a.get("requestUrl", a.get("request_url")),
-                "requestMethod": a.get("requestMethod", a.get("request_method")),
-                "script": a.get("script"),
-            })
+            normalized_actions.append(
+                {
+                    "actionCode": a.get("actionCode", a.get("action_code", "")),
+                    "actionName": a.get("actionName", a.get("action_name", "")),
+                    "actionType": a.get("actionType", a.get("action_type")),
+                    "belongObjectCode": a.get("belongObjectCode", a.get("belong_object_code", "")),
+                    "actionDesc": a.get("actionDesc", a.get("action_desc")),
+                    "params": normalized_params,
+                    "requestUrl": a.get("requestUrl", a.get("request_url")),
+                    "requestMethod": a.get("requestMethod", a.get("request_method")),
+                    "script": a.get("script"),
+                }
+            )
         return {
             "objectCode": data.get("objectCode", data.get("object_code", "")),
             "objectName": data.get("objectName", data.get("object_name", "")),

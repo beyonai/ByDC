@@ -45,7 +45,9 @@ class OntologyRepository(Protocol):
     def get_objects(self, base_id: str, scene_id: str) -> list[dict]: ...
     def get_object_detail(self, base_id: str, scene_id: str, object_code: str) -> dict | None: ...
     def create_object(self, base_id: str, scene_id: str, obj: ObjectType) -> ObjectType: ...
-    def update_object(self, base_id: str, scene_id: str, object_code: str, obj: ObjectType) -> ObjectType: ...
+    def update_object(
+        self, base_id: str, scene_id: str, object_code: str, obj: ObjectType
+    ) -> ObjectType: ...
     def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None: ...
 
     # ── View ──
@@ -59,7 +61,9 @@ class OntologyRepository(Protocol):
     def get_relations(self, base_id: str, scene_id: str) -> list[dict]: ...
     def get_relation_detail(self, base_id: str, scene_id: str, rel_code: str) -> dict | None: ...
     def create_relation(self, base_id: str, scene_id: str, rel: Relation) -> Relation: ...
-    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel: Relation) -> Relation: ...
+    def update_relation(
+        self, base_id: str, scene_id: str, rel_code: str, rel: Relation
+    ) -> Relation: ...
     def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None: ...
 
     # ── Datasource ──
@@ -71,28 +75,50 @@ class OntologyRepository(Protocol):
     # ── Action ──
     def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]: ...
     def get_action_detail(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
     ) -> dict | None: ...
     def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action: Action,
     ) -> Action: ...
     def update_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        action: Action,
     ) -> Action: ...
     def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
     ) -> None: ...
 
     # ── Search & Graph ──
     def search_instances(
-        self, base_id: str, *,
+        self,
+        base_id: str,
+        *,
         object_code: str,
         select: list[str] | None = None,
         where: dict | None = None,
     ) -> dict: ...
 
     def search_ontology(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
@@ -105,7 +131,10 @@ class OntologyRepository(Protocol):
     ) -> dict: ...
 
     def search_ontology_batch(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keywords: list[str],
         search_scope: str = "all",
         object_code: list[str] | None = None,
@@ -114,7 +143,10 @@ class OntologyRepository(Protocol):
     ) -> list[dict]: ...
 
     def graph_query(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         object_code: list[str],
         match_by: str = "name",
         values: list[str] | None = None,
@@ -122,7 +154,10 @@ class OntologyRepository(Protocol):
     ) -> dict: ...
 
     def graph_path(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         match_by: str = "name",
         start_node: str,
         end_node: str = "",

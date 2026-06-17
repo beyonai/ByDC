@@ -515,19 +515,21 @@ def search_ontology_base(
     """Cross-scene ontology search. sceneId in body ('-1' for global)."""
     svc = get_search_service()
     try:
-        return ok(data=svc.search_ontology(
-            base_id,
-            body.get("sceneId", "-1"),
-            keyword=body.get("keyword", ""),
-            query_type=body.get("queryType", "vector"),
-            search_scope=body.get("searchScope", "all"),
-            object_code=body.get("objectCode"),
-            view_code=body.get("viewCode"),
-            property_code=body.get("propertyCode"),
-            result_per_type=body.get("resultPerType", 5),
-            page_size=body.get("pageSize", 20),
-            page_token=body.get("pageToken"),
-        ))
+        return ok(
+            data=svc.search_ontology(
+                base_id,
+                body.get("sceneId", "-1"),
+                keyword=body.get("keyword", ""),
+                query_type=body.get("queryType", "vector"),
+                search_scope=body.get("searchScope", "all"),
+                object_code=body.get("objectCode"),
+                view_code=body.get("viewCode"),
+                property_code=body.get("propertyCode"),
+                result_per_type=body.get("resultPerType", 5),
+                page_size=body.get("pageSize", 20),
+                page_token=body.get("pageToken"),
+            )
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -537,18 +539,21 @@ def search_ontology(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Vector search across ontology metadata and instances."""
     svc = get_search_service()
     try:
-        return ok(data=svc.search_ontology(
-            base_id, scene_id,
-            keyword=body.get("keyword", ""),
-            query_type=body.get("queryType", "vector"),
-            search_scope=body.get("searchScope", "all"),
-            object_code=body.get("objectCode"),
-            view_code=body.get("viewCode"),
-            property_code=body.get("propertyCode"),
-            result_per_type=body.get("resultPerType", 5),
-            page_size=body.get("pageSize", 20),
-            page_token=body.get("pageToken"),
-        ))
+        return ok(
+            data=svc.search_ontology(
+                base_id,
+                scene_id,
+                keyword=body.get("keyword", ""),
+                query_type=body.get("queryType", "vector"),
+                search_scope=body.get("searchScope", "all"),
+                object_code=body.get("objectCode"),
+                view_code=body.get("viewCode"),
+                property_code=body.get("propertyCode"),
+                result_per_type=body.get("resultPerType", 5),
+                page_size=body.get("pageSize", 20),
+                page_token=body.get("pageToken"),
+            )
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -590,12 +595,14 @@ def search_instances(owner_type: str, base_id: str, body: dict):
     """Search instances in a base."""
     svc = get_search_service()
     try:
-        return ok(data=svc.search_instances(
-            base_id,
-            object_code=body.get("objectCode", ""),
-            select=body.get("select"),
-            where=body.get("where"),
-        ))
+        return ok(
+            data=svc.search_instances(
+                base_id,
+                object_code=body.get("objectCode", ""),
+                select=body.get("select"),
+                where=body.get("where"),
+            )
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -605,13 +612,16 @@ def graph_query(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Query the graph of objects and relations."""
     svc = get_search_service()
     try:
-        return ok(data=svc.graph_query(
-            base_id, scene_id,
-            object_code=body.get("objectCodes", body.get("objectCode", [])),
-            match_by=body.get("matchBy", "name"),
-            values=body.get("values"),
-            step=body.get("depth", body.get("step", 1)),
-        ))
+        return ok(
+            data=svc.graph_query(
+                base_id,
+                scene_id,
+                object_code=body.get("objectCodes", body.get("objectCode", [])),
+                match_by=body.get("matchBy", "name"),
+                values=body.get("values"),
+                step=body.get("depth", body.get("step", 1)),
+            )
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -621,12 +631,15 @@ def graph_path(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Find shortest path between two objects."""
     svc = get_search_service()
     try:
-        return ok(data=svc.graph_path(
-            base_id, scene_id,
-            match_by=body.get("matchBy", "name"),
-            start_node=body.get("sourceObjectCode", ""),
-            end_node=body.get("targetObjectCode", ""),
-            direction=body.get("direction", "forward"),
-        ))
+        return ok(
+            data=svc.graph_path(
+                base_id,
+                scene_id,
+                match_by=body.get("matchBy", "name"),
+                start_node=body.get("sourceObjectCode", ""),
+                end_node=body.get("targetObjectCode", ""),
+                direction=body.get("direction", "forward"),
+            )
+        )
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

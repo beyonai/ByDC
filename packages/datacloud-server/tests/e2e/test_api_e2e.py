@@ -112,7 +112,9 @@ class TestObjectAPI:
             json={
                 "objectCode": "customer",
                 "objectName": "Customer",
-                "properties": [{"propertyCode": "name", "propertyName": "Name", "dataType": "STRING"}],
+                "properties": [
+                    {"propertyCode": "name", "propertyName": "Name", "dataType": "STRING"}
+                ],
             },
         )
         assert resp.status_code == 200
@@ -121,7 +123,9 @@ class TestObjectAPI:
         assert resp2.status_code == 200
         assert len(resp2.json()["data"]) == 1
 
-        resp3 = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/objects/customer")
+        resp3 = base_client.get(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/objects/customer"
+        )
         assert resp3.status_code == 200
         assert resp3.json()["data"]["objectCode"] == "customer"
 
@@ -130,7 +134,9 @@ class TestObjectAPI:
             "/api/v1/ontologyBases/personal/local_base/scenes/default/objects",
             json={"objectCode": "temp", "objectName": "Temp"},
         )
-        resp = base_client.delete("/api/v1/ontologyBases/personal/local_base/scenes/default/objects/temp")
+        resp = base_client.delete(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/objects/temp"
+        )
         assert resp.status_code == 200
 
         resp2 = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/objects")
@@ -182,12 +188,16 @@ class TestViewAPI:
             "/api/v1/ontologyBases/personal/local_base/scenes/default/views",
             json={"viewCode": "detail_view", "viewName": "Detail View"},
         )
-        resp = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/views/detail_view")
+        resp = base_client.get(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/views/detail_view"
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["viewCode"] == "detail_view"
 
     def test_get_nonexistent_view_returns_404(self, base_client: TestClient) -> None:
-        resp = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/views/no_such")
+        resp = base_client.get(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/views/no_such"
+        )
         assert resp.status_code == 404
 
     def test_delete_view(self, base_client: TestClient) -> None:
@@ -195,7 +205,9 @@ class TestViewAPI:
             "/api/v1/ontologyBases/personal/local_base/scenes/default/views",
             json={"viewCode": "to_delete", "viewName": "Delete Me"},
         )
-        resp = base_client.delete("/api/v1/ontologyBases/personal/local_base/scenes/default/views/to_delete")
+        resp = base_client.delete(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/views/to_delete"
+        )
         assert resp.status_code == 200
         resp2 = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/views")
         assert len(resp2.json()["data"]) == 0
@@ -253,7 +265,9 @@ class TestRelationAPI:
         assert resp.status_code == 200
         assert resp.json()["data"]["relationCode"] == "has_order"
 
-        resp2 = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/relations")
+        resp2 = base_client.get(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/relations"
+        )
         assert resp2.status_code == 200
         assert len(resp2.json()["data"]) == 1
 
@@ -287,7 +301,9 @@ class TestRelationAPI:
             "/api/v1/ontologyBases/personal/local_base/scenes/default/relations/to_delete"
         )
         assert resp.status_code == 200
-        resp2 = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/relations")
+        resp2 = base_client.get(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/relations"
+        )
         assert len(resp2.json()["data"]) == 0
 
     def test_create_relation_on_remote_returns_403(self, base_client: TestClient) -> None:
@@ -361,14 +377,20 @@ class TestDatasourceAPI:
         assert resp.status_code == 200
         assert resp.json()["data"]["db"][0]["dbId"] == "pg_main"
 
-        resp2 = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/datasources")
+        resp2 = base_client.get(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources"
+        )
         assert resp2.status_code == 200
         assert len(resp2.json()["data"]) == 1
 
     def test_get_datasource_detail(self, base_client: TestClient) -> None:
         base_client.post(
             "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources",
-            json={"db": [{"dbId": "detail_db", "dbCode": "detail", "dbType": "opengauss"}], "doc": [], "api": []},
+            json={
+                "db": [{"dbId": "detail_db", "dbCode": "detail", "dbType": "opengauss"}],
+                "doc": [],
+                "api": [],
+            },
         )
         resp = base_client.get(
             "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources/detail_db"
@@ -379,13 +401,19 @@ class TestDatasourceAPI:
     def test_delete_datasource(self, base_client: TestClient) -> None:
         base_client.post(
             "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources",
-            json={"db": [{"dbId": "to_delete", "dbCode": "del", "dbType": "opengauss"}], "doc": [], "api": []},
+            json={
+                "db": [{"dbId": "to_delete", "dbCode": "del", "dbType": "opengauss"}],
+                "doc": [],
+                "api": [],
+            },
         )
         resp = base_client.delete(
             "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources/to_delete"
         )
         assert resp.status_code == 200
-        resp2 = base_client.get("/api/v1/ontologyBases/personal/local_base/scenes/default/datasources")
+        resp2 = base_client.get(
+            "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources"
+        )
         assert len(resp2.json()["data"]) == 0
 
     def test_create_datasource_on_remote_returns_403(self, base_client: TestClient) -> None:
@@ -399,18 +427,30 @@ class TestDatasourceAPI:
         )
         resp = base_client.post(
             "/api/v1/ontologyBases/enterprise/remote_base/scenes/default/datasources",
-            json={"db": [{"dbId": "ds1", "dbCode": "ds1", "dbType": "opengauss"}], "doc": [], "api": []},
+            json={
+                "db": [{"dbId": "ds1", "dbCode": "ds1", "dbType": "opengauss"}],
+                "doc": [],
+                "api": [],
+            },
         )
         assert resp.status_code == 403
 
     def test_create_duplicate_datasource_returns_400(self, base_client: TestClient) -> None:
         base_client.post(
             "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources",
-            json={"db": [{"dbId": "dup_db", "dbCode": "dup1", "dbType": "opengauss"}], "doc": [], "api": []},
+            json={
+                "db": [{"dbId": "dup_db", "dbCode": "dup1", "dbType": "opengauss"}],
+                "doc": [],
+                "api": [],
+            },
         )
         resp = base_client.post(
             "/api/v1/ontologyBases/personal/local_base/scenes/default/datasources",
-            json={"db": [{"dbId": "dup_db", "dbCode": "dup2", "dbType": "opengauss"}], "doc": [], "api": []},
+            json={
+                "db": [{"dbId": "dup_db", "dbCode": "dup2", "dbType": "opengauss"}],
+                "doc": [],
+                "api": [],
+            },
         )
         assert resp.status_code == 400
 
@@ -435,7 +475,9 @@ class TestActionAPI:
             json={
                 "objectCode": "customer",
                 "objectName": "Customer",
-                "properties": [{"propertyCode": "name", "propertyName": "Name", "dataType": "STRING"}],
+                "properties": [
+                    {"propertyCode": "name", "propertyName": "Name", "dataType": "STRING"}
+                ],
             },
         )
         return client

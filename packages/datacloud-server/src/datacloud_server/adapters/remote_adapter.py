@@ -134,7 +134,11 @@ class RemoteOntologyAdapter:
         return []
 
     def get_action_detail(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
     ) -> dict | None:
         """REMOTE 暂不支持 get_action_detail，返回 None。"""
         return None
@@ -193,7 +197,9 @@ class RemoteOntologyAdapter:
         """REMOTE 只读，禁止删除。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_object(self, base_id: str, scene_id: str, object_code: str, obj: ObjectType) -> ObjectType:
+    def update_object(
+        self, base_id: str, scene_id: str, object_code: str, obj: ObjectType
+    ) -> ObjectType:
         """REMOTE 只读，禁止更新。"""
         raise PermissionError("Remote ontology base is read-only")
 
@@ -213,7 +219,9 @@ class RemoteOntologyAdapter:
         """REMOTE 只读，禁止创建。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel: Relation) -> Relation:
+    def update_relation(
+        self, base_id: str, scene_id: str, rel_code: str, rel: Relation
+    ) -> Relation:
         """REMOTE 只读，禁止更新。"""
         raise PermissionError("Remote ontology base is read-only")
 
@@ -230,19 +238,32 @@ class RemoteOntologyAdapter:
         raise PermissionError("Remote ontology base is read-only")
 
     def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action: Action,
     ) -> Action:
         """REMOTE 只读，禁止创建。"""
         raise PermissionError("Remote ontology base is read-only")
 
     def update_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str, action: Action,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        action: Action,
     ) -> Action:
         """REMOTE 只读，禁止更新。"""
         raise PermissionError("Remote ontology base is read-only")
 
     def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str,
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
     ) -> None:
         """REMOTE 只读，禁止删除。"""
         raise PermissionError("Remote ontology base is read-only")
@@ -250,7 +271,9 @@ class RemoteOntologyAdapter:
     # ── 应用服务 ──────────────────────────────────
 
     def search_instances(
-        self, base_id: str, *,
+        self,
+        base_id: str,
+        *,
         object_code: str,
         select: list[str] | None = None,
         where: dict | None = None,
@@ -269,7 +292,10 @@ class RemoteOntologyAdapter:
         return response.json()  # type: ignore[no-any-return]
 
     def search_ontology(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
@@ -305,7 +331,10 @@ class RemoteOntologyAdapter:
         return response.json()  # type: ignore[no-any-return]
 
     def search_ontology_batch(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         keywords: list[str],
         search_scope: str = "all",
         object_code: list[str] | None = None,
@@ -326,7 +355,9 @@ class RemoteOntologyAdapter:
 
         return asyncio.run(
             self._search_ontology_batch_async(
-                url, headers, valid_keywords,
+                url,
+                headers,
+                valid_keywords,
                 scene_id=scene_id,
                 search_scope=search_scope,
                 result_per_type=result_per_type,
@@ -381,7 +412,10 @@ class RemoteOntologyAdapter:
         return hits
 
     def graph_query(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         object_code: list[str],
         match_by: str = "name",
         values: list[str] | None = None,
@@ -391,7 +425,10 @@ class RemoteOntologyAdapter:
         return {"nodes": [], "edges": []}
 
     def graph_path(
-        self, base_id: str, scene_id: str, *,
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
         match_by: str = "name",
         start_node: str,
         end_node: str = "",

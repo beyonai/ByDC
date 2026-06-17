@@ -38,7 +38,9 @@ class TestSearchInstances:
 
     def test_search_by_keyword_finds_customer(self, adapter: LocalOntologyAdapter) -> None:
         result = adapter.search_instances(
-            "owl_example", object_code="", where={"keyword": "customer"},
+            "owl_example",
+            object_code="",
+            where={"keyword": "customer"},
         )
         data = result["data"]
         assert len(data) > 0
@@ -47,7 +49,9 @@ class TestSearchInstances:
 
     def test_search_by_object_name_finds_chinese(self, adapter: LocalOntologyAdapter) -> None:
         result = adapter.search_instances(
-            "owl_example", object_code="", where={"keyword": "客户"},
+            "owl_example",
+            object_code="",
+            where={"keyword": "客户"},
         )
         data = result["data"]
         assert len(data) > 0
@@ -56,7 +60,9 @@ class TestSearchInstances:
 
     def test_search_by_field_keyword(self, adapter: LocalOntologyAdapter) -> None:
         result = adapter.search_instances(
-            "owl_example", object_code="", where={"keyword": "customer_code"},
+            "owl_example",
+            object_code="",
+            where={"keyword": "customer_code"},
         )
         data = result["data"]
         assert len(data) > 0
@@ -93,14 +99,18 @@ class TestSearchInstances:
 
     def test_search_nonexistent_keyword_returns_empty(self, adapter: LocalOntologyAdapter) -> None:
         result = adapter.search_instances(
-            "owl_example", object_code="", where={"keyword": "xyznonexistent99"},
+            "owl_example",
+            object_code="",
+            where={"keyword": "xyznonexistent99"},
         )
         assert result["data"] == []
         assert result["totalCount"] == 0
 
     def test_search_result_structure(self, adapter: LocalOntologyAdapter) -> None:
         result = adapter.search_instances(
-            "owl_example", object_code="", where={"keyword": "customer"},
+            "owl_example",
+            object_code="",
+            where={"keyword": "customer"},
         )
         for item in result["data"]:
             assert "objectCode" in item
@@ -148,7 +158,9 @@ class TestGraphQuery:
 
     def test_graph_query_empty_object_codes(self, adapter: LocalOntologyAdapter) -> None:
         result = adapter.graph_query(
-            "owl_example", "object", object_code=["nonexistent"],
+            "owl_example",
+            "object",
+            object_code=["nonexistent"],
         )
         assert result["nodes"] == []
         assert result["edges"] == []

@@ -106,7 +106,8 @@ class TestLocalAdapterCRUD:
     def test_delete_object_removes_it(self, adapter: LocalOntologyAdapter) -> None:
         """Delete removes object from index."""
         adapter.create_object(
-            "my_base", "default",
+            "my_base",
+            "default",
             ObjectType(object_code="temp", object_name="Temp"),
         )
         adapter.delete_object("my_base", "default", "temp")
@@ -116,11 +117,13 @@ class TestLocalAdapterCRUD:
     def test_create_duplicate_raises_error(self, adapter: LocalOntologyAdapter) -> None:
         """Duplicate objectCode raises ValueError."""
         adapter.create_object(
-            "my_base", "default",
+            "my_base",
+            "default",
             ObjectType(object_code="dup", object_name="Dup"),
         )
         with pytest.raises(ValueError, match="already exists"):
             adapter.create_object(
-                "my_base", "default",
+                "my_base",
+                "default",
                 ObjectType(object_code="dup", object_name="Dup"),
             )

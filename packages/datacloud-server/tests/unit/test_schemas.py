@@ -108,9 +108,7 @@ class TestProperty:
     """Property definition — using propertyCode/propertyName/dataType naming."""
 
     def test_minimal(self) -> None:
-        p = Property.model_validate(
-            {"propertyCode": "name", "propertyName": "Name"}
-        )
+        p = Property.model_validate({"propertyCode": "name", "propertyName": "Name"})
         d = p.model_dump(by_alias=True)
         assert d["propertyCode"] == "name"
         assert d["propertyName"] == "Name"
@@ -146,9 +144,7 @@ class TestAction:
     """Action definition — full model with belongObjectCode."""
 
     def test_minimal(self) -> None:
-        a = Action.model_validate(
-            {"actionCode": "create_customer", "belongObjectCode": "customer"}
-        )
+        a = Action.model_validate({"actionCode": "create_customer", "belongObjectCode": "customer"})
         d = a.model_dump(by_alias=True)
         assert d["actionCode"] == "create_customer"
         assert d["actionName"] == ""
@@ -161,7 +157,12 @@ class TestAction:
                 "actionName": "Search",
                 "belongObjectCode": "cust",
                 "params": [
-                    {"paramCode": "keyword", "paramName": "Keyword", "paramType": "STRING", "isRequired": 1}
+                    {
+                        "paramCode": "keyword",
+                        "paramName": "Keyword",
+                        "paramType": "STRING",
+                        "isRequired": 1,
+                    }
                 ],
                 "requestUrl": "/api/search",
                 "requestMethod": "GET",
@@ -188,8 +189,16 @@ class TestObjectType:
             {
                 "objectCode": "customer",
                 "objectName": "Customer",
-                "properties": [{"propertyCode": "name", "propertyName": "Name", "dataType": "STRING"}],
-                "actions": [{"actionCode": "get_customer", "actionName": "Get Customer", "belongObjectCode": "customer"}],
+                "properties": [
+                    {"propertyCode": "name", "propertyName": "Name", "dataType": "STRING"}
+                ],
+                "actions": [
+                    {
+                        "actionCode": "get_customer",
+                        "actionName": "Get Customer",
+                        "belongObjectCode": "customer",
+                    }
+                ],
             }
         )
         d = oc.model_dump(by_alias=True)
@@ -228,7 +237,11 @@ class TestView:
 
     def test_with_object_codes(self) -> None:
         vc = View.model_validate(
-            {"viewCode": "sales_view", "viewName": "Sales View", "objectCodes": ["customer", "order"]}
+            {
+                "viewCode": "sales_view",
+                "viewName": "Sales View",
+                "objectCodes": ["customer", "order"],
+            }
         )
         d = vc.model_dump(by_alias=True)
         assert d["objectCodes"] == ["customer", "order"]
@@ -239,7 +252,11 @@ class TestRelation:
 
     def test_minimal(self) -> None:
         rc = Relation.model_validate(
-            {"relationCode": "has_order", "sourceObjectCode": "customer", "targetObjectCode": "order"}
+            {
+                "relationCode": "has_order",
+                "sourceObjectCode": "customer",
+                "targetObjectCode": "order",
+            }
         )
         d = rc.model_dump(by_alias=True)
         assert d["relationCode"] == "has_order"
@@ -285,7 +302,12 @@ class TestDatasource:
         dc = Datasource.model_validate(
             {
                 "db": [
-                    {"dbId": "pg1", "dbCode": "main", "dbType": "opengauss", "dbParams": {"host": "10.0.0.1", "port": 5432}}
+                    {
+                        "dbId": "pg1",
+                        "dbCode": "main",
+                        "dbType": "opengauss",
+                        "dbParams": {"host": "10.0.0.1", "port": 5432},
+                    }
                 ],
                 "doc": [{"docId": "d1", "docPath": "/docs/spec.pdf"}],
                 "api": [{"apiId": "a1", "url": "https://api.example.com", "method": "GET"}],
@@ -331,7 +353,9 @@ class TestSearchResult:
 
     def test_with_hits(self) -> None:
         sr = SearchResult(
-            metadata=[MetadataHit(sceneId="s1", resultType="object", matchedField="cust", score=0.95)],
+            metadata=[
+                MetadataHit(sceneId="s1", resultType="object", matchedField="cust", score=0.95)
+            ],
             instances=[],
             totalCount=SearchTotalCount(metadata=1, instances=0),
         )

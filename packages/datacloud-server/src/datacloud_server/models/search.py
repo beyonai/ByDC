@@ -84,9 +84,7 @@ class SearchResult(BaseModel):
 
     metadata: list[MetadataHit] = Field(default_factory=list)
     instances: list[InstanceHit] = Field(default_factory=list)
-    total_count: SearchTotalCount = Field(
-        default_factory=SearchTotalCount, alias="totalCount"
-    )
+    total_count: SearchTotalCount = Field(default_factory=SearchTotalCount, alias="totalCount")
     next_page_token: str | None = Field(default=None, alias="nextPageToken")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
 # ── Strategy Protocol ────────────────────────────────────────────
 
+
 class SearchStrategy(Protocol):
     """Search strategy interface.
 
@@ -44,6 +45,7 @@ class SearchStrategy(Protocol):
 
 
 # ── Internal helpers ─────────────────────────────────────────────
+
 
 def _flatten_hits(
     result: dict[str, Any],
@@ -90,6 +92,7 @@ def _hit_identity(hit: dict[str, Any]) -> str:
 
 # ── Built-in strategies ──────────────────────────────────────────
 
+
 class DirectStrategy:
     """Pass-through — calls search_ontology per target, flattens, no re-rank."""
 
@@ -106,7 +109,8 @@ class DirectStrategy:
         results: list[dict[str, Any]] = []
         for adapter, base_id, scene_id in targets:
             raw = adapter.search_ontology(
-                base_id, scene_id,
+                base_id,
+                scene_id,
                 keyword=keyword,
                 search_scope=search_scope,
                 result_per_type=result_per_type,
@@ -153,7 +157,8 @@ class RRFStrategy:
 
         for adapter, base_id, scene_id in targets:
             hits = adapter.search_ontology_batch(
-                base_id, scene_id,
+                base_id,
+                scene_id,
                 keywords=tokens,
                 search_scope=search_scope,
                 result_per_type=result_per_type,
@@ -195,6 +200,7 @@ class RRFStrategy:
 
 
 # ── SearchEngine ─────────────────────────────────────────────────
+
 
 @dataclass
 class SearchEngine:
@@ -249,9 +255,12 @@ class SearchEngine:
         """
         strat = strategy or self._strategy
         raw = strat(
-            keyword, self._targets,
-            search_scope=search_scope, result_per_type=result_per_type,
-            object_code=object_codes, view_code=view_codes,
+            keyword,
+            self._targets,
+            search_scope=search_scope,
+            result_per_type=result_per_type,
+            object_code=object_codes,
+            view_code=view_codes,
         )
         return self._dedup(raw)
 

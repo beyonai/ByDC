@@ -48,6 +48,7 @@ def get_search_service() -> OntologySearchService:
 
 # ── backward-compat alias for existing callers ──
 
+
 def get_service() -> OntologyBaseService:
     """Backward-compat: returns the first service (same behavior for list_bases)."""
     return get_base_service()

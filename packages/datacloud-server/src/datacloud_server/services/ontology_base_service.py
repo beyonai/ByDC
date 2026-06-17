@@ -54,7 +54,10 @@ class OntologyBaseService:
         object_code: str | None = None,
     ) -> dict:
         return self._router.get(base_id).get_scene_details(
-            base_id, scene_id, view_code=view_code, object_code=object_code,
+            base_id,
+            scene_id,
+            view_code=view_code,
+            object_code=object_code,
         )
 
     def query_ontologies_by_scene(
@@ -67,7 +70,11 @@ class OntologyBaseService:
         keyword: str | None = None,
     ) -> dict:
         return self._router.get(base_id).query_ontologies_by_scene(
-            base_id, scene_id, page=page, page_size=page_size, keyword=keyword,
+            base_id,
+            scene_id,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
         )
 
     # -- helpers --
