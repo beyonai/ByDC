@@ -464,6 +464,66 @@ async def test_view_analyze_orders_time_group_by_selected_alias() -> None:
 
 
 @pytest.mark.asyncio
+async def test_view_analyze_count_all_metric_filters_generate_case_when() -> None:
+    loader = _build_loader()
+    loader.get_class("orders").datasource_alias = "db_users"
+    view = loader.get_view("cross_db_view")
+    connector = _CaptureConnector(DataSourceConfig(alias="db_users", db_type="POSTGRESQL"))
+    ds_manager = DataSourceManager({"db_users": connector.config})
+    ds_manager._connectors["db_users"] = connector
+
+    await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+        view,
+        {
+            "metrics": [
+                {
+                    "agg": "count_all",
+                    "as": "large_order_count",
+                    "filters": [{"field": "order_amount", "op": "gt", "value": 10}],
+                }
+            ],
+            "limit": 100,
+        },
+    )
+
+    assert (
+        'SUM(CASE WHEN (t1."amount" > :m0_order_amount_0) THEN 1 ELSE 0 END) '
+        'AS "large_order_count"'
+    ) in connector.sql
+    assert 'LEFT JOIN "orders" t1 ON t0."id" = t1."user_id"' in connector.sql
+    assert connector.params == {"m0_order_amount_0": 10}
+
+
+@pytest.mark.asyncio
+async def test_cross_db_view_analyze_metric_filters_reference_joined_object(
+    cross_db_context: tuple[OntologyLoader, DataSourceManager],
+) -> None:
+    loader, ds_manager = cross_db_context
+    view = loader.get_view("cross_db_view")
+
+    result = await ViewAnalyzeExecutor(loader, ds_manager=ds_manager).execute(
+        view,
+        {
+            "dimensions": [{"field": "user_name", "group_op": "self"}],
+            "metrics": [
+                {
+                    "agg": "count_all",
+                    "as": "large_order_count",
+                    "filters": [{"field": "order_amount", "op": "gt", "value": 15}],
+                }
+            ],
+            "order_by": [{"field": "user_name", "direction": "asc"}],
+            "limit": 10,
+        },
+    )
+
+    assert result["records"] == [
+        {"user_name": "Alice", "large_order_count": 0},
+        {"user_name": "Bob", "large_order_count": 1},
+    ]
+
+
+@pytest.mark.asyncio
 async def test_view_analyze_orders_metric_alias_instead_of_raw_column(
     cross_db_context: tuple[OntologyLoader, DataSourceManager],
     caplog: pytest.LogCaptureFixture,

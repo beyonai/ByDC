@@ -255,6 +255,10 @@ def create_app(
 
     app.include_router(skills_router, prefix="/api/v1/skills")
 
+    from datacloud_data_service.api.ontology_manager import router as ont_manager_router
+
+    app.include_router(ont_manager_router, prefix="/api/v1/ontology-manager")
+
     # GraphQL 端点：从 crm_demo_graphql 加载独立 loader（与主 loader 分离）
     graphql_registry = (
         Path(__file__).resolve().parents[3]

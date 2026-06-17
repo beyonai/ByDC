@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """查询指定术语类型的值列表（与 structured-ontology-manager 相同逻辑）。
 
 I/O 协议：stdin JSON → stdout JSON
@@ -33,10 +33,13 @@ def main() -> None:
 
     keyword: str = params.get("keyword", "")
 
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
+    import _common
 
-    session = OntologyBuildSession()
-    data = session.get_term_type_values(term_type_code, keyword=keyword)
+    result = _common.post_ontology_api(
+        "/term-types/values",
+        {"term_type_code": term_type_code, "keyword": keyword},
+    )
+    data = result.get("data", [])
     print(json.dumps({"ok": True, "data": data}, ensure_ascii=False), flush=True)
 
 

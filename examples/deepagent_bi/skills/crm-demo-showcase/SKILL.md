@@ -29,25 +29,25 @@ Agent 打开本文件后，先根据用户意图匹配下表，找到对应的�
 
 Agent 收到演示请求后，先判断环境是否就绪。就绪标准：
 
-1. **venv 存在**：`/tmp/ont_env/bin/python` 文件存在且可 import `by-datacloud`
+1. **系统 Python 就绪**：`/usr/local/bin/python3` 可用，`by-framework` 和 `by-datacloud` 已预装
 2. **本体已挂载**：`list_mounted_resources.py` 返回的 `data` 数组中至少有一条 VIEW 或 OBJECT 记录
 
 两个条件都满足 → 直接开始演示。任一不满足 → 按以下步骤准备。
 
-### Step 1：安装 Python 环境
+### Step 1：检查 Python 环境
 
 ```bash
 bash scripts/setup.sh
 ```
 
-幂等，已安装则跳过。完成后 `/tmp/ont_env/bin/python` 可用，`by-datacloud` 和 `by-framework` 可导入。
+验证系统 Python 和依赖就绪（by-framework / by-datacloud 已预装在镜像中）。
 
 ### Step 2：挂载视图（仅在未挂载时执行）
 
 先执行 `list_mounted_resources.py` 检查是否已有 `scene_sales_management`：
 
 ```bash
-/tmp/ont_env/bin/python scripts/ontology/structured/list_mounted_resources.py \
+/usr/local/bin/python3 scripts/ontology/structured/list_mounted_resources.py \
   '{"resource_id": <Agent的数字后缀>}'
 ```
 
@@ -55,7 +55,7 @@ bash scripts/setup.sh
 - **不存在** → 执行挂载：
 
 ```bash
-/tmp/ont_env/bin/python scripts/ontology/structured/mount_resource.py \
+/usr/local/bin/python3 scripts/ontology/structured/mount_resource.py \
   '{"agent_id": <Agent编码的数字后缀>, "resource_code": "scene_sales_management"}'
 ```
 
@@ -81,7 +81,7 @@ bash scripts/setup.sh
 
 ```bash
 # 提取 Agent 的 resource_id（从编码中的数字后缀，如 agent-10014603 → 10014603）
-/tmp/ont_env/bin/python scripts/ontology/structured/list_mounted_resources.py \
+/usr/local/bin/python3 scripts/ontology/structured/list_mounted_resources.py \
   '{"resource_id": <Agent的resource_id>, "keyword": "<中文名称>"}'
 ```
 
@@ -95,7 +95,6 @@ bash scripts/setup.sh
 
 演示 5/6 中创建的视图/对象挂载后，属于非首次挂载，无需结束本轮等待生效。规则同上 Step 3。
 
-> Python 环境详情见 [Python 环境搭建](references/python-env.md)。
 
 ---
 
@@ -180,7 +179,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 | `baiying_call` 工具不在列表中 / 404 | 视图未挂载 | 执行下方「挂载视图」→ 自然引导用户继续对话 → **结束本轮**（下一轮生效） |
 | `baiying_call` 超时 | 后端未响应 | 等 30s 后重试一次 |
 | `baiying_call` 返回权限错误 | 视图未授权 | 执行下方「挂载视图」→ 结束本轮等待生效 |
-| Python import 失败 | 环境未搭建 | 执行 `bash scripts/setup.sh` |
+| Python import 失败 | 依赖缺失 | 执行 `bash scripts/setup.sh` 检查环境 |
 | 脚本执行报错 | 环境变量缺失 | 执行 `bash scripts/check_env.sh` 检查 |
 
 ### 检查视图挂载状态
@@ -188,7 +187,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 ```bash
 # 1. 提取 Agent 的 resource_id（从编码中的数字后缀，如 agent-10014603 → 10014603）
 # 2. 查询全部已挂载资源（keyword 按中文名称过滤，可选）
-/tmp/ont_env/bin/python scripts/ontology/structured/list_mounted_resources.py \
+/usr/local/bin/python3 scripts/ontology/structured/list_mounted_resources.py \
   '{"resource_id": <Agent的resource_id>}'
 
 # 3. 在返回的 data 数组中查找 resourceCode == "scene_sales_management"
@@ -198,7 +197,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 ### 挂载视图
 
 ```bash
-/tmp/ont_env/bin/python scripts/ontology/structured/mount_resource.py \
+/usr/local/bin/python3 scripts/ontology/structured/mount_resource.py \
   '{"agent_id": <Agent 编码里的数字后缀>, "resource_code": "scene_sales_management"}'
 ```
 
@@ -206,7 +205,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 
 ### 脚本路径速查
 
-演示 4/5/6 涉及以下脚本（相对于 skill 根目录，通过 `/tmp/ont_env/bin/python` 执行）：
+演示 4/5/6 涉及以下脚本（相对于 skill 根目录，通过 `/usr/local/bin/python3` 执行）：
 
 | 脚本 | 用途 |
 |------|------|
@@ -235,7 +234,7 @@ Agent 根据用户问题匹配下表，找到对应场景，打开链接文件�
 
 | 文档 | 内容 |
 |------|------|
-| [Python 环境搭建](references/python-env.md) | 环境安装、环境变量、脚本路径约定、故障排查 |
+| [Python 环境参考](references/python-env.md) | 环境变量、脚本路径约定 |
 | [歧义处理指南](references/ambiguity-guide.md) | 五种歧义类型的处理策略与话术模板 |
 | [数据操作指南](references/data-operations.md) | 周报格式、字段映射、校验规则、任务创建 |
 | [本体对象定义](references/ontology-objects.md) | 对象字段定义、Mock 数据、脚本调用规范 |

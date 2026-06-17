@@ -10,7 +10,7 @@ Agent 调用 Python 脚本生成一份随机模拟周报，内部数据填充逻
 
 ```bash
 # 从 SKILL 根目录执行
-/tmp/ont_env/bin/python scripts/weekly-report/generate_weekly_report.py
+/usr/local/bin/python3 scripts/weekly-report/generate_weekly_report.py
 ```
 
 **可选参数**：

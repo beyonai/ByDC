@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """创建结构化本体视图（信息收集 + 提交两阶段）。
 
 I/O 协议：stdin JSON → stdout JSON
@@ -61,9 +61,9 @@ def main() -> None:
         sys.exit(1)
 
     # 预加载 Embedding 模型配置（从 Redis），使 build_terms 内的向量回填可用
-    from _common import load_embedding_model_from_redis
+    import _common
 
-    load_embedding_model_from_redis()
+    _common.load_embedding_model_from_redis()
 
     params: dict = json.loads(raw)
     action: str = params.get("action", "collect").lower().strip()
@@ -74,25 +74,24 @@ def main() -> None:
         print(json.dumps({"ok": False, "error": "view_code 不能为空"}), flush=True)
         sys.exit(1)
 
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
-
-    session = OntologyBuildSession()
-
     if action == "collect":
-        state = session.collect_view_info(
-            view_code=view_code,
-            session_id=session_id,
-            view_name=params.get("view_name", ""),
-            view_desc=params.get("view_desc", ""),
-            object_codes=params.get("object_codes"),
-            object_relations=params.get("object_relations"),
+        result = _common.post_ontology_api(
+            "/view/collect",
+            {
+                "view_code": view_code,
+                "session_id": session_id,
+                "view_name": params.get("view_name", ""),
+                "view_desc": params.get("view_desc", ""),
+                "object_codes": params.get("object_codes"),
+                "object_relations": params.get("object_relations"),
+            },
         )
         if not state.get("ok", True):
             output_state = deepcopy(state)
             output_state['view_code'] = view_code
             print(json.dumps(output_state, ensure_ascii=False), flush=True)
             return
-        missing = state.pop("missing", [])
+        missing = result.pop("missing", []) if isinstance(result.get("missing"), list) else []
         output_state = deepcopy(state)
         output_state['view_code'] = view_code
         print(
@@ -101,7 +100,10 @@ def main() -> None:
         )
 
     elif action == "submit":
-        result = session.submit_view(view_code=view_code, session_id=session_id)
+        result = _common.post_ontology_api(
+            "/view/submit",
+            {"view_code": view_code, "session_id": session_id},
+        )
         print(json.dumps(result, ensure_ascii=False), flush=True)
 
     else:

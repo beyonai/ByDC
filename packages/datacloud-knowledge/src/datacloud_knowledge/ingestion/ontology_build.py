@@ -45,11 +45,11 @@ def _init_discovery_redis() -> None:
     from by_framework.common.redis_client import init_redis
 
     init_redis(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
-        db=int(os.getenv("REDIS_DATABASE", "0")),
-        password=os.getenv("REDIS_PASSWORD") or None,
-        username=os.getenv("REDIS_USERNAME") or None,
+        host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
+        port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
+        db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
+        password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")) or None,
+        username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
     )
 
 
@@ -73,62 +73,38 @@ def _submit_object_async(
         _init_discovery_redis()
         discovery_client = DiscoveryClient(cache_interval=5)
         try:
-            # 建表（DYNAMIC_TABLE 模式）
+            # 建表（DYNAMIC_TABLE 模式）→ 本地 SQLite personal_object.db
             if fields is not None:
-                sqlite_service = f"BYCLAW_EXE_{user_code}"
-                sqlite_instance = await discovery_client.discover(
-                    sqlite_service, health_threshold_ms=-1
-                )
-                if not sqlite_instance:
-                    return {"ok": False, "error": f"未找到 SQLite 服务实例: {sqlite_service}"}
-                metadata = sqlite_instance.metadata or {}
-                sqlite_token = metadata.get("token", "")
-                sqlite_auth_type = metadata.get("authType", "header")
-                sqlite_auth_param = metadata.get("authParam", "token")
-                sqlite_protocol = getattr(sqlite_instance, "protocol", "http")
-                sqlite_path_prefix = getattr(sqlite_instance, "path_prefix", "") or ""
-                sqlite_url = f"{sqlite_protocol}://{sqlite_instance.host}:{sqlite_instance.port}"
-                sqlite_sql_path = (
-                    f"/{sqlite_path_prefix.strip('/')}/plugins/byclaw-sqlite/sqlExecute".replace(
-                        "//", "/"
-                    )
-                )
-                sqlite_params = (
-                    {sqlite_auth_param: sqlite_token} if sqlite_auth_type == "query" else {}
-                )
-                sqlite_headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {sqlite_token}",
-                }
-                col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
-                for f in fields:
-                    col_name = f.get("property_code", "")
-                    if not col_name or col_name.lower() == "id":
-                        continue
-                    sqlite_type = {
-                        "STRING": "TEXT",
-                        "INTEGER": "INTEGER",
-                        "FLOAT": "REAL",
-                        "BOOLEAN": "INTEGER",
-                        "DATE": "TEXT",
-                    }.get(f.get("data_type", "STRING"), "TEXT")
-                    col_defs.append(f"{col_name} {sqlite_type}")
-                ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
-                async with httpx.AsyncClient(
-                    base_url=sqlite_url,
-                    timeout=30.0,
-                    verify=False,  # noqa: S501
-                ) as sqlite_client:
-                    resp = await sqlite_client.post(
-                        sqlite_sql_path,
-                        headers=sqlite_headers,
-                        params=sqlite_params,
-                        json={"sql": ddl, "user_code": user_code},
-                    )
-                    resp_body = resp.json() if resp.content else {}
-                    if not resp_body.get("ok"):
-                        err = resp_body.get("error", {})
-                        return {"ok": False, "error": f"建表失败: {err.get('message', resp_body)}"}
+                import sqlite3 as _sqlite3
+
+                mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+                if not mount:
+                    return {"ok": False, "error": "FILE_STORAGE_MINIO_MOUNT_PATH 环境变量未设置"}
+                db_dir = os.path.join(mount, "byclaw-datacloud")
+                os.makedirs(db_dir, exist_ok=True)
+                db_path = os.path.join(db_dir, "personal_object.db")
+                _conn = _sqlite3.connect(db_path)
+                try:
+                    col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
+                    for f in fields:
+                        col_name = f.get("property_code", "")
+                        if not col_name or col_name.lower() == "id":
+                            continue
+                        sqlite_type = {
+                            "STRING": "TEXT",
+                            "INTEGER": "INTEGER",
+                            "FLOAT": "REAL",
+                            "BOOLEAN": "INTEGER",
+                            "DATE": "TEXT",
+                        }.get(f.get("data_type", "STRING"), "TEXT")
+                        col_defs.append(f"{col_name} {sqlite_type}")
+                    ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
+                    _conn.execute(ddl)
+                    _conn.commit()
+                except _sqlite3.Error as exc:
+                    return {"ok": False, "error": f"建表失败: {exc}"}
+                finally:
+                    _conn.close()
 
             # 上传 OWL zip
             byai_instance = await discovery_client.discover(service_name, health_threshold_ms=-1)

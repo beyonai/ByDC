@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """删除结构化本体视图（不删表）。
 
 I/O 协议：stdin JSON → stdout JSON
@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
 
-from _common import delete_resource_by_code
+import _common
 
 
 def main() -> None:
@@ -42,15 +42,14 @@ def main() -> None:
         print(json.dumps({"ok": False, "error": "view_code 不能为空"}), flush=True)
         sys.exit(1)
 
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
-
-    session = OntologyBuildSession()
-
-    # 步骤一：清除术语库数据
-    session.delete_owl_scope("VIEW", view_code)
-
-    # 步骤二：下架本体
-    delete_resource_by_code(view_code)
+    # 通过 ontology-manager API 完成删除
+    result = _common.post_ontology_api(
+        "/view/delete",
+        {"view_code": view_code},
+    )
+    if not result.get("ok"):
+        print(json.dumps(result, ensure_ascii=False), flush=True)
+        sys.exit(1)
 
     print(json.dumps({"ok": True, "view_code": view_code}, ensure_ascii=False), flush=True)
 

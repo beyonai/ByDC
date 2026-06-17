@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
-# CRM Demo Showcase — 环境一键安装脚本
+# CRM Demo Showcase — 环境检查脚本
 #
-# 幂等设计：已安装则跳过，可安全重复执行。
+# 幂等设计，可安全重复执行。
+# 系统已预装 Python 3.12 (/usr/local/bin/python3) 及 by-framework/by-datacloud 依赖。
 # 用法: bash scripts/setup.sh
 # =============================================================================
 set -euo pipefail
@@ -18,64 +19,34 @@ ok()    { echo -e "${GREEN}  ✓${NC} $*"; }
 warn()  { echo -e "${YELLOW}  ⚠${NC} $*"; }
 fail()  { echo -e "${RED}  ✗${NC} $*"; }
 
-VENV_DIR="${CRM_VENV_DIR:-/tmp/ont_env}"
-PYTHON_BIN="${VENV_DIR}/bin/python"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REQUIREMENTS="${SCRIPT_DIR}/requirements.txt"
+PYTHON_BIN=/usr/local/bin/python3
 
 echo ""
 echo "============================================"
-echo "  CRM Demo Showcase 环境安装"
+echo "  CRM Demo Showcase 环境检查"
 echo "============================================"
 echo ""
 
-# ---- Step 1: Install uv ----
-info "Step 1/5: 安装 uv 包管理器 ..."
-export PATH="$HOME/.local/bin:$PATH"
-if command -v uv &>/dev/null; then
-    ok "uv 已安装: $(uv --version 2>&1)"
-else
-    info "安装中 ..."
-    pip install uv
-    if command -v uv &>/dev/null; then
-        ok "uv 安装成功: $(uv --version 2>&1)"
-    else
-        fail "uv 安装失败"
-        exit 1
-    fi
-fi
-
-# ---- Step 2: Create venv (idempotent) ----
-info "Step 2/5: 创建 Python 虚拟环境 ..."
+# ---- Step 1: Check Python ----
+info "Step 1/4: 检查系统 Python 环境 ..."
 if [ -f "$PYTHON_BIN" ]; then
-    ok "venv 已存在: $VENV_DIR ($("$PYTHON_BIN" --version 2>&1))"
+    ok "Python 已安装: $("$PYTHON_BIN" --version 2>&1)"
 else
-    info "创建中: $VENV_DIR"
-    uv venv --python 3.12 --link-mode copy "$VENV_DIR"
-    ok "venv 创建完成 ($("$PYTHON_BIN" --version 2>&1))"
-fi
-
-# ---- Step 3: Install dependencies ----
-info "Step 3/5: 安装 Python 依赖 ..."
-if [ ! -f "$REQUIREMENTS" ]; then
-    fail "未找到 requirements.txt: $REQUIREMENTS"
-    exit 1
-fi
-uv pip install --python "$PYTHON_BIN" -r "$REQUIREMENTS" \
-    -i https://mirrors.aliyun.com/pypi/simple/ --extra-index-url https://pypi.org/simple/
-ok "依赖安装完成"
-
-# ---- Step 4: Verify imports ----
-info "Step 4/5: 验证 Python 包导入 ..."
-if "$PYTHON_BIN" -c "import by_framework; import by_datacloud; print('OK')" 2>/dev/null; then
-    ok "by_framework / by_datacloud 导入正常"
-else
-    fail "Python 包导入失败，请检查依赖"
+    fail "系统 Python 未找到: $PYTHON_BIN"
     exit 1
 fi
 
-# ---- Step 5: Check environment variables ----
-info "Step 5/5: 检查环境变量 ..."
+# ---- Step 2: Verify imports ----
+info "Step 2/4: 验证 Python 包导入 ..."
+if "$PYTHON_BIN" -c "import by_framework; print('OK')" 2>/dev/null; then
+    ok "by_framework 导入正常"
+else
+    fail "by_framework 导入失败，请检查镜像依赖"
+    exit 1
+fi
+
+# ---- Step 3: Check environment variables ----
+info "Step 3/4: 检查环境变量 ..."
 MISSING=0
 
 # Required
@@ -112,6 +83,6 @@ if [ $MISSING -gt 0 ]; then
     echo "============================================"
     exit 1
 else
-    echo -e "  ${GREEN}✅ 环境安装完成！${NC}"
+    echo -e "  ${GREEN}✅ 环境就绪！${NC}"
     echo "============================================"
 fi

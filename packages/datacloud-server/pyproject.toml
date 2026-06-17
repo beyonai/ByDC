@@ -1,0 +1,35 @@
+[project]
+name = "datacloud-server"
+version = "0.1.0"
+description = "本体服务层 — Ports & Adapters 架构，提供 LOCAL/REMOTE 统一 API"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+
+dependencies = [
+    "pydantic>=2.0",
+    "fastapi>=0.115.0",
+    "httpx>=0.27",
+    "sqlalchemy>=2.0",
+    "requests>=2.31",
+    "datacloud-data",
+    "datacloud-knowledge",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-httpx>=0.30",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datacloud_server"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.5",
+]

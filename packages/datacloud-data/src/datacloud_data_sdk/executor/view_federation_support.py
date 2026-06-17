@@ -94,6 +94,13 @@ def collect_referenced_fields(view: Any, arguments: dict[str, Any], mode: str) -
                 field_code = item.get("field", "")
                 if field_code:
                     referenced.add(str(field_code))
+            if isinstance(item, dict):
+                for metric_filter in item.get("filters") or []:
+                    if not isinstance(metric_filter, dict):
+                        continue
+                    field_code = metric_filter.get("field", "")
+                    if field_code:
+                        referenced.add(str(field_code))
         for item in filters:
             field_code = item.get("field", "")
             if field_code:

@@ -16,6 +16,7 @@ class _CaptureConnector(BaseSourceConnector):
         super().__init__(config)
         self.calls: list[tuple[str, dict[str, Any] | None]] = []
         self.select_rows: list[dict[str, Any]] = []
+        self.insert_rows: list[dict[str, Any]] = []
 
     @classmethod
     def supported_type(cls) -> str:
@@ -29,6 +30,8 @@ class _CaptureConnector(BaseSourceConnector):
         self.calls.append((sql, params))
         if sql.startswith("SELECT"):
             return self.select_rows
+        if sql.startswith("INSERT"):
+            return self.insert_rows
         return []
 
     async def test_connection(self) -> bool:
@@ -59,10 +62,12 @@ def _loader() -> tuple[OntologyLoader, _CaptureConnector]:
 
 
 @pytest.mark.asyncio
-async def test_dynamic_table_insert_excludes_generated_primary_key() -> None:
+async def test_dynamic_table_insert_returns_auto_increment_id() -> None:
     loader, connector = _loader()
     ds = DataSourceManager({"dynamic_table": connector.config})
     ds._connectors["dynamic_table"] = connector
+    # Simulate SQLite RETURNING *: connector returns the full inserted row with id
+    connector.insert_rows = [{"id": 1, "customer_name": "白银有色", "amount": 12.5}]
 
     result = await DynamicTableExecutor(loader, ds).insert(
         "sales_note",
@@ -70,9 +75,12 @@ async def test_dynamic_table_insert_excludes_generated_primary_key() -> None:
     )
 
     sql, params = connector.calls[0]
-    assert sql == 'INSERT INTO "sales_note" ("customer_name", "amount") VALUES (:v_0, :v_1)'
+    assert sql == (
+        'INSERT INTO "sales_note" ("customer_name", "amount") '
+        'VALUES (:v_0, :v_1) RETURNING *'
+    )
     assert params == {"v_0": "白银有色", "v_1": 12.5}
-    assert result["records"] == [{"customer_name": "白银有色", "amount": "12.5"}]
+    assert result["records"] == [{"id": 1, "customer_name": "白银有色", "amount": 12.5}]
 
 
 @pytest.mark.asyncio

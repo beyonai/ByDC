@@ -95,15 +95,11 @@ def test_T1_2_compute_schema_has_query_and_metric_extensions() -> None:
     assert "metrics" in schema.get("required", [])
 
     metrics_schema = props.get("metrics", {})
-    one_of = metrics_schema.get("items", {}).get("oneOf", [])
-    has_expr = any("expr" in item.get("properties", {}) for item in one_of)
-    has_filters = any("filters" in item.get("properties", {}) for item in one_of)
-    assert has_expr
-    assert has_filters
-
-    for item in one_of:
-        if "expr" in item.get("properties", {}):
-            assert_required_uses_field(item.get("required", []), context="compute expr item")
+    metric_item_props = metrics_schema.get("items", {}).get("properties", {})
+    assert "oneOf" not in metrics_schema.get("items", {})
+    assert "expr" in metric_item_props
+    assert "filters" in metric_item_props
+    assert_required_uses_field(["field"], context="compute metric item")
 
 
 def test_T1_3_schema_constraints_relaxed() -> None:
@@ -115,11 +111,10 @@ def test_T1_3_schema_constraints_relaxed() -> None:
 
     filters_schema = props.get("filters", {})
     items = filters_schema.get("items", {})
-    one_of = items.get("oneOf", [])
-    assert one_of
-    first_field = one_of[0].get("properties", {}).get("field", {})
+    assert "oneOf" not in items
+    first_field = items.get("properties", {}).get("field", {})
     assert "enum" in first_field or "const" in first_field
-    assert_uses_field_key(one_of[0].get("properties", {}), context="query filter item")
+    assert_uses_field_key(items.get("properties", {}), context="query filter item")
 
     select_schema = props.get("select", {})
     select_items = select_schema.get("items", {})
@@ -243,3 +238,149 @@ def test_T1_6_compute_tool_requires_query() -> None:
 
     assert "query" in required
     assert props.get("query", {}).get("description") == AGENT_QUERY_DESCRIPTION
+
+
+def test_json_schema_to_pydantic_preserves_array_items_one_of() -> None:
+    """数组字段转换为 Pydantic 后应保留 items.oneOf 给 StructuredTool schema。"""
+    from datacloud_analysis.tools.ontology_tool_loader import _json_schema_to_pydantic
+
+    model = _json_schema_to_pydantic(
+        {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "type": "array",
+                    "description": "指标列表",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "field": {"type": "string", "enum": ["revenue"]},
+                                    "agg": {"type": "string", "enum": ["sum"]},
+                                    "as": {"type": "string"},
+                                },
+                                "required": ["field", "agg", "as"],
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "agg": {"type": "string", "enum": ["count_all"]},
+                                    "as": {"type": "string"},
+                                    "filters": {"type": "array", "items": {"type": "object"}},
+                                },
+                                "required": ["agg", "as"],
+                            },
+                        ]
+                    },
+                }
+            },
+            "required": ["metrics"],
+        },
+        "_PreserveArrayItemsOneOfSchema",
+    )
+
+    metrics_schema = model.model_json_schema()["properties"]["metrics"]
+
+    assert metrics_schema["items"]["oneOf"][0]["properties"]["field"]["enum"] == ["revenue"]
+    assert "filters" in metrics_schema["items"]["oneOf"][1]["properties"]
+
+
+def test_compute_structured_tool_args_keep_metric_item_properties() -> None:
+    """StructuredTool.args 中 metrics.items 应直接保留字段结构，不能退化为 {}。"""
+    from datacloud_analysis.orchestration.execution.node import _build_tools_list
+    from datacloud_data_sdk.virtual_action.generator import build_compute_schema
+    from langchain_core.tools import StructuredTool
+
+    fields = [
+        _FakeField(
+            "total_revenue",
+            "总营收",
+            filter_ops=["gt", "lt"],
+            group_ops=[],
+            aggregate_ops=["sum", "avg"],
+            analytic_role="measure",
+            analytic_kind="basic_metric",
+        ),
+        _FakeField(
+            "manage_grid_name",
+            "管理网格",
+            filter_ops=["eq"],
+            group_ops=["direct"],
+        ),
+    ]
+
+    async def _compute_tool(**kwargs: object) -> str:
+        _ = kwargs
+        return "ok"
+
+    tool = StructuredTool(
+        name="compute_grid_analysis",
+        description="demo",
+        args_schema=build_compute_schema("网格分析", fields),
+        coroutine=_compute_tool,
+    )
+
+    patched_tool = next(
+        t
+        for t in _build_tools_list({"compute_grid_analysis": tool})
+        if t.name == "compute_grid_analysis"
+    )
+    metric_items = patched_tool.args["metrics"]["items"]
+    filter_items = patched_tool.args["filters"]["items"]
+
+    assert "properties" in metric_items
+    assert {"field", "expr", "filters", "agg", "as"} <= set(metric_items["properties"])
+    assert metric_items["properties"]["field"]["enum"] == ["total_revenue"]
+    assert "count_all" in metric_items["properties"]["agg"]["enum"]
+    assert "properties" in filter_items
+    assert {"field", "op", "value", "value_field"} <= set(filter_items["properties"])
+
+
+def test_structured_tool_args_strip_schema_extras_to_reduce_context() -> None:
+    """发给模型的工具 schema 应去掉 x-dc/example 等冗余上下文。"""
+    from datacloud_analysis.orchestration.execution.node import _build_tools_list
+    from datacloud_data_sdk.virtual_action.generator import build_compute_schema
+    from langchain_core.tools import StructuredTool
+
+    fields = [
+        _FakeField(
+            f"field_{idx}",
+            f"字段{idx}",
+            filter_ops=["eq", "in"],
+            group_ops=[],
+            aggregate_ops=["sum"],
+            analytic_role="measure",
+            analytic_kind="basic_metric",
+        )
+        for idx in range(12)
+    ]
+
+    async def _compute_tool(**kwargs: object) -> str:
+        _ = kwargs
+        return "ok"
+
+    schema = build_compute_schema("重字段对象", fields)
+    long_description = "保留完整说明" * 40 + "结尾不能丢"
+    schema["properties"]["metrics"]["description"] = long_description
+
+    tool = StructuredTool(
+        name="compute_context_heavy",
+        description="demo",
+        args_schema=schema,
+        coroutine=_compute_tool,
+    )
+
+    patched_tool = next(
+        t
+        for t in _build_tools_list({"compute_context_heavy": tool})
+        if t.name == "compute_context_heavy"
+    )
+    metrics_schema = patched_tool.args["metrics"]
+    filter_items = patched_tool.args["filters"]["items"]
+
+    assert "x-dc-measure-fields" not in metrics_schema
+    assert "example" not in metrics_schema
+    assert metrics_schema["description"] == long_description
+    assert "properties" in filter_items
+    assert "query" in patched_tool.args

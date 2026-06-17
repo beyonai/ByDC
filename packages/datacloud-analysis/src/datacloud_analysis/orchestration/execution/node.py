@@ -31,6 +31,25 @@ _DATA_TOOL_PREFIXES = ("query_", "compute_", "data_query_")
 _BLOCKED_TOOL_NAMES: frozenset[str] = frozenset({"write_code", "execute_code"})
 
 
+def _compact_json_schema_for_tool(schema: dict[str, Any]) -> dict[str, Any]:
+    """移除不影响参数生成、但会显著占用模型上下文的 schema 元数据。"""
+    drop_keys = {"example", "examples"}
+
+    def _compact(value: Any) -> Any:
+        if isinstance(value, dict):
+            compacted: dict[str, Any] = {}
+            for key, item in value.items():
+                if key in drop_keys or key.startswith("x-dc-"):
+                    continue
+                compacted[key] = _compact(item)
+            return compacted
+        if isinstance(value, list):
+            return [_compact(item) for item in value]
+        return value
+
+    return _compact(schema)
+
+
 def _is_data_tool_name(name: str) -> bool:
     """判断工具名是否属于数据类工具（query_/compute_/data_query_ 前缀）。"""
     return any(name.startswith(p) for p in _DATA_TOOL_PREFIXES)
@@ -56,53 +75,93 @@ def inject_query_fields(
         original_schema = t.args_schema
         if original_schema is None:
             return t
-        # JSON Schema dict 无法用 create_model 注入字段，跳过
-        if isinstance(original_schema, dict) or not hasattr(original_schema, "__name__"):
-            return t
-
         from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
             AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
             AGENT_QUERY_DESCRIPTION,
         )
 
-        model_fields = getattr(original_schema, "model_fields", {})
-        schema_overrides: dict[str, tuple[Any, Any]] = {}
+        if isinstance(original_schema, dict):
+            import copy  # noqa: PLC0415
 
-        if require_query:
-            schema_overrides["query"] = (
-                str,
-                Field(..., description=AGENT_QUERY_DESCRIPTION),
-            )
-        elif "query" not in model_fields:
-            schema_overrides["query"] = (
-                str,
-                Field(default="", description=AGENT_QUERY_DESCRIPTION),
-            )
+            new_schema = copy.deepcopy(original_schema)
+            props = new_schema.setdefault("properties", {})
+            required = list(new_schema.get("required") or [])
 
-        if "complex_conditions" not in model_fields:
-            schema_overrides["complex_conditions"] = (
-                list[str],
-                Field(default_factory=list, description=AGENT_COMPLEX_CONDITIONS_DESCRIPTION),
-            )
+            if require_query:
+                props["query"] = {"type": "string", "description": AGENT_QUERY_DESCRIPTION}
+                if "query" not in required:
+                    required.append("query")
+            elif "query" not in props:
+                props["query"] = {
+                    "type": "string",
+                    "default": "",
+                    "description": AGENT_QUERY_DESCRIPTION,
+                }
 
-        if require_select:
-            select_desc = ""
-            select_field = model_fields.get("select")
-            if select_field is not None:
-                select_desc = str(select_field.description or "").strip()
-            if not select_desc:
-                select_desc = "返回字段列表"
-            schema_overrides["select"] = (
-                list[str],
-                Field(..., description=select_desc),
-            )
+            if "complex_conditions" not in props:
+                props["complex_conditions"] = {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "default": [],
+                    "description": AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
+                }
 
-        new_schema = create_model(
-            f"{original_schema.__name__}WithQuery",
-            __base__=original_schema,
-            **schema_overrides,
-        )
-        t.args_schema = new_schema
+            if require_select:
+                select_desc = str(
+                    props.get("select", {}).get("description") or "返回字段列表"
+                ).strip()
+                props["select"] = {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": select_desc,
+                }
+                if "select" not in required:
+                    required.append("select")
+
+            if required:
+                new_schema["required"] = required
+            t.args_schema = _compact_json_schema_for_tool(new_schema)
+        elif not hasattr(original_schema, "__name__"):
+            return t
+        else:
+            model_fields = getattr(original_schema, "model_fields", {})
+            schema_overrides: dict[str, tuple[Any, Any]] = {}
+
+            if require_query:
+                schema_overrides["query"] = (
+                    str,
+                    Field(..., description=AGENT_QUERY_DESCRIPTION),
+                )
+            elif "query" not in model_fields:
+                schema_overrides["query"] = (
+                    str,
+                    Field(default="", description=AGENT_QUERY_DESCRIPTION),
+                )
+
+            if "complex_conditions" not in model_fields:
+                schema_overrides["complex_conditions"] = (
+                    list[str],
+                    Field(default_factory=list, description=AGENT_COMPLEX_CONDITIONS_DESCRIPTION),
+                )
+
+            if require_select:
+                select_desc = ""
+                select_field = model_fields.get("select")
+                if select_field is not None:
+                    select_desc = str(select_field.description or "").strip()
+                if not select_desc:
+                    select_desc = "返回字段列表"
+                schema_overrides["select"] = (
+                    list[str],
+                    Field(..., description=select_desc),
+                )
+
+            new_schema = create_model(
+                f"{original_schema.__name__}WithQuery",
+                __base__=original_schema,
+                **schema_overrides,
+            )
+            t.args_schema = new_schema
 
         # 包装 coroutine：调用前剥除两个元字段（before_callback 已消费）
         if hasattr(t, "coroutine") and t.coroutine is not None:

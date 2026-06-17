@@ -3,6 +3,7 @@
 # CRM Demo Showcase — 环境就绪检查
 #
 # 快速检查 Python 环境和必需变量是否就绪。
+# 系统已预装 /usr/local/bin/python3 及 by-framework/by-datacloud 依赖。
 # 用法: bash scripts/check_env.sh
 # =============================================================================
 set -euo pipefail
@@ -26,23 +27,22 @@ check() {
     fi
 }
 
-VENV_DIR="${CRM_VENV_DIR:-/tmp/ont_env}"
-PYTHON_BIN="${VENV_DIR}/bin/python"
+PYTHON_BIN=/usr/local/bin/python3
 
 echo ""
 echo "CRM Demo Showcase 环境检查"
 echo "==========================="
 echo ""
 
-# Python venv
+# Python
 if [ -f "$PYTHON_BIN" ]; then
-    if "$PYTHON_BIN" -c "import by_datacloud" 2>/dev/null; then
-        check "Python venv ($VENV_DIR)" true ""
+    if "$PYTHON_BIN" -c "import by_framework" 2>/dev/null; then
+        check "系统 Python ($PYTHON_BIN)" true ""
     else
-        check "Python venv ($VENV_DIR)" false "by_datacloud 导入失败，请运行: bash scripts/setup.sh"
+        check "系统 Python ($PYTHON_BIN)" false "by_framework 导入失败"
     fi
 else
-    check "Python venv ($VENV_DIR)" false "venv 未创建，请运行: bash scripts/setup.sh"
+    check "系统 Python ($PYTHON_BIN)" false "未找到"
 fi
 
 # Required env vars

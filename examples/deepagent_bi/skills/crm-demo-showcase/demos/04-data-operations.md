@@ -18,7 +18,7 @@
 ### 第 1 步：生成周报
 
 ```bash
-/tmp/ont_env/bin/python scripts/weekly-report/generate_weekly_report.py
+/usr/local/bin/python3 scripts/weekly-report/generate_weekly_report.py
 ```
 
 - **成功标志**：输出一段模拟钉钉周报文本，含客户和商机信息

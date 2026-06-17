@@ -84,58 +84,49 @@ def _compute_fields() -> list[_FakeField]:
 
 
 def test_T9_1_query_filter_item_uses_field() -> None:
-    """T9-1：build_query_schema 的 filters.items.oneOf[*].properties 含 field，不含 field_name_cn。"""
+    """T9-1：build_query_schema 的 filters.items.properties 含 field，不含 field_name_cn。"""
     from datacloud_data_sdk.virtual_action.generator import build_query_schema
 
     schema = build_query_schema("企业分析", _query_fields())
-    filter_items = schema["properties"]["filters"]["items"]["oneOf"]
+    filter_item = schema["properties"]["filters"]["items"]
 
-    for item in filter_items:
-        props = item.get("properties", {})
-        assert_uses_field_key(props, context="filters item")
-        required = item.get("required", [])
-        assert_required_uses_field(required, context="filters item")
+    assert "oneOf" not in filter_item
+    props = filter_item.get("properties", {})
+    assert_uses_field_key(props, context="filters item")
+    required = filter_item.get("required", [])
+    assert_required_uses_field(required, context="filters item")
 
 
 # ── T9-2：compute_* dimensions 使用 field ────────────────────────────────────
 
 
 def test_T9_2_compute_dim_item_uses_field() -> None:
-    """T9-2：build_compute_schema 的 dimensions.items.oneOf[*].properties 含 field，不含 field_name_cn。"""
+    """T9-2：build_compute_schema 的 dimensions.items.properties 含 field，不含 field_name_cn。"""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema("企业分析", _compute_fields())
     dim_schema = schema["properties"].get("dimensions", {})
     items_schema = dim_schema.get("items", {})
-    one_of = items_schema.get("oneOf", [])
 
-    assert one_of, "dimensions.items.oneOf 为空"
-    for item in one_of:
-        props = item.get("properties", {})
-        assert_uses_field_key(props, context="dimensions item")
+    assert "oneOf" not in items_schema
+    props = items_schema.get("properties", {})
+    assert_uses_field_key(props, context="dimensions item")
 
 
 # ── T9-3：compute_* metrics 使用 field ───────────────────────────────────────
 
 
 def test_T9_3_compute_metric_item_uses_field() -> None:
-    """T9-3：build_compute_schema 的 metrics.items.oneOf 普通指标项含 field，不含 field_name_cn。"""
+    """T9-3：build_compute_schema 的 metrics.items.properties 含 field，不含 field_name_cn。"""
     from datacloud_data_sdk.virtual_action.generator import build_compute_schema
 
     schema = build_compute_schema("企业分析", _compute_fields())
-    metric_items = schema["properties"]["metrics"]["items"]["oneOf"]
+    metric_item = schema["properties"]["metrics"]["items"]
 
-    # 排除 count_all_item（它不需要 field，通过 agg.enum 识别）
-    regular_items = [
-        item
-        for item in metric_items
-        if item.get("properties", {}).get("agg", {}).get("enum") != ["count_all"]
-    ]
-    assert regular_items, "没有普通指标项（非 count_all）"
-
-    for item in regular_items:
-        props = item.get("properties", {})
-        assert_uses_field_key(props, context="metrics item")
+    assert "oneOf" not in metric_item
+    props = metric_item.get("properties", {})
+    assert_uses_field_key(props, context="metrics item")
+    assert "count_all" in props.get("agg", {}).get("enum", [])
 
 
 # ── T9-4：query_* / compute_* order_by 使用 field ───────────────────────────
@@ -170,7 +161,7 @@ def test_T9_5_field_description_mentions_both_formats() -> None:
 
     # query filters
     q_schema = build_query_schema("企业分析", _query_fields())
-    q_filter_item = q_schema["properties"]["filters"]["items"]["oneOf"][0]
+    q_filter_item = q_schema["properties"]["filters"]["items"]
     q_field_desc = q_filter_item["properties"]["field"].get("description", "")
     assert "中文名" in q_field_desc or "字段编码" in q_field_desc or "属性编码" in q_field_desc, (
         f"query filters.field description 缺少格式说明: {q_field_desc!r}"
@@ -178,7 +169,7 @@ def test_T9_5_field_description_mentions_both_formats() -> None:
 
     # compute dimensions
     c_schema = build_compute_schema("企业分析", _compute_fields())
-    c_dim_item = c_schema["properties"]["dimensions"]["items"]["oneOf"][0]
+    c_dim_item = c_schema["properties"]["dimensions"]["items"]
     c_dim_desc = c_dim_item["properties"]["field"].get("description", "")
     assert "中文名" in c_dim_desc or "字段编码" in c_dim_desc or "属性编码" in c_dim_desc, (
         f"compute dimensions.field description 缺少格式说明: {c_dim_desc!r}"

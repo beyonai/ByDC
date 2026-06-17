@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """创建结构化本体对象（信息收集 + 提交两阶段）。
 
 I/O 协议：stdin JSON → stdout JSON
@@ -49,9 +49,7 @@ from __future__ import annotations
 
 import json
 import sys
-from copy import deepcopy
 from pathlib import Path
-import traceback
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -63,9 +61,9 @@ def main() -> None:
         sys.exit(1)
 
     # 预加载 Embedding 模型配置（从 Redis），使 build_terms 内的向量回填可用
-    from _common import load_embedding_model_from_redis
+    import _common
 
-    load_embedding_model_from_redis()
+    _common.load_embedding_model_from_redis()
 
     params: dict = json.loads(raw)
     action: str = params.get("action", "collect").lower().strip()
@@ -76,25 +74,24 @@ def main() -> None:
         print(json.dumps({"ok": False, "error": "entity_code 不能为空"}), flush=True)
         sys.exit(1)
 
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
-
-    session = OntologyBuildSession()
-
     if action == "collect":
-        state = session.collect_object_info(
-            entity_code=entity_code,
-            session_id=session_id,
-            entity_name=params.get("entity_name", ""),
-            entity_desc=params.get("entity_desc", ""),
-            fields=params.get("fields"),
+        result = _common.post_ontology_api(
+            "/object/collect",
+            {
+                "entity_code": entity_code,
+                "session_id": session_id,
+                "entity_name": params.get("entity_name", ""),
+                "entity_desc": params.get("entity_desc", ""),
+                "fields": params.get("fields"),
+            },
         )
-        if not state.get("ok", True):
-            output_state = deepcopy(state)
+        if not result.get("ok", True):
+            output_state = dict(result)
             output_state['entity_code'] = entity_code
             print(json.dumps(output_state, ensure_ascii=False), flush=True)
             return
-        missing = state.pop("missing", [])
-        output_state = deepcopy(state)
+        missing = result.pop("missing", []) if isinstance(result.get("missing"), list) else []
+        output_state = dict(result)
         output_state['entity_code'] = entity_code
         print(
             json.dumps({"ok": True, "state": output_state, "missing": missing}, ensure_ascii=False),
@@ -102,7 +99,10 @@ def main() -> None:
         )
 
     elif action == "submit":
-        result = session.submit_object(entity_code=entity_code, session_id=session_id)
+        result = _common.post_ontology_api(
+            "/object/submit",
+            {"entity_code": entity_code, "session_id": session_id},
+        )
         print(json.dumps(result, ensure_ascii=False), flush=True)
 
     else:

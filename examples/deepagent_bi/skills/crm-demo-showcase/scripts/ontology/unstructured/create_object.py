@@ -1,47 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """创建非结构化本体对象（信息收集 + 提交两阶段）。
 
 I/O 协议：stdin JSON → stdout JSON
 
-## 阶段一：信息收集（action="collect"）
-
-入参（stdin JSON）:
-    {
-        "action": "collect",
-        "session_id": "uuid-xxx",
-        "entity_code": "by_meeting_note",
-        "entity_name": "会议纪要",
-        "entity_desc": "会议纪要文档对象",
-        "kb_id": "kb-001",              # 知识库编码（resourceCode），来自 list_knowledge_bases.py 返回的 resourceCode 字段，不是 resourceId
-        "kb_directory": "/meeting",     # 知识库目录，来自 list_kb_directories.py
-        "fields": [
-            {
-                "property_code": "topic",
-                "property_name": "主题",
-                "data_type": "STRING",
-                "ext_property": {}
-            }
-        ]
-    }
-
-出参（stdout JSON）:
-    {
-        "ok": true,
-        "state": { ...当前暂存状态... },
-        "missing": ["entity_name", "kb_id"]
-    }
-
-## 阶段二：信息提交（action="submit"）
-
-入参（stdin JSON）:
-    {
-        "action": "submit",
-        "session_id": "uuid-xxx",
-        "entity_code": "by_meeting_note"
-    }
-
-出参（stdout JSON）:
-    {"ok": true, "resource_id": "..."}
+所有业务逻辑由 datacloud_data_service 的 ontology-manager API 提供服务。
 """
 
 from __future__ import annotations
@@ -49,9 +11,10 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from copy import deepcopy
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import _common
 
 
 def main() -> None:
@@ -69,41 +32,38 @@ def main() -> None:
         print(json.dumps({"ok": False, "error": "entity_code 不能为空"}), flush=True)
         sys.exit(1)
 
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
-
-    session = OntologyBuildSession()
-
     if action == "collect":
-        state = session.collect_object_info(
-            entity_code=entity_code,
-            session_id=session_id,
-            entity_name=params.get("entity_name", ""),
-            entity_desc=params.get("entity_desc", ""),
-            fields=params.get("fields"),
-            kb_id=params.get("kb_id", ""),
-            kb_directory=params.get("kb_directory", ""),
+        result = _common.post_ontology_api(
+            "/object/collect",
+            {
+                "entity_code": entity_code,
+                "session_id": session_id,
+                "entity_name": params.get("entity_name", ""),
+                "entity_desc": params.get("entity_desc", ""),
+                "fields": params.get("fields"),
+                "kb_id": params.get("kb_id", ""),
+                "kb_directory": params.get("kb_directory", ""),
+            },
         )
-        if not state.get("ok", True):
-            output_state = deepcopy(state)
-            output_state['entity_code'] = entity_code
-            print(json.dumps(output_state, ensure_ascii=False), flush=True)
+        if not result.get("ok", True):
+            result["entity_code"] = entity_code
+            print(json.dumps(result, ensure_ascii=False), flush=True)
             return
-        missing = state.pop("missing", [])
-        # 非结构化还需要 kb_id
-        if not state.get("kb_id"):
+        missing = result.pop("missing", []) if isinstance(result.get("missing"), list) else []
+        if not result.get("kb_id"):
             missing.append("kb_id")
-        output_state = deepcopy(state)
-        output_state['entity_code'] = entity_code
+        result["entity_code"] = entity_code
         print(
-            json.dumps({"ok": True, "state": output_state, "missing": missing}, ensure_ascii=False),
+            json.dumps({"ok": True, "state": result, "missing": missing}, ensure_ascii=False),
             flush=True,
         )
 
     elif action == "submit":
-        from _common import load_embedding_model_from_redis
-
-        load_embedding_model_from_redis()
-        result = session.submit_object(entity_code=entity_code, session_id=session_id)
+        _common.load_embedding_model_from_redis()
+        result = _common.post_ontology_api(
+            "/object/submit",
+            {"entity_code": entity_code, "session_id": session_id},
+        )
         print(json.dumps(result, ensure_ascii=False), flush=True)
 
     else:

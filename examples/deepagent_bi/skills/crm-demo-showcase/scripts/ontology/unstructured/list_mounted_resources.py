@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """查询数字员工已挂载的资源列表。
 
 I/O 协议：stdin JSON → stdout JSON

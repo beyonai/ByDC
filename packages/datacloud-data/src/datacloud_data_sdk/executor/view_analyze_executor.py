@@ -58,6 +58,23 @@ def _collect_required_filter_groups(fields: list[Any]) -> list[str]:
     return groups
 
 
+def _conditional_metric_expr(agg: str, col_expr: str, condition_sql: str) -> str:
+    """构建 metric 级 filters 对应的条件聚合表达式。"""
+    agg_lower = agg.lower()
+    condition_expr = f"({condition_sql})"
+    if agg_lower == "count_all":
+        return f"SUM(CASE WHEN {condition_expr} THEN 1 ELSE 0 END)"
+    if agg_lower == "count":
+        return f"SUM(CASE WHEN {condition_expr} AND {col_expr} IS NOT NULL THEN 1 ELSE 0 END)"
+    if agg_lower == "count_distinct":
+        return f"COUNT(DISTINCT CASE WHEN {condition_expr} THEN {col_expr} ELSE NULL END)"
+    if agg_lower == "sum":
+        return f"SUM(CASE WHEN {condition_expr} THEN {col_expr} ELSE 0 END)"
+    if agg_lower in ("avg", "min", "max"):
+        return f"{agg_lower.upper()}(CASE WHEN {condition_expr} THEN {col_expr} ELSE NULL END)"
+    return _agg_expr(agg, f"CASE WHEN {condition_expr} THEN {col_expr} ELSE NULL END")
+
+
 class ViewAnalyzeExecutor:
     """执行视图级 analyze 虚拟动作（多对象 LEFT JOIN 分组统计）。"""
 
@@ -200,25 +217,48 @@ class ViewAnalyzeExecutor:
         # Metrics
         metric_alias_to_expr: dict[str, str] = {}
         metric_field_to_exprs: dict[str, list[str]] = {}
-        for mtr in metrics:
+        metric_params: dict[str, Any] = {}
+        for metric_idx, mtr in enumerate(metrics):
             agg = mtr.get("agg", "count")
             mtr_alias = mtr.get("as") or f"{agg}_result"
+            metric_filters = mtr.get("filters") or []
             if agg == "count_all":
                 expr = "COUNT(*)"
+                col_expr = ""
             else:
                 fc = mtr.get("field", "")
-                resolved = field_to_alias_col.get(fc)
-                if not resolved:
-                    logger.warning(
-                        "[ViewAnalyzeExecutor] metric field '%s' not in view mapping"
-                        " (view=%s), falling back to bare column — check field_code",
-                        fc,
-                        getattr(view, "view_id", "?"),
-                    )
-                    expr = _agg_expr(agg, quote_identifier(fc, db_type))
+                raw_expr = mtr.get("expr", "")
+                if raw_expr:
+                    col_expr = f"({raw_expr})"
                 else:
-                    ta, col = resolved
-                    expr = _agg_expr(agg, f"{ta}.{quote_identifier(col, db_type)}")
+                    resolved = field_to_alias_col.get(fc)
+                    if not resolved:
+                        logger.warning(
+                            "[ViewAnalyzeExecutor] metric field '%s' not in view mapping"
+                            " (view=%s), falling back to bare column — check field_code",
+                            fc,
+                            getattr(view, "view_id", "?"),
+                        )
+                        col_expr = quote_identifier(fc, db_type)
+                    else:
+                        ta, col = resolved
+                        col_expr = f"{ta}.{quote_identifier(col, db_type)}"
+                expr = _agg_expr(agg, col_expr)
+            if metric_filters:
+                condition_sql, condition_params = build_filters_where(
+                    metric_filters,
+                    field_to_alias_col,
+                    db_type,
+                    lambda _prefix, field_code, filter_idx: _safe_pkey(
+                        f"m{metric_idx}", field_code, filter_idx
+                    ),
+                    str(mtr.get("filter_relation") or "AND"),
+                    context.field_to_analytic_kind,
+                    context.field_to_field_type,
+                )
+                if condition_sql:
+                    expr = _conditional_metric_expr(agg, col_expr, condition_sql)
+                    metric_params.update(condition_params)
             select_parts.append(f"{expr} AS {quote_identifier(mtr_alias, db_type)}")
             col_keys.append(mtr_alias)
             metric_alias_to_expr[mtr_alias] = expr
@@ -236,6 +276,7 @@ class ViewAnalyzeExecutor:
             context.field_to_analytic_kind,
             context.field_to_field_type,
         )
+        params = {**metric_params, **params}
 
         # HAVING
         having_clauses: list[str] = []
@@ -301,6 +342,12 @@ class ViewAnalyzeExecutor:
         required_fields = {item.get("field", "") for item in dimensions}
         required_fields.update(
             metric.get("field", "") for metric in metrics if metric.get("agg") != "count_all"
+        )
+        required_fields.update(
+            item.get("field", "")
+            for metric in metrics
+            for item in metric.get("filters") or []
+            if isinstance(item, dict)
         )
         required_fields.update(item.get("field", "") for item in filters)
         required_fields.update(

@@ -187,7 +187,7 @@ baiying_call(
 
 ```bash
 export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
-/tmp/ont_env/bin/python scripts/ontology/structured/<script>.py '<JSON>'
+/usr/local/bin/python3 scripts/ontology/structured/<script>.py '<JSON>'
 ```
 
 **可用脚本：**
@@ -207,7 +207,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 
 ```bash
 # 阶段一：收集信息
-/tmp/ont_env/bin/python scripts/ontology/structured/create_object.py '{
+/usr/local/bin/python3 scripts/ontology/structured/create_object.py '{
   "action": "collect",
   "entity_code": "product",
   "entity_name": "产品",
@@ -257,7 +257,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 }'
 
 # 阶段二：确认提交
-/tmp/ont_env/bin/python scripts/ontology/structured/create_object.py '{
+/usr/local/bin/python3 scripts/ontology/structured/create_object.py '{
   "action": "submit",
   "entity_code": "product"
 }'
@@ -267,7 +267,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 
 ```bash
 # 阶段一：收集信息（object_codes 扁平列表 + object_relations + 含 formula 的 fields）
-/tmp/ont_env/bin/python scripts/ontology/structured/create_view.py '{
+/usr/local/bin/python3 scripts/ontology/structured/create_view.py '{
   "action": "collect",
   "view_code": "product_order_view",
   "view_name": "产品订单视图",
@@ -291,7 +291,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 }'
 
 # 阶段二：确认提交
-/tmp/ont_env/bin/python scripts/ontology/structured/create_view.py '{
+/usr/local/bin/python3 scripts/ontology/structured/create_view.py '{
   "action": "submit",
   "view_code": "product_order_view"
 }'
@@ -329,7 +329,7 @@ export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
 三篇 DataCloud 项目会议纪要，通过 `scripts/meeting-minutes/generate_meeting_minutes.py` 获取：
 
 ```bash
-/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py --index 0 # 指定某一篇
+/usr/local/bin/python3 scripts/meeting-minutes/generate_meeting_minutes.py --index 0 # 指定某一篇
 ```
 
 **数据摘要：**
@@ -368,7 +368,7 @@ baiying_call(
 
 ```bash
 export BE_DOMAINNAME=${BE_DOMAINNAME:-ByaiService}
-/tmp/ont_env/bin/python scripts/ontology/unstructured/<script>.py '<JSON>'
+/usr/local/bin/python3 scripts/ontology/unstructured/<script>.py '<JSON>'
 ```
 
 **可用脚本：**

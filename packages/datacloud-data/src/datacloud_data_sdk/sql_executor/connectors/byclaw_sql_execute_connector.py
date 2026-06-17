@@ -1,210 +1,80 @@
-"""ByClaw sqlExecute connector based on service discovery."""
+"""ByClaw sqlExecute connector backed by file-based SQLite."""
 
 from __future__ import annotations
 
-import re
+import asyncio
+import os
+import sqlite3
 from typing import Any
 
-from datacloud_data_sdk.context import get_current_context
-from datacloud_data_sdk.exceptions import DatacloudError, SqlExecutionError
+from datacloud_data_sdk.exceptions import SqlExecutionError
 from datacloud_data_sdk.sql_executor.base_connector import BaseSourceConnector
 from datacloud_data_sdk.sql_executor.models import DataSourceConfig
-from datacloud_data_sdk.utils.redis_discovery import (
-    RedisDiscoveryConfig,
-    load_redis_discovery_config,
-)
 
-_SQL_EXECUTE_PATH = "/plugins/byclaw-sqlite/sqlExecute"
+DEFAULT_MOUNT_PATH = None  # type: ignore[reportGeneralTypeIssues]
+_MOUNT_PATH: str | None = DEFAULT_MOUNT_PATH
+
+FIXED_DB_NAME = "personal_object.db"
 
 
 class ByclawSqlExecuteConnector(BaseSourceConnector):
-    """Execute SQL through ByClaw sqlExecute API discovered from Redis."""
+    """Execute SQL against a shared file-based SQLite database.
 
-    _default_redis_config: RedisDiscoveryConfig | None = None
+    Database path: {mount_path}/byclaw-datacloud/personal_object.db
+    where mount_path defaults to .
+
+    All callers share the same single database file.
+    """
 
     def __init__(
         self,
         config: DataSourceConfig,
-        redis_config: RedisDiscoveryConfig | None = None,
     ) -> None:
         super().__init__(config)
-        self._redis_config = (
-            redis_config or self.__class__._default_redis_config or _load_redis_discovery_config()
-        )
+        db_path = self._resolve_db_path(config)
+        self._conn = sqlite3.connect(db_path, check_same_thread=False, timeout=5)
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.row_factory = sqlite3.Row
+        self._execute_lock = asyncio.Lock()
 
     @classmethod
     def supported_type(cls) -> str:
         return "BYCLAW_SQL_EXECUTE"
 
     @classmethod
-    def configure_default_redis(cls, redis_config: RedisDiscoveryConfig | None) -> None:
-        """Configure default Redis discovery settings for registry-created instances."""
-        cls._default_redis_config = redis_config
+    def configure_mount_path(cls, mount_path: str | None) -> None:
+        """Override the default FILE_STORAGE_MINIO_MOUNT_PATH mount point."""
+        global _MOUNT_PATH
+        _MOUNT_PATH = mount_path
+
+    def _resolve_db_path(self, config: DataSourceConfig) -> str:
+        mount = (
+            _MOUNT_PATH
+            if _MOUNT_PATH is not DEFAULT_MOUNT_PATH
+            else os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+        )
+        if not mount:
+            raise SqlExecutionError(
+                config.alias,
+                "",
+                "FILE_STORAGE_MINIO_MOUNT_PATH is required",
+            )
+        return os.path.join(mount, "byclaw-datacloud", FIXED_DB_NAME)
 
     async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        user_code = self._resolve_user_code()
-        payload: dict[str, Any] = {
-            "sql": _render_sql(sql, params),
-            "user_code": user_code,
-        }
-
-        try:
-            body = await self._post_by_discovery(user_code, payload)
-        except (ImportError, ValueError, RuntimeError) as exc:
-            raise SqlExecutionError(self.config.alias, sql, str(exc)) from exc
-
-        try:
-            return self._extract_records(body)
-        except (TypeError, ValueError) as exc:
-            raise SqlExecutionError(self.config.alias, sql, str(exc)) from exc
+        async with self._execute_lock:
+            cursor = self._conn.execute(sql, params or [])
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+            self._conn.commit()
+            return [dict(zip(columns, row)) for row in rows]
 
     async def test_connection(self) -> bool:
         try:
-            await self.execute("SELECT 1")
-        except Exception:  # noqa: BLE001
+            self._conn.execute("SELECT 1")
+            return True
+        except Exception:
             return False
-        return True
 
-    async def _post_by_discovery(self, user_code: str, payload: dict[str, Any]) -> dict[str, Any]:
-        service_name = self._resolve_service_name(user_code)
-
-        try:
-            from by_framework.common.redis_client import init_redis
-            from by_framework.core.discovery import DiscoveryClient
-            from by_framework.util.discovery_http_client import DiscoveryHttpClient
-            from by_framework.util.http_client import RetryConfig
-        except ImportError as exc:
-            raise RuntimeError(
-                "BYCLAW_SQL_EXECUTE service discovery requires by_framework dependency"
-            ) from exc
-
-        init_redis(
-            host=self._redis_config.host,
-            port=self._redis_config.port,
-            db=self._redis_config.database,
-            password=self._redis_config.password,
-            username=self._redis_config.username,
-        )
-        discovery_client = DiscoveryClient(cache_interval=5)
-        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
-        try:
-            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
-            if not instance:
-                raise RuntimeError(f"未找到 SQLite 服务实例: {service_name}")
-
-            metadata = instance.metadata or {}
-            token = metadata.get("token", "")
-            headers = {"Content-Type": "application/json"}
-            if token:
-                headers["Authorization"] = f"Bearer {token}"
-
-            async with DiscoveryHttpClient(
-                discovery_client,
-                retry_config=retry_config,
-                health_threshold_ms=-1,
-            ) as client:
-                response = await client.post(
-                    service_name,
-                    _SQL_EXECUTE_PATH,
-                    headers=headers,
-                    json=payload,
-                )
-        finally:
-            await discovery_client.close()
-
-        body = response.data
-        if not isinstance(body, dict):
-            raise ValueError("BYCLAW_SQL_EXECUTE response must be a JSON object")
-        return body
-
-    def _resolve_user_code(self) -> str:
-        try:
-            ctx = get_current_context()
-        except DatacloudError as exc:
-            raise SqlExecutionError(
-                self.config.alias,
-                "",
-                "InvocationContext is required to resolve BYCLAW_SQL_EXECUTE user_code",
-            ) from exc
-
-        if isinstance(ctx.extras, dict):
-            user_code = ctx.extras.get("user_code")
-            if isinstance(user_code, str) and user_code:
-                return user_code
-
-        if ctx.user_id:
-            return ctx.user_id
-
-        raise SqlExecutionError(
-            self.config.alias,
-            "",
-            "BYCLAW_SQL_EXECUTE user_code is required; set InvocationContext(user_id=...) "
-            'or extras={"user_code": "..."}',
-        )
-
-    def _resolve_service_name(self, user_code: str) -> str:
-        service_name = self.config.service_name.strip()
-        return service_name or f"BYCLAW_EXE_{user_code}"
-
-    def _extract_records(self, body: Any) -> list[dict[str, Any]]:
-        if not isinstance(body, dict):
-            raise TypeError("BYCLAW_SQL_EXECUTE response must be a JSON object")
-
-        if body.get("ok") is False:
-            error = body.get("error")
-            raise ValueError(f"BYCLAW_SQL_EXECUTE service returned error: {error or body}")
-
-        result_code = body.get("resultCode")
-        if result_code not in (None, "0", 0):
-            message = str(body.get("resultMsg") or body.get("message") or "unknown error")
-            raise ValueError(
-                f"BYCLAW_SQL_EXECUTE service returned resultCode={result_code}: {message}"
-            )
-
-        candidates = [
-            body.get("data"),
-            body.get("resultObject"),
-            body.get("resultData"),
-        ]
-        for candidate in candidates:
-            records = _extract_record_list(candidate)
-            if records is not None:
-                return records
-        return []
-
-
-def _load_redis_discovery_config() -> RedisDiscoveryConfig:
-    return load_redis_discovery_config()
-
-
-def _extract_record_list(value: Any) -> list[dict[str, Any]] | None:
-    if isinstance(value, list):
-        return [dict(row) for row in value if isinstance(row, dict)]
-    if not isinstance(value, dict):
-        return None
-    for key in ("records", "rows", "data", "resultData"):
-        records = _extract_record_list(value.get(key))
-        if records is not None:
-            return records
-    return None
-
-
-def _render_sql(sql: str, params: dict[str, Any] | None) -> str:
-    if not params:
-        return sql
-
-    result = sql
-    for key in sorted(params.keys(), key=len, reverse=True):
-        value = params[key]
-        result = re.sub(rf":{re.escape(key)}\b", _sql_literal(value), result)
-    return result
-
-
-def _sql_literal(value: Any) -> str:
-    if value is None:
-        return "NULL"
-    if isinstance(value, bool):
-        return "1" if value else "0"
-    if isinstance(value, (int, float)):
-        return str(value)
-    return "'" + str(value).replace("'", "''") + "'"
+    async def close(self) -> None:
+        self._conn.close()

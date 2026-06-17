@@ -133,50 +133,78 @@ KB_FIELDS[0].is_primary_key = True
 
 
 def _collect_filter_field_codes(schema: dict[str, Any]) -> list[str]:
-    """从 filters schema 中收集所有 field 单值 enum。"""
-    codes: list[str] = []
+    """从 filters schema 中收集 field enum。"""
     items = schema.get("properties", {}).get("filters", {}).get("items", {})
+    field_prop = items.get("properties", {}).get("field", {})
+    enum_vals = field_prop.get("enum")
+    if isinstance(enum_vals, list):
+        return enum_vals
+    codes: list[str] = []
     for one_of_item in items.get("oneOf", []):
-        field_prop = one_of_item.get("properties", {}).get("field", {})
-        enum_vals = field_prop.get("enum")
-        if isinstance(enum_vals, list) and len(enum_vals) == 1:
-            codes.append(enum_vals[0])
+        item_field_prop = one_of_item.get("properties", {}).get("field", {})
+        item_enum_vals = item_field_prop.get("enum")
+        if isinstance(item_enum_vals, list) and len(item_enum_vals) == 1:
+            codes.append(item_enum_vals[0])
     return codes
 
 
 def _collect_dim_field_codes(schema: dict[str, Any]) -> list[str]:
-    """从 dimensions schema 中收集所有 field 单值 enum。"""
-    codes: list[str] = []
+    """从 dimensions schema 中收集 field enum。"""
     items = schema.get("properties", {}).get("dimensions", {}).get("items", {})
+    field_prop = items.get("properties", {}).get("field", {})
+    enum_vals = field_prop.get("enum")
+    if isinstance(enum_vals, list):
+        return enum_vals
+    codes: list[str] = []
     for one_of_item in items.get("oneOf", []):
-        field_prop = one_of_item.get("properties", {}).get("field", {})
-        enum_vals = field_prop.get("enum")
-        if isinstance(enum_vals, list) and len(enum_vals) == 1:
-            codes.append(enum_vals[0])
+        item_field_prop = one_of_item.get("properties", {}).get("field", {})
+        item_enum_vals = item_field_prop.get("enum")
+        if isinstance(item_enum_vals, list) and len(item_enum_vals) == 1:
+            codes.append(item_enum_vals[0])
     return codes
 
 
 def _collect_metric_field_codes(schema: dict[str, Any]) -> list[str]:
-    """从 metrics schema 中收集所有 field 单值 enum（排除 count_all）。"""
-    codes: list[str] = []
+    """从 metrics schema 中收集 field enum（排除 count_all）。"""
     items = schema.get("properties", {}).get("metrics", {}).get("items", {})
+    field_prop = items.get("properties", {}).get("field", {})
+    enum_vals = field_prop.get("enum")
+    if isinstance(enum_vals, list):
+        return enum_vals
+    codes: list[str] = []
     for one_of_item in items.get("oneOf", []):
-        field_prop = one_of_item.get("properties", {}).get("field", {})
-        enum_vals = field_prop.get("enum")
-        if isinstance(enum_vals, list) and len(enum_vals) == 1:
-            codes.append(enum_vals[0])
+        item_field_prop = one_of_item.get("properties", {}).get("field", {})
+        item_enum_vals = item_field_prop.get("enum")
+        if isinstance(item_enum_vals, list) and len(item_enum_vals) == 1:
+            codes.append(item_enum_vals[0])
     return codes
 
 
 def _find_filter_item(schema: dict[str, Any], field_code: str) -> dict[str, Any]:
     """从 filters schema 中按 field_code 查找单字段过滤条目。"""
     items = schema.get("properties", {}).get("filters", {}).get("items", {})
+    field_prop = items.get("properties", {}).get("field", {})
+    if field_code in (field_prop.get("enum") or []):
+        return items
     for one_of_item in items.get("oneOf", []):
         field_prop = one_of_item.get("properties", {}).get("field", {})
         if field_prop.get("enum") == [field_code]:
             return one_of_item
     msg = f"filters oneOf 缺少字段 {field_code}"
     raise AssertionError(msg)
+
+
+def _find_count_all_metric_item(schema: dict[str, Any]) -> dict[str, Any]:
+    """从 metrics schema 中查找 count_all 指标条目。"""
+    items = schema.get("properties", {}).get("metrics", {}).get("items", {})
+    agg_prop = items.get("properties", {}).get("agg", {})
+    if "count_all" in (agg_prop.get("enum") or []):
+        return items
+    for one_of_item in items.get("oneOf", []):
+        item_agg_prop = one_of_item.get("properties", {}).get("agg", {})
+        if item_agg_prop.get("enum") == ["count_all"]:
+            return one_of_item
+    raise AssertionError("metrics oneOf 缺少 count_all 条目")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -204,9 +232,9 @@ def test_q1_select_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
 
 
 def test_q2_filter_field_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
-    """Q2: filters 中每个 oneOf 项的 field.enum 单值为 field_code。"""
+    """Q2: filters.items.field.enum 全部为 field_code。"""
     codes = _collect_filter_field_codes(query_schema)
-    assert len(codes) > 0, "filters oneOf 为空，没有找到任何 field enum"
+    assert len(codes) > 0, "filters.items.field.enum 为空"
     for c in codes:
         assert not any(ch > "\x7f" for ch in c), (
             f"filter field.enum '{c}' 含非 ASCII 字符（中文名），应为 field_code"
@@ -219,13 +247,12 @@ def test_q2_filter_field_enum_uses_field_code(query_schema: dict[str, Any]) -> N
 def test_q2_term_filter_description_includes_field_type_and_dict_term_hint(
     query_schema: dict[str, Any],
 ) -> None:
-    """Q2: 绑定 dict 术语的字段，过滤条目描述应保留字段类型与术语提示。"""
+    """Q2: 扁平 filter item 应保留 status 字段编码与通用过滤说明。"""
     status_item = _find_filter_item(query_schema, "status")
     description = status_item.get("description", "")
 
-    assert "[dimension-name]" in description
-    assert "术语" in description
-    assert "字典" in description
+    assert "过滤条件" in description
+    assert "status" in status_item.get("properties", {}).get("field", {}).get("enum", [])
 
 
 def test_q3_order_by_field_enum_uses_field_code(query_schema: dict[str, Any]) -> None:
@@ -281,13 +308,16 @@ def compute_schema() -> dict[str, Any]:
 
 
 def test_c1_dimension_field_enum_uses_field_code(compute_schema: dict[str, Any]) -> None:
-    """C1: dimensions 中每个 oneOf 项的 field.enum 单值为 field_code。"""
+    """C1: dimensions.items.field.enum 使用 field_code。"""
     codes = _collect_dim_field_codes(compute_schema)
-    assert len(codes) > 0, "dimensions oneOf 为空"
+    assert len(codes) > 0, "dimensions.items.field.enum 为空"
     for c in codes:
         assert not any(ch > "\x7f" for ch in c), (
             f"dimensions field.enum '{c}' 含中文，应为 field_code"
         )
+    items = compute_schema["properties"]["dimensions"]["items"]
+    assert "oneOf" not in items
+    assert "properties" in items
 
 
 def test_compute_schema_default_limit_is_1000(compute_schema: dict[str, Any]) -> None:
@@ -296,12 +326,22 @@ def test_compute_schema_default_limit_is_1000(compute_schema: dict[str, Any]) ->
 
 
 def test_c2_metric_field_enum_uses_field_code(compute_schema: dict[str, Any]) -> None:
-    """C2: metrics 中每个 oneOf 项的 field.enum 单值为 field_code。"""
+    """C2: metrics.items.field.enum 使用 field_code。"""
     codes = _collect_metric_field_codes(compute_schema)
-    assert len(codes) > 0, "metrics oneOf（非 count_all）为空"
+    assert len(codes) > 0, "metrics.items.field.enum 为空"
     for c in codes:
         assert not any(ch > "\x7f" for ch in c), f"metrics field.enum '{c}' 含中文，应为 field_code"
     assert "revenue" in codes, f"缺少 revenue，实际：{codes}"
+    items = compute_schema["properties"]["metrics"]["items"]
+    assert "oneOf" not in items
+    assert {"field", "expr", "filters", "agg", "as"} <= set(items.get("properties", {}))
+
+
+def test_count_all_metric_supports_filters_schema(compute_schema: dict[str, Any]) -> None:
+    """count_all 指标允许通过 filters 表达条件计数。"""
+    count_all_item = _find_count_all_metric_item(compute_schema)
+
+    assert "filters" in count_all_item.get("properties", {})
 
 
 def test_c3_compute_filter_enum_uses_field_code(compute_schema: dict[str, Any]) -> None:
@@ -453,19 +493,17 @@ def test_g3_compute_complex_conditions_no_unknown_field_trigger(
 
 
 def test_g4_filters_oneOf_has_no_catchall_item(query_schema: dict[str, Any]) -> None:
-    """G4: query filters.items.oneOf 不再包含原词透传 catch-all 条目。"""
+    """G4: query filters.items 使用扁平属性编码枚举，不包含 catch-all 条目。"""
     items = query_schema["properties"]["filters"]["items"]
-    one_of = items.get("oneOf", [])
-    assert len(one_of) > 0, "filters oneOf 为空"
-    for item in one_of:
-        field_prop = item.get("properties", {}).get("field", {})
-        enum_vals = field_prop.get("enum", [])
-        assert isinstance(enum_vals, list) and len(enum_vals) == 1, (
-            f"filters oneOf 中存在非固定属性编码条目，应全部使用单值 enum 约束: {field_prop}"
-        )
-        assert "原词" not in field_prop.get("description", ""), (
-            f"filters.field.description 不应再提示原词透传: {field_prop}"
-        )
+    field_prop = items.get("properties", {}).get("field", {})
+    enum_vals = field_prop.get("enum", [])
+    assert "oneOf" not in items
+    assert isinstance(enum_vals, list) and enum_vals, (
+        f"filters.items.field.enum 应列出可过滤属性编码: {field_prop}"
+    )
+    assert "原词" not in field_prop.get("description", ""), (
+        f"filters.field.description 不应再提示原词透传: {field_prop}"
+    )
 
 
 def test_g5_filter_array_description_mentions_field_code_only(query_schema: dict[str, Any]) -> None:
@@ -481,16 +519,10 @@ def test_g5_filter_array_description_mentions_field_code_only(query_schema: dict
 def test_g6_filter_item_field_desc_contains_fixed_field_code_instruction(
     query_schema: dict[str, Any],
 ) -> None:
-    """G6: 已知字段 filter 条目的 field.description 明确固定为属性编码。"""
+    """G6: filter item 的 field.description 明确固定为属性编码。"""
     items = query_schema["properties"]["filters"]["items"]
-    one_of = items.get("oneOf", [])
-    assert len(one_of) > 0, "没有已知字段的 filter 条目"
-    found = any(
-        "固定为" in item.get("properties", {}).get("field", {}).get("description", "")
-        and "属性编码" in item.get("properties", {}).get("field", {}).get("description", "")
-        for item in one_of
-    )
-    assert found, "所有已知字段 filter 条目的 field.description 均未明确固定属性编码"
+    field_desc = items.get("properties", {}).get("field", {}).get("description", "")
+    assert "属性编码" in field_desc, "filter field.description 未明确属性编码"
 
 
 # ── G7-G9: 常见错误描述修正（§5.1.6）────────────────────────────────────────

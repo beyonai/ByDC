@@ -51,7 +51,8 @@ dependencies = [
     "strawberry-graphql[fastapi]>=0.260",
     "python-multipart>=0.0.12",
     "uvicorn>=0.32.0",
-    "watchfiles>=1.0"
+    "watchfiles>=1.0",
+    "psycopg2-binary",
 ]
 
 [dependency-groups]
@@ -112,6 +113,7 @@ members = [
     "packages/datacloud-analysis",
     "packages/datacloud-data",
     "packages/datacloud-knowledge",
+    "packages/datacloud-server",
 ]
 
 [tool.uv.sources]
@@ -263,6 +265,8 @@ ignore = [
 ]
 "packages/datacloud-knowledge/db/scripts/*.py" = ["PLC0415"]
 "packages/datacloud-knowledge/scripts/manual/*.py" = ["E402", "PLC0415", "PLW0603", "S101", "S105", "S106", "S108", "S603", "PLW1510", "T201"]
+"packages/datacloud-server/scripts/*.py" = ["E402", "PLC0415", "T201", "RUF001", "RUF002"]
+"packages/datacloud-server/scripts/quick_start.py" = ["E402", "PLC0415", "PLR0915", "T201", "RUF001", "RUF002"]
 "packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_build/importer/notifier.py" = ["S310"]
 "packages/datacloud-knowledge/src/datacloud_knowledge/knowledge_build/importer/owl_parser.py" = [
     "N802",
