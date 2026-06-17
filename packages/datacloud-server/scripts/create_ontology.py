@@ -12,7 +12,7 @@ load_dotenv()
 
 from datacloud_server.adapters.local_adapter import LocalOntologyAdapter
 from datacloud_server.models.action import Action, ActionParam
-from datacloud_server.models.datasource import Datasource
+from datacloud_server.models.datasource import Datasource, DbConnection
 from datacloud_server.models.object_type import ObjectType
 from datacloud_server.models.property import Property
 from datacloud_server.models.relation import Relation
@@ -182,21 +182,32 @@ def main() -> None:
     logger.info("Action created: %s (%s)", created_action.action_code, created_action.action_name)
 
     # =================================================================
-    # 5. 创建 Datasource
+    # 5. 创建 Datasource (嵌套模型: db[DbConnection])
     # =================================================================
     print("\n--- 5. 创建 Datasource ---")
     ds = Datasource(
-        dbId="script_demo_db",
-        dbName="示例数据库",
-        dbType="opengauss",
-        host="localhost",
-        port=5432,
-        database="demo",
-        dbSchema="public",
-        description="由脚本创建的示例数据源",
+        db=[
+            DbConnection(
+                dbId="script_demo_db",
+                dbCode="demo",
+                dbType="opengauss",
+                dbParams={
+                    "host": "localhost",
+                    "port": 5432,
+                    "database": "demo",
+                    "schema": "public",
+                },
+            )
+        ],
+        doc=[],
+        api=[],
     )
     created_ds = resource_svc.create_datasource(BASE_ID, SCENE_ID, ds)
-    logger.info("Datasource created: %s (%s)", created_ds.db_id, created_ds.db_name)
+    logger.info(
+        "Datasource created: %s (%s)",
+        created_ds.db[0].db_id,
+        created_ds.db[0].db_code,
+    )
 
     # =================================================================
     # 6. 汇总
