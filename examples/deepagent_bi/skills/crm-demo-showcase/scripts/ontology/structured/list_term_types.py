@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """查询可绑定的术语类型列表。
 
 I/O 协议：stdin JSON → stdout JSON
@@ -34,10 +34,13 @@ def main() -> None:
     params: dict = json.loads(raw) if raw else {}
     keyword: str = params.get("keyword", "")
 
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
+    import _common
 
-    session = OntologyBuildSession()
-    data = session.list_bindable_term_types(keyword=keyword)
+    result = _common.post_ontology_api(
+        "/term-types/list",
+        {"keyword": keyword},
+    )
+    data = result.get("data", [])
     print(json.dumps({"ok": True, "data": data}, ensure_ascii=False), flush=True)
 
 

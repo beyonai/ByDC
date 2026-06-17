@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """将当前数字员工/个人助理的本体资源卸载。
 
 I/O 协议：stdin JSON → stdout JSON

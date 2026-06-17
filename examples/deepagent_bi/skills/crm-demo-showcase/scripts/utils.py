@@ -33,7 +33,7 @@ def check_venv_ready() -> tuple[bool, str]:
         return False, f"Python 虚拟环境不存在: {python_bin}，请运行 bash scripts/setup.sh"
     try:
         result = subprocess.run(
-            [str(python_bin), "-c", "import by_datacloud; print('OK')"],
+            [str(python_bin), "-c", "import by_framework; print('OK')"],
             capture_output=True,
             text=True,
             timeout=15,
@@ -41,7 +41,7 @@ def check_venv_ready() -> tuple[bool, str]:
         )
         if result.returncode == 0 and "OK" in result.stdout:
             return True, f"环境就绪: {python_bin}"
-        return False, f"by_datacloud 导入失败: {result.stderr.strip()}"
+        return False, f"by_framework 导入失败: {result.stderr.strip()}"
     except FileNotFoundError:
         return False, f"Python 解释器不可用: {python_bin}"
     except subprocess.TimeoutExpired:

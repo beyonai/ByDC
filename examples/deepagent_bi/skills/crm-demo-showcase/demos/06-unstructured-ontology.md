@@ -21,7 +21,7 @@
 1. **查询知识库**：
 
    ```bash
-   /tmp/ont_env/bin/python scripts/ontology/unstructured/list_knowledge_bases.py
+   /usr/local/bin/python3 scripts/ontology/unstructured/list_knowledge_bases.py
    ```
 
    从返回结果中获取匹配知识库的 `resourceCode`（作为 `kb_id`）。
@@ -29,7 +29,7 @@
 2. **查询目录**：
 
    ```bash
-   /tmp/ont_env/bin/python scripts/ontology/unstructured/list_kb_directories.py \
+   /usr/local/bin/python3 scripts/ontology/unstructured/list_kb_directories.py \
      '{"resource_code": "<上一步的 resourceCode>"}'
    ```
 
@@ -51,7 +51,7 @@
 
 ```bash
 # 阶段一：收集信息
-/tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
+/usr/local/bin/python3 scripts/ontology/unstructured/create_object.py '{
   "action": "collect",
   "entity_code": "meeting_note",
   "entity_name": "会议纪要",
@@ -103,7 +103,7 @@
 }'
 
 # 阶段二：确认提交
-/tmp/ont_env/bin/python scripts/ontology/unstructured/create_object.py '{
+/usr/local/bin/python3 scripts/ontology/unstructured/create_object.py '{
   "action": "submit",
   "entity_code": "meeting_note"
 }'
@@ -118,14 +118,14 @@
 1. **挂载对象**：
 
    ```bash
-   /tmp/ont_env/bin/python scripts/ontology/unstructured/mount_resource.py \
+   /usr/local/bin/python3 scripts/ontology/unstructured/mount_resource.py \
      '{"agent_id": <Agent的数字后缀>, "resource_code": "<上一步获取的会议纪要对象的resource_code>"}'
    ```
 
 2. **获取 resource_id**：
 
    ```bash
-    /tmp/ont_env/bin/python scripts/ontology/unstructured/list_mounted_resources.py \
+    /usr/local/bin/python3 scripts/ontology/unstructured/list_mounted_resources.py \
       '{"resource_id": <Agent的数字后缀>, "keyword": "会议纪要"}'
    ```
 
@@ -148,7 +148,7 @@
 ### 第 3 步：获取会议纪要
 
 ```bash
-/tmp/ont_env/bin/python scripts/meeting-minutes/generate_meeting_minutes.py
+/usr/local/bin/python3 scripts/meeting-minutes/generate_meeting_minutes.py
 ```
 
 可选参数：`--index 0/1/2` 指定某一篇。

@@ -65,7 +65,7 @@ class DynamicTableExecutor:
 
             sql = (
                 f"INSERT INTO {_quote(cls.table_name or '', db_type)} "
-                f"({', '.join(quoted_columns)}) VALUES ({', '.join(placeholders)})"
+                f"({', '.join(quoted_columns)}) VALUES ({', '.join(placeholders)}) RETURNING *"
             )
             returned_rows = await connector.execute(sql, params)
             if returned_rows:

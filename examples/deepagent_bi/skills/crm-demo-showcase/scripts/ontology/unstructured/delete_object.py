@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 """删除非结构化本体对象（不删知识库，不删表）。
 
 I/O 协议：stdin JSON → stdout JSON
@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent / "lib"))
 
-from _common import delete_resource_by_code
+import _common
 
 
 def main() -> None:
@@ -43,15 +43,14 @@ def main() -> None:
         print(json.dumps({"ok": False, "error": "entity_code 不能为空"}), flush=True)
         sys.exit(1)
 
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
-
-    session = OntologyBuildSession()
-
-    # 步骤一：清除术语库数据
-    session.delete_owl_scope("OBJECT", entity_code)
-
-    # 步骤二：下架本体（不删知识库，不删表）
-    delete_resource_by_code(entity_code)
+    # 非结构化删除：只清术语库 + 下架，不传 user_code（不删表）
+    result = _common.post_ontology_api(
+        "/object/delete",
+        {"entity_code": entity_code, "user_code": ""},
+    )
+    if not result.get("ok"):
+        print(json.dumps(result, ensure_ascii=False), flush=True)
+        sys.exit(1)
 
     print(json.dumps({"ok": True, "entity_code": entity_code}, ensure_ascii=False), flush=True)
 

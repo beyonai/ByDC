@@ -1,19 +1,14 @@
-"""个人 SQLite 动态表管理 — 通过服务发现调用 byclaw-sqlite HTTP API。
+"""个人 SQLite 动态表管理 — 直接操作本地 personal_object.db。
 
-服务发现环境变量：
-    REDIS_HOST / REDIS_PORT / REDIS_DATABASE / REDIS_PASSWORD / REDIS_USERNAME
-        — 服务发现 Redis 连接参数（与运行环境共享）
-
-SQLite 服务名规则：BYCLAW_EXE_{user_code}（如 BYCLAW_EXE_adminvip）
-认证 token 从服务实例的 metadata.token 字段读取，无需额外环境变量。
+数据库路径：/byclaw-datacloud/personal_object.db
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
-import threading
+import sqlite3
+import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -26,144 +21,83 @@ _TYPE_MAP: dict[str, str] = {
     "DATE": "TEXT",
 }
 
-
-# ── 服务发现 HTTP 调用 ─────────────────────────────────────────────────────────
-
-
-def _init_discovery_redis() -> None:
-    """全局初始化服务发现 Redis（幂等）。"""
-    from by_framework.common.redis_client import init_redis
-
-    init_redis(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
-        db=int(os.getenv("REDIS_DATABASE", "0")),
-        password=os.getenv("REDIS_PASSWORD") or None,
-        username=os.getenv("REDIS_USERNAME") or None,
-    )
+FIXED_DB_NAME = "personal_object.db"
+_DDL_LOCK_TIMEOUT = 5.0  # 等待其他连接释放锁的最大秒数
+_DDL_RETRY_INTERVAL = 0.1
 
 
-def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:
-    """通过服务发现调用 byclaw-sqlite sqlExecute 接口。
+def _db_path() -> str:
+    mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+    if not mount:
+        raise RuntimeError("FILE_STORAGE_MINIO_MOUNT_PATH 环境变量未设置")
+    return os.path.join(mount, "byclaw-datacloud", FIXED_DB_NAME)
 
-    服务名规则：BYCLAW_EXE_{user_code}，每个用户对应独立的 SQLite 服务实例。
-    认证 token 从服务实例 metadata.token 读取，通过 Authorization: Bearer {token} header 传递。
-    """
-    if not user_code:
-        raise ValueError("user_code 不能为空，无法确定 SQLite 服务实例")
 
-    service_name = f"BYCLAW_EXE_{user_code}"
+def _ensure_db_dir() -> None:
+    os.makedirs(os.path.dirname(_db_path()), exist_ok=True)
 
-    async def _call() -> dict[str, Any]:
-        import httpx
-        from by_framework.core.discovery import DiscoveryClient
 
-        _init_discovery_redis()
-        discovery_client = DiscoveryClient(cache_interval=5)
+def _connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(_db_path(), timeout=_DDL_LOCK_TIMEOUT)
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+
+def _execute_ddl(ddl: str, label: str) -> None:
+    _ensure_db_dir()
+    deadline = time.monotonic() + _DDL_LOCK_TIMEOUT
+    last_error: Exception | None = None
+    while True:
+        conn = _connect()
         try:
-            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
-            if not instance:
-                raise RuntimeError(f"未找到 SQLite 服务实例: {service_name}")
-
-            metadata = instance.metadata or {}
-            token = metadata.get("token", "")
-            auth_type = metadata.get("authType", "header")
-            auth_param = metadata.get("authParam", "token")
-            protocol = getattr(instance, "protocol", "http")
-            path_prefix = getattr(instance, "path_prefix", "") or ""
-            base_url = f"{protocol}://{instance.host}:{instance.port}"
-            sql_path = f"/{path_prefix.strip('/')}/plugins/byclaw-sqlite/sqlExecute".replace(
-                "//", "/"
-            )
-
-            params = {auth_param: token} if auth_type == "query" else {}
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}",
-            }
-
-            async with httpx.AsyncClient(base_url=base_url, timeout=30.0, verify=False) as client:
-                response = await client.post(
-                    sql_path,
-                    headers=headers,
-                    params=params,
-                    json={"sql": sql, "user_code": user_code},
-                )
+            conn.execute(ddl)
+            conn.commit()
+            return
+        except sqlite3.OperationalError as exc:
+            last_error = exc
+            if "locked" in str(exc).lower() and time.monotonic() < deadline:
+                logger.warning("%s 被锁，重试中...", label)
+                time.sleep(_DDL_RETRY_INTERVAL)
+            else:
+                raise RuntimeError(f"{label}失败: {exc}") from exc
+        except sqlite3.Error as exc:
+            raise RuntimeError(f"{label}失败: {exc}") from exc
         finally:
-            await discovery_client.close()
-
-        if response.status_code != 200:
-            raise RuntimeError(f"SQLite API HTTP {response.status_code}")
-        body: dict[str, Any] = response.json() if response.content else {}
-        if not body.get("ok"):
-            err = body.get("error", {})
-            raise RuntimeError(f"SQLite API error: {err.get('message', body)}")
-        data = body.get("data")
-        return data if isinstance(data, dict) else {}
-
-    result = _run_async_in_thread(_call())
-    return result if isinstance(result, dict) else {}
-
-
-def _run_async_in_thread(coro: Any) -> Any:
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-
-    result: dict[str, Any] = {}
-    error: dict[str, BaseException] = {}
-
-    def runner() -> None:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result["value"] = loop.run_until_complete(coro)
-        except BaseException as exc:  # noqa: BLE001
-            error["exc"] = exc
-        finally:
-            loop.close()
-
-    thread = threading.Thread(target=runner, daemon=True)
-    thread.start()
-    thread.join()
-    if "exc" in error:
-        raise error["exc"]
-    return result.get("value")
+            conn.close()
+    raise RuntimeError(f"{label}失败: {last_error}")
 
 
 # ── 公开 API ──────────────────────────────────────────────────────────────────
 
 
-def create_table(entity_code: str, fields: list[dict[str, Any]], user_code: str) -> None:
-    """在个人 SQLite 中创建动态表（IF NOT EXISTS）。
+def create_table(entity_code: str, fields: list[dict[str, Any]], _user_code: str = "") -> None:
+    """在本地 SQLite 中创建动态表（IF NOT EXISTS）。
 
     Args:
         entity_code: 表名（即本体对象编码）。
         fields: 字段列表，每项含 property_code 和 data_type。
-        user_code: 操作用户编码，用于 SQLite key（BYCLAW_EXE_{user_code}）。
+        _user_code: 已废弃，保留兼容。
     """
     col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
     for f in fields:
         col_name = f.get("property_code", "")
-        if not col_name or col_name.lower() == "id":  # id 由系统自动生成，跳过
+        if not col_name or col_name.lower() == "id":
             continue
         sqlite_type = _TYPE_MAP.get(f.get("data_type", "STRING"), "TEXT")
         col_defs.append(f"{col_name} {sqlite_type}")
 
     ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
-    logger.info("create_table: user=%s entity=%s", user_code, entity_code)
-    _execute_sql(ddl, user_code)
+    logger.info("create_table: entity=%s", entity_code)
+    _execute_ddl(ddl, "建表")
 
 
-def drop_table(entity_code: str, user_code: str = "") -> None:
-    """删除个人 SQLite 中的动态表（IF EXISTS）。
+def drop_table(entity_code: str, _user_code: str = "") -> None:
+    """删除本地 SQLite 中的动态表（IF EXISTS）。
 
     Args:
         entity_code: 表名（即本体对象编码）。
-        user_code: 操作用户编码，默认从 USER_CODE 环境变量读取。
+        _user_code: 已废弃，保留兼容。
     """
-    _user_code = user_code or os.environ.get("USER_CODE", "")
     ddl = f"DROP TABLE IF EXISTS {entity_code}"
-    logger.info("drop_table: user=%s entity=%s", _user_code, entity_code)
-    _execute_sql(ddl, _user_code)
+    logger.info("drop_table: entity=%s", entity_code)
+    _execute_ddl(ddl, "删表")
