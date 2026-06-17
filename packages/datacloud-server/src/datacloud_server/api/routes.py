@@ -21,6 +21,7 @@ from datacloud_server.models.datasource import Datasource  # noqa: TC001
 from datacloud_server.models.object_type import ObjectType  # noqa: TC001
 from datacloud_server.models.relation import Relation  # noqa: TC001
 from datacloud_server.models.view import View  # noqa: TC001
+from datacloud_server.registry.registry import OntologyBaseEntry
 
 router = APIRouter(prefix="/api/v1/ontologyBases", tags=["ontology"])
 
@@ -45,7 +46,19 @@ def create_base(body: OntologyBaseCreate):
     """
     svc = get_service()
     try:
-        return ok(data=svc.create_base(body.model_dump(by_alias=True)), message="created")
+        source_url = body.source_url
+        entry = OntologyBaseEntry(
+            base_id=body.base_id,
+            display_name=body.display_name,
+            description=body.description,
+            owner_type=body.owner_type,
+            source_type="REMOTE" if source_url else "LOCAL",
+            source_url=source_url,
+            auth_type=body.auth_type,
+            auth_config=body.auth_config,
+            timeout_sec=body.timeout_sec,
+        )
+        return ok(data=svc.create_base(entry), message="created")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -166,7 +179,7 @@ def create_view(owner_type: str, base_id: str, scene_id: str, body: View):
     svc = get_service()
     try:
         return ok(
-            data=svc.create_view(base_id, scene_id, body.model_dump(by_alias=True)),
+            data=svc.create_view(base_id, scene_id, body),
             message="created",
         )
     except PermissionError as e:
@@ -182,7 +195,7 @@ def update_view(owner_type: str, base_id: str, scene_id: str, code: str, body: V
     """Update a view (LOCAL only)."""
     svc = get_service()
     try:
-        svc.update_view(base_id, scene_id, code, body.model_dump(by_alias=True))
+        svc.update_view(base_id, scene_id, code, body)
         return ok(data={"viewCode": code})
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
@@ -239,7 +252,7 @@ def create_relation(owner_type: str, base_id: str, scene_id: str, body: Relation
     svc = get_service()
     try:
         return ok(
-            data=svc.create_relation(base_id, scene_id, body.model_dump(by_alias=True)),
+            data=svc.create_relation(base_id, scene_id, body),
             message="created",
         )
     except PermissionError as e:
@@ -255,7 +268,7 @@ def update_relation(owner_type: str, base_id: str, scene_id: str, code: str, bod
     """Update a relation (LOCAL only)."""
     svc = get_service()
     try:
-        svc.update_relation(base_id, scene_id, code, body.model_dump(by_alias=True))
+        svc.update_relation(base_id, scene_id, code, body)
         return ok(data={"relationCode": code})
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
@@ -312,7 +325,7 @@ def create_datasource(owner_type: str, base_id: str, scene_id: str, body: Dataso
     svc = get_service()
     try:
         return ok(
-            data=svc.create_datasource(base_id, scene_id, body.model_dump(by_alias=True)),
+            data=svc.create_datasource(base_id, scene_id, body),
             message="created",
         )
     except PermissionError as e:
@@ -342,11 +355,11 @@ def delete_datasource(owner_type: str, base_id: str, scene_id: str, db_id: str):
 
 
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/objects")
-def list_objects(owner_type: str, base_id: str, scene_id: str, cache: bool = False):
+def list_objects(owner_type: str, base_id: str, scene_id: str):
     """List objects in a scene."""
     svc = get_service()
     try:
-        return ok(data=svc.get_objects(base_id, scene_id, use_cache=cache))
+        return ok(data=svc.get_objects(base_id, scene_id))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -370,7 +383,7 @@ def create_object(owner_type: str, base_id: str, scene_id: str, body: ObjectType
     svc = get_service()
     try:
         return ok(
-            data=svc.create_object(base_id, scene_id, body.model_dump(by_alias=True)),
+            data=svc.create_object(base_id, scene_id, body),
             message="created",
         )
     except PermissionError as e:
@@ -386,7 +399,7 @@ def update_object(owner_type: str, base_id: str, scene_id: str, code: str, body:
     """Update an object (LOCAL only)."""
     svc = get_service()
     try:
-        svc.update_object(base_id, scene_id, code, body.model_dump(by_alias=True))
+        svc.update_object(base_id, scene_id, code, body)
         return ok(data={"objectCode": code})
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
@@ -443,7 +456,7 @@ def create_action(owner_type: str, base_id: str, scene_id: str, object_code: str
     svc = get_service()
     try:
         return ok(
-            data=svc.create_action(base_id, scene_id, object_code, body.model_dump(by_alias=True)),
+            data=svc.create_action(base_id, scene_id, object_code, body),
             message="created",
         )
     except PermissionError as e:
@@ -461,7 +474,7 @@ def update_action(
     """Update an action on an object (LOCAL only)."""
     svc = get_service()
     try:
-        svc.update_action(base_id, scene_id, object_code, code, body.model_dump(by_alias=True))
+        svc.update_action(base_id, scene_id, object_code, code, body)
         return ok(data={"actionCode": code})
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
@@ -498,7 +511,19 @@ def search_ontology_base(
     """Cross-scene ontology search. sceneId in body ('-1' for global)."""
     svc = get_service()
     try:
-        return ok(data=svc.search_ontology_base(base_id, body))
+        return ok(data=svc.search_ontology_base(
+            base_id,
+            keyword=body.get("keyword", ""),
+            scene_id=body.get("sceneId", "-1"),
+            query_type=body.get("queryType", "vector"),
+            search_scope=body.get("searchScope", "all"),
+            object_code=body.get("objectCode"),
+            view_code=body.get("viewCode"),
+            property_code=body.get("propertyCode"),
+            result_per_type=body.get("resultPerType", 5),
+            page_size=body.get("pageSize", 20),
+            page_token=body.get("pageToken"),
+        ))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -508,7 +533,13 @@ def search_ontology(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Vector search across ontology metadata and instances."""
     svc = get_service()
     try:
-        return ok(data=svc.search_ontology(base_id, scene_id, body))
+        return ok(data=svc.search_ontology(
+            base_id, scene_id,
+            keyword=body.get("keyword", ""),
+            query_type=body.get("queryType", "vector"),
+            search_scope=body.get("searchScope", "all"),
+            result_per_type=body.get("resultPerType", 5),
+        ))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -550,7 +581,12 @@ def search_instances(owner_type: str, base_id: str, body: dict):
     """Search instances in a base."""
     svc = get_service()
     try:
-        return ok(data=svc.search_instances(base_id, body))
+        return ok(data=svc.search_instances(
+            base_id,
+            object_code=body.get("objectCode", ""),
+            select=body.get("select"),
+            where=body.get("where"),
+        ))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -560,7 +596,13 @@ def graph_query(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Query the graph of objects and relations."""
     svc = get_service()
     try:
-        return ok(data=svc.graph_query(base_id, scene_id, body))
+        return ok(data=svc.graph_query(
+            base_id, scene_id,
+            object_code=body.get("objectCodes", body.get("objectCode", [])),
+            match_by=body.get("matchBy", "name"),
+            values=body.get("values"),
+            step=body.get("depth", body.get("step", 1)),
+        ))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -570,6 +612,12 @@ def graph_path(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Find shortest path between two objects."""
     svc = get_service()
     try:
-        return ok(data=svc.graph_path(base_id, scene_id, body))
+        return ok(data=svc.graph_path(
+            base_id, scene_id,
+            match_by=body.get("matchBy", "name"),
+            start_node=body.get("sourceObjectCode", ""),
+            end_node=body.get("targetObjectCode", ""),
+            direction=body.get("direction", "forward"),
+        ))
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

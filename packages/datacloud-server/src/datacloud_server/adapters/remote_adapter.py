@@ -7,16 +7,22 @@
     - 响应透传: 外部服务返回什么就透出什么，不做格式转换
     - 缓存: 元数据查询 TTL 5 分钟内存缓存（仅读操作）
 """
-
-# ruff: noqa: RUF002, ARG002
+# ruff: noqa: ARG002, RUF002  # stub methods match Protocol; Chinese docstrings use full-width punctuation
 
 from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
+
+if TYPE_CHECKING:
+    from datacloud_server.models.action import Action
+    from datacloud_server.models.datasource import Datasource
+    from datacloud_server.models.object_type import ObjectType
+    from datacloud_server.models.relation import Relation
+    from datacloud_server.models.view import View
 
 logger = logging.getLogger(__name__)
 
@@ -69,33 +75,17 @@ class RemoteOntologyAdapter:
         """REMOTE 暂不支持 list_scenes，返回空列表。"""
         return []
 
-    def get_scene(self, base_id: str, scene_id: str) -> dict | None:
-        """REMOTE 暂不支持 get_scene，返回 None。"""
-        return None
-
-    def get_objects(
-        self,
-        base_id: str,
-        scene_id: str,
-        *,
-        use_cache: bool = True,
-    ) -> list[dict]:
+    def get_objects(self, base_id: str, scene_id: str) -> list[dict]:
         """等价转发: GET → POST /OntologyEntityController/sceneDetails。
-
-        Args:
-            base_id: 本体库 ID
-            scene_id: 场景 ID
-            use_cache: 是否使用 TTL 缓存，默认 True
 
         Returns:
             外部服务返回的 objects 列表，透传不做格式转换。
         """
         cache_key = self._cache_key(base_id, scene_id, "objects")
 
-        if use_cache:
-            entry = self._cache.get(cache_key)
-            if entry is not None and not entry.is_expired:
-                return entry.data  # type: ignore[no-any-return]
+        entry = self._cache.get(cache_key)
+        if entry is not None and not entry.is_expired:
+            return entry.data  # type: ignore[no-any-return]
 
         client = self._get_client()
         headers = self._build_auth_headers()
@@ -107,8 +97,7 @@ class RemoteOntologyAdapter:
         result: dict[str, Any] = response.json()
 
         data = result.get("data", {}).get("objects", [])
-        if use_cache:
-            self._cache[cache_key] = _CacheEntry(data, ttl=300)
+        self._cache[cache_key] = _CacheEntry(data, ttl=300)
         return data
 
     def get_object_detail(self, base_id: str, scene_id: str, object_code: str) -> dict | None:
@@ -144,7 +133,7 @@ class RemoteOntologyAdapter:
         return []
 
     def get_action_detail(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str
+        self, base_id: str, scene_id: str, object_code: str, action_code: str,
     ) -> dict | None:
         """REMOTE 暂不支持 get_action_detail，返回 None。"""
         return None
@@ -195,7 +184,7 @@ class RemoteOntologyAdapter:
 
     # ── 元数据: 写 ────────────────────────────────
 
-    def create_object(self, base_id: str, scene_id: str, obj_data: dict) -> dict:
+    def create_object(self, base_id: str, scene_id: str, obj: ObjectType) -> ObjectType:
         """REMOTE 只读，禁止创建。"""
         raise PermissionError("Remote ontology base is read-only")
 
@@ -203,15 +192,15 @@ class RemoteOntologyAdapter:
         """REMOTE 只读，禁止删除。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_object(self, base_id: str, scene_id: str, object_code: str, obj_data: dict) -> dict:
+    def update_object(self, base_id: str, scene_id: str, object_code: str, obj: ObjectType) -> ObjectType:
         """REMOTE 只读，禁止更新。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def create_view(self, base_id: str, scene_id: str, view_data: dict) -> dict:
+    def create_view(self, base_id: str, scene_id: str, view: View) -> View:
         """REMOTE 只读，禁止创建。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_view(self, base_id: str, scene_id: str, view_code: str, view_data: dict) -> dict:
+    def update_view(self, base_id: str, scene_id: str, view_code: str, view: View) -> View:
         """REMOTE 只读，禁止更新。"""
         raise PermissionError("Remote ontology base is read-only")
 
@@ -219,11 +208,11 @@ class RemoteOntologyAdapter:
         """REMOTE 只读，禁止删除。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def create_relation(self, base_id: str, scene_id: str, rel_data: dict) -> dict:
+    def create_relation(self, base_id: str, scene_id: str, rel: Relation) -> Relation:
         """REMOTE 只读，禁止创建。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel_data: dict) -> dict:
+    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel: Relation) -> Relation:
         """REMOTE 只读，禁止更新。"""
         raise PermissionError("Remote ontology base is read-only")
 
@@ -231,7 +220,7 @@ class RemoteOntologyAdapter:
         """REMOTE 只读，禁止删除。"""
         raise PermissionError("Remote ontology base is read-only")
 
-    def create_datasource(self, base_id: str, scene_id: str, ds_data: dict) -> dict:
+    def create_datasource(self, base_id: str, scene_id: str, ds: Datasource) -> Datasource:
         """REMOTE 只读，禁止创建。"""
         raise PermissionError("Remote ontology base is read-only")
 
@@ -240,56 +229,128 @@ class RemoteOntologyAdapter:
         raise PermissionError("Remote ontology base is read-only")
 
     def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action_data: dict
-    ) -> dict:
+        self, base_id: str, scene_id: str, object_code: str, action: Action,
+    ) -> Action:
         """REMOTE 只读，禁止创建。"""
         raise PermissionError("Remote ontology base is read-only")
 
     def update_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str, action_data: dict
-    ) -> dict:
+        self, base_id: str, scene_id: str, object_code: str, action_code: str, action: Action,
+    ) -> Action:
         """REMOTE 只读，禁止更新。"""
         raise PermissionError("Remote ontology base is read-only")
 
     def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str
+        self, base_id: str, scene_id: str, object_code: str, action_code: str,
     ) -> None:
         """REMOTE 只读，禁止删除。"""
         raise PermissionError("Remote ontology base is read-only")
 
     # ── 应用服务 ──────────────────────────────────
 
-    def search_instances(self, base_id: str, query: dict) -> dict:
+    def search_instances(
+        self, base_id: str, *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict | None = None,
+    ) -> dict:
         """等价转发: 不缓存，实时转发到 /InstanceController/search。"""
         client = self._get_client()
         headers = self._build_auth_headers()
+        body: dict[str, Any] = {"objectCode": object_code}
+        if select:
+            body["select"] = select
+        if where:
+            body["where"] = where
         url = f"{self._source_url}/InstanceController/search"
-        response = client.post(url, json=query, headers=headers)
+        response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 
-    def search_ontology(self, base_id: str, scene_id: str, request: dict) -> dict:
+    def search_ontology(
+        self, base_id: str, scene_id: str, *,
+        keyword: str,
+        query_type: str = "vector",
+        search_scope: str = "all",
+        result_per_type: int = 5,
+    ) -> dict:
         """等价转发: 不缓存，实时转发到 /search/ontology，注入 sceneId。"""
         client = self._get_client()
         headers = self._build_auth_headers()
-        body = {**request, "sceneId": scene_id}
+        body: dict[str, Any] = {
+            "keyword": keyword,
+            "queryType": query_type,
+            "searchScope": search_scope,
+            "resultPerType": result_per_type,
+            "sceneId": scene_id,
+        }
         url = f"{self._source_url}/search/ontology"
         response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 
-    def search_ontology_base(self, base_id: str, request: dict) -> dict:
-        """等价转发: 不缓存，实时转发到 /search/ontology（sceneId 在 body 中）。"""
+    def search_ontology_base(
+        self, base_id: str, *,
+        keyword: str,
+        scene_id: str = "-1",
+        query_type: str = "vector",
+        search_scope: str = "all",
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
+        result_per_type: int = 5,
+        page_size: int = 20,
+        page_token: str | None = None,
+    ) -> dict:
+        """等价转发: 不缓存，实时转发到 /search/ontology。"""
         client = self._get_client()
         headers = self._build_auth_headers()
+        body: dict[str, Any] = {
+            "keyword": keyword,
+            "sceneId": scene_id,
+            "queryType": query_type,
+            "searchScope": search_scope,
+            "resultPerType": result_per_type,
+            "pageSize": page_size,
+        }
+        if object_code:
+            body["objectCode"] = object_code
+        if view_code:
+            body["viewCode"] = view_code
+        if property_code:
+            body["propertyCode"] = property_code
+        if page_token:
+            body["pageToken"] = page_token
         url = f"{self._source_url}/search/ontology"
-        response = client.post(url, json=request, headers=headers)
+        response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 
-    def graph_query(self, base_id: str, scene_id: str, query: dict) -> dict:
+    def graph_query(
+        self, base_id: str, scene_id: str, *,
+        object_code: list[str],
+        match_by: str = "name",
+        values: list[str] | None = None,
+        step: int = 1,
+    ) -> dict:
         """REMOTE 暂不支持 graph_query，返回空结果。"""
         return {"nodes": [], "edges": []}
+
+    def graph_path(
+        self, base_id: str, scene_id: str, *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict:
+        """REMOTE 暂不支持 graph_path，返回空结果。"""
+        return {"path": [], "edges": [], "hops": -1}
+
+    # ── OWL Import ──
+
+    def import_owl(self, base_id: str, scene_id: str, zip_bytes: bytes) -> dict:
+        """REMOTE 只读，禁止导入。"""
+        raise PermissionError("Remote ontology base is read-only")
 
     # ── 辅助方法 ──────────────────────────────────
 

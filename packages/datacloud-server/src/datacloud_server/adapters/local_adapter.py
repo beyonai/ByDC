@@ -22,6 +22,11 @@ import requests
 from sqlalchemy import create_engine, text
 
 if TYPE_CHECKING:
+    from datacloud_server.models.action import Action
+    from datacloud_server.models.datasource import Datasource
+    from datacloud_server.models.object_type import ObjectType
+    from datacloud_server.models.relation import Relation
+    from datacloud_server.models.view import View
     from datacloud_server.storage.json_writer import JSONWriter
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -469,49 +474,54 @@ class LocalOntologyAdapter:
 
     # -- metadata: write --
 
-    def create_object(self, base_id: str, scene_id: str, obj_data: dict) -> dict:
-        self._validate_object(obj_data)
+    def create_object(self, base_id: str, scene_id: str, obj: ObjectType) -> ObjectType:
+        self._validate_object(obj)
         scene_path = self._scene_path(base_id, scene_id)
+        obj_data = obj.model_dump(by_alias=True)
         file_path = scene_path / "objects" / f"{obj_data['objectCode']}.json"
         if file_path.exists():
             raise ValueError(f"Object '{obj_data['objectCode']}' already exists")
         self.writer.write_object(scene_path, obj_data)
         self._reload_loader(base_id)
-        return obj_data
+        return obj
 
-    def update_object(self, base_id: str, scene_id: str, object_code: str, obj_data: dict) -> dict:  # noqa: ARG002
-        self._validate_object(obj_data)
+    def update_object(self, base_id: str, scene_id: str, _object_code: str, obj: ObjectType) -> ObjectType:
+        self._validate_object(obj)
         scene_path = self._scene_path(base_id, scene_id)
+        obj_data = obj.model_dump(by_alias=True)
         self.writer.write_object(scene_path, obj_data)
         self._reload_loader(base_id)
-        return obj_data
+        return obj
 
     def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
         self.writer.delete_object(self._scene_path(base_id, scene_id), object_code)
         self._reload_loader(base_id)
 
-    def create_view(self, base_id: str, scene_id: str, view_data: dict) -> dict:
+    def create_view(self, base_id: str, scene_id: str, view: View) -> View:
         scene_path = self._scene_path(base_id, scene_id)
-        view_code = view_data.get("viewCode", view_data.get("view_id", ""))
+        view_data = view.model_dump(by_alias=True)
+        view_code = view_data.get("viewCode", view.view_code)
         file_path = scene_path / "views" / f"{view_code}.json"
         if file_path.exists():
             raise ValueError(f"View '{view_code}' already exists")
         self.writer.write_view(scene_path, view_data)
         self._reload_loader(base_id)
-        return view_data
+        return view
 
-    def update_view(self, base_id: str, scene_id: str, view_code: str, view_data: dict) -> dict:  # noqa: ARG002
+    def update_view(self, base_id: str, scene_id: str, _view_code: str, view: View) -> View:
         scene_path = self._scene_path(base_id, scene_id)
+        view_data = view.model_dump(by_alias=True)
         self.writer.write_view(scene_path, view_data)
         self._reload_loader(base_id)
-        return view_data
+        return view
 
     def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
         self.writer.delete_view(self._scene_path(base_id, scene_id), view_code)
         self._reload_loader(base_id)
 
-    def create_relation(self, base_id: str, scene_id: str, rel_data: dict) -> dict:
+    def create_relation(self, base_id: str, scene_id: str, rel: Relation) -> Relation:
         scene_path = self._scene_path(base_id, scene_id)
+        rel_data = rel.model_dump(by_alias=True)
         file_path = scene_path / "relations.json"
         existing: list[dict] = []
         if file_path.exists():
@@ -522,10 +532,11 @@ class LocalOntologyAdapter:
         existing.append(rel_data)
         self.writer.write_relation(scene_path, existing)
         self._reload_loader(base_id)
-        return rel_data
+        return rel
 
-    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel_data: dict) -> dict:
+    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel: Relation) -> Relation:
         scene_path = self._scene_path(base_id, scene_id)
+        rel_data = rel.model_dump(by_alias=True)
         file_path = scene_path / "relations.json"
         existing: list[dict] = []
         if file_path.exists():
@@ -540,7 +551,7 @@ class LocalOntologyAdapter:
             raise KeyError(f"Relation '{rel_code}' not found")
         self.writer.write_relation(scene_path, existing)
         self._reload_loader(base_id)
-        return rel_data
+        return rel
 
     def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
         scene_path = self._scene_path(base_id, scene_id)
@@ -581,8 +592,9 @@ class LocalOntologyAdapter:
         # Flat legacy: {"dbId": "pg1", ...}
         return str(ds_data.get("dbId", ds_data.get("db_id", "")))
 
-    def create_datasource(self, base_id: str, scene_id: str, ds_data: dict) -> dict:
+    def create_datasource(self, base_id: str, scene_id: str, ds: Datasource) -> Datasource:
         scene_path = self._scene_path(base_id, scene_id)
+        ds_data = ds.model_dump(by_alias=True)
         db_id = self._extract_db_id(ds_data)
         ds_dir = scene_path / "datasources"
         self.writer.ensure_dir(ds_dir)
@@ -590,7 +602,7 @@ class LocalOntologyAdapter:
         if file_path.exists():
             raise ValueError(f"Datasource '{db_id}' already exists")
         self.writer._atomic_write(file_path, ds_data)
-        return ds_data
+        return ds
 
     def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
         scene_path = self._scene_path(base_id, scene_id)
@@ -618,10 +630,11 @@ class LocalOntologyAdapter:
         return None
 
     def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action_data: dict
-    ) -> dict:
+        self, base_id: str, scene_id: str, object_code: str, action: Action,
+    ) -> Action:
         """Create an action on an object."""
         scene_path = self._scene_path(base_id, scene_id)
+        action_data = action.model_dump(by_alias=True)
         file_path = scene_path / "objects" / f"{object_code}.json"
         if not file_path.exists():
             raise KeyError(f"Object '{object_code}' not found")
@@ -634,13 +647,14 @@ class LocalOntologyAdapter:
         obj["actions"] = existing
         self.writer._atomic_write(file_path, obj)
         self._reload_loader(base_id)
-        return action_data
+        return action
 
     def update_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str, action_data: dict
-    ) -> dict:
+        self, base_id: str, scene_id: str, object_code: str, action_code: str, action: Action,
+    ) -> Action:
         """Update an action on an object."""
         scene_path = self._scene_path(base_id, scene_id)
+        action_data = action.model_dump(by_alias=True)
         file_path = scene_path / "objects" / f"{object_code}.json"
         if not file_path.exists():
             raise KeyError(f"Object '{object_code}' not found")
@@ -657,7 +671,7 @@ class LocalOntologyAdapter:
         obj["actions"] = existing
         self.writer._atomic_write(file_path, obj)
         self._reload_loader(base_id)
-        return action_data
+        return action
 
     def delete_action(
         self, base_id: str, scene_id: str, object_code: str, action_code: str
@@ -741,46 +755,43 @@ class LocalOntologyAdapter:
 
     # -- application services --
 
-    def search_instances(self, base_id: str, query: dict) -> dict:
+    def search_instances(
+        self, base_id: str, *,
+        object_code: str,
+        select: list[str] | None = None,  # noqa: ARG002  # reserved: future search filtering
+        where: dict | None = None,
+    ) -> dict:
         """Search ontology objects by keyword.
 
         Args:
             base_id: Ontology base identifier.
-            query: {
-                "keyword": str,
-                "objectCode": str | None,   # optional: filter to single object
-                "page": int,                 # default 1
-                "pageSize": int,             # default 20
-            }
+            object_code: Filter to a single object code.
+            select: Optional field list (unused in local adapter).
+            where: Optional filter conditions (unused in local adapter).
 
         Returns:
             {"data": [object_dict, ...], "totalCount": N}
         """
         loader = self._get_loader(base_id)
-        keyword = (query.get("keyword") or "").strip().lower()
-        filter_code = query.get("objectCode")
-        page = max(int(query.get("page", 1)), 1)
-        page_size = max(int(query.get("pageSize", 20)), 1)
+        keyword_str = (where or {}).get("keyword", "") if where else ""
 
-        if not keyword:
+        if not keyword_str:
             classes = list(loader._classes.values())
+            if object_code:
+                classes = [c for c in classes if c.object_code == object_code]
             total = len(classes)
-            start = (page - 1) * page_size
-            data = [self._ontology_class_to_summary(c) for c in classes[start : start + page_size]]
+            data = [self._ontology_class_to_summary(c) for c in classes]
             return {"data": data, "totalCount": total}
 
         matches: list[dict] = []
         for cls in loader._classes.values():
-            if filter_code and cls.object_code != filter_code:
+            if object_code and cls.object_code != object_code:
                 continue
-            if not self._class_matches_keyword(cls, keyword):
+            if not self._class_matches_keyword(cls, keyword_str.strip().lower()):
                 continue
             matches.append(self._ontology_class_to_summary(cls))
 
-        total = len(matches)
-        start = (page - 1) * page_size
-        data = matches[start : start + page_size]
-        return {"data": data, "totalCount": total}
+        return {"data": matches, "totalCount": len(matches)}
 
     @staticmethod
     def _class_matches_keyword(ont_class: object, keyword: str) -> bool:
@@ -798,7 +809,13 @@ class LocalOntologyAdapter:
                 return True
         return False
 
-    def search_ontology(self, base_id: str, scene_id: str, request: dict) -> dict:
+    def search_ontology(
+        self, base_id: str, scene_id: str, *,
+        keyword: str,
+        query_type: str = "vector",  # noqa: ARG002  # reserved: future search mode
+        search_scope: str = "all",
+        result_per_type: int = 5,  # noqa: ARG002  # reserved: future result count
+    ) -> dict:
         """Vector search across metadata and instance terms.
 
         Uses embedding model to encode keyword, then pgvector cosine distance.
@@ -808,10 +825,6 @@ class LocalOntologyAdapter:
             {"metadata": [MetadataHit-like dicts], "instances": [InstanceHit-like dicts],
              "totalCount": {"metadata": int, "instances": int}}
         """
-        keyword = request.get("keyword", "")
-        search_scope = request.get("searchScope", "all")
-        scene_id_val = scene_id or request.get("sceneId", "")
-
         if not keyword:
             return {"metadata": [], "instances": [], "totalCount": {"metadata": 0, "instances": 0}}
 
@@ -850,7 +863,7 @@ class LocalOntologyAdapter:
                 result["metadata"] = [
                     self._build_metadata_hit(
                         conn=conn,
-                        scene_id=scene_id_val,
+                        scene_id=scene_id,
                         term_code=row[1],
                         term_type=row[2],
                         term_name=row[3],
@@ -915,7 +928,7 @@ class LocalOntologyAdapter:
 
                     instance_items.append(
                         {
-                            "sceneId": scene_id_val,
+                            "sceneId": scene_id,
                             "objectCode": object_code,
                             "objectName": object_name,
                             "primaryKey": value_code,
@@ -932,17 +945,36 @@ class LocalOntologyAdapter:
 
         return result
 
-    def search_ontology_base(self, base_id: str, request: dict) -> dict:
-        """Cross-scene search. If sceneId is '-1', search across all scenes."""
-        scene_id = request.get("sceneId", "-1")
+    def search_ontology_base(
+        self, base_id: str, *,
+        keyword: str,
+        scene_id: str = "-1",
+        query_type: str = "vector",
+        search_scope: str = "all",
+        object_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        view_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        property_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        result_per_type: int = 5,
+        page_size: int = 20,  # noqa: ARG002  # reserved: future paging
+        page_token: str | None = None,  # noqa: ARG002  # reserved: future pagination
+    ) -> dict:
+        """Cross-scene search. If scene_id is '-1', search across all scenes."""
         if scene_id and scene_id != "-1":
-            return self.search_ontology(base_id, scene_id, request)
+            return self.search_ontology(
+                base_id, scene_id,
+                keyword=keyword, query_type=query_type,
+                search_scope=search_scope, result_per_type=result_per_type,
+            )
         # Global search: iterate all scenes under the base
         scenes = self.list_scenes(base_id)
         all_metadata: list[dict] = []
         all_instances: list[dict] = []
         for s in scenes:
-            result = self.search_ontology(base_id, s.get("sceneId", ""), request)
+            result = self.search_ontology(
+                base_id, s.get("sceneId", ""),
+                keyword=keyword, query_type=query_type,
+                search_scope=search_scope, result_per_type=result_per_type,
+            )
             all_metadata.extend(result.get("metadata", []))
             all_instances.extend(result.get("instances", []))
         return {
@@ -954,16 +986,22 @@ class LocalOntologyAdapter:
             },
         }
 
-    def graph_query(self, base_id: str, _scene_id: str, query: dict) -> dict:
+    def graph_query(
+        self, base_id: str, _scene_id: str, *,
+        object_code: list[str],
+        match_by: str = "name",  # noqa: ARG002  # reserved: future match mode
+        values: list[str] | None = None,  # noqa: ARG002  # reserved: future match values
+        step: int = 1,
+    ) -> dict:
         """Build a graph of objects and their relations.
 
         Args:
             base_id: Ontology base identifier.
-            _scene_id: Scene identifier (unused in local adapter).
-            query: {
-                "objectCodes": list[str] | None,  # filter to these objects
-                "depth": int | None,              # maximum hop depth (BFS expansion)
-            }
+            scene_id: Scene identifier (unused in local adapter).
+            object_code: Filter to these object codes.
+            match_by: Match mode (unused in local adapter).
+            values: Optional match values (unused in local adapter).
+            step: Maximum hop depth (BFS expansion).
 
         Returns:
             {"nodes": [{"code": str, "label": str, "description": str}, ...],
@@ -971,8 +1009,10 @@ class LocalOntologyAdapter:
                         "relationCardinality": str}, ...]}
         """
         loader = self._get_loader(base_id)
-        object_codes: list[str] | None = query.get("objectCodes")
-        depth: int | None = query.get("depth")
+        object_codes = object_code if object_code else None
+        # step=1 (default) means no BFS expansion — only filter by object codes.
+        # step > 1 means BFS expand up to step hops from seed objects.
+        depth = step if step > 1 else None
 
         nodes: dict[str, dict] = {}
         edges: list[dict] = []
@@ -981,24 +1021,30 @@ class LocalOntologyAdapter:
 
         return {"nodes": list(nodes.values()), "edges": edges}
 
-    def graph_path(self, base_id: str, _scene_id: str, query: dict) -> dict:
+    def graph_path(
+        self, base_id: str, _scene_id: str, *,
+        match_by: str = "name",  # noqa: ARG002  # reserved: future match mode
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",  # noqa: ARG002  # reserved: future traversal direction
+    ) -> dict:
         """Find shortest path between two objects in the relation graph.
 
         Args:
             base_id: Ontology base identifier.
-            _scene_id: Scene identifier (unused in local adapter).
-            query: {
-                "sourceObjectCode": str,
-                "targetObjectCode": str,
-            }
+            scene_id: Scene identifier (unused in local adapter).
+            match_by: Match mode (unused in local adapter).
+            start_node: Source object code.
+            end_node: Target object code.
+            direction: Path direction (unused in local adapter).
 
         Returns:
             {"path": [str, ...], "edges": [...], "hops": int}
             — hops == -1 when no path exists.
         """
         loader = self._get_loader(base_id)
-        source = query.get("sourceObjectCode", "")
-        target = query.get("targetObjectCode", "")
+        source = start_node
+        target = end_node
 
         if not source or not target:
             return {"path": [], "edges": [], "hops": -1}
@@ -1491,10 +1537,10 @@ class LocalOntologyAdapter:
         }
 
     @staticmethod
-    def _validate_object(obj_data: dict) -> None:
-        if "objectCode" not in obj_data:
+    def _validate_object(obj: ObjectType) -> None:
+        if not obj.object_code:
             raise ValueError("objectCode is required")
-        if "objectName" not in obj_data:
+        if not obj.object_name:
             raise ValueError("objectName is required")
 
     @staticmethod
