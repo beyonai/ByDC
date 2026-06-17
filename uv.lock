@@ -1148,6 +1148,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
+    { name = "requests" },
+    { name = "sqlalchemy" },
 ]
 
 [package.optional-dependencies]
@@ -1172,6 +1174,8 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.30" },
+    { name = "requests", specifier = ">=2.31" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
 ]
 provides-extras = ["dev"]
 
