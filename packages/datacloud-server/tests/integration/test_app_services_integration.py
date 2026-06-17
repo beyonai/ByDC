@@ -37,28 +37,36 @@ class TestSearchInstances:
     """Keyword-based instance search over loaded ontology objects."""
 
     def test_search_by_keyword_finds_customer(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.search_instances("owl_example", {"keyword": "customer"})
+        result = adapter.search_instances(
+            "owl_example", object_code="", where={"keyword": "customer"},
+        )
         data = result["data"]
         assert len(data) > 0
         codes = {item["objectCode"] for item in data}
         assert "by_customer" in codes
 
     def test_search_by_object_name_finds_chinese(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.search_instances("owl_example", {"keyword": "客户"})
+        result = adapter.search_instances(
+            "owl_example", object_code="", where={"keyword": "客户"},
+        )
         data = result["data"]
         assert len(data) > 0
         codes = {item["objectCode"] for item in data}
         assert "by_customer" in codes
 
     def test_search_by_field_keyword(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.search_instances("owl_example", {"keyword": "customer_code"})
+        result = adapter.search_instances(
+            "owl_example", object_code="", where={"keyword": "customer_code"},
+        )
         data = result["data"]
         assert len(data) > 0
         assert result["totalCount"] == len(data)
 
     def test_search_with_object_code_filter(self, adapter: LocalOntologyAdapter) -> None:
         result = adapter.search_instances(
-            "owl_example", {"keyword": "客户", "objectCode": "by_opportunity"}
+            "owl_example",
+            object_code="by_opportunity",
+            where={"keyword": "客户"},
         )
         data = result["data"]
         codes = {item["objectCode"] for item in data}
@@ -67,7 +75,9 @@ class TestSearchInstances:
     def test_search_by_english_code_filter(self, adapter: LocalOntologyAdapter) -> None:
         """Search with keyword that appears in the specific object's field names."""
         result = adapter.search_instances(
-            "owl_example", {"keyword": "opp", "objectCode": "by_opportunity"}
+            "owl_example",
+            object_code="by_opportunity",
+            where={"keyword": "opp"},
         )
         data = result["data"]
         assert len(data) > 0
@@ -75,23 +85,23 @@ class TestSearchInstances:
         assert codes == {"by_opportunity"}
 
     def test_search_no_keyword_returns_all(self, adapter: LocalOntologyAdapter) -> None:
-        """Empty keyword means 'match all' — returns all objects with pagination."""
-        result = adapter.search_instances("owl_example", {"keyword": ""})
+        """Empty keyword means 'match all' — returns all objects."""
+        result = adapter.search_instances("owl_example", object_code="")
         # Returns all 8 objects
         assert result["totalCount"] == 8
         assert len(result["data"]) == 8
 
     def test_search_nonexistent_keyword_returns_empty(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.search_instances("owl_example", {"keyword": "xyznonexistent99"})
+        result = adapter.search_instances(
+            "owl_example", object_code="", where={"keyword": "xyznonexistent99"},
+        )
         assert result["data"] == []
         assert result["totalCount"] == 0
 
-    def test_search_pagination_page1(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.search_instances("owl_example", {"keyword": "", "page": 1, "pageSize": 2})
-        assert len(result["data"]) <= 2
-
     def test_search_result_structure(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.search_instances("owl_example", {"keyword": "customer"})
+        result = adapter.search_instances(
+            "owl_example", object_code="", where={"keyword": "customer"},
+        )
         for item in result["data"]:
             assert "objectCode" in item
             assert "objectName" in item
@@ -105,7 +115,7 @@ class TestGraphQuery:
     """Graph query based on object relations."""
 
     def test_graph_query_returns_nodes_and_edges(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.graph_query("owl_example", "object", {})
+        result = adapter.graph_query("owl_example", "object", object_code=[])
         assert "nodes" in result
         assert "edges" in result
         assert len(result["nodes"]) > 0
@@ -114,7 +124,7 @@ class TestGraphQuery:
         result = adapter.graph_query(
             "owl_example",
             "object",
-            {"objectCodes": ["by_customer", "by_opportunity", "by_project"]},
+            object_code=["by_customer", "by_opportunity", "by_project"],
         )
         node_codes = {n["code"] for n in result["nodes"]}
         assert node_codes == {"by_customer", "by_opportunity", "by_project"}
@@ -127,7 +137,8 @@ class TestGraphQuery:
         result = adapter.graph_query(
             "owl_example",
             "object",
-            {"objectCodes": ["by_customer"], "depth": 1},
+            object_code=["by_customer"],
+            step=2,
         )
         node_codes = {n["code"] for n in result["nodes"]}
         # by_customer + directly connected: by_opportunity, by_project, po_users, po_organization
@@ -136,12 +147,14 @@ class TestGraphQuery:
         assert "by_project" in node_codes
 
     def test_graph_query_empty_object_codes(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.graph_query("owl_example", "object", {"objectCodes": ["nonexistent"]})
+        result = adapter.graph_query(
+            "owl_example", "object", object_code=["nonexistent"],
+        )
         assert result["nodes"] == []
         assert result["edges"] == []
 
     def test_graph_query_node_has_label(self, adapter: LocalOntologyAdapter) -> None:
-        result = adapter.graph_query("owl_example", "object", {})
+        result = adapter.graph_query("owl_example", "object", object_code=[])
         for node in result["nodes"]:
             assert "code" in node
             assert "label" in node
@@ -157,7 +170,8 @@ class TestGraphPath:
         result = adapter.graph_path(
             "owl_example",
             "object",
-            {"sourceObjectCode": "by_customer", "targetObjectCode": "by_opportunity"},
+            start_node="by_customer",
+            end_node="by_opportunity",
         )
         assert result["path"] == ["by_customer", "by_opportunity"]
         assert result["hops"] == 1
@@ -168,7 +182,8 @@ class TestGraphPath:
         result = adapter.graph_path(
             "owl_example",
             "object",
-            {"sourceObjectCode": "by_customer", "targetObjectCode": "by_project_task"},
+            start_node="by_customer",
+            end_node="by_project_task",
         )
         assert result["hops"] == 2
         assert result["path"][0] == "by_customer"
@@ -178,7 +193,8 @@ class TestGraphPath:
         result = adapter.graph_path(
             "owl_example",
             "object",
-            {"sourceObjectCode": "by_customer", "targetObjectCode": "nonexistent"},
+            start_node="by_customer",
+            end_node="nonexistent",
         )
         assert result["path"] == []
         assert result["hops"] == -1
@@ -188,7 +204,8 @@ class TestGraphPath:
         result = adapter.graph_path(
             "owl_example",
             "object",
-            {"sourceObjectCode": "by_customer", "targetObjectCode": "by_customer"},
+            start_node="by_customer",
+            end_node="by_customer",
         )
         assert result["path"] == ["by_customer"]
         assert result["hops"] == 0
@@ -199,7 +216,8 @@ class TestGraphPath:
         result = adapter.graph_path(
             "owl_example",
             "object",
-            {"sourceObjectCode": "by_customer", "targetObjectCode": "by_rd_task"},
+            start_node="by_customer",
+            end_node="by_rd_task",
         )
         assert result["hops"] == 2
         assert result["path"][0] == "by_customer"

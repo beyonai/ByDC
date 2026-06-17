@@ -148,7 +148,9 @@ class TestSearchOntologyIntegration:
         result = adapter.search_ontology(
             "test_base",
             "test_scene",
-            {"keyword": "金融行业客户", "searchScope": "all", "queryType": "vector"},
+            keyword="金融行业客户",
+            search_scope="all",
+            query_type="vector",
         )
 
         assert "metadata" in result

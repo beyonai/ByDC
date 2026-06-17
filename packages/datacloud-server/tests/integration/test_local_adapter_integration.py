@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from datacloud_server.adapters.local_adapter import LocalOntologyAdapter
+from datacloud_server.models.object_type import ObjectType
 from datacloud_server.storage.json_writer import JSONWriter
 
 
@@ -92,25 +93,34 @@ class TestLocalAdapterCRUD:
 
     def test_create_and_read_object(self, adapter: LocalOntologyAdapter) -> None:
         """Write object via JSON, then read back."""
-        obj_data = {
-            "objectCode": "product",
-            "objectName": "Product",
-            "fields": [{"fieldCode": "price", "fieldName": "Price", "fieldType": "NUMBER"}],
-        }
-        adapter.create_object("my_base", "default", obj_data)
+        obj = ObjectType(
+            object_code="product",
+            object_name="Product",
+            properties=[],  # extra=allow handles anything else in JSON
+        )
+        adapter.create_object("my_base", "default", obj)
         objects = adapter.get_objects("my_base", "default")
         assert len(objects) == 1
         assert objects[0]["objectCode"] == "product"
 
     def test_delete_object_removes_it(self, adapter: LocalOntologyAdapter) -> None:
         """Delete removes object from index."""
-        adapter.create_object("my_base", "default", {"objectCode": "temp", "objectName": "Temp"})
+        adapter.create_object(
+            "my_base", "default",
+            ObjectType(object_code="temp", object_name="Temp"),
+        )
         adapter.delete_object("my_base", "default", "temp")
         objects = adapter.get_objects("my_base", "default")
         assert len(objects) == 0
 
     def test_create_duplicate_raises_error(self, adapter: LocalOntologyAdapter) -> None:
         """Duplicate objectCode raises ValueError."""
-        adapter.create_object("my_base", "default", {"objectCode": "dup", "objectName": "Dup"})
+        adapter.create_object(
+            "my_base", "default",
+            ObjectType(object_code="dup", object_name="Dup"),
+        )
         with pytest.raises(ValueError, match="already exists"):
-            adapter.create_object("my_base", "default", {"objectCode": "dup", "objectName": "Dup"})
+            adapter.create_object(
+                "my_base", "default",
+                ObjectType(object_code="dup", object_name="Dup"),
+            )

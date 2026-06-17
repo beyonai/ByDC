@@ -7,9 +7,10 @@ logic and permission control only.
 from __future__ import annotations
 
 import pytest
+from datacloud_server.registry.registry import OntologyBaseEntry
 from datacloud_server.services.ontology_service import OntologyService
 
-from tests.fake_registry import FakeRegistry, OntologyBaseEntry
+from tests.fake_registry import FakeRegistry
 from tests.fake_repository import FakeOntologyRepository
 
 
@@ -126,32 +127,34 @@ class TestCreateOntologyBase:
 
     def test_create_local_base_derives_source_type(self, svc: OntologyService) -> None:
         result = svc.create_base(
-            {"baseId": "my_base", "displayName": "My Base", "ownerType": "personal"}
+            OntologyBaseEntry(base_id="my_base", display_name="My Base", owner_type="personal", description="", source_type="LOCAL"),
         )
         assert result["sourceType"] == "LOCAL"
 
     def test_create_remote_base_derives_source_type(self, svc: OntologyService) -> None:
         result = svc.create_base(
-            {
-                "baseId": "r_base",
-                "displayName": "Remote Base",
-                "ownerType": "enterprise",
-                "sourceUrl": "https://external.example.com/api",
-            }
+            OntologyBaseEntry(
+                base_id="r_base",
+                display_name="Remote Base",
+                owner_type="enterprise",
+                description="",
+                source_type="REMOTE",
+                source_url="https://external.example.com/api",
+            ),
         )
         assert result["sourceType"] == "REMOTE"
         assert result["sourceUrl"] == "https://external.example.com/api"
 
     def test_duplicate_base_id_raises_error(self, svc: OntologyService) -> None:
-        svc.create_base({"baseId": "dup", "displayName": "First"})
+        svc.create_base(OntologyBaseEntry(base_id="dup", display_name="First", description="", owner_type="personal", source_type="LOCAL"))
         with pytest.raises(ValueError, match="already exists"):
-            svc.create_base({"baseId": "dup", "displayName": "Second"})
+            svc.create_base(OntologyBaseEntry(base_id="dup", display_name="Second", description="", owner_type="personal", source_type="LOCAL"))
 
     def test_list_bases_returns_all(self, local_repo: FakeOntologyRepository) -> None:
         reg = FakeRegistry()
         svc_clean = OntologyService(reg, {"LOCAL": local_repo})
-        svc_clean.create_base({"baseId": "b1", "displayName": "B1"})
-        svc_clean.create_base({"baseId": "b2", "displayName": "B2"})
+        svc_clean.create_base(OntologyBaseEntry(base_id="b1", display_name="B1", description="", owner_type="personal", source_type="LOCAL"))
+        svc_clean.create_base(OntologyBaseEntry(base_id="b2", display_name="B2", description="", owner_type="personal", source_type="LOCAL"))
         result = svc_clean.list_bases()
         assert len(result) == 2
         assert {r["baseId"] for r in result} == {"b1", "b2"}

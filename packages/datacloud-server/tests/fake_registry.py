@@ -5,35 +5,7 @@ Mirrors OntologyBaseRegistry interface.
 
 from __future__ import annotations
 
-
-class OntologyBaseEntry:
-    """Test-compatible entry with same fields as registry/models.py."""
-
-    def __init__(
-        self,
-        base_id: str,
-        display_name: str,
-        description: str = "",
-        owner_type: str = "personal",
-        source_type: str = "LOCAL",
-        source_url: str | None = None,
-        auth_type: str | None = None,
-        auth_config: dict | None = None,
-        timeout_sec: int = 30,
-        ontology_path: str = "",
-        created_at: str = "",
-    ) -> None:
-        self.base_id = base_id
-        self.display_name = display_name
-        self.description = description
-        self.owner_type = owner_type
-        self.source_type = source_type
-        self.source_url = source_url
-        self.auth_type = auth_type
-        self.auth_config = auth_config
-        self.timeout_sec = timeout_sec
-        self.ontology_path = ontology_path
-        self.created_at = created_at
+from datacloud_server.registry.registry import OntologyBaseEntry
 
 
 class FakeRegistry:

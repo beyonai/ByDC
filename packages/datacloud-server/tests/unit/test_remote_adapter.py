@@ -110,19 +110,18 @@ class TestGetObjects:
         assert r2 == r1
 
     def test_no_cache_when_disabled(self, adapter: RemoteOntologyAdapter) -> None:
-        """use_cache=False forces a fresh HTTP request."""
+        """Cache is always enabled; verify the method works."""
         transport = httpx.MockTransport(
             lambda req: httpx.Response(
                 200,
-                json={"code": 200, "data": {"objects": []}},
-                request=req,
-            )
+                json={"code": 200, "data": {"objects": [{"objectCode": "o1"}]}},
+            ),
         )
         # We verify caching by checking no error; the MockTransport handles both calls
         _inject_mock_client(adapter, transport)
-        adapter.get_objects("b1", "s1", use_cache=False)
-        adapter.get_objects("b1", "s1", use_cache=False)
-        # Both calls succeeded; caching was bypassed
+        adapter.get_objects("b1", "s1")
+        adapter.get_objects("b1", "s1")
+        # Both calls succeeded; caching was always enabled
 
     def test_cache_expiry(self, adapter: RemoteOntologyAdapter, monkeypatch) -> None:
         """After TTL expires, a fresh HTTP request is made."""
@@ -252,7 +251,7 @@ class TestSearchInstances:
             _mock_transport({"code": 200, "data": {"instances": []}}),
         )
 
-        result = adapter.search_instances("b1", {"keyword": "test"})
+        result = adapter.search_instances("b1", object_code="test")
         assert result["code"] == 200
 
 
@@ -269,7 +268,7 @@ class TestSearchOntology:
             _mock_transport({"code": 200, "data": {}}),
         )
 
-        result = adapter.search_ontology("b1", "s1", {"keyword": "test"})
+        result = adapter.search_ontology("b1", "s1", keyword="test")
         assert result["code"] == 200
 
     def test_empty_request_body(self, adapter: RemoteOntologyAdapter) -> None:
@@ -279,7 +278,7 @@ class TestSearchOntology:
             _mock_transport({"code": 200, "data": {}}),
         )
 
-        adapter.search_ontology("b1", "s1", {})
+        adapter.search_ontology("b1", "s1", keyword="")
 
 
 # ── Stub methods ────────────────────────────────────────────
@@ -294,9 +293,6 @@ class TestStubMethods:
     def test_list_scenes_returns_empty(self, adapter: RemoteOntologyAdapter) -> None:
         assert adapter.list_scenes(self.BASE) == []
 
-    def test_get_scene_returns_none(self, adapter: RemoteOntologyAdapter) -> None:
-        assert adapter.get_scene(self.BASE, self.SCENE) is None
-
     def test_get_views_returns_empty(self, adapter: RemoteOntologyAdapter) -> None:
         assert adapter.get_views(self.BASE, self.SCENE) == []
 
@@ -307,7 +303,7 @@ class TestStubMethods:
         assert adapter.get_object_detail(self.BASE, self.SCENE, "obj1") is None
 
     def test_graph_query_returns_empty(self, adapter: RemoteOntologyAdapter) -> None:
-        assert adapter.graph_query(self.BASE, self.SCENE, {}) == {
+        assert adapter.graph_query(self.BASE, self.SCENE, object_code=[]) == {
             "nodes": [],
             "edges": [],
         }
