@@ -19,7 +19,7 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 logger = logging.getLogger(__name__)
 
 
-def _add_nodes_and_edges(
+def _add_nodes_and_edges(  # noqa: PLR0912
     loader: OntologyLoader,
     object_codes: list[str] | None,
     depth: int | None,
@@ -53,10 +53,7 @@ def _add_nodes_and_edges(
 
     # Determine seed object codes
     seed_codes: set[str]
-    if object_codes:
-        seed_codes = set(object_codes)
-    else:
-        seed_codes = set(loader._classes.keys())
+    seed_codes = set(object_codes) if object_codes else set(loader._classes.keys())
 
     # Expand by depth if requested
     effective_codes = seed_codes.copy()
@@ -346,9 +343,10 @@ class LocalOntologyAdapter:
         ds_dir = scene_path / "datasources"
         if not ds_dir.exists():
             return []
-        result: list[dict] = []
-        for json_file in sorted(ds_dir.glob("*.json")):
-            result.append(_json.loads(json_file.read_text(encoding="utf-8")))
+        result: list[dict] = [
+            _json.loads(json_file.read_text(encoding="utf-8"))
+            for json_file in sorted(ds_dir.glob("*.json"))
+        ]
         return result
 
     def get_datasource_detail(self, base_id: str, scene_id: str, db_id: str) -> dict | None:
@@ -366,7 +364,7 @@ class LocalOntologyAdapter:
         file_path = ds_dir / f"{db_id}.json"
         if file_path.exists():
             raise ValueError(f"Datasource '{db_id}' already exists")
-        self.writer._atomic_write(file_path, ds_data)  # noqa: SLF001
+        self.writer._atomic_write(file_path, ds_data)
         return ds_data
 
     def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
@@ -409,7 +407,7 @@ class LocalOntologyAdapter:
                 raise ValueError(f"Action '{action_data['actionCode']}' already exists")
         existing.append(action_data)
         obj["actions"] = existing
-        self.writer._atomic_write(file_path, obj)  # noqa: SLF001
+        self.writer._atomic_write(file_path, obj)
         self._reload_loader(base_id)
         return action_data
 
@@ -427,7 +425,7 @@ class LocalOntologyAdapter:
         if len(filtered) == len(existing):
             return  # action not found, no-op
         obj["actions"] = filtered
-        self.writer._atomic_write(file_path, obj)  # noqa: SLF001
+        self.writer._atomic_write(file_path, obj)
         self._reload_loader(base_id)
 
     # -- OWL import --
@@ -544,15 +542,15 @@ class LocalOntologyAdapter:
         return {"data": data, "totalCount": total}
 
     @staticmethod
-    def _class_matches_keyword(cls: object, keyword: str) -> bool:
+    def _class_matches_keyword(ont_class: object, keyword: str) -> bool:
         """Check if OntologyClass matches a keyword (case-insensitive)."""
-        if keyword in cls.object_code.lower():
+        if keyword in ont_class.object_code.lower():
             return True
-        if keyword in cls.object_name.lower():
+        if keyword in ont_class.object_name.lower():
             return True
-        if keyword in cls.description.lower():
+        if keyword in ont_class.description.lower():
             return True
-        for field in cls.fields:
+        for field in ont_class.fields:
             if keyword in field.field_code.lower():
                 return True
             if keyword in field.field_name.lower():
