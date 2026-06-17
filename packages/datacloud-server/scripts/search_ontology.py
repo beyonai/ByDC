@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""快速开始：本体检索示例。
-"""
+"""快速开始：本体检索示例。"""
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 
@@ -26,11 +24,11 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)-5s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger(__file__)
+logger = logging.getLogger(__name__)
 
 
 BASE_ID = "owl_example"
-DATA_DIR = os.environ.get('DATACLOUD_ONTOLOGY_PATH', "./")
+DATA_DIR = os.environ.get("DATACLOUD_ONTOLOGY_PATH", "./")
 
 
 def _print_engine_hits(hits: list[dict], limit: int = 3) -> None:
