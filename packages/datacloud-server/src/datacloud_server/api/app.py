@@ -1,5 +1,6 @@
 """FastAPI application factory with dependency injection."""
-# ruff: noqa: ARG002  # stub adapter must match Protocol signatures — all params required by contract
+
+# ruff: noqa: ARG002  # fallback adapter must match Protocol signatures — all params required by contract
 
 from __future__ import annotations
 
@@ -9,7 +10,10 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 
 from datacloud_server.api.routes import router
-from datacloud_server.services.ontology_service import OntologyService
+from datacloud_server.services.adapter_router import AdapterRouter
+from datacloud_server.services.ontology_base_service import OntologyBaseService
+from datacloud_server.services.ontology_resource_service import OntologyResourceService
+from datacloud_server.services.ontology_search_service import OntologySearchService
 
 if TYPE_CHECKING:
     from datacloud_server.models.action import Action
@@ -21,7 +25,7 @@ if TYPE_CHECKING:
     from datacloud_server.registry.registry import OntologyBaseRegistry
 
 
-class _RemoteFallbackAdapter:
+class _WriteRejectingFallback:
     """Write-rejecting fallback adapter used when no remote adapter is configured.
 
     Raises PermissionError on all write operations; returns empty on reads.
@@ -30,48 +34,48 @@ class _RemoteFallbackAdapter:
     _ERR_MSG = "Remote ontology base is read-only"
 
     # ── Scene ──
-    def list_scenes(self, base_id: str) -> list[dict]: return []
-    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict]: return []
-    def count_scenes(self, base_id: str, keyword: str | None) -> int: return 0
+    def list_scenes(self, base_id: str) -> list[dict]: return []  # type: ignore[empty-body]
+    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict]: return []  # type: ignore[empty-body]
+    def count_scenes(self, base_id: str, keyword: str | None) -> int: return 0  # type: ignore[empty-body]
     def get_scene_details(
         self, base_id: str, scene_id: str, *,
         view_code: str | None = None, object_code: str | None = None,
-    ) -> dict: return {}
+    ) -> dict: return {}  # type: ignore[empty-body]
     def query_ontologies_by_scene(
         self, base_id: str, scene_id: str, *,
         page: int = 1, page_size: int = 20, keyword: str | None = None,
-    ) -> dict: return {"data": [], "totalCount": 0}
+    ) -> dict: return {"data": [], "totalCount": 0}  # type: ignore[empty-body]
 
     # ── Object ──
-    def get_objects(self, base_id: str, scene_id: str) -> list[dict]: return []
-    def get_object_detail(self, base_id: str, scene_id: str, object_code: str) -> dict | None: return None
+    def get_objects(self, base_id: str, scene_id: str) -> list[dict]: return []  # type: ignore[empty-body]
+    def get_object_detail(self, base_id: str, scene_id: str, object_code: str) -> dict | None: return None  # type: ignore[empty-body]
     def create_object(self, base_id: str, scene_id: str, obj: ObjectType) -> ObjectType: raise PermissionError(self._ERR_MSG)
     def update_object(self, base_id: str, scene_id: str, object_code: str, obj: ObjectType) -> ObjectType: raise PermissionError(self._ERR_MSG)
     def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None: raise PermissionError(self._ERR_MSG)
 
     # ── View ──
-    def get_views(self, base_id: str, scene_id: str) -> list[dict]: return []
-    def get_view_detail(self, base_id: str, scene_id: str, view_code: str) -> dict | None: return None
+    def get_views(self, base_id: str, scene_id: str) -> list[dict]: return []  # type: ignore[empty-body]
+    def get_view_detail(self, base_id: str, scene_id: str, view_code: str) -> dict | None: return None  # type: ignore[empty-body]
     def create_view(self, base_id: str, scene_id: str, view: View) -> View: raise PermissionError(self._ERR_MSG)
     def update_view(self, base_id: str, scene_id: str, view_code: str, view: View) -> View: raise PermissionError(self._ERR_MSG)
     def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None: raise PermissionError(self._ERR_MSG)
 
     # ── Relation ──
-    def get_relations(self, base_id: str, scene_id: str) -> list[dict]: return []
-    def get_relation_detail(self, base_id: str, scene_id: str, rel_code: str) -> dict | None: return None
+    def get_relations(self, base_id: str, scene_id: str) -> list[dict]: return []  # type: ignore[empty-body]
+    def get_relation_detail(self, base_id: str, scene_id: str, rel_code: str) -> dict | None: return None  # type: ignore[empty-body]
     def create_relation(self, base_id: str, scene_id: str, rel: Relation) -> Relation: raise PermissionError(self._ERR_MSG)
     def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel: Relation) -> Relation: raise PermissionError(self._ERR_MSG)
     def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None: raise PermissionError(self._ERR_MSG)
 
     # ── Datasource ──
-    def get_datasources(self, base_id: str, scene_id: str) -> list[dict]: return []
-    def get_datasource_detail(self, base_id: str, scene_id: str, db_id: str) -> dict | None: return None
+    def get_datasources(self, base_id: str, scene_id: str) -> list[dict]: return []  # type: ignore[empty-body]
+    def get_datasource_detail(self, base_id: str, scene_id: str, db_id: str) -> dict | None: return None  # type: ignore[empty-body]
     def create_datasource(self, base_id: str, scene_id: str, ds: Datasource) -> Datasource: raise PermissionError(self._ERR_MSG)
     def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None: raise PermissionError(self._ERR_MSG)
 
     # ── Action ──
-    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]: return []
-    def get_action_detail(self, base_id: str, scene_id: str, object_code: str, action_code: str) -> dict | None: return None
+    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[dict]: return []  # type: ignore[empty-body]
+    def get_action_detail(self, base_id: str, scene_id: str, object_code: str, action_code: str) -> dict | None: return None  # type: ignore[empty-body]
     def create_action(self, base_id: str, scene_id: str, object_code: str, action: Action) -> Action: raise PermissionError(self._ERR_MSG)
     def update_action(self, base_id: str, scene_id: str, object_code: str, action_code: str, action: Action) -> Action: raise PermissionError(self._ERR_MSG)
     def delete_action(self, base_id: str, scene_id: str, object_code: str, action_code: str) -> None: raise PermissionError(self._ERR_MSG)
@@ -106,8 +110,12 @@ def create_app(
     if registry is not None and adapters is not None:
         # Auto-inject write-rejecting fallback for REMOTE if not provided
         if "REMOTE" not in adapters:
-            adapters["REMOTE"] = _RemoteFallbackAdapter()
-        service = OntologyService(registry=registry, adapters=adapters)
-        _deps.set_service(service)
+            adapters["REMOTE"] = _WriteRejectingFallback()
+        router_obj = AdapterRouter(registry=registry, adapters=adapters)
+        _deps.set_services(
+            base_service=OntologyBaseService(router_obj),
+            resource_service=OntologyResourceService(router_obj),
+            search_service=OntologySearchService(router_obj),
+        )
 
     return app

@@ -11,7 +11,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
-from datacloud_server.api.deps import get_service
+from datacloud_server.api.deps import (
+    get_base_service,
+    get_resource_service,
+    get_search_service,
+)
 from datacloud_server.api.schemas import (
     OntologyBaseCreate,  # noqa: TC001
 )
@@ -27,14 +31,14 @@ router = APIRouter(prefix="/api/v1/ontologyBases", tags=["ontology"])
 
 
 # ══════════════════════════════════════════════════
-# OntologyBase management
+# OntologyBase management (→ OntologyBaseService)
 # ══════════════════════════════════════════════════
 
 
 @router.get("")
 def list_bases():
     """List all ontology bases."""
-    svc = get_service()
+    svc = get_base_service()
     return ok(data=svc.list_bases())
 
 
@@ -44,7 +48,7 @@ def create_base(body: OntologyBaseCreate):
 
     sourceType is auto-derived: sourceUrl present -> REMOTE, else LOCAL.
     """
-    svc = get_service()
+    svc = get_base_service()
     try:
         source_url = body.source_url
         entry = OntologyBaseEntry(
@@ -66,7 +70,7 @@ def create_base(body: OntologyBaseCreate):
 @router.delete("/{owner_type}/{base_id}")
 def delete_base(owner_type: str, base_id: str):
     """Delete an ontology base."""
-    svc = get_service()
+    svc = get_base_service()
     try:
         svc.delete_base(base_id)
         return ok(message="deleted")
@@ -75,7 +79,7 @@ def delete_base(owner_type: str, base_id: str):
 
 
 # ══════════════════════════════════════════════════
-# Scene query + detail
+# Scene query + detail (→ OntologyBaseService)
 # ══════════════════════════════════════════════════
 
 
@@ -86,7 +90,7 @@ def list_scenes(
     keyword: str | None = Query(default=None, description="模糊查询场景列表"),
 ):
     """List scenes under an ontology base. Supports optional keyword filter."""
-    svc = get_service()
+    svc = get_base_service()
     try:
         if keyword:
             return ok(
@@ -112,7 +116,7 @@ def get_scene_details(
     - objectCode: return only those objects + their associated actions/relations/dbsources (views empty)
     - neither: full dump
     """
-    svc = get_service()
+    svc = get_base_service()
     try:
         result = svc.get_scene_details(
             base_id,
@@ -135,7 +139,7 @@ def query_ontologies_by_scene(
     keyword: str | None = Query(default=None),
 ):
     """Query ontologies in a scene."""
-    svc = get_service()
+    svc = get_base_service()
     try:
         result = svc.query_ontologies_by_scene(
             base_id, scene_id, page=page, page_size=page_size, keyword=keyword
@@ -146,14 +150,14 @@ def query_ontologies_by_scene(
 
 
 # ══════════════════════════════════════════════════
-# View CRUD
+# View CRUD (→ OntologyResourceService)
 # ══════════════════════════════════════════════════
 
 
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/views")
 def list_views(owner_type: str, base_id: str, scene_id: str):
     """List views in a scene."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(data=svc.get_views(base_id, scene_id))
     except KeyError as e:
@@ -163,7 +167,7 @@ def list_views(owner_type: str, base_id: str, scene_id: str):
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/views/{code}")
 def get_view(owner_type: str, base_id: str, scene_id: str, code: str):
     """Get view detail."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         view = svc.get_view_detail(base_id, scene_id, code)
         if view is None:
@@ -176,7 +180,7 @@ def get_view(owner_type: str, base_id: str, scene_id: str, code: str):
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/views")
 def create_view(owner_type: str, base_id: str, scene_id: str, body: View):
     """Create a view (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(
             data=svc.create_view(base_id, scene_id, body),
@@ -193,7 +197,7 @@ def create_view(owner_type: str, base_id: str, scene_id: str, body: View):
 @router.put("/{owner_type}/{base_id}/scenes/{scene_id}/views/{code}")
 def update_view(owner_type: str, base_id: str, scene_id: str, code: str, body: View):
     """Update a view (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.update_view(base_id, scene_id, code, body)
         return ok(data={"viewCode": code})
@@ -208,7 +212,7 @@ def update_view(owner_type: str, base_id: str, scene_id: str, code: str, body: V
 @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/views/{code}")
 def delete_view(owner_type: str, base_id: str, scene_id: str, code: str):
     """Delete a view (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.delete_view(base_id, scene_id, code)
         return ok(message="deleted")
@@ -219,14 +223,14 @@ def delete_view(owner_type: str, base_id: str, scene_id: str, code: str):
 
 
 # ══════════════════════════════════════════════════
-# Relation CRUD
+# Relation CRUD (→ OntologyResourceService)
 # ══════════════════════════════════════════════════
 
 
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/relations")
 def list_relations(owner_type: str, base_id: str, scene_id: str):
     """List relations in a scene."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(data=svc.get_relations(base_id, scene_id))
     except KeyError as e:
@@ -236,7 +240,7 @@ def list_relations(owner_type: str, base_id: str, scene_id: str):
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/relations/{code}")
 def get_relation(owner_type: str, base_id: str, scene_id: str, code: str):
     """Get relation detail."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         rel = svc.get_relation_detail(base_id, scene_id, code)
         if rel is None:
@@ -249,7 +253,7 @@ def get_relation(owner_type: str, base_id: str, scene_id: str, code: str):
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/relations")
 def create_relation(owner_type: str, base_id: str, scene_id: str, body: Relation):
     """Create a relation (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(
             data=svc.create_relation(base_id, scene_id, body),
@@ -266,7 +270,7 @@ def create_relation(owner_type: str, base_id: str, scene_id: str, body: Relation
 @router.put("/{owner_type}/{base_id}/scenes/{scene_id}/relations/{code}")
 def update_relation(owner_type: str, base_id: str, scene_id: str, code: str, body: Relation):
     """Update a relation (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.update_relation(base_id, scene_id, code, body)
         return ok(data={"relationCode": code})
@@ -281,7 +285,7 @@ def update_relation(owner_type: str, base_id: str, scene_id: str, code: str, bod
 @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/relations/{code}")
 def delete_relation(owner_type: str, base_id: str, scene_id: str, code: str):
     """Delete a relation (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.delete_relation(base_id, scene_id, code)
         return ok(message="deleted")
@@ -292,14 +296,14 @@ def delete_relation(owner_type: str, base_id: str, scene_id: str, code: str):
 
 
 # ══════════════════════════════════════════════════
-# Datasource CRUD
+# Datasource CRUD (→ OntologyResourceService)
 # ══════════════════════════════════════════════════
 
 
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/datasources")
 def list_datasources(owner_type: str, base_id: str, scene_id: str):
     """List datasources in a scene."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(data=svc.get_datasources(base_id, scene_id))
     except KeyError as e:
@@ -309,7 +313,7 @@ def list_datasources(owner_type: str, base_id: str, scene_id: str):
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/datasources/{db_id}")
 def get_datasource(owner_type: str, base_id: str, scene_id: str, db_id: str):
     """Get datasource detail."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         ds = svc.get_datasource_detail(base_id, scene_id, db_id)
         if ds is None:
@@ -322,7 +326,7 @@ def get_datasource(owner_type: str, base_id: str, scene_id: str, db_id: str):
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/datasources")
 def create_datasource(owner_type: str, base_id: str, scene_id: str, body: Datasource):
     """Create a datasource (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(
             data=svc.create_datasource(base_id, scene_id, body),
@@ -339,7 +343,7 @@ def create_datasource(owner_type: str, base_id: str, scene_id: str, body: Dataso
 @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/datasources/{db_id}")
 def delete_datasource(owner_type: str, base_id: str, scene_id: str, db_id: str):
     """Delete a datasource (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.delete_datasource(base_id, scene_id, db_id)
         return ok(message="deleted")
@@ -350,14 +354,14 @@ def delete_datasource(owner_type: str, base_id: str, scene_id: str, db_id: str):
 
 
 # ══════════════════════════════════════════════════
-# Object CRUD
+# Object CRUD (→ OntologyResourceService)
 # ══════════════════════════════════════════════════
 
 
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/objects")
 def list_objects(owner_type: str, base_id: str, scene_id: str):
     """List objects in a scene."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(data=svc.get_objects(base_id, scene_id))
     except KeyError as e:
@@ -367,7 +371,7 @@ def list_objects(owner_type: str, base_id: str, scene_id: str):
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{code}")
 def get_object(owner_type: str, base_id: str, scene_id: str, code: str):
     """Get object detail."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         obj = svc.get_object_detail(base_id, scene_id, code)
         if obj is None:
@@ -380,7 +384,7 @@ def get_object(owner_type: str, base_id: str, scene_id: str, code: str):
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/objects")
 def create_object(owner_type: str, base_id: str, scene_id: str, body: ObjectType):
     """Create an object (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(
             data=svc.create_object(base_id, scene_id, body),
@@ -397,7 +401,7 @@ def create_object(owner_type: str, base_id: str, scene_id: str, body: ObjectType
 @router.put("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{code}")
 def update_object(owner_type: str, base_id: str, scene_id: str, code: str, body: ObjectType):
     """Update an object (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.update_object(base_id, scene_id, code, body)
         return ok(data={"objectCode": code})
@@ -412,7 +416,7 @@ def update_object(owner_type: str, base_id: str, scene_id: str, code: str, body:
 @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{code}")
 def delete_object(owner_type: str, base_id: str, scene_id: str, code: str):
     """Delete an object (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.delete_object(base_id, scene_id, code)
         return ok(message="deleted")
@@ -423,14 +427,14 @@ def delete_object(owner_type: str, base_id: str, scene_id: str, code: str):
 
 
 # ══════════════════════════════════════════════════
-# Action CRUD
+# Action CRUD (→ OntologyResourceService)
 # ══════════════════════════════════════════════════
 
 
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions")
 def list_actions(owner_type: str, base_id: str, scene_id: str, object_code: str):
     """List actions on an object."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(data=svc.get_actions(base_id, scene_id, object_code))
     except KeyError as e:
@@ -440,7 +444,7 @@ def list_actions(owner_type: str, base_id: str, scene_id: str, object_code: str)
 @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions/{code}")
 def get_action(owner_type: str, base_id: str, scene_id: str, object_code: str, code: str):
     """Get action detail."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         action = svc.get_action_detail(base_id, scene_id, object_code, code)
         if action is None:
@@ -453,7 +457,7 @@ def get_action(owner_type: str, base_id: str, scene_id: str, object_code: str, c
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions")
 def create_action(owner_type: str, base_id: str, scene_id: str, object_code: str, body: Action):
     """Create an action on an object (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         return ok(
             data=svc.create_action(base_id, scene_id, object_code, body),
@@ -472,7 +476,7 @@ def update_action(
     owner_type: str, base_id: str, scene_id: str, object_code: str, code: str, body: Action
 ):
     """Update an action on an object (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.update_action(base_id, scene_id, object_code, code, body)
         return ok(data={"actionCode": code})
@@ -487,7 +491,7 @@ def update_action(
 @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions/{code}")
 def delete_action(owner_type: str, base_id: str, scene_id: str, object_code: str, code: str):
     """Delete an action from an object (LOCAL only)."""
-    svc = get_service()
+    svc = get_resource_service()
     try:
         svc.delete_action(base_id, scene_id, object_code, code)
         return ok(message="deleted")
@@ -498,7 +502,7 @@ def delete_action(owner_type: str, base_id: str, scene_id: str, object_code: str
 
 
 # ══════════════════════════════════════════════════
-# Search
+# Search (→ OntologySearchService)
 # ══════════════════════════════════════════════════
 
 
@@ -509,7 +513,7 @@ def search_ontology_base(
     body: dict,
 ):
     """Cross-scene ontology search. sceneId in body ('-1' for global)."""
-    svc = get_service()
+    svc = get_search_service()
     try:
         return ok(data=svc.search_ontology_base(
             base_id,
@@ -531,7 +535,7 @@ def search_ontology_base(
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/search")
 def search_ontology(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Vector search across ontology metadata and instances."""
-    svc = get_service()
+    svc = get_search_service()
     try:
         return ok(data=svc.search_ontology(
             base_id, scene_id,
@@ -545,7 +549,7 @@ def search_ontology(owner_type: str, base_id: str, scene_id: str, body: dict):
 
 
 # ══════════════════════════════════════════════════
-# OWL import
+# OWL import (→ OntologySearchService)
 # ══════════════════════════════════════════════════
 
 
@@ -560,7 +564,7 @@ async def import_owl(
 
     Expects multipart upload with Content-Type: application/zip.
     """
-    svc = get_service()
+    svc = get_search_service()
     try:
         zip_bytes = await file.read()
         result = svc.import_owl(base_id, scene_id, zip_bytes)
@@ -572,14 +576,14 @@ async def import_owl(
 
 
 # ══════════════════════════════════════════════════
-# Application services
+# Application services (→ OntologySearchService)
 # ══════════════════════════════════════════════════
 
 
 @router.post("/{owner_type}/{base_id}/instances/search")
 def search_instances(owner_type: str, base_id: str, body: dict):
     """Search instances in a base."""
-    svc = get_service()
+    svc = get_search_service()
     try:
         return ok(data=svc.search_instances(
             base_id,
@@ -594,7 +598,7 @@ def search_instances(owner_type: str, base_id: str, body: dict):
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/graph/query")
 def graph_query(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Query the graph of objects and relations."""
-    svc = get_service()
+    svc = get_search_service()
     try:
         return ok(data=svc.graph_query(
             base_id, scene_id,
@@ -610,7 +614,7 @@ def graph_query(owner_type: str, base_id: str, scene_id: str, body: dict):
 @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/graph/path")
 def graph_path(owner_type: str, base_id: str, scene_id: str, body: dict):
     """Find shortest path between two objects."""
-    svc = get_service()
+    svc = get_search_service()
     try:
         return ok(data=svc.graph_path(
             base_id, scene_id,
