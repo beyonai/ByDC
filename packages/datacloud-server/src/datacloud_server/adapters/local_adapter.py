@@ -971,6 +971,136 @@ class LocalOntologyAdapter:
 
         return result
 
+    def search_ontology_batch(
+        self, base_id: str, scene_id: str, *,
+        keywords: list[str],
+        search_scope: str = "all",
+        object_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        view_code: list[str] | None = None,  # noqa: ARG002  # reserved: future scope filter
+        result_per_type: int = 5,  # noqa: ARG002  # reserved: future result count
+    ) -> list[dict]:
+        """Batch vector search for multiple keywords in a single scene.
+
+        Builds UNION ALL SQL with one SELECT per keyword, each embedding its own
+        pgvector <=> operator. Returns a flat list of hit dicts, each tagged with
+        ``_keyword_index`` (int) for downstream fusion.
+        """
+        valid_keywords = [k for k in keywords if k]
+        if not valid_keywords:
+            return []
+
+        vecs = [self._embed_and_encode(k) for k in valid_keywords]
+        engine = self._get_search_engine()
+
+        loader = None
+        with suppress(Exception):
+            loader = self._get_loader(base_id)
+
+        hits: list[dict] = []
+
+        with engine.connect() as conn:
+            # -- metadata branch --
+            if search_scope in ("metadata", "all"):
+                selects: list[str] = []
+                params: dict[str, str] = {}
+                for i, vec in enumerate(vecs):
+                    pname = f"vec_{i}"
+                    selects.append(
+                        f"SELECT {i} AS keyword_index,"
+                        " tn.name_text, t.term_code, t.term_type_code,"
+                        " t.term_name, t.desc_summary,"
+                        f" 1 - (tn.name_embedding <=> :{pname}) AS score"
+                        " FROM byai.term_name tn"
+                        " JOIN byai.term t ON t.term_id = tn.term_id"
+                        " WHERE t.term_type_code IN"
+                        " ('object','view','prop','action','func')"
+                        " AND tn.name_embedding IS NOT NULL"
+                        f" ORDER BY tn.name_embedding <=> :{pname}"
+                        " LIMIT 20"
+                    )
+                    params[pname] = vec
+
+                union_sql = "\nUNION ALL\n".join(f"({s})" for s in selects)
+                rows = conn.execute(text(union_sql), params).fetchall()
+
+                for row in rows:
+                    hit = self._build_metadata_hit(
+                        conn=conn,
+                        scene_id=scene_id,
+                        term_code=row[2],
+                        term_type=row[3],
+                        term_name=row[4],
+                        desc_summary=row[5] or "",
+                        matched_value=row[1],
+                        score=round(float(row[6]), 4),
+                        loader=loader,
+                    )
+                    hit["_keyword_index"] = row[0]
+                    hits.append(hit)
+
+            # -- instance branch --
+            if search_scope in ("instance", "all"):
+                selects = []
+                params = {}
+                for i, vec in enumerate(vecs):
+                    pname = f"vec_{i}"
+                    selects.append(
+                        f"SELECT {i} AS keyword_index,"
+                        " tn.name_text, t.term_code, t.term_type_code,"
+                        " t.term_name, t.term_id,"
+                        f" 1 - (tn.name_embedding <=> :{pname}) AS score"
+                        " FROM byai.term_name tn"
+                        " JOIN byai.term t ON t.term_id = tn.term_id"
+                        " JOIN byai.term_type tt ON tt.type_code = t.term_type_code"
+                        " WHERE tt.type_category IN (1, 2)"
+                        " AND tn.name_embedding IS NOT NULL"
+                        f" ORDER BY tn.name_embedding <=> :{pname}"
+                        " LIMIT 20"
+                    )
+                    params[pname] = vec
+
+                union_sql = "\nUNION ALL\n".join(f"({s})" for s in selects)
+                rows = conn.execute(text(union_sql), params).fetchall()
+
+                for row in rows:
+                    value_name = row[1]
+                    value_code = row[2]
+                    value_type = row[3]
+                    value_term_id = row[5]
+                    score = round(float(row[6]), 4)
+
+                    prop_info = self._resolve_value_to_property(conn, value_term_id)
+                    obj_code = prop_info.get("objectCode", "")
+                    property_code = prop_info.get("propertyCode", value_type)
+                    object_name = (
+                        self._get_term_name(conn, obj_code, "object") if obj_code else ""
+                    )
+                    is_enum = self._check_is_enum_type(conn, value_type)
+                    referenced_by: list[dict] = (
+                        self._resolve_referenced_by_properties(conn, value_term_id)
+                        if is_enum
+                        else []
+                    )
+
+                    hits.append({
+                        "sceneId": scene_id,
+                        "objectCode": obj_code,
+                        "objectName": object_name,
+                        "primaryKey": value_code,
+                        "matchedProperty": property_code,
+                        "matchedValue": value_name,
+                        "isEnumType": is_enum,
+                        "referencedByProperties": referenced_by,
+                        "score": score,
+                        "properties": {
+                            "matchedValue": value_name,
+                            "matchedProperty": property_code,
+                        },
+                        "_keyword_index": row[0],
+                    })
+
+        return hits
+
     def _search_all_scenes(
         self, base_id: str, *,
         keyword: str,

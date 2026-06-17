@@ -118,10 +118,11 @@ class DirectStrategy:
 
 
 class RRFStrategy:
-    """jieba word-level tokenization → per-token search → RRF fusion.
+    """jieba word-level tokenization → batched per-target search → RRF fusion.
 
-    Splits keyword with jieba, searches each token independently,
-    then fuses results via Reciprocal Rank Fusion (RRF).
+    Splits keyword with jieba, searches all tokens in a single batch call
+    per target via ``search_ontology_batch``, then fuses results via
+    Reciprocal Rank Fusion (RRF).
 
     Args:
         rrf_k: RRF smoothing constant (default 60, standard BM25-RRF choice).
@@ -143,27 +144,39 @@ class RRFStrategy:
         import jieba  # noqa: PLC0415  # lazy import — only needed for RRF
 
         tokens = list(jieba.cut(keyword)) if keyword else []
+        if not tokens:
+            return []
 
         # {identity_key: [rank, ...]} — one rank per token match
         scored: dict[str, list[int]] = {}
         docs: dict[str, dict[str, Any]] = {}
 
-        for token in tokens:
-            for adapter, base_id, scene_id in targets:
-                raw = adapter.search_ontology(
-                    base_id, scene_id,
-                    keyword=token,
-                    search_scope=search_scope,
-                    result_per_type=result_per_type,
-                    object_code=object_code,
-                    view_code=view_code,
-                )
-                hits = _flatten_hits(raw, base_id, scene_id)
-                for rank, hit in enumerate(hits):
-                    key = _hit_identity(hit)
-                    scored.setdefault(key, []).append(rank)
-                    if key not in docs:
-                        docs[key] = hit
+        for adapter, base_id, scene_id in targets:
+            hits = adapter.search_ontology_batch(
+                base_id, scene_id,
+                keywords=tokens,
+                search_scope=search_scope,
+                result_per_type=result_per_type,
+                object_code=object_code,
+                view_code=view_code,
+            )
+            # Tag hits for downstream dedup
+            for hit in hits:
+                hit["_base_id"] = base_id
+                hit["_scene_id"] = scene_id
+
+            # Per-keyword rank: hits within each keyword_index group are
+            # already ordered by score descending (SQL ORDER BY / API order).
+            kw_rank: dict[int, int] = {}
+            for hit in hits:
+                kw_idx = hit.get("_keyword_index", 0)
+                rank = kw_rank.get(kw_idx, 0)
+                kw_rank[kw_idx] = rank + 1
+
+                key = _hit_identity(hit)
+                scored.setdefault(key, []).append(rank)
+                if key not in docs:
+                    docs[key] = hit
 
         return self._rrf_fuse(scored, docs)
 

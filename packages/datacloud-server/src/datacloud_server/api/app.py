@@ -85,6 +85,8 @@ class _WriteRejectingFallback:
         return {"data": [], "totalCount": 0}
     def search_ontology(self, base_id: str, scene_id: str, *, keyword: str, query_type: str = "vector", search_scope: str = "all", object_code: list[str] | None = None, view_code: list[str] | None = None, property_code: list[str] | None = None, result_per_type: int = 5, page_size: int = 20, page_token: str | None = None) -> dict:
         return {"metadata": [], "instances": [], "totalCount": {"metadata": 0, "instances": 0}}
+    def search_ontology_batch(self, base_id: str, scene_id: str, *, keywords: list[str], search_scope: str = "all", object_code: list[str] | None = None, view_code: list[str] | None = None, result_per_type: int = 5) -> list[dict]:
+        return []
     def graph_query(self, base_id: str, scene_id: str, *, object_code: list[str], match_by: str = "name", values: list[str] | None = None, step: int = 1) -> dict:
         return {"nodes": [], "edges": []}
     def graph_path(self, base_id: str, scene_id: str, *, match_by: str = "name", start_node: str, end_node: str = "", direction: str = "forward") -> dict:

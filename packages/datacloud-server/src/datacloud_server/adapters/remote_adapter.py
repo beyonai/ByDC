@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -302,6 +303,82 @@ class RemoteOntologyAdapter:
         response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
+
+    def search_ontology_batch(
+        self, base_id: str, scene_id: str, *,
+        keywords: list[str],
+        search_scope: str = "all",
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        result_per_type: int = 5,
+    ) -> list[dict]:
+        """Batch search across multiple keywords via concurrent HTTP POST.
+
+        Builds one request per keyword, posts concurrently with asyncio.gather,
+        then tags each response's hits with ``_keyword_index`` (int).
+        """
+        valid_keywords = [k for k in keywords if k]
+        if not valid_keywords:
+            return []
+
+        url = f"{self._source_url}/search/ontology"
+        headers = self._build_auth_headers()
+
+        return asyncio.run(
+            self._search_ontology_batch_async(
+                url, headers, valid_keywords,
+                scene_id=scene_id,
+                search_scope=search_scope,
+                result_per_type=result_per_type,
+                object_code=object_code,
+                view_code=view_code,
+            )
+        )
+
+    async def _search_ontology_batch_async(
+        self,
+        url: str,
+        headers: dict[str, str],
+        keywords: list[str],
+        *,
+        scene_id: str,
+        search_scope: str,
+        result_per_type: int,
+        object_code: list[str] | None,
+        view_code: list[str] | None,
+    ) -> list[dict]:
+        """Internal async implementation: concurrent POSTs via httpx.AsyncClient."""
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            tasks = [
+                client.post(
+                    url,
+                    json={
+                        "keyword": kw,
+                        "sceneId": scene_id,
+                        "queryType": "vector",
+                        "searchScope": search_scope,
+                        "resultPerType": result_per_type,
+                        "pageSize": 20,
+                        **({"objectCode": object_code} if object_code else {}),
+                        **({"viewCode": view_code} if view_code else {}),
+                    },
+                    headers=headers,
+                )
+                for kw in keywords
+            ]
+            responses = await asyncio.gather(*tasks)
+
+        hits: list[dict] = []
+        for i, resp in enumerate(responses):
+            resp.raise_for_status()
+            data: dict[str, Any] = resp.json()
+            for hit in data.get("metadata", []):
+                hit["_keyword_index"] = i
+                hits.append(hit)
+            for hit in data.get("instances", []):
+                hit["_keyword_index"] = i
+                hits.append(hit)
+        return hits
 
     def graph_query(
         self, base_id: str, scene_id: str, *,
