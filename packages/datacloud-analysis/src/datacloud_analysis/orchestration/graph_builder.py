@@ -453,6 +453,26 @@ def _build_prebuilt_graph(
 
     # ── tools_list（含 finish_react sentinel 工具）────────────────────────────────
     tools_list = _build_tools_list(tools)
+
+    # 附06-V3：锚点模式下，把 activate_anchor / mark_dead_end 加入工具列表
+    try:
+        from datacloud_analysis.tools.anchor_tools import make_anchor_tools  # noqa: PLC0415
+        from datacloud_analysis.tools.tool_pool import is_anchor_mode  # noqa: PLC0415
+
+        if is_anchor_mode():
+            # 用当前 state getter（这里用空 state，工厂函数在闭包内读 state）
+            # get_state_fn 在运行时通过 graph_builder 注入实际 state
+            # 注意：anchor_tools 是 per-request 状态感知工具，需要 state 闭包
+            # 这里先使用空 state 占位，实际 state 在 llm_call 节点运行时传入
+            _anchor_tools = make_anchor_tools(get_state_fn=lambda: {})
+            tools_list = [*tools_list, *_anchor_tools]
+            logger.info(
+                "_build_prebuilt_graph: anchor mode active, added %d anchor tools",
+                len(_anchor_tools),
+            )
+    except Exception:  # noqa: BLE001
+        logger.debug("_build_prebuilt_graph: anchor tools init skipped", exc_info=True)
+
     # finish_react 必须在 ToolNode tools 列表中，ToolNode 才能执行它
     all_tools = [*tools_list, finish_react]
     # redirect_tools（data_query_*）只加入 ToolNode 执行列表，不加入 bind_tools。

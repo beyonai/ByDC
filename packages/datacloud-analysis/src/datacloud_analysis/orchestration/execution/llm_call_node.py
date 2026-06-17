@@ -115,6 +115,79 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
             _runtime_lines.append(f"- 当前用户工号：{_user_code}")
     parts.append("\n".join(_runtime_lines))
 
+    # ── 附06-V3 锚点模式：注入本体对象列表 + 已排除路径 + 收敛引导 ─────────────
+    try:
+        from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+            TOOL_POOL,
+            TOOL_TO_OBJECT,
+            is_anchor_mode,
+        )
+
+        if is_anchor_mode():
+            rg: dict[str, Any] = state.get("reasoning_graph") or {}
+            dead_end_codes = {d["object_code"] for d in (rg.get("dead_ends") or [])}
+            active_tools_set = set(state.get("active_tools") or [])
+
+            obj_tools: dict[str, list[str]] = {}
+            for tname, ocode in TOOL_TO_OBJECT.items():
+                if tname in TOOL_POOL:
+                    obj_tools.setdefault(ocode, []).append(tname)
+
+            # 尝试从 loader 读取对象/视图的中文名称，供 LLM 理解选择
+            _obj_names: dict[str, str] = {}
+            try:
+                from datacloud_analysis.tools.tool_pool import _get_shared_loader  # noqa: PLC0415
+                _loader = _get_shared_loader()
+                if _loader is not None:
+                    for ocode in obj_tools:
+                        try:
+                            _cls = _loader.get_ontology_class(ocode)
+                            _obj_names[ocode] = getattr(_cls, "object_name", "") or ""
+                        except Exception:  # noqa: BLE001
+                            try:
+                                _view = _loader.get_view(ocode)
+                                _obj_names[ocode] = getattr(_view, "view_name", "") or ""
+                            except Exception:  # noqa: BLE001
+                                pass
+            except Exception:  # noqa: BLE001
+                pass
+
+            available_objs = []
+            for ocode, tools in sorted(obj_tools.items()):
+                if ocode in dead_end_codes:
+                    continue
+                if any(t in active_tools_set for t in tools):
+                    continue
+                name = _obj_names.get(ocode, "")
+                label = f"{ocode}（{name}）" if name else ocode
+                available_objs.append(f"  - {label}")
+
+            if available_objs:
+                parts.append(
+                    "\n\n## 可选本体对象（锚点模式）\n"
+                    "当前工具池对象数超过阈值，需先选择最相关的本体对象作为锚点。\n"
+                    "调用 activate_anchor(object_code) 激活后开始推理。\n"
+                    "路径走不通时调用 mark_dead_end(object_code, reason) 标记后换锚点。\n\n"
+                    "可用对象：\n" + "\n".join(available_objs)
+                )
+
+            dead_ends_info: list[dict[str, str]] = rg.get("dead_ends") or []
+            if dead_ends_info:
+                dead_str = "\n".join(
+                    f"  - {d['object_code']}：{d['reason']}" for d in dead_ends_info
+                )
+                parts.append(f"\n\n## 已排除路径\n{dead_str}")
+
+            findings: list[str] = rg.get("findings") or []
+            if findings:
+                parts.append(
+                    f"\n\n**收敛判断：** 已确认 {len(findings)} 条结论。"
+                    "如证据足够回答用户问题，直接调用 finish_react 输出结论。"
+                    "如仍需继续，选择新锚点或沿当前路径继续探索。"
+                )
+    except Exception:  # noqa: BLE001
+        pass  # TOOL_POOL 未初始化时静默跳过
+
     result = "".join(parts) if parts else None
     logger.info("[_build_runtime_dynamic_prompt] dynamic_prompt=%r", result)
     return result
@@ -309,10 +382,16 @@ def make_llm_call_node(
             try:
                 from langfuse import Langfuse  # noqa: PLC0415
 
+                # LANGFUSE_HOST / LANGFUSE_BASE_URL 两个变量名都支持
+                _lf_host = (
+                    os.getenv("LANGFUSE_HOST")
+                    or os.getenv("LANGFUSE_BASE_URL")
+                    or "https://cloud.langfuse.com"
+                )
                 lf = Langfuse(
                     secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
                     public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-                    host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+                    host=_lf_host,
                 )
                 lf.update_current_span(
                     usage={
