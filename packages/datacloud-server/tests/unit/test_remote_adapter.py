@@ -12,21 +12,17 @@ Tests cover:
 
 from __future__ import annotations
 
-import json as _json
-
 import httpx
 import pytest
-
+from datacloud_server.adapters import remote_adapter as _remote_mod
 from datacloud_server.adapters.remote_adapter import (
     RemoteOntologyAdapter,
 )
 
-
 # ── Helpers ─────────────────────────────────────────────────
 
-def _mock_transport(
-    response_json: dict, status_code: int = 200
-) -> httpx.MockTransport:
+
+def _mock_transport(response_json: dict, status_code: int = 200) -> httpx.MockTransport:
     """Create a MockTransport that returns the given JSON response."""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -41,6 +37,7 @@ def _inject_mock_client(adapter: RemoteOntologyAdapter, transport: httpx.BaseTra
 
 
 # ── Fixtures ────────────────────────────────────────────────
+
 
 @pytest.fixture
 def adapter() -> RemoteOntologyAdapter:
@@ -61,6 +58,7 @@ def adapter_no_auth() -> RemoteOntologyAdapter:
 
 
 # ── Write operations ────────────────────────────────────────
+
 
 class TestWriteOperationsRejected:
     """All write operations must raise PermissionError."""
@@ -83,6 +81,7 @@ class TestWriteOperationsRejected:
 
 # ── get_objects forwarding + caching ────────────────────────
 
+
 class TestGetObjects:
     """HTTP forwarding for get_objects with TTL cache."""
 
@@ -90,9 +89,7 @@ class TestGetObjects:
         """GET (internal) → POST /OntologyEntityController/sceneDetails (external)."""
         _inject_mock_client(
             adapter,
-            _mock_transport(
-                {"code": 200, "data": {"objects": [{"objectCode": "o1"}]}}
-            ),
+            _mock_transport({"code": 200, "data": {"objects": [{"objectCode": "o1"}]}}),
         )
 
         result = adapter.get_objects("b1", "s1")
@@ -104,9 +101,7 @@ class TestGetObjects:
         """Second call within TTL returns cached data, no HTTP request."""
         _inject_mock_client(
             adapter,
-            _mock_transport(
-                {"code": 200, "data": {"objects": [{"objectCode": "o1"}]}}
-            ),
+            _mock_transport({"code": 200, "data": {"objects": [{"objectCode": "o1"}]}}),
         )
 
         r1 = adapter.get_objects("b1", "s1")
@@ -116,14 +111,11 @@ class TestGetObjects:
 
     def test_no_cache_when_disabled(self, adapter: RemoteOntologyAdapter) -> None:
         """use_cache=False forces a fresh HTTP request."""
-        call_count = 0
         transport = httpx.MockTransport(
-            lambda req: (
-                httpx.Response(
-                    200,
-                    json={"code": 200, "data": {"objects": []}},
-                    request=req,
-                )
+            lambda req: httpx.Response(
+                200,
+                json={"code": 200, "data": {"objects": []}},
+                request=req,
             )
         )
         # We verify caching by checking no error; the MockTransport handles both calls
@@ -134,16 +126,12 @@ class TestGetObjects:
 
     def test_cache_expiry(self, adapter: RemoteOntologyAdapter, monkeypatch) -> None:
         """After TTL expires, a fresh HTTP request is made."""
-        from datacloud_server.adapters import remote_adapter as mod
-
         fake_time = 0.0
-        monkeypatch.setattr(mod.time, "monotonic", lambda: fake_time)
+        monkeypatch.setattr(_remote_mod.time, "monotonic", lambda: fake_time)
 
         _inject_mock_client(
             adapter,
-            _mock_transport(
-                {"code": 200, "data": {"objects": [{"objectCode": "o1"}]}}
-            ),
+            _mock_transport({"code": 200, "data": {"objects": [{"objectCode": "o1"}]}}),
         )
 
         # First call — caches at fake_time=0
@@ -180,6 +168,7 @@ class TestGetObjects:
 
 
 # ── Auth headers ────────────────────────────────────────────
+
 
 class TestAuthHeaders:
     """Authentication header construction."""
@@ -252,6 +241,7 @@ class TestAuthHeaders:
 
 # ── search_instances ────────────────────────────────────────
 
+
 class TestSearchInstances:
     """search_instances forwarding without cache."""
 
@@ -267,6 +257,7 @@ class TestSearchInstances:
 
 
 # ── search_ontology ─────────────────────────────────────────
+
 
 class TestSearchOntology:
     """search_ontology forwarding with sceneId injection."""
@@ -292,6 +283,7 @@ class TestSearchOntology:
 
 
 # ── Stub methods ────────────────────────────────────────────
+
 
 class TestStubMethods:
     """Methods that are not yet implemented for REMOTE."""
@@ -323,6 +315,7 @@ class TestStubMethods:
 
 # ── Client lifecycle ────────────────────────────────────────
 
+
 class TestClientLifecycle:
     """httpx client creation and cleanup."""
 
@@ -345,6 +338,7 @@ class TestClientLifecycle:
 
 
 # ── URL construction ────────────────────────────────────────
+
 
 class TestUrlConstruction:
     """URL normalization — trailing slash handling."""
@@ -379,6 +373,7 @@ class TestUrlConstruction:
 
 
 # ── Edge cases ──────────────────────────────────────────────
+
 
 class TestEdgeCases:
     """Edge case behavior."""
