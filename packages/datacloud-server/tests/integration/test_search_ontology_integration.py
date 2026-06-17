@@ -158,6 +158,25 @@ class TestSearchOntologyIntegration:
         assert len(result["metadata"]) > 0, "Expected metadata hits"
         meta = result["metadata"][0]
         assert "score" in meta
+        assert "sceneId" in meta, "metadata hit should have sceneId"
+        assert "resultType" in meta, "metadata hit should have resultType"
+        assert "matchedField" in meta, "metadata hit should have matchedField"
+        assert "matchedValue" in meta, "metadata hit should have matchedValue"
+        # resultType-specific fields
+        rt = meta["resultType"]
+        if rt == "object":
+            assert "objectCode" in meta
+            assert "objectName" in meta
+            assert "objectDesc" in meta
+        elif rt == "view":
+            assert "viewCode" in meta
+            assert "viewName" in meta
+        elif rt in ("action",):
+            assert "actionCode" in meta
+            assert "actionName" in meta
+        elif rt in ("prop", "func"):
+            assert "propertyCode" in meta
+            assert "propertyName" in meta
 
         assert len(result["instances"]) > 0, "Expected instance hits"
         inst = result["instances"][0]
@@ -165,6 +184,11 @@ class TestSearchOntologyIntegration:
         assert "matchedProperty" in inst
         assert "matchedValue" in inst
         assert "score" in inst
+        assert "sceneId" in inst, "instance hit should have sceneId"
+        assert "objectName" in inst, "instance hit should have objectName"
+        assert "isEnumType" in inst, "instance hit should have isEnumType"
+        assert "referencedByProperties" in inst, "instance hit should have referencedByProperties"
+        assert "properties" in inst, "instance hit should have properties"
 
         assert result["totalCount"]["metadata"] > 0
         assert result["totalCount"]["instances"] > 0

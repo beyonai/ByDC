@@ -57,7 +57,7 @@ class TestOWLMetadataRead:
         assert obj is not None
         assert obj["objectCode"] == "by_customer"
         assert obj["objectName"] == "客户信息表"
-        assert len(obj["fields"]) >= 16
+        assert len(obj["properties"]) >= 16
         assert len(obj["actions"]) >= 4
 
     def test_get_views_loads_all_views(self, adapter: LocalOntologyAdapter) -> None:

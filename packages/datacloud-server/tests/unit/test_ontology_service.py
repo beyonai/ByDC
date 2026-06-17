@@ -13,9 +13,65 @@ from tests.fake_registry import FakeRegistry, OntologyBaseEntry
 from tests.fake_repository import FakeOntologyRepository
 
 
+class FakeRemoteOntologyRepository(FakeOntologyRepository):
+    """Fake repository that rejects all write operations (simulating REMOTE)."""
+
+    _ERR_MSG = "Remote ontology base is read-only"
+
+    def create_object(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def delete_object(self, *args, **kwargs) -> None:
+        raise PermissionError(self._ERR_MSG)
+
+    def update_object(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def create_view(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def update_view(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def delete_view(self, *args, **kwargs) -> None:
+        raise PermissionError(self._ERR_MSG)
+
+    def create_relation(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def update_relation(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def delete_relation(self, *args, **kwargs) -> None:
+        raise PermissionError(self._ERR_MSG)
+
+    def create_datasource(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def delete_datasource(self, *args, **kwargs) -> None:
+        raise PermissionError(self._ERR_MSG)
+
+    def create_action(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def update_action(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+    def delete_action(self, *args, **kwargs) -> None:
+        raise PermissionError(self._ERR_MSG)
+
+    def import_owl(self, *args, **kwargs) -> dict:
+        raise PermissionError(self._ERR_MSG)
+
+
 @pytest.fixture
 def local_repo() -> FakeOntologyRepository:
     return FakeOntologyRepository()
+
+
+@pytest.fixture
+def remote_repo() -> FakeRemoteOntologyRepository:
+    return FakeRemoteOntologyRepository()
 
 
 @pytest.fixture
@@ -51,14 +107,18 @@ def remote_registry() -> FakeRegistry:
 
 @pytest.fixture
 def svc(local_registry: FakeRegistry, local_repo: FakeOntologyRepository) -> OntologyService:
-    return OntologyService(local_registry, local_repo, local_repo)
+    return OntologyService(local_registry, {"LOCAL": local_repo})
 
 
 @pytest.fixture
 def svc_remote(
-    remote_registry: FakeRegistry, local_repo: FakeOntologyRepository
+    remote_registry: FakeRegistry, local_repo: FakeOntologyRepository,
+    remote_repo: FakeRemoteOntologyRepository,
 ) -> OntologyService:
-    return OntologyService(remote_registry, local_repo, local_repo)
+    return OntologyService(
+        remote_registry,
+        {"LOCAL": local_repo, "REMOTE": remote_repo},
+    )
 
 
 class TestCreateOntologyBase:
@@ -89,7 +149,7 @@ class TestCreateOntologyBase:
 
     def test_list_bases_returns_all(self, local_repo: FakeOntologyRepository) -> None:
         reg = FakeRegistry()
-        svc_clean = OntologyService(reg, local_repo, local_repo)
+        svc_clean = OntologyService(reg, {"LOCAL": local_repo})
         svc_clean.create_base({"baseId": "b1", "displayName": "B1"})
         svc_clean.create_base({"baseId": "b2", "displayName": "B2"})
         result = svc_clean.list_bases()

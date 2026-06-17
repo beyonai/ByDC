@@ -95,7 +95,7 @@ class TestSearchInstances:
         for item in result["data"]:
             assert "objectCode" in item
             assert "objectName" in item
-            assert "description" in item
+            assert "objectDesc" in item
 
 
 # ── graph_query ────────────────────────────────────────────────────

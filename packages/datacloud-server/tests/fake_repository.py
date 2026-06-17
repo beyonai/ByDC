@@ -2,6 +2,7 @@
 
 Uses duck typing; no need to explicitly inherit from Protocol.
 """
+# ruff: noqa: ARG002  # stub parameters must match Protocol signature
 
 from __future__ import annotations
 
@@ -35,6 +36,46 @@ class FakeOntologyRepository:
                 return s
         return None
 
+    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict]:
+        scenes = self._scenes.get(base_id, [])
+        if not keyword:
+            return scenes
+        kw = keyword.strip().lower()
+        return [s for s in scenes if kw in s.get("sceneName", "").lower() or kw in s.get("sceneCode", "").lower()]
+
+    def count_scenes(self, base_id: str, keyword: str | None) -> int:
+        return len(self.query_scenes(base_id, keyword))
+
+    def get_scene_details(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        view_code: str | None = None,
+        object_code: str | None = None,
+    ) -> dict:
+        """Return full scene dump (simplified for tests)."""
+        return {
+            "scene": self.get_scene(base_id, scene_id),
+            "views": self.get_views(base_id, scene_id),
+            "objects": self.get_objects(base_id, scene_id),
+            "actions": [],
+            "relations": self.get_relations(base_id, scene_id),
+            "dbsources": self.get_datasources(base_id, scene_id),
+            "version": None,
+        }
+
+    def query_ontologies_by_scene(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+    ) -> dict:
+        return {"data": [], "totalCount": 0}
+
     def get_objects(self, base_id: str, scene_id: str) -> list[dict]:
         prefix = self._key(base_id, scene_id)
         return [obj for k, obj in self._objects.items() if k.startswith(prefix)]
@@ -65,6 +106,16 @@ class FakeOntologyRepository:
                 raise ValueError(f"Relation '{rel_data['relationCode']}' already exists")
         self._relations[key].append(rel_data)
         return rel_data
+
+    def update_relation(self, base_id: str, scene_id: str, rel_code: str, rel_data: dict) -> dict:
+        key = self._key(base_id, scene_id)
+        if key not in self._relations:
+            raise KeyError(f"Relation '{rel_code}' not found")
+        for i, r in enumerate(self._relations[key]):
+            if r.get("relationCode") == rel_code:
+                self._relations[key][i] = rel_data
+                return rel_data
+        raise KeyError(f"Relation '{rel_code}' not found")
 
     def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
         key = self._key(base_id, scene_id)
@@ -112,6 +163,13 @@ class FakeOntologyRepository:
         self._views[key] = view_data
         return view_data
 
+    def update_view(self, base_id: str, scene_id: str, view_code: str, view_data: dict) -> dict:
+        key = self._key(base_id, scene_id, view_code)
+        if key not in self._views:
+            raise KeyError(f"View '{view_code}' not found")
+        self._views[key] = view_data
+        return view_data
+
     def get_view_detail(self, base_id: str, scene_id: str, view_code: str) -> dict | None:
         return self._views.get(self._key(base_id, scene_id, view_code))
 
@@ -154,6 +212,15 @@ class FakeOntologyRepository:
         self._actions[key] = action_data
         return action_data
 
+    def update_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str, action_data: dict
+    ) -> dict:
+        key = self._key(base_id, scene_id) + f":{object_code}:{action_code}"
+        if key not in self._actions:
+            raise KeyError(f"Action '{action_code}' not found")
+        self._actions[key] = action_data
+        return action_data
+
     def delete_action(
         self, base_id: str, scene_id: str, object_code: str, action_code: str
     ) -> None:
@@ -163,14 +230,20 @@ class FakeOntologyRepository:
 
     # -- application services (stubs) --
 
-    def search_instances(self, _base_id: str, _query: dict) -> dict:
+    def search_instances(self, base_id: str, query: dict) -> dict:
         return {"data": [], "totalCount": 0}
 
-    def search_ontology(self, _base_id: str, _scene_id: str, _request: dict) -> dict:
+    def search_ontology(self, base_id: str, scene_id: str, request: dict) -> dict:
         return {"metadata": [], "instances": [], "totalCount": {"metadata": 0, "instances": 0}}
 
-    def graph_query(self, _base_id: str, _scene_id: str, _query: dict) -> dict:
+    def search_ontology_base(self, base_id: str, request: dict) -> dict:
+        return {"metadata": [], "instances": [], "totalCount": {"metadata": 0, "instances": 0}}
+
+    def graph_query(self, base_id: str, scene_id: str, query: dict) -> dict:
         return {"nodes": [], "edges": []}
 
-    def graph_path(self, _base_id: str, _scene_id: str, _query: dict) -> dict:
+    def graph_path(self, base_id: str, scene_id: str, query: dict) -> dict:
         return {"path": [], "edges": [], "hops": -1}
+
+    def import_owl(self, base_id: str, scene_id: str, zip_bytes: bytes) -> dict:
+        return {"objects": 0, "views": 0, "relations": 0}
