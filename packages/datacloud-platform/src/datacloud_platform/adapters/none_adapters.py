@@ -13,7 +13,7 @@ class _NoopOntologyBackend:
 
     def parse_owl(self, directory: Any) -> Any:
         """Return empty ParsedOwlContent."""
-        from datacloud_platform.models import ParsedOwlContent
+        from datacloud_platform.models.shared import ParsedOwlContent
 
         return ParsedOwlContent(objects=[], views=[], relations=[])
 
@@ -40,6 +40,173 @@ class _NoopOntologyBackend:
     def get_object_detail(self, loader: Any, object_code: str) -> Any | None:
         """Return None."""
         return None
+
+    # -- View CRUD (no-op) --
+
+    def get_views(self, base_id: str, scene_id: str) -> list[Any]:
+        """Return empty list."""
+        return []
+
+    def get_view_detail(
+        self, base_id: str, scene_id: str, view_code: str
+    ) -> Any | None:
+        """Return None."""
+        return None
+
+    def create_view(self, base_id: str, scene_id: str, view: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_view(
+        self, base_id: str, scene_id: str, view_code: str, view: Any
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    # -- Relation CRUD (no-op) --
+
+    def get_relations(self, base_id: str, scene_id: str) -> list[Any]:
+        """Return empty list."""
+        return []
+
+    def get_relation_detail(
+        self, base_id: str, scene_id: str, rel_code: str
+    ) -> Any | None:
+        """Return None."""
+        return None
+
+    def create_relation(self, base_id: str, scene_id: str, rel: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_relation(
+        self, base_id: str, scene_id: str, rel_code: str, rel: Any
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    # -- Action CRUD (no-op) --
+
+    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[Any]:
+        """Return empty list."""
+        return []
+
+    def get_action_detail(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> Any | None:
+        """Return None."""
+        return None
+
+    def create_action(
+        self, base_id: str, scene_id: str, object_code: str, action: Any
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_action(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        action: Any,
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    # -- Datasource CRUD (no-op) --
+
+    def get_datasources(self, base_id: str, scene_id: str) -> list[Any]:
+        """Return empty list."""
+        return []
+
+    def get_datasource_detail(
+        self, base_id: str, scene_id: str, db_id: str
+    ) -> Any | None:
+        """Return None."""
+        return None
+
+    def create_datasource(self, base_id: str, scene_id: str, ds: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    # -- Object CRUD (no-op) --
+
+    def create_object(self, base_id: str, scene_id: str, obj: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_object(
+        self, base_id: str, scene_id: str, object_code: str, obj: Any
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
+        """No-op — delete is safe to be idempotent."""
+
+    # -- Scene management (no-op) --
+
+    def list_scenes(self, base_id: str) -> list[Any]:
+        """Return empty list."""
+        return []
+
+    def query_scenes(self, base_id: str, keyword: str | None) -> list[Any]:
+        """Return empty list."""
+        return []
+
+    def count_scenes(self, base_id: str, keyword: str | None) -> int:
+        """Return 0."""
+        return 0
+
+    def get_scene_details(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        view_code: str | None = None,
+        object_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Return empty scene details."""
+        return {
+            "scene": None,
+            "views": [],
+            "objects": [],
+            "actions": [],
+            "relations": [],
+            "dbsources": [],
+            "version": None,
+        }
+
+    def query_ontologies_by_scene(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
 
 
 class _NoopKnowledgeBackend:
@@ -113,7 +280,7 @@ class _NoopKnowledgeBackend:
 
     def resolve_dimension_value(self, value_term_id: str) -> Any:
         """Return empty DimensionProperty."""
-        from datacloud_platform.models import DimensionProperty
+        from datacloud_platform.models.shared import DimensionProperty
 
         return DimensionProperty(property_code="", object_code="")
 
@@ -142,6 +309,19 @@ class _NoopKnowledgeBackend:
             "totalCount": {"metadata": 0, "instances": 0},
         }
 
+    def search_ontology_batch(
+        self,
+        base_id: str,
+        keyword: str,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Return empty batch search result."""
+        return {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
+
     def graph_query(
         self,
         base_id: str,
@@ -157,6 +337,30 @@ class _NoopKnowledgeBackend:
 
     def update_scores(self, records: list[Any]) -> None:
         """No-op."""
+
+    def search_instances(
+        self,
+        base_id: str,
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
+
+    def graph_path(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """Return empty path."""
+        return {"path": [], "edges": [], "hops": -1}
 
 
 class _NoopExecutionBackend:

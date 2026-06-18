@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from datacloud_platform.models import (
+from datacloud_platform.models.shared import (
     DimensionProperty,
     EmbeddingHit,
     MatchCandidate,
@@ -484,6 +484,111 @@ class DataCloudKnowledgeBackend:
 
     # ── Ontology search & graph ────────────────────────────────────────────
 
+    def search_ontology_batch(
+        self,
+        base_id: str,
+        keyword: str,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Batch search across all scenes of a base.
+
+        Performs a global vector search via the knowledge SDK embedding
+        service and search engine, then caps results at ``limit`` and
+        deduplicates by ``(termCode, termType)``.
+
+        Args:
+            base_id: Ontology base identifier.
+            keyword: Search keyword string.
+            limit: Max results per branch (metadata / instances).
+
+        Returns:
+            ``{"metadata": [...], "instances": [...], "totalCount": {...}}``
+        """
+        _ = base_id
+
+        if not keyword:
+            return {
+                "metadata": [],
+                "instances": [],
+                "totalCount": {"metadata": 0, "instances": 0},
+            }
+
+        svc = self._get_embedding()
+        vec = svc.get_text_embedding(keyword)
+
+        result: dict[str, Any] = {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
+
+        engine = self._get_search_engine()
+
+        # Metadata branch
+        _METADATA_TERM_TYPES = {
+            "object",
+            "view",
+            "dimension",
+            "property",
+            "ontology_action",
+        }
+        metadata_hits = engine.search_terms_by_embedding(
+            vector=vec,
+            term_types=list(_METADATA_TERM_TYPES),
+            limit=limit,
+        )
+        seen_metadata: set[tuple[str, str]] = set()
+        for hit in metadata_hits:
+            key = (str(hit["term_code"]), str(hit["term_type_code"]))
+            if key in seen_metadata:
+                continue
+            seen_metadata.add(key)
+            result["metadata"].append(
+                {
+                    "termCode": str(hit["term_code"]),
+                    "termType": str(hit["term_type_code"]),
+                    "nameText": str(hit.get("name_text", hit.get("term_name", ""))),
+                    "score": round(float(hit["score"]), 4),
+                }
+            )
+        result["totalCount"]["metadata"] = len(result["metadata"])
+
+        # Instance branch
+        reader = self._get_reader()
+        instance_type_codes: list[str] = []
+        try:
+            instance_type_codes = sorted(
+                reader.get_type_codes_by_category(categories={3, 4, 5})
+            )
+        except Exception:
+            logger.exception(
+                "Failed to get instance type codes for search_ontology_batch"
+            )
+
+        if instance_type_codes:
+            instance_hits = engine.search_terms_by_embedding(
+                vector=vec,
+                term_types=instance_type_codes,
+                limit=limit,
+            )
+            seen_instances: set[tuple[str, str]] = set()
+            for hit in instance_hits:
+                key = (str(hit["term_code"]), str(hit["term_type_code"]))
+                if key in seen_instances:
+                    continue
+                seen_instances.add(key)
+                result["instances"].append(
+                    {
+                        "termCode": str(hit["term_code"]),
+                        "termType": str(hit["term_type_code"]),
+                        "nameText": str(hit.get("name_text", hit.get("term_name", ""))),
+                        "score": round(float(hit["score"]), 4),
+                    }
+                )
+            result["totalCount"]["instances"] = len(result["instances"])
+
+        return result
+
     def search_ontology(
         self,
         base_id: str,
@@ -622,6 +727,67 @@ class DataCloudKnowledgeBackend:
             "graph_query not implemented in knowledge adapter — returning empty result"
         )
         return {"nodes": [], "edges": []}
+
+    def search_instances(
+        self,
+        base_id: str,
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Search instances in a base — not yet implemented.
+
+        Returns empty result. For instance search, use the
+        ``datacloud-server`` local adapter directly.
+
+        Args:
+            base_id: Ontology base identifier.
+            object_code: Object code filter.
+            select: Optional field selection.
+            where: Optional where clause.
+
+        Returns:
+            ``{"data": [], "totalCount": 0}``
+        """
+        _ = base_id, object_code, select, where
+        logger.debug(
+            "search_instances not implemented in knowledge adapter — "
+            "returning empty result"
+        )
+        return {"data": [], "totalCount": 0}
+
+    def graph_path(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """Find shortest path between two objects — not yet implemented.
+
+        Returns empty path. For graph path queries, use the
+        ``datacloud-server`` local adapter directly.
+
+        Args:
+            base_id: Ontology base identifier.
+            scene_id: Scene identifier.
+            match_by: Match mode (reserved).
+            start_node: Starting object code.
+            end_node: Target object code (empty = return all paths).
+            direction: Path direction (``forward`` / ``backward``).
+
+        Returns:
+            ``{"path": [], "edges": [], "hops": -1}``
+        """
+        _ = base_id, scene_id, match_by, start_node, end_node, direction
+        logger.debug(
+            "graph_path not implemented in knowledge adapter — returning empty result"
+        )
+        return {"path": [], "edges": [], "hops": -1}
 
     # ── Scoring ────────────────────────────────────────────────────────────
 
