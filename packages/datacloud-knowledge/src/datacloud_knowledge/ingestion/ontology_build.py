@@ -574,7 +574,7 @@ class OntologyBuildSession:
             # 调试：把 zip 复制到 /tmp 方便检查
             import shutil
 
-            debug_zip = Path(f"/mnt/d/tmp/debug_{actual_entity_code}.zip")
+            debug_zip = Path(f"tmp/debug_{actual_entity_code}.zip")
             debug_zip.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(zip_path, debug_zip)
             logger.info("DEBUG zip saved to %s", debug_zip)

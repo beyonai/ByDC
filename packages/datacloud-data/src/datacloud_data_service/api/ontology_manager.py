@@ -28,9 +28,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ── session 惰性单例 ─────────────────────────────────────────────────────────
+# ── session 工厂 ─────────────────────────────────────────────────────────────
+#
+# 不缓存 OntologyBuildSession 单例：submit_object / submit_view 内部通过
+# _run_async_in_thread 在新线程的新 event loop 中执行 redis.asyncio 操作。
+# 若复用同一个 Session，其 redis 连接已绑定到前次调用的 loop，下次调用时
+# 出现 "Future attached to a different loop" / "Event loop is closed"。
+# 每次请求创建新 Session，确保 asyncio 对象在正确的 loop 中初始化。
 
-_session: object | None = None
 
 def _init_discovery_redis() -> None:
     """全局初始化服务发现 Redis（幂等）。"""
@@ -44,14 +49,12 @@ def _init_discovery_redis() -> None:
         username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
     )
 
-def _get_session() -> object:
-    """获取全局 OntologyBuildSession 单例。"""
-    global _session
-    if _session is None:
-        from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
 
-        _session = OntologyBuildSession()
-    return _session
+def _get_session() -> object:
+    """每次调用返回新的 OntologyBuildSession，避免跨 event loop 复用 asyncio 对象。"""
+    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession  # type: ignore[import-untyped]
+
+    return OntologyBuildSession()
 
 
 # ── 请求处理辅助 ─────────────────────────────────────────────────────────────
