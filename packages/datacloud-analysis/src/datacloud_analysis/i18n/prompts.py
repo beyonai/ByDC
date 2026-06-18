@@ -363,12 +363,12 @@ _UI_TEXT: dict[str, dict[str, str]] = {
         "en_US": "The user cancelled this operation. The business submission will not run.",
     },
     "operation_term_ambiguous_recommended": {
-        "zh_CN": "模型识别为“{original}”，匹配到多个，已默认选择“{display}”（code: {code}），请确认或重新选择。",
-        "en_US": 'The model recognized "{original}" and found multiple matches. "{display}" (code: {code}) was selected by default. Please confirm or choose again.',
+        "zh_CN": "模型识别为“{original}”，匹配到多个，已默认选择“{display}”（code: {code}）",
+        "en_US": 'The model recognized "{original}" and found multiple matches. "{display}" (code: {code}) was selected by default',
     },
     "operation_term_recommended": {
-        "zh_CN": "模型识别为“{original}”，未精确命中，已推荐“{display}”（code: {code}），请确认或重新选择。",
-        "en_US": 'The model recognized "{original}" but did not find an exact match. "{display}" (code: {code}) is recommended. Please confirm or choose again.',
+        "zh_CN": "模型识别为“{original}”，未精确命中，已推荐“{display}”（code: {code}）",
+        "en_US": 'The model recognized "{original}" but did not find an exact match. "{display}" (code: {code}) is recommended',
     },
     "operation_term_not_found": {
         "zh_CN": "模型识别为“{original}”，未能找到可推荐值，请重新选择。",
