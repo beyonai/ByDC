@@ -719,6 +719,7 @@ async def dispatch_tool(
                         _inv_ctx_redirect: Any = InvocationContext(
                             user_id=_gc_user_id,
                             session_id=_gc_session_id,
+                            token=str(getattr(gateway_context, "beyond_token", "") or ""),
                             gateway_context=gateway_context,
                             workspace_dir=str(workspace_root) if workspace_root is not None else "",
                             result_file_storage=_result_file_storage,
@@ -793,6 +794,7 @@ async def dispatch_tool(
                 _inv_ctx: Any = InvocationContext(
                     user_id=_gc_user_id,
                     session_id=_gc_session_id,
+                    token=str(getattr(gateway_context, "beyond_token", "") or ""),
                     gateway_context=gateway_context,
                     workspace_dir=str(workspace_root) if workspace_root is not None else "",
                     result_file_storage=_result_file_storage,

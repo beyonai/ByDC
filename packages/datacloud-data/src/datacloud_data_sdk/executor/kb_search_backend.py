@@ -268,7 +268,9 @@ class HttpKnowledgeSearchBackend:
         if endpoint:
             import_url = self._build_import_url(endpoint, config)
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(
+                    headers=self._get_beyond_token_header(), timeout=30.0
+                ) as client:
                     await self._ensure_metadata_properties_http(client, endpoint, config, request)
 
                     log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
@@ -470,8 +472,14 @@ class HttpKnowledgeSearchBackend:
                     request.datasource_alias,
                     f"knowledge service instance not found: {service_name}",
                 )
-            json_headers = self._build_discovery_headers(instance)
-            upload_headers = self._build_discovery_upload_headers(instance)
+            json_headers = {
+                **self._build_discovery_headers(instance),
+                **self._get_beyond_token_header(),
+            }
+            upload_headers = {
+                **self._build_discovery_upload_headers(instance),
+                **self._get_beyond_token_header(),
+            }
             async with DiscoveryHttpClient(
                 discovery_client,
                 retry_config=retry_config,
@@ -683,6 +691,19 @@ class HttpKnowledgeSearchBackend:
                 headers["Authorization"] = f"Bearer {token}"
         return headers
 
+    @staticmethod
+    def _get_beyond_token_header() -> dict[str, str]:
+        """Return Beyond-Token header from the current InvocationContext, or empty dict."""
+        try:
+            from datacloud_data_sdk.context import get_current_context  # type: ignore[import]
+
+            token = get_current_context().token
+            if token:
+                return {"Beyond-Token": token}
+        except Exception:  # noqa: BLE001
+            pass
+        return {}
+
     async def _post_json(
         self,
         url: str,
@@ -691,7 +712,9 @@ class HttpKnowledgeSearchBackend:
     ) -> dict[str, Any]:
         log_curl("POST", url, body=body)
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(
+                headers=self._get_beyond_token_header(), timeout=30.0
+            ) as client:
                 response = await client.post(url, json=body)
         except httpx.HTTPError as exc:
             raise KbExecutionError(datasource_alias, str(exc)) from exc
@@ -733,7 +756,7 @@ class HttpKnowledgeSearchBackend:
                     datasource_alias,
                     f"knowledge service instance not found: {service_name}",
                 )
-            headers = self._build_discovery_headers(instance)
+            headers = {**self._build_discovery_headers(instance), **self._get_beyond_token_header()}
             async with DiscoveryHttpClient(
                 discovery_client,
                 retry_config=retry_config,

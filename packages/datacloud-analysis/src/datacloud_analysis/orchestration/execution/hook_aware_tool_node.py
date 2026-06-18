@@ -351,6 +351,7 @@ class HookAwareToolNode(ToolNode):
                 _inv_ctx = InvocationContext(
                     user_id=_gc_user_id,
                     session_id=_gc_session_id,
+                    token=str(getattr(_gw_ctx, "beyond_token", "") or ""),
                     gateway_context=_gw_ctx,
                     workspace_dir=str(_workspace_root)
                     if _workspace_root is not None
