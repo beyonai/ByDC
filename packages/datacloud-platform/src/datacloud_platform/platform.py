@@ -1,0 +1,889 @@
+"""DatacloudPlatform — unified ontology + knowledge + execution platform entry point.
+
+Multi-base router: injects OntologyBaseRegistry, routes every operation by base_id.
+Each base independently declares its 4 Backend dimensions via source_type presets
+and manual_backends overrides.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, final
+from uuid import uuid4
+
+from datacloud_platform.backends.registry import get_backend_factory
+from datacloud_platform.backends.resolution import resolve_backend_names
+
+if TYPE_CHECKING:
+    from datacloud_platform.backends.execution import ExecutionBackend
+    from datacloud_platform.backends.knowledge import KnowledgeBackend
+    from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
+    from datacloud_platform.backends.storage import StorageBackend
+    from datacloud_platform.base_entry import OntologyBaseEntry, OntologyBaseRegistry
+    from datacloud_platform.models import MatchResult, ObjectSummary
+
+logger = logging.getLogger(__name__)
+
+
+@final
+@dataclass
+class DatacloudPlatform:
+    """Unified ontology + knowledge + execution + storage platform — multi-base router.
+
+    Dependency injection:
+      - _base_registry: OntologyBaseRegistry → base_id lookup
+      - _backend_cache: instance cache, reuses same (type_name, impl_name) instances
+
+    Every public method accepts base_id and internally resolves the correct Backend
+    instance via 3-layer resolution: defaults → preset → manual_backends.
+    """
+
+    # ── Base registry (injected, required) ──
+    _base_registry: OntologyBaseRegistry = field(init=True)
+    """OntologyBaseRegistry — library management, always local."""
+
+    # ── Backend instance cache ──
+    _backend_cache: dict[str, Any] = field(default_factory=dict, init=False)
+
+    # ── Config params ──
+    workspace: str = field(default="")
+    library_id: str = field(default="PERSONAL_LIB")
+    top_k: int = field(default=20)
+    enable_rerank: bool = field(default=True)
+
+    _initialized: bool = field(default=False, init=False)
+
+    # ── Routing core: base_id → 3-layer resolution → Backend instance ──
+
+    def _resolve_entry(self, base_id: str) -> OntologyBaseEntry:
+        """Look up an OntologyBaseEntry from the registry.
+
+        Raises:
+            KeyError: If base_id is not registered.
+        """
+        entry: OntologyBaseEntry | None = self._base_registry.get(base_id)
+        if entry is None:
+            raise KeyError(f"OntologyBase '{base_id}' not found")
+        return entry
+
+    def _resolve_names(self, entry: OntologyBaseEntry) -> dict[str, str]:
+        """3-layer resolution: defaults → preset overlay → manual override.
+
+        Delegates to the shared resolve_backend_names function for correctness.
+        """
+        return resolve_backend_names(entry.source_type, entry.manual_backends)
+
+    def _get_backend(self, type_name: str, impl_name: str) -> Any:  # noqa: ANN401
+        """Get or create a Backend instance (cached).
+
+        Cache key is ``{type_name}:{impl_name}`` — same pair reuses same instance.
+        """
+        cache_key = f"{type_name}:{impl_name}"
+        if cache_key not in self._backend_cache:
+            factory = get_backend_factory(type_name, impl_name)
+            self._backend_cache[cache_key] = factory()
+        return self._backend_cache[cache_key]
+
+    def _ontology_for(self, base_id: str) -> OntologyBackend:
+        """Resolve and cache the OntologyBackend for a given base_id."""
+        names = self._resolve_names(self._resolve_entry(base_id))
+        return self._get_backend("ontology", names["ontology"])  # type: ignore[no-any-return]
+
+    def _knowledge_for(self, base_id: str) -> KnowledgeBackend:
+        """Resolve and cache the KnowledgeBackend for a given base_id."""
+        names = self._resolve_names(self._resolve_entry(base_id))
+        return self._get_backend("knowledge", names["knowledge"])  # type: ignore[no-any-return]
+
+    def _execution_for(self, base_id: str) -> ExecutionBackend | None:
+        """Resolve ExecutionBackend for a given base_id.
+
+        Returns None when the resolved name is ``"none"``.
+        """
+        names = self._resolve_names(self._resolve_entry(base_id))
+        name = names["execution"]
+        if name == "none":
+            return None
+        return self._get_backend("execution", name)  # type: ignore[no-any-return]
+
+    def _storage_for(self, base_id: str) -> StorageBackend | None:
+        """Resolve StorageBackend for a given base_id.
+
+        Returns None when the resolved name is ``"none"``.
+        """
+        names = self._resolve_names(self._resolve_entry(base_id))
+        name = names["storage"]
+        if name == "none":
+            return None
+        return self._get_backend("storage", name)  # type: ignore[no-any-return]
+
+    def _base_path_for(self, base_id: str) -> Path:
+        """Derive the base ontology path from the entry's backend_config, with fallback."""
+        entry = self._resolve_entry(base_id)
+        onto_cfg = entry.backend_config.get("ontology", {})
+        path_str: str = onto_cfg.get("base_path", f"/data/{base_id}")
+        return Path(path_str)
+
+    # ── Lifecycle ──
+
+    async def initialize(self) -> None:
+        """Initialize all backend connections (placeholder for future async init)."""
+        if self._initialized:
+            return
+        self._initialized = True
+
+    # ── Library management (always local) ──
+
+    def list_bases(self) -> list[dict[str, Any]]:
+        """List all registered ontology bases as dicts."""
+        return [asdict(e) for e in self._base_registry.list()]
+
+    def create_base(self, entry: OntologyBaseEntry) -> dict[str, Any]:
+        """Register a new ontology base.
+
+        Raises:
+            ValueError: If a base with the same base_id already exists.
+        """
+        self._base_registry.register(entry)
+        return asdict(entry)
+
+    def delete_base(self, base_id: str) -> None:
+        """Remove a registered ontology base.
+
+        Raises:
+            KeyError: If base_id is not registered.
+        """
+        self._base_registry.unregister(base_id)
+
+    # ── Ontology: query / CRUD ──
+
+    def load_ontology(self, base_id: str, base_path: str | Path) -> OntologyQueryable:
+        """Load ontology from a base_path, returning a queryable handle."""
+        return self._ontology_for(base_id).load_ontology(Path(base_path))
+
+    def get_objects(self, base_id: str, scene_id: str) -> list[ObjectSummary]:
+        """Get all ontology object summaries under a scene."""
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_objects(loader, base_id, scene_id)
+
+    def get_object_detail(
+        self, base_id: str, scene_id: str, object_code: str
+    ) -> ObjectSummary | None:
+        """Get a single object's detail by code."""
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_object_detail(loader, object_code)
+
+    def create_object(self, base_id: str, scene_id: str, obj: Any) -> Any:
+        """Create an ontology object.
+
+        REMOTE backends raise PermissionError internally — Platform does not
+        check permissions.
+        """
+        return self._ontology_for(base_id).create_object(base_id, scene_id, obj)
+
+    def update_object(
+        self, base_id: str, scene_id: str, object_code: str, obj: Any
+    ) -> Any:
+        """Update an ontology object.
+
+        REMOTE backends raise PermissionError internally.
+        """
+        return self._ontology_for(base_id).update_object(
+            base_id, scene_id, object_code, obj
+        )
+
+    def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
+        """Delete an ontology object.
+
+        REMOTE backends raise PermissionError internally.
+        """
+        self._ontology_for(base_id).delete_object(base_id, scene_id, object_code)
+
+    # ── Knowledge: search / disambiguation ──
+
+    def search(
+        self,
+        base_id: str,
+        query: str,
+        *,
+        scope: str = "all",
+        limit: int = 20,
+    ) -> list[MatchResult]:
+        """Term search + disambiguation routed to the knowledge backend."""
+        backend = self._knowledge_for(base_id)
+        candidates = backend.search_candidates(query, scope=scope, limit=limit)
+        return backend.disambiguate(candidates, query)
+
+    def search_ontology(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        keyword: str,
+        query_type: str = "vector",
+        search_scope: str = "all",
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Search ontology metadata and instances via vector / keyword.
+
+        Returns consumer-facing JSON as dict.
+        """
+        return self._knowledge_for(base_id).search_ontology(
+            base_id,
+            scene_id,
+            keyword=keyword,
+            query_type=query_type,
+            search_scope=search_scope,
+            **kwargs,
+        )
+
+    def graph_query(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        object_code: list[str],
+        match_by: str = "name",
+        values: list[str] | None = None,
+        step: int = 1,
+    ) -> dict[str, Any]:
+        """Graph traversal query returning nodes + edges.
+
+        When the knowledge backend lacks graph capability (no ``graph_query``
+        attribute), returns ``{"nodes": [], "edges": []}``.
+        """
+        backend = self._knowledge_for(base_id)
+        if not hasattr(backend, "graph_query"):
+            return {"nodes": [], "edges": []}
+        return backend.graph_query(
+            base_id,
+            scene_id,
+            object_code=object_code,
+            match_by=match_by,
+            values=values,
+            step=step,
+        )
+
+    # ── Execution: Action execution ──
+
+    def execute_action(
+        self, base_id: str, action: Any, *, context: Any, **params: Any
+    ) -> Any:
+        """Execute an Action via the execution backend.
+
+        Raises:
+            PermissionError: If execution is ``"none"`` for this base.
+        """
+        backend = self._execution_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Execution not available for base '{base_id}'")
+        return backend.execute_action(action, context=context, **params)
+
+    def generate_action_tools(
+        self,
+        base_id: str,
+        loader: OntologyQueryable,
+        mounted_objects: list[str],
+    ) -> list[dict[str, Any]]:
+        """Generate LangChain Tool descriptors for ontology objects.
+
+        Raises:
+            PermissionError: If execution is ``"none"`` for this base.
+        """
+        backend = self._execution_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Execution not available for base '{base_id}'")
+        return backend.generate_action_tools(loader, mounted_objects)
+
+    # ── Storage: file / result persistence ──
+
+    def store_result(
+        self,
+        base_id: str,
+        key: str,
+        data: bytes,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> str:
+        """Store a result file; returns file_id.
+
+        Raises:
+            PermissionError: If storage is ``"none"`` for this base.
+        """
+        backend = self._storage_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Storage not available for base '{base_id}'")
+        return backend.store_result(key, data, metadata=metadata)
+
+    def get_result(self, base_id: str, file_id: str) -> bytes:
+        """Retrieve a stored result file.
+
+        Raises:
+            PermissionError: If storage is ``"none"`` for this base.
+        """
+        backend = self._storage_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Storage not available for base '{base_id}'")
+        return backend.get_result(file_id)
+
+    def delete_result(self, base_id: str, file_id: str) -> None:
+        """Delete a stored result file.
+
+        Raises:
+            PermissionError: If storage is ``"none"`` for this base.
+        """
+        backend = self._storage_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Storage not available for base '{base_id}'")
+        backend.delete_result(file_id)
+
+    # ── Orchestration: cross-Backend workflows ──
+
+    def import_owl(
+        self, base_id: str, scene_id: str, zip_bytes: bytes
+    ) -> dict[str, Any]:
+        """Import an OWL zip: unzip → parse → write objects/views/relations → sync terms.
+
+        Returns a summary dict: ``{"objects": N, "views": N, "relations": N}``.
+        """
+        import io
+        import zipfile
+
+        onto = self._ontology_for(base_id)
+        know = self._knowledge_for(base_id)
+
+        with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+            extract_dir = Path(f"/tmp/owl_import_{uuid4().hex}")
+            zf.extractall(extract_dir)
+
+        try:
+            parsed = onto.parse_owl(extract_dir)
+        finally:
+            import shutil
+
+            shutil.rmtree(extract_dir, ignore_errors=True)
+
+        obj_count = 0
+        for obj_dict in parsed.objects:
+            try:
+                onto.create_object(base_id, scene_id, obj_dict)
+                obj_count += 1
+            except Exception as exc:
+                logger.warning("Failed to create object from OWL import: %s", exc)
+
+        # Sync terms for each object
+        for obj_dict in parsed.objects:
+            try:
+                code: str = obj_dict.get("object_code", "")
+                name: str = obj_dict.get("object_name", "")
+                source: str = obj_dict.get("object_source", "")
+                fields: list[dict[str, Any]] = obj_dict.get("properties", [])
+                know.sync_terms(
+                    code,
+                    name,
+                    source,
+                    fields,
+                    backfill_vectors=True,
+                )
+            except Exception as exc:
+                logger.warning("Failed to sync terms for object: %s", exc)
+
+        view_count = len(parsed.views)
+        rel_count = len(parsed.relations)
+
+        return {"objects": obj_count, "views": view_count, "relations": rel_count}
+
+    # ── Scene: query + detail ──
+
+    def list_scenes(self, base_id: str) -> list[dict[str, Any]]:
+        """List scene directories under a base."""
+        base_path = self._base_path_for(base_id)
+        if not base_path.exists():
+            return []
+        return [
+            {
+                "sceneId": d.name,
+                "sceneName": d.name,
+                "sceneCode": d.name,
+                "sceneDesc": "",
+            }
+            for d in sorted(base_path.iterdir())
+            if d.is_dir()
+        ]
+
+    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict[str, Any]]:
+        """Query scenes with optional keyword filter."""
+        scenes = self.list_scenes(base_id)
+        if not keyword:
+            return scenes
+        kw = keyword.strip().lower()
+        return [
+            s
+            for s in scenes
+            if kw in s.get("sceneName", "").lower()
+            or kw in s.get("sceneCode", "").lower()
+        ]
+
+    def count_scenes(self, base_id: str, keyword: str | None) -> int:
+        """Count scenes matching optional keyword filter."""
+        return len(self.query_scenes(base_id, keyword))
+
+    def get_scene_details(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        view_code: str | None = None,
+        object_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Get full scene details with optional filtering."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "get_scene_details"):
+            return backend.get_scene_details(  # type: ignore[no-any-return]
+                base_id, scene_id, view_code=view_code, object_code=object_code
+            )
+
+        base_path = self._base_path_for(base_id)
+        scene_path = base_path / scene_id
+        scene: dict[str, Any] | None = (
+            {
+                "sceneId": scene_id,
+                "sceneName": scene_id,
+                "sceneCode": scene_id,
+                "sceneDesc": "",
+            }
+            if scene_path.exists()
+            else None
+        )
+
+        raw_objects = self.get_objects(base_id, scene_id)
+        all_objects: list[dict[str, Any]] = []
+        for o in raw_objects:
+            all_objects.append(asdict(o))
+        all_views = self.get_views(base_id, scene_id)
+        all_relations = self.get_relations(base_id, scene_id)
+        all_actions: list[dict[str, Any]] = []
+        for obj in all_objects:
+            obj_code: str = obj.get("objectCode", "")
+            all_actions.extend(self.get_actions(base_id, scene_id, obj_code))
+        all_dbsources = self.get_datasources(base_id, scene_id)
+
+        view_codes: set[str] | None = None
+        object_codes: set[str] | None = None
+        if view_code:
+            view_codes = {vc.strip() for vc in view_code.split(",") if vc.strip()}
+        if object_code:
+            object_codes = {oc.strip() for oc in object_code.split(",") if oc.strip()}
+
+        affected_object_codes: set[str] | None = None
+        if view_codes:
+            filtered_views = [v for v in all_views if v.get("viewCode") in view_codes]
+            affected_object_codes = set()
+            for v in filtered_views:
+                for oc in v.get("objectCodes", []):
+                    affected_object_codes.add(oc)
+        elif object_codes:
+            filtered_views = []
+            affected_object_codes = object_codes
+        else:
+            filtered_views = all_views
+            affected_object_codes = None
+
+        if affected_object_codes is not None:
+            filtered_objects = [
+                o for o in all_objects if o.get("objectCode") in affected_object_codes
+            ]
+            filtered_actions = [
+                a
+                for a in all_actions
+                if a.get("belongObjectCode") in affected_object_codes
+            ]
+            filtered_relations = [
+                r
+                for r in all_relations
+                if r.get("sourceObjectCode") in affected_object_codes
+                or r.get("targetObjectCode") in affected_object_codes
+            ]
+            filtered_dbsources = [
+                d
+                for d in all_dbsources
+                if any(
+                    p.get("dbId")
+                    == (d.get("db", [{}])[0].get("dbId") if d.get("db") else "")
+                    for o in filtered_objects
+                    for p in o.get("properties", [])
+                )
+            ]
+        else:
+            filtered_objects = all_objects
+            filtered_actions = all_actions
+            filtered_relations = all_relations
+            filtered_dbsources = all_dbsources
+
+        return {
+            "scene": scene,
+            "views": filtered_views,
+            "objects": filtered_objects,
+            "actions": filtered_actions,
+            "relations": filtered_relations,
+            "dbsources": filtered_dbsources,
+            "version": None,
+        }
+
+    def query_ontologies_by_scene(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+    ) -> dict[str, Any]:
+        """Query ontologies (objects) in a scene with pagination and keyword filter."""
+        raw_objs = self.get_objects(base_id, scene_id)
+        objects: list[dict[str, Any]] = []
+        for o in raw_objs:
+            objects.append(asdict(o))
+        if keyword:
+            kw = keyword.strip().lower()
+            objects = [
+                o
+                for o in objects
+                if kw in o.get("objectName", "").lower()
+                or kw in o.get("objectCode", "").lower()
+                or kw in o.get("objectDesc", "").lower()
+            ]
+        total = len(objects)
+        start = (page - 1) * page_size
+        summaries = [
+            {
+                "ontologyId": o.get("objectCode", ""),
+                "sceneId": scene_id,
+                "ontologyName": o.get("objectName", ""),
+                "ontologyCode": o.get("objectCode", ""),
+                "ontologySource": o.get("objectSource"),
+                "ontologyDesc": o.get("objectDesc"),
+                "conceptType": o.get("conceptType"),
+                "ontologyType": o.get("objectType"),
+                "domainType": o.get("domainType"),
+            }
+            for o in objects[start : start + page_size]
+        ]
+        return {"data": summaries, "totalCount": total}
+
+    # ── View CRUD ──
+
+    def get_views(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Get all views under a scene."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "get_views"):
+            return backend.get_views(base_id, scene_id)  # type: ignore[no-any-return]
+
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        views: list[dict[str, Any]] = []
+        if hasattr(loader, "_scenes") and loader._scenes:
+            for vid, scene_data in loader._scenes.items():
+                views.append(
+                    {
+                        "viewCode": vid,
+                        "viewName": getattr(scene_data, "view_name", vid)
+                        if hasattr(scene_data, "view_name")
+                        else scene_data.get("view_name", vid)
+                        if isinstance(scene_data, dict)
+                        else vid,
+                        "description": getattr(scene_data, "description", "")
+                        if hasattr(scene_data, "description")
+                        else scene_data.get("description", "")
+                        if isinstance(scene_data, dict)
+                        else "",
+                        "objectCodes": getattr(scene_data, "object_codes", [])
+                        if hasattr(scene_data, "object_codes")
+                        else scene_data.get("object_codes", [])
+                        if isinstance(scene_data, dict)
+                        else [],
+                        "properties": [],
+                    }
+                )
+        return views
+
+    def get_view_detail(
+        self, base_id: str, scene_id: str, view_code: str
+    ) -> dict[str, Any] | None:
+        """Get single view detail."""
+        for v in self.get_views(base_id, scene_id):
+            if v.get("viewCode") == view_code:
+                return v
+        return None
+
+    def create_view(self, base_id: str, scene_id: str, view: Any) -> Any:
+        """Create a view. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "create_view"):
+            return backend.create_view(base_id, scene_id, view)
+        raise PermissionError(f"View creation not available for base '{base_id}'")
+
+    def update_view(
+        self, base_id: str, scene_id: str, view_code: str, view: Any
+    ) -> Any:
+        """Update a view. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "update_view"):
+            return backend.update_view(base_id, scene_id, view_code, view)
+        raise PermissionError(f"View update not available for base '{base_id}'")
+
+    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+        """Delete a view. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "delete_view"):
+            backend.delete_view(base_id, scene_id, view_code)
+            return
+        raise PermissionError(f"View deletion not available for base '{base_id}'")
+
+    # ── Relation CRUD ──
+
+    def get_relations(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Get all relations under a scene."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "get_relations"):
+            return backend.get_relations(base_id, scene_id)  # type: ignore[no-any-return]
+
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        relations: list[dict[str, Any]] = []
+        if hasattr(loader, "_relations"):
+            for r in loader._relations:
+                rel: dict[str, Any] = {
+                    "relationCode": getattr(r, "relation_code", "") or "",
+                    "relationName": getattr(r, "relation_name", ""),
+                    "sourceObjectCode": getattr(r, "source_class", ""),
+                    "targetObjectCode": getattr(r, "target_class", ""),
+                    "relationCardinality": getattr(r, "relation_type", ""),
+                    "joinKeys": getattr(r, "join_keys", []),
+                }
+                relations.append(rel)
+        return relations
+
+    def get_relation_detail(
+        self, base_id: str, scene_id: str, rel_code: str
+    ) -> dict[str, Any] | None:
+        """Get single relation detail."""
+        for r in self.get_relations(base_id, scene_id):
+            if r.get("relationCode") == rel_code:
+                return r
+        return None
+
+    def create_relation(self, base_id: str, scene_id: str, rel: Any) -> Any:
+        """Create a relation. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "create_relation"):
+            return backend.create_relation(base_id, scene_id, rel)
+        raise PermissionError(f"Relation creation not available for base '{base_id}'")
+
+    def update_relation(
+        self, base_id: str, scene_id: str, rel_code: str, rel: Any
+    ) -> Any:
+        """Update a relation. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "update_relation"):
+            return backend.update_relation(base_id, scene_id, rel_code, rel)
+        raise PermissionError(f"Relation update not available for base '{base_id}'")
+
+    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+        """Delete a relation. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "delete_relation"):
+            backend.delete_relation(base_id, scene_id, rel_code)
+            return
+        raise PermissionError(f"Relation deletion not available for base '{base_id}'")
+
+    # ── Datasource CRUD ──
+
+    def get_datasources(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Get all datasources under a scene."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "get_datasources"):
+            return backend.get_datasources(base_id, scene_id)  # type: ignore[no-any-return]
+
+        ds_dir = self._base_path_for(base_id) / scene_id / "datasources"
+        if not ds_dir.exists():
+            return []
+        import json as _json
+
+        result: list[dict[str, Any]] = []
+        for json_file in sorted(ds_dir.glob("*.json")):
+            result.append(_json.loads(json_file.read_text(encoding="utf-8")))
+        return result
+
+    def get_datasource_detail(
+        self, base_id: str, scene_id: str, db_id: str
+    ) -> dict[str, Any] | None:
+        """Get single datasource detail."""
+        for ds in self.get_datasources(base_id, scene_id):
+            ds_id = ""
+            if isinstance(ds.get("db"), list) and ds["db"]:
+                ds_id = str(ds["db"][0].get("dbId", ""))
+            else:
+                ds_id = str(ds.get("dbId", ds.get("db_id", "")))
+            if ds_id == db_id:
+                return ds
+        return None
+
+    def create_datasource(self, base_id: str, scene_id: str, ds: Any) -> Any:
+        """Create a datasource. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "create_datasource"):
+            return backend.create_datasource(base_id, scene_id, ds)
+        raise PermissionError(f"Datasource creation not available for base '{base_id}'")
+
+    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+        """Delete a datasource. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "delete_datasource"):
+            backend.delete_datasource(base_id, scene_id, db_id)
+            return
+        raise PermissionError(f"Datasource deletion not available for base '{base_id}'")
+
+    # ── Action CRUD ──
+
+    def get_actions(
+        self, base_id: str, scene_id: str, object_code: str
+    ) -> list[dict[str, Any]]:
+        """Get all actions on an object."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "get_actions"):
+            return backend.get_actions(base_id, scene_id, object_code)  # type: ignore[no-any-return]
+
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        if hasattr(loader, "_classes"):
+            ont_class = loader._classes.get(object_code)
+            if ont_class is not None:
+                actions = getattr(ont_class, "actions", [])
+                result: list[dict[str, Any]] = []
+                for a in actions:
+                    result.append(
+                        {
+                            "actionCode": getattr(a, "action_code", ""),
+                            "actionName": getattr(a, "action_name", ""),
+                            "actionDesc": getattr(a, "action_desc", ""),
+                            "actionType": getattr(a, "action_type", ""),
+                            "belongObjectCode": object_code,
+                            "params": [
+                                {
+                                    "paramCode": getattr(p, "param_code", ""),
+                                    "paramName": getattr(p, "param_name", ""),
+                                    "paramType": getattr(p, "param_type", ""),
+                                }
+                                for p in getattr(a, "params", [])
+                            ],
+                        }
+                    )
+                return result
+        return []
+
+    def get_action_detail(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+    ) -> dict[str, Any] | None:
+        """Get single action detail."""
+        for a in self.get_actions(base_id, scene_id, object_code):
+            if a.get("actionCode") == action_code:
+                return a
+        return None
+
+    def create_action(
+        self, base_id: str, scene_id: str, object_code: str, action: Any
+    ) -> Any:
+        """Create an action. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "create_action"):
+            return backend.create_action(base_id, scene_id, object_code, action)
+        raise PermissionError(f"Action creation not available for base '{base_id}'")
+
+    def update_action(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        action: Any,
+    ) -> Any:
+        """Update an action. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "update_action"):
+            return backend.update_action(
+                base_id, scene_id, object_code, action_code, action
+            )
+        raise PermissionError(f"Action update not available for base '{base_id}'")
+
+    def delete_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> None:
+        """Delete an action. Delegates to backend; raises on read-only backends."""
+        backend = self._ontology_for(base_id)
+        if hasattr(backend, "delete_action"):
+            backend.delete_action(base_id, scene_id, object_code, action_code)
+            return
+        raise PermissionError(f"Action deletion not available for base '{base_id}'")
+
+    # ── Search & Graph (knowledge-backend routed) ──
+
+    def search_instances(
+        self,
+        base_id: str,
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Search instances in a base."""
+        backend = self._knowledge_for(base_id)
+        if hasattr(backend, "search_instances"):
+            return backend.search_instances(  # type: ignore[no-any-return]
+                base_id, object_code=object_code, select=select, where=where
+            )
+        return {"data": [], "totalCount": 0}
+
+    def graph_path(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """Find shortest path between two objects."""
+        backend = self._knowledge_for(base_id)
+        if hasattr(backend, "graph_path"):
+            return backend.graph_path(  # type: ignore[no-any-return]
+                base_id,
+                scene_id,
+                match_by=match_by,
+                start_node=start_node,
+                end_node=end_node,
+                direction=direction,
+            )
+        return {"path": [], "edges": [], "hops": -1}
+
+    # ── Backward-compatible convenience methods (optional transition bridge) ──
+
+    def _default_base_id(self) -> str:
+        """Return the first registered base_id, for backward-compat convenience methods.
+
+        Raises:
+            RuntimeError: If no bases are registered.
+        """
+        entries = self._base_registry.list()
+        if not entries:
+            raise RuntimeError(
+                "No OntologyBase registered — use create_base() first, "
+                "or call methods with explicit base_id."
+            )
+        e: OntologyBaseEntry = entries[0]
+        return e.base_id
