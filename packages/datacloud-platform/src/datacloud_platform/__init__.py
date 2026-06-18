@@ -45,7 +45,7 @@ from datacloud_platform.backends.registry import (
 )
 from datacloud_platform.backends.resolution import resolve_backend_names
 from datacloud_platform.base_entry import OntologyBaseEntry, OntologyBaseRegistry
-from datacloud_platform.models import (
+from datacloud_platform.models.shared import (
     DimensionProperty,
     EmbeddingHit,
     MatchCandidate,

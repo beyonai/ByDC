@@ -18,6 +18,7 @@ class OntologyBaseEntry:
     description: str = ""
     owner_type: str = "personal"
     source_url: str | None = None
+    auth_type: str | None = None
     auth_config: dict[str, Any] | None = None
     timeout_sec: int = 30
     created_at: str = ""
