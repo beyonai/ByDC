@@ -1,0 +1,132 @@
+"""Search + Graph query routes (factory pattern).
+
+Prefix: ``/api/v1/ontologyBases``
+"""
+
+# ruff: noqa: ARG001  # owner_type is a URL path parameter for routing, not consumed by services
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from fastapi import APIRouter, HTTPException
+
+from datacloud_platform.models.common import ok
+
+if TYPE_CHECKING:
+    from datacloud_platform.platform import DatacloudPlatform
+
+
+def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
+    """Create a fresh APIRouter for search, instance search, and graph endpoints.
+
+    Args:
+        platform: A fully configured DatacloudPlatform instance.
+
+    Returns:
+        APIRouter with prefix ``/api/v1/ontologyBases``, tags ``["search"]``.
+    """
+    router = APIRouter(prefix="/api/v1/ontologyBases", tags=["search"])
+
+    @router.post("/{owner_type}/{base_id}/search")
+    def search_ontology_base(
+        owner_type: str, base_id: str, body: dict[str, Any]
+    ) -> Any:
+        """Cross-scene ontology search. sceneId in body ('-1' for global)."""
+        try:
+            return ok(
+                data=platform.search_ontology(
+                    base_id,
+                    body.get("sceneId", "-1"),
+                    keyword=body.get("keyword", ""),
+                    query_type=body.get("queryType", "vector"),
+                    search_scope=body.get("searchScope", "all"),
+                    object_code=body.get("objectCode"),
+                    view_code=body.get("viewCode"),
+                    property_code=body.get("propertyCode"),
+                    result_per_type=body.get("resultPerType", 5),
+                    page_size=body.get("pageSize", 20),
+                    page_token=body.get("pageToken"),
+                )
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/search")
+    def search_ontology(
+        owner_type: str, base_id: str, scene_id: str, body: dict[str, Any]
+    ) -> Any:
+        """Vector search across ontology metadata and instances."""
+        try:
+            return ok(
+                data=platform.search_ontology(
+                    base_id,
+                    scene_id,
+                    keyword=body.get("keyword", ""),
+                    query_type=body.get("queryType", "vector"),
+                    search_scope=body.get("searchScope", "all"),
+                    object_code=body.get("objectCode"),
+                    view_code=body.get("viewCode"),
+                    property_code=body.get("propertyCode"),
+                    result_per_type=body.get("resultPerType", 5),
+                    page_size=body.get("pageSize", 20),
+                    page_token=body.get("pageToken"),
+                )
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.post("/{owner_type}/{base_id}/instances/search")
+    def search_instances(owner_type: str, base_id: str, body: dict[str, Any]) -> Any:
+        """Search instances in a base."""
+        try:
+            return ok(
+                data=platform.search_instances(
+                    base_id,
+                    object_code=body.get("objectCode", ""),
+                    select=body.get("select"),
+                    where=body.get("where"),
+                )
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/graph/query")
+    def graph_query(
+        owner_type: str, base_id: str, scene_id: str, body: dict[str, Any]
+    ) -> Any:
+        """Query the graph of objects and relations."""
+        try:
+            return ok(
+                data=platform.graph_query(
+                    base_id,
+                    scene_id,
+                    object_code=body.get("objectCodes", body.get("objectCode", [])),
+                    match_by=body.get("matchBy", "name"),
+                    values=body.get("values"),
+                    step=body.get("depth", body.get("step", 1)),
+                )
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/graph/path")
+    def graph_path(
+        owner_type: str, base_id: str, scene_id: str, body: dict[str, Any]
+    ) -> Any:
+        """Find shortest path between two objects."""
+        try:
+            return ok(
+                data=platform.graph_path(
+                    base_id,
+                    scene_id,
+                    match_by=body.get("matchBy", "name"),
+                    start_node=body.get("sourceObjectCode", ""),
+                    end_node=body.get("targetObjectCode", ""),
+                    direction=body.get("direction", "forward"),
+                )
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    return router
