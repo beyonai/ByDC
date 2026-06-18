@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from datacloud_platform.models import (
+    from datacloud_platform.models.shared import (
         DimensionProperty,
         EmbeddingHit,
         MatchCandidate,
@@ -130,6 +130,19 @@ class KnowledgeBackend(Protocol):
         """
         ...
 
+    def search_ontology_batch(
+        self,
+        base_id: str,
+        keyword: str,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Batch search across all scenes of a base, aggregating + deduplicating results.
+
+        Returns same structure as :meth:`search_ontology`:
+        ``{"metadata": [...], "instances": [...], "totalCount": {...}}``.
+        """
+        ...
+
     def graph_query(
         self,
         base_id: str,
@@ -151,4 +164,31 @@ class KnowledgeBackend(Protocol):
 
     def update_scores(self, records: list[ScoreUpdateRecord]) -> None:
         """Batch update term scores."""
+        ...
+
+    # -- Instance search & graph path --
+
+    def search_instances(
+        self,
+        base_id: str,
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Search instances in a base. Returns ``{"data": [...], "totalCount": N}``."""
+        ...
+
+    def graph_path(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """Find shortest path between two objects.
+        Returns ``{"path": [...], "edges": [...], "hops": N}``."""
         ...

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from datacloud_platform.models import StoredFile
+    from datacloud_platform.models.shared import StoredFile
 
 
 class StorageBackend(Protocol):

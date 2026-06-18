@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from datacloud_platform.models import ObjectSummary, ParsedOwlContent
+    from datacloud_platform.models.shared import ObjectSummary, ParsedOwlContent
 
 
 class OntologyQueryable(Protocol):
@@ -77,4 +77,154 @@ class OntologyBackend(Protocol):
 
     def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
         """Delete an ontology object. REMOTE backends raise PermissionError."""
+        ...
+
+    # -- Scene management --
+
+    def list_scenes(self, base_id: str) -> list[dict[str, Any]]:
+        """List all scene directories under a base."""
+        ...
+
+    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict[str, Any]]:
+        """Query scenes with optional keyword filter."""
+        ...
+
+    def count_scenes(self, base_id: str, keyword: str | None) -> int:
+        """Count scenes matching optional keyword filter."""
+        ...
+
+    def get_scene_details(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        view_code: str | None = None,
+        object_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Get full scene details with optional filtering by view_code or object_code."""
+        ...
+
+    def query_ontologies_by_scene(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+    ) -> dict[str, Any]:
+        """Query ontologies (objects) in a scene with pagination and keyword filter."""
+        ...
+
+    # -- View CRUD --
+
+    def get_views(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Get all views under a scene."""
+        ...
+
+    def get_view_detail(
+        self, base_id: str, scene_id: str, view_code: str
+    ) -> dict[str, Any] | None:
+        """Get single view detail by code."""
+        ...
+
+    def create_view(self, base_id: str, scene_id: str, obj: Any) -> Any:
+        """Create a view. REMOTE backends raise PermissionError."""
+        ...
+
+    def update_view(
+        self, base_id: str, scene_id: str, object_code: str, obj: Any
+    ) -> Any:
+        """Update a view. REMOTE backends raise PermissionError."""
+        ...
+
+    def delete_view(self, base_id: str, scene_id: str, object_code: str) -> None:
+        """Delete a view. REMOTE backends raise PermissionError."""
+        ...
+
+    # -- Relation CRUD --
+
+    def get_relations(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Get all relations under a scene."""
+        ...
+
+    def get_relation_detail(
+        self, base_id: str, scene_id: str, rel_code: str
+    ) -> dict[str, Any] | None:
+        """Get single relation detail by code."""
+        ...
+
+    def create_relation(self, base_id: str, scene_id: str, obj: Any) -> Any:
+        """Create a relation. REMOTE backends raise PermissionError."""
+        ...
+
+    def update_relation(
+        self, base_id: str, scene_id: str, object_code: str, obj: Any
+    ) -> Any:
+        """Update a relation. REMOTE backends raise PermissionError."""
+        ...
+
+    def delete_relation(self, base_id: str, scene_id: str, object_code: str) -> None:
+        """Delete a relation. REMOTE backends raise PermissionError."""
+        ...
+
+    # -- Datasource CRUD --
+
+    def get_datasources(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Get all datasources under a scene."""
+        ...
+
+    def get_datasource_detail(
+        self, base_id: str, scene_id: str, db_id: str
+    ) -> dict[str, Any] | None:
+        """Get single datasource detail by db_id."""
+        ...
+
+    def create_datasource(self, base_id: str, scene_id: str, obj: Any) -> Any:
+        """Create a datasource. REMOTE backends raise PermissionError."""
+        ...
+
+    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+        """Delete a datasource. REMOTE backends raise PermissionError."""
+        ...
+
+    # -- Action CRUD --
+
+    def get_actions(
+        self, base_id: str, scene_id: str, object_code: str
+    ) -> list[dict[str, Any]]:
+        """Get all actions on an object."""
+        ...
+
+    def get_action_detail(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+    ) -> dict[str, Any] | None:
+        """Get single action detail by code."""
+        ...
+
+    def create_action(
+        self, base_id: str, scene_id: str, object_code: str, obj: Any
+    ) -> Any:
+        """Create an action. REMOTE backends raise PermissionError."""
+        ...
+
+    def update_action(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        obj: Any,
+    ) -> Any:
+        """Update an action. REMOTE backends raise PermissionError."""
+        ...
+
+    def delete_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> None:
+        """Delete an action. REMOTE backends raise PermissionError."""
         ...
