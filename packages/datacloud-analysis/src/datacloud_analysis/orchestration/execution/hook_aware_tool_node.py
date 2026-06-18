@@ -348,10 +348,26 @@ class HookAwareToolNode(ToolNode):
                 _workspace_root = (
                     resolve_shared_workspace_dir(_workspace_dir) if _workspace_dir else None
                 )
+                _inv_ctx_token = str(
+                    getattr(_gw_ctx, "beyond_token", "")
+                    or (_extras or {}).get("beyond_token", "")
+                    or ""
+                )
+                _inv_ctx_token_masked = (
+                    f"{_inv_ctx_token[:4]}...{_inv_ctx_token[-4:]}"
+                    if len(_inv_ctx_token) > 8
+                    else ("***" if _inv_ctx_token else "<empty>")
+                )
+                logger.info(
+                    "[invocation-ctx] HookAwareToolNode session=%s user=%s beyond_token=%s",
+                    _gc_session_id,
+                    _gc_user_id,
+                    _inv_ctx_token_masked,
+                )
                 _inv_ctx = InvocationContext(
                     user_id=_gc_user_id,
                     session_id=_gc_session_id,
-                    token=str(getattr(_gw_ctx, "beyond_token", "") or ""),
+                    token=_inv_ctx_token,
                     gateway_context=_gw_ctx,
                     workspace_dir=str(_workspace_root)
                     if _workspace_root is not None

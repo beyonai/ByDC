@@ -704,20 +704,40 @@ class HttpKnowledgeSearchBackend:
             pass
         return {}
 
+    @staticmethod
+    def _mask_token(token: str) -> str:
+        """Return first 4 + last 4 chars of token with middle masked, or <empty>."""
+        if not token:
+            return "<empty>"
+        if len(token) <= 8:
+            return "***"
+        return f"{token[:4]}...{token[-4:]}"
+
     async def _post_json(
         self,
         url: str,
         body: dict[str, Any],
         datasource_alias: str,
     ) -> dict[str, Any]:
+        _beyond_header = self._get_beyond_token_header()
+        logger.info(
+            "[kb-backend] POST %s datasource=%s beyond_token=%s",
+            url,
+            datasource_alias,
+            self._mask_token(_beyond_header.get("Beyond-Token", "")),
+        )
         log_curl("POST", url, body=body)
         try:
-            async with httpx.AsyncClient(
-                headers=self._get_beyond_token_header(), timeout=30.0
-            ) as client:
+            async with httpx.AsyncClient(headers=_beyond_header, timeout=30.0) as client:
                 response = await client.post(url, json=body)
         except httpx.HTTPError as exc:
             raise KbExecutionError(datasource_alias, str(exc)) from exc
+        logger.info(
+            "[kb-backend] POST %s datasource=%s status=%s",
+            url,
+            datasource_alias,
+            response.status_code,
+        )
         return self._parse_response_body(response, datasource_alias)
 
     async def _post_json_by_discovery(
@@ -756,7 +776,15 @@ class HttpKnowledgeSearchBackend:
                     datasource_alias,
                     f"knowledge service instance not found: {service_name}",
                 )
-            headers = {**self._build_discovery_headers(instance), **self._get_beyond_token_header()}
+            _beyond_header = self._get_beyond_token_header()
+            headers = {**self._build_discovery_headers(instance), **_beyond_header}
+            logger.info(
+                "[kb-backend] POST (discovery) service=%s path=%s datasource=%s beyond_token=%s",
+                service_name,
+                path,
+                datasource_alias,
+                self._mask_token(_beyond_header.get("Beyond-Token", "")),
+            )
             async with DiscoveryHttpClient(
                 discovery_client,
                 retry_config=retry_config,
@@ -772,6 +800,12 @@ class HttpKnowledgeSearchBackend:
         finally:
             await discovery_client.close()
 
+        logger.info(
+            "[kb-backend] POST (discovery) service=%s path=%s datasource=%s done",
+            service_name,
+            path,
+            datasource_alias,
+        )
         return self._parse_discovery_response_body(response, datasource_alias)
 
     @staticmethod

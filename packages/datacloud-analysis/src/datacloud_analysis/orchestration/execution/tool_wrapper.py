@@ -716,10 +716,26 @@ async def dispatch_tool(
                             ).get("locale")
                             or "zh_CN"
                         )
+                        _inv_ctx_redirect_token = str(
+                            getattr(gateway_context, "beyond_token", "")
+                            or (_extras or {}).get("beyond_token", "")
+                            or ""
+                        )
+                        _inv_ctx_redirect_token_masked = (
+                            f"{_inv_ctx_redirect_token[:4]}...{_inv_ctx_redirect_token[-4:]}"
+                            if len(_inv_ctx_redirect_token) > 8
+                            else ("***" if _inv_ctx_redirect_token else "<empty>")
+                        )
+                        logger.info(
+                            "[invocation-ctx] redirect session=%s user=%s beyond_token=%s",
+                            _gc_session_id,
+                            _gc_user_id,
+                            _inv_ctx_redirect_token_masked,
+                        )
                         _inv_ctx_redirect: Any = InvocationContext(
                             user_id=_gc_user_id,
                             session_id=_gc_session_id,
-                            token=str(getattr(gateway_context, "beyond_token", "") or ""),
+                            token=_inv_ctx_redirect_token,
                             gateway_context=gateway_context,
                             workspace_dir=str(workspace_root) if workspace_root is not None else "",
                             result_file_storage=_result_file_storage,
@@ -791,10 +807,26 @@ async def dispatch_tool(
                     )
                     or "zh_CN"
                 )
+                _inv_ctx_token = str(
+                    getattr(gateway_context, "beyond_token", "")
+                    or (_extras or {}).get("beyond_token", "")
+                    or ""
+                )
+                _inv_ctx_token_masked = (
+                    f"{_inv_ctx_token[:4]}...{_inv_ctx_token[-4:]}"
+                    if len(_inv_ctx_token) > 8
+                    else ("***" if _inv_ctx_token else "<empty>")
+                )
+                logger.info(
+                    "[invocation-ctx] dispatch session=%s user=%s beyond_token=%s",
+                    _gc_session_id,
+                    _gc_user_id,
+                    _inv_ctx_token_masked,
+                )
                 _inv_ctx: Any = InvocationContext(
                     user_id=_gc_user_id,
                     session_id=_gc_session_id,
-                    token=str(getattr(gateway_context, "beyond_token", "") or ""),
+                    token=_inv_ctx_token,
                     gateway_context=gateway_context,
                     workspace_dir=str(workspace_root) if workspace_root is not None else "",
                     result_file_storage=_result_file_storage,
