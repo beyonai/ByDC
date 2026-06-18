@@ -70,8 +70,6 @@ async def run_agent(
             "clarify_needed": False,
             "results": [],
             "execution_status": "",
-            "todo_active_id": "",
-            "todo_tool_plan": [],
             "active_tools": [],
             "execution_trace": [],
             "invocation_dedup": [],
