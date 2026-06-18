@@ -8,7 +8,7 @@ import zipfile
 import pytest
 
 from datacloud_platform import DatacloudPlatform, OntologyBaseEntry
-from datacloud_platform.models import (
+from datacloud_platform.models.shared import (
     MatchCandidate,
     MatchResult,
     ObjectSummary,

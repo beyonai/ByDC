@@ -9,7 +9,7 @@ import pytest
 
 from datacloud_platform import DatacloudPlatform
 from datacloud_platform.backends.presets import register_preset
-from datacloud_platform.models import (
+from datacloud_platform.models.shared import (
     MatchCandidate,
     MatchResult,
 )

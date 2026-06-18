@@ -7,7 +7,7 @@ from datacloud_platform.backends.registry import (
     register_backend_type,
     register_implementation,
 )
-from datacloud_platform.models import (
+from datacloud_platform.models.shared import (
     MatchCandidate,
     MatchResult,
     ObjectSummary,
