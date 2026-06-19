@@ -325,7 +325,6 @@ async def term_types_values(body: dict, request: Request):
 def _delete_resource_by_code(resource_code: str) -> None:
     """通过服务发现下架本体资源。"""
 
-
     from by_framework.core.discovery import DiscoveryClient
     from by_framework.util.discovery_http_client import DiscoveryHttpClient
     from by_framework.util.http_client import RetryConfig
