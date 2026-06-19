@@ -54,9 +54,9 @@ _IMPORTANCE_RULES: list[tuple[list[str], str]] = [
 _BUDGET: dict[str, dict[str, int]] = {
     "9": {"f": 80, "r": 120, "a": 80, "s": 150},
     "8": {"f": 60, "r": 100, "a": 60, "s": 120},
-    "7": {"f": 50, "r": 80,  "a": 50, "s": 100},
-    "6": {"f": 40, "r": 60,  "a": 40, "s": 60},
-    "5": {"f": 30, "r": 40,  "a": 30, "s": 40},
+    "7": {"f": 50, "r": 80, "a": 50, "s": 100},
+    "6": {"f": 40, "r": 60, "a": 40, "s": 60},
+    "5": {"f": 30, "r": 40, "a": 30, "s": 40},
 }
 
 
@@ -145,11 +145,13 @@ def build_ontology_index(loader: Any, object_codes: list[str]) -> str:
             target: str = getattr(rel, "target_class", "") or ""
             if src not in relation_map:
                 relation_map[src] = []
-            relation_map[src].append({
-                "target": target,
-                "action": action_code,
-                "reason": unlock_reason,
-            })
+            relation_map[src].append(
+                {
+                    "target": target,
+                    "action": action_code,
+                    "reason": unlock_reason,
+                }
+            )
     except Exception:
         logger.debug("OntologyIndex: failed to load relations", exc_info=True)
 
@@ -168,16 +170,13 @@ def build_ontology_index(loader: Any, object_codes: list[str]) -> str:
 
         # 尝试从 loader 获取对象定义
         obj = None
-        try:
+        import contextlib  # noqa: PLC0415
+
+        with contextlib.suppress(Exception):
             obj = loader.get_ontology_class(code)
-        except Exception:
-            pass
 
         # F: 业务角色
-        if obj is not None:
-            raw_desc = _extract_entity_desc(obj)
-        else:
-            raw_desc = code.replace("_", " ")
+        raw_desc = _extract_entity_desc(obj) if obj is not None else code.replace("_", " ")
         f_field = _truncate(raw_desc, budget["f"])
 
         # R: 关联对象（取 target 列表，按 budget 截断）
@@ -196,6 +195,7 @@ def build_ontology_index(loader: Any, object_codes: list[str]) -> str:
             # 从 TOOL_TO_OBJECT 反查（工具已注册时）
             try:
                 from datacloud_analysis.tools.tool_pool import TOOL_TO_OBJECT  # noqa: PLC0415
+
                 action_codes = [t for t, oc in TOOL_TO_OBJECT.items() if oc == code]
             except Exception:
                 action_codes = []

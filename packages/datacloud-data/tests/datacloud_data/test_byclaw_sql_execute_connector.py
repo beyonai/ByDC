@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 import sqlite3
 import tempfile
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 import pytest
 from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry
@@ -65,9 +66,7 @@ async def test_execute(tmp_mount: str) -> None:
 async def test_params_are_bound(tmp_mount: str) -> None:
     _init_db(tmp_mount)
     connector = ByclawSqlExecuteConnector(_make_config())
-    records = await connector.execute(
-        "SELECT name FROM users WHERE id = :uid", {"uid": 2}
-    )
+    records = await connector.execute("SELECT name FROM users WHERE id = :uid", {"uid": 2})
     assert records == [{"name": "bob"}]
     await connector.close()
 

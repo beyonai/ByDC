@@ -16,15 +16,16 @@ from typing import Any
 
 import pytest
 
-
 # ── _build_ontology_rules_zh ───────────────────────────────────────────────────
+
 
 def test_build_ontology_rules_zh_exists() -> None:
     """prompts.py 应有 _build_ontology_rules_zh() 函数。"""
     from datacloud_analysis.i18n import prompts
 
-    assert hasattr(prompts, "_build_ontology_rules_zh"), \
+    assert hasattr(prompts, "_build_ontology_rules_zh"), (
         "prompts.py 应有 _build_ontology_rules_zh 函数"
+    )
 
 
 def test_build_ontology_rules_zh_contains_xml_tags() -> None:
@@ -55,19 +56,22 @@ def test_exec_prompt_retry_rule_refined() -> None:
 
     result = _build_exec_zh()
     # 应有更精细的失败处理规则
-    assert "相同参数" in result or "盲目重试" in result or "换参数" in result, \
+    assert "相同参数" in result or "盲目重试" in result or "换参数" in result, (
         "_build_exec_zh 应有区分重试策略的规则"
+    )
 
 
 # ── graph_builder L1 排序 ──────────────────────────────────────────────────────
+
 
 def test_graph_builder_l1_has_ontology_rules() -> None:
     """graph_builder._build_prebuilt_graph 的 L1 应包含 ontology_rules。"""
     from datacloud_analysis.orchestration import graph_builder
 
     src = inspect.getsource(graph_builder._build_prebuilt_graph)
-    assert "_build_ontology_rules_zh" in src or "ontology_rules" in src, \
+    assert "_build_ontology_rules_zh" in src or "ontology_rules" in src, (
         "_build_prebuilt_graph 应注入 ontology_rules"
+    )
 
 
 def test_graph_builder_task_prompt_in_system_parts() -> None:
@@ -75,11 +79,11 @@ def test_graph_builder_task_prompt_in_system_parts() -> None:
     from datacloud_analysis.orchestration import graph_builder
 
     src = inspect.getsource(graph_builder._build_prebuilt_graph)
-    assert "custom_task" in src or "task_prompt" in src, \
-        "_build_prebuilt_graph 应包含 task_prompt"
+    assert "custom_task" in src or "task_prompt" in src, "_build_prebuilt_graph 应包含 task_prompt"
 
 
 # ── finish_react Verification ─────────────────────────────────────────────────
+
 
 def test_finish_react_node_has_verification_logic() -> None:
     """finish_react_node 应有 findings 非空检查的 Verification 逻辑。"""
@@ -92,21 +96,22 @@ def test_finish_react_node_has_verification_logic() -> None:
 @pytest.mark.asyncio
 async def test_finish_react_verification_blocks_empty_findings() -> None:
     """findings 为空时，finish_react_node 应返回 Command 继续推理而不是结束。"""
+    from datacloud_analysis.orchestration.execution.finish_react_node import finish_react_node
     from langchain_core.messages import AIMessage
     from langchain_core.runnables import RunnableConfig
-
-    from datacloud_analysis.orchestration.execution.finish_react_node import finish_react_node
 
     state = {
         "messages": [
             AIMessage(
                 content="",
-                tool_calls=[{
-                    "id": "tc_001",
-                    "name": "finish_react",
-                    "args": {"result_type": "text", "answer": "分析完成"},
-                    "type": "tool_call",
-                }],
+                tool_calls=[
+                    {
+                        "id": "tc_001",
+                        "name": "finish_react",
+                        "args": {"result_type": "text", "answer": "分析完成"},
+                        "type": "tool_call",
+                    }
+                ],
             )
         ],
         "reasoning_graph": {
@@ -126,6 +131,7 @@ async def test_finish_react_verification_blocks_empty_findings() -> None:
     # findings 为空时，应被拦截（返回 Command goto agent 或在结果中有提示）
     # 检查方式：react_final 不存在（被重定向到 agent），或结果包含重试信号
     from langgraph.types import Command
+
     if isinstance(result, Command):
         assert result.goto == "agent", "findings 为空时应重定向到 agent"
     # 如果直接返回 dict，则不拦截（此行为也可接受，取决于实现选择）
@@ -133,13 +139,13 @@ async def test_finish_react_verification_blocks_empty_findings() -> None:
 
 # ── should_continue dead_end 兜底 ─────────────────────────────────────────────
 
+
 def test_should_continue_has_dead_end_fallback() -> None:
     """should_continue 应有 dead_end 全覆盖兜底逻辑。"""
     from datacloud_analysis.orchestration import graph_builder
 
     src = inspect.getsource(graph_builder.should_continue)
-    assert "dead_end" in src or "is_dead_end" in src, \
-        "should_continue 应有 dead_end 兜底逻辑"
+    assert "dead_end" in src or "is_dead_end" in src, "should_continue 应有 dead_end 兜底逻辑"
 
 
 def test_should_continue_returns_respond_when_all_dead() -> None:
@@ -172,12 +178,12 @@ def test_should_continue_returns_respond_when_all_dead() -> None:
 
 # ── llm_call_node _build_message_tail ─────────────────────────────────────────
 
+
 def test_build_message_tail_exists() -> None:
     """llm_call_node 应有 _build_message_tail() 函数。"""
     from datacloud_analysis.orchestration.execution import llm_call_node as m
 
-    assert hasattr(m, "_build_message_tail"), \
-        "llm_call_node 应有 _build_message_tail 函数"
+    assert hasattr(m, "_build_message_tail"), "llm_call_node 应有 _build_message_tail 函数"
 
 
 def test_build_message_tail_includes_findings() -> None:

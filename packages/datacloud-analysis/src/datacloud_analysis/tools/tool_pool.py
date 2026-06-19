@@ -38,6 +38,7 @@ def get_ontology_index() -> str:
     """返回 AOCI 格式本体索引字符串，未初始化时返回空字符串。"""
     return _ONTOLOGY_INDEX
 
+
 # 工具池阈值：工具数超过此值时启用锚点驱动模式（LLM 自选锚点 + 渐进式解锁）
 # 低于或等于阈值时全量挂载（原有行为不变）
 TOOL_POOL_THRESHOLD: int = int(os.getenv("TOOL_POOL_THRESHOLD", "30"))
@@ -136,10 +137,13 @@ def _init_ext_tool_pool(
             ops_codes,
         )
     else:
-        ops_codes = sorted([
-            d.name for d in object_dir.iterdir()
-            if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
-        ])
+        ops_codes = sorted(
+            [
+                d.name
+                for d in object_dir.iterdir()
+                if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
+            ]
+        )
         logger.info(
             "TOOL_POOL init: scan mode (prefix=%r), found %d objects: %s",
             name_prefix,

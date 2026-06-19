@@ -11,12 +11,10 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from unittest.mock import MagicMock
 
 # ── dynamic_prompt 锚点注入测试 ─────────────────────────────────────────────────
+
 
 def _make_state(**kwargs: Any) -> Any:
     """构造一个最小 AgentState-like dict。"""
@@ -141,16 +139,19 @@ def test_dynamic_prompt_hides_activated_objects_from_list(monkeypatch: Any) -> N
         if result and "可选本体对象" in result:
             # 已激活的对象不应再出现在可选列表
             # （但可能出现在其他区域，这里只检查可选列表部分）
-            available_section = result.split("可选本体对象")[1].split("##")[0] if "##" in result.split("可选本体对象")[1] else result.split("可选本体对象")[1]
-            assert "ops_activated_obj" not in available_section, (
-                "已激活的对象不应出现在可选列表中"
+            available_section = (
+                result.split("可选本体对象")[1].split("##")[0]
+                if "##" in result.split("可选本体对象")[1]
+                else result.split("可选本体对象")[1]
             )
+            assert "ops_activated_obj" not in available_section, "已激活的对象不应出现在可选列表中"
     finally:
         tool_pool.TOOL_POOL.pop("get_spans_activated", None)
         tool_pool.TOOL_TO_OBJECT.pop("get_spans_activated", None)
 
 
 # ── graph_builder 集成测试 ──────────────────────────────────────────────────────
+
 
 def test_prebuilt_graph_includes_anchor_tools_when_anchor_mode(monkeypatch: Any) -> None:
     """锚点模式下，build_analysis_graph 构建的 tools 应包含 activate_anchor / mark_dead_end。"""
@@ -164,7 +165,6 @@ def test_prebuilt_graph_includes_anchor_tools_when_anchor_mode(monkeypatch: Any)
     try:
         # 直接调用 _build_tools_list 看是否含锚点工具
         # graph_builder 里使用局部 import，所以通过 tool_pool.TOOL_POOL 非空来触发
-        from datacloud_analysis.orchestration.execution.node import _build_tools_list
         from datacloud_analysis.tools.anchor_tools import make_anchor_tools
 
         # 确认在锚点模式下 make_anchor_tools 工厂能产生两个工具
@@ -175,6 +175,7 @@ def test_prebuilt_graph_includes_anchor_tools_when_anchor_mode(monkeypatch: Any)
 
         # 确认 graph_builder 中实际已经 import 并调用
         import inspect
+
         from datacloud_analysis.orchestration import graph_builder
 
         src = inspect.getsource(graph_builder._build_prebuilt_graph)

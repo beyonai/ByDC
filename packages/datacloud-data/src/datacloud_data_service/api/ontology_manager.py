@@ -32,6 +32,7 @@ router = APIRouter()
 
 _session: object | None = None
 
+
 def _init_discovery_redis() -> None:
     """全局初始化服务发现 Redis（幂等）。"""
     from by_framework.common.redis_client import init_redis  # type: ignore[import-untyped]
@@ -43,6 +44,7 @@ def _init_discovery_redis() -> None:
         password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")) or None,
         username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
     )
+
 
 def _get_session() -> object:
     """获取全局 OntologyBuildSession 单例。"""
@@ -69,7 +71,9 @@ def _with_env(body: dict, request: Request) -> dict:
     """提取并注入环境变量，返回纯净参数。"""
     env_map: dict[str, str] = {}
     # 从 header 提取 token / user_code
-    token = request.headers.get("Beyond-Token") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    token = request.headers.get("Beyond-Token") or request.headers.get(
+        "Authorization", ""
+    ).removeprefix("Bearer ")
     user_code = request.headers.get("X-User-Code", "")
     if token:
         env_map["BEYOND_TOKEN"] = token
@@ -320,9 +324,7 @@ async def term_types_values(body: dict, request: Request):
 
 def _delete_resource_by_code(resource_code: str) -> None:
     """通过服务发现下架本体资源。"""
-    import json
 
-    import httpx
 
     from by_framework.core.discovery import DiscoveryClient
     from by_framework.util.discovery_http_client import DiscoveryHttpClient
@@ -338,6 +340,7 @@ def _delete_resource_by_code(resource_code: str) -> None:
         headers["Beyond-Token"] = token
 
     _init_discovery_redis()
+
     async def _call() -> None:
         discovery_client = DiscoveryClient(cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
@@ -356,9 +359,7 @@ def _delete_resource_by_code(resource_code: str) -> None:
 
         body: dict = response.data if isinstance(response.data, dict) else {}
         if not response.is_success or body.get("code", 0) != 0:
-            raise RuntimeError(
-                f"下架失败 HTTP {response.status_code}: {body.get('msg', body)}"
-            )
+            raise RuntimeError(f"下架失败 HTTP {response.status_code}: {body.get('msg', body)}")
 
     import asyncio
 

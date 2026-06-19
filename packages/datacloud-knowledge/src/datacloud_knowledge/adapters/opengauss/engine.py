@@ -131,7 +131,7 @@ def _build_scope_params(scope_code: str | None) -> dict[str, str]:
     if not scope_code:
         return {}
     if scope_code.startswith("task:"):
-        task_id = scope_code[len("task:"):]
+        task_id = scope_code[len("task:") :]
         return {
             "scope_code": scope_code,
             "task_scope": json.dumps({"owner_type": "task", "task_id": task_id}),

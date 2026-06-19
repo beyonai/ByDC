@@ -16,6 +16,11 @@ if TYPE_CHECKING:
     from datacloud_server.models.view import View
     from datacloud_server.services.adapter_router import AdapterRouter
 
+try:
+    from datacloud_knowledge.ingestion.ontology_terms import build_terms as _build_terms
+except ImportError:
+    _build_terms = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,34 +46,32 @@ class OntologyResourceService:
         search_scope_extra: dict[str, Any] | None = None,
     ) -> ObjectType:
         result = self._router.get(base_id).create_object(base_id, scene_id, obj)
-        # 扩展：若传入 search_scope_extra，写入 term 表（供 search_ontology 向量搜索命中）
-        if search_scope_extra:
+        # 扩展: 若传入 search_scope_extra, 写入 term 表 (供 search_ontology 向量搜索命中)
+        if search_scope_extra and _build_terms is not None:
             try:
-                from datacloud_knowledge.ingestion.ontology_terms import build_terms  # noqa: PLC0415
-
                 fields = [
                     {
-                        "property_code": p.propertyCode if hasattr(p, "propertyCode") else str(p),
-                        "property_name": p.propertyName if hasattr(p, "propertyName") else str(p),
+                        "property_code": p.property_code if hasattr(p, "property_code") else str(p),
+                        "property_name": p.property_name if hasattr(p, "property_name") else str(p),
                         "data_type": "STRING",
                     }
                     for p in (obj.properties or [])
                 ]
-                build_terms(
-                    entity_code=obj.objectCode,
-                    entity_name=obj.objectName or obj.objectCode,
+                _build_terms(
+                    entity_code=obj.object_code,
+                    entity_name=obj.object_name or obj.object_code,
                     fields=fields,
-                    entity_desc=obj.objectDesc or "",
+                    entity_desc=obj.object_desc or "",
                     search_scope_extra=search_scope_extra,
                 )
                 logger.info(
                     "create_object: build_terms done for %s scope=%s",
-                    obj.objectCode,
+                    obj.object_code,
                     search_scope_extra,
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.warning(
-                    "create_object: build_terms failed for %s", obj.objectCode, exc_info=True
+                    "create_object: build_terms failed for %s", obj.object_code, exc_info=True
                 )
         return result
 

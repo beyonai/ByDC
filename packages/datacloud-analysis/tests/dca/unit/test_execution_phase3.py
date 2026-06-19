@@ -9,12 +9,11 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ── record_finding ─────────────────────────────────────────────────────────────
+
 
 def test_record_finding_tool_exists() -> None:
     """record_finding 工具应存在于 anchor_tools 模块。"""
@@ -85,9 +84,11 @@ def test_record_finding_initializes_rg_if_none() -> None:
 
 # ── after_call_back result_summary ────────────────────────────────────────────
 
+
 def test_hook_aware_tool_node_writes_result_summary() -> None:
     """after_call_back 应将 ToolMessage 内容截断写入 reasoning_graph 节点的 result_summary。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import hook_aware_tool_node as m
 
     src = inspect.getsource(m)
@@ -96,9 +97,11 @@ def test_hook_aware_tool_node_writes_result_summary() -> None:
 
 # ── finish_react_node findings → execution_summary ───────────────────────────
 
+
 def test_finish_react_node_reads_findings_to_execution_summary() -> None:
     """finish_react_node 应读取 reasoning_graph.findings 并合并到 execution_summary。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import finish_react_node as m
 
     src = inspect.getsource(m)
@@ -109,21 +112,22 @@ def test_finish_react_node_reads_findings_to_execution_summary() -> None:
 @pytest.mark.asyncio
 async def test_finish_react_node_includes_findings_in_output() -> None:
     """finish_react_node 执行后，返回值应包含 findings 合并的 execution_summary。"""
+    from datacloud_analysis.orchestration.execution.finish_react_node import finish_react_node
     from langchain_core.messages import AIMessage
     from langchain_core.runnables import RunnableConfig
-
-    from datacloud_analysis.orchestration.execution.finish_react_node import finish_react_node
 
     state = {
         "messages": [
             AIMessage(
                 content="",
-                tool_calls=[{
-                    "id": "tc_001",
-                    "name": "finish_react",
-                    "args": {"result_type": "text", "answer": "分析完成"},
-                    "type": "tool_call",
-                }],
+                tool_calls=[
+                    {
+                        "id": "tc_001",
+                        "name": "finish_react",
+                        "args": {"result_type": "text", "answer": "分析完成"},
+                        "type": "tool_call",
+                    }
+                ],
             )
         ],
         "reasoning_graph": {
@@ -145,5 +149,6 @@ async def test_finish_react_node_includes_findings_in_output() -> None:
     # execution_summary 应包含 findings 内容
     exec_summary = result.get("execution_summary") or ""
     if exec_summary:
-        assert "BY_001" in exec_summary or "超时" in exec_summary, \
+        assert "BY_001" in exec_summary or "超时" in exec_summary, (
             "execution_summary 应包含 findings 内容"
+        )

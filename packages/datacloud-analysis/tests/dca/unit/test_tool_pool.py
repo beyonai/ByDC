@@ -175,16 +175,13 @@ def test_init_ext_tool_pool_exists() -> None:
 
 def test_init_ext_tool_pool_accepts_ext_codes(tmp_path: Any) -> None:
     """_init_ext_tool_pool 接受 ext_codes 参数，不报 TypeError。"""
-    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
     import inspect
 
+    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
+
     sig = inspect.signature(_init_ext_tool_pool)
-    assert "ext_codes" in sig.parameters, (
-        "_init_ext_tool_pool must have ext_codes parameter"
-    )
-    assert "name_prefix" in sig.parameters, (
-        "_init_ext_tool_pool must have name_prefix parameter"
-    )
+    assert "ext_codes" in sig.parameters, "_init_ext_tool_pool must have ext_codes parameter"
+    assert "name_prefix" in sig.parameters, "_init_ext_tool_pool must have name_prefix parameter"
 
 
 def test_init_ext_tool_pool_ext_codes_none_scans_directory(tmp_path: Any) -> None:
@@ -202,7 +199,8 @@ def test_init_ext_tool_pool_ext_codes_none_scans_directory(tmp_path: Any) -> Non
     def fake_scan(resource_path, ext_codes=None, name_prefix=None):
         object_dir_inner = _Path(resource_path) / "object"
         scanned = sorted(
-            d.name for d in object_dir_inner.iterdir()
+            d.name
+            for d in object_dir_inner.iterdir()
             if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
         )
         captured.extend(scanned)
@@ -216,8 +214,9 @@ def test_init_ext_tool_pool_ext_codes_none_scans_directory(tmp_path: Any) -> Non
 
 def test_init_ext_tool_pool_ext_codes_list_skips_scan(tmp_path: Any) -> None:
     """ext_codes=[...] 时直接使用列表，不扫描目录。"""
-    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
     import inspect
+
+    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
 
     # 仅验证签名默认值，ext_codes=None 表示扫目录
     sig = inspect.signature(_init_ext_tool_pool)
@@ -232,7 +231,6 @@ def test_init_ops_tool_pool_removed() -> None:
     assert not hasattr(tool_pool, "_init_ops_tool_pool"), (
         "_init_ops_tool_pool must be removed; callers must use _init_ext_tool_pool"
     )
-
 
 
 def test_span_cache_importable() -> None:

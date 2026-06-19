@@ -15,8 +15,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ── 3.2.1 阈值常量与 is_anchor_mode ────────────────────────────────────────────
+
 
 def test_tool_pool_threshold_constant_exists() -> None:
     from datacloud_analysis.tools.tool_pool import TOOL_POOL_THRESHOLD
@@ -59,6 +59,7 @@ def test_is_anchor_mode_above_threshold(monkeypatch: Any) -> None:
 
 
 # ── 3.2.2 anchor_tools 模块 ────────────────────────────────────────────────────
+
 
 def test_anchor_tools_module_importable() -> None:
     from datacloud_analysis.tools import anchor_tools  # noqa: F401
@@ -138,9 +139,7 @@ def test_activate_anchor_unknown_object_returns_error() -> None:
     activate = next(t for t in tools if t.name == "activate_anchor")
 
     result = activate.invoke({"object_code": "nonexistent_object_xyz"})
-    assert "未找到" in result or "not found" in result.lower(), (
-        "未知对象应返回错误提示"
-    )
+    assert "未找到" in result or "not found" in result.lower(), "未知对象应返回错误提示"
 
 
 def test_mark_dead_end_writes_to_reasoning_graph() -> None:
@@ -154,10 +153,12 @@ def test_mark_dead_end_writes_to_reasoning_graph() -> None:
     tools = make_anchor_tools(get_state_fn=lambda: state_store)
     mark = next(t for t in tools if t.name == "mark_dead_end")
 
-    result = mark.invoke({
-        "object_code": "ops_langfuse_trace",
-        "reason": "get_spans 返回空，无诊断信号",
-    })
+    result = mark.invoke(
+        {
+            "object_code": "ops_langfuse_trace",
+            "reason": "get_spans 返回空，无诊断信号",
+        }
+    )
 
     assert isinstance(result, str)
     rg = state_store.get("reasoning_graph") or {}
@@ -189,13 +190,12 @@ def test_mark_dead_end_accumulates_multiple_entries() -> None:
 
 # ── worker.py 需求一：不再依赖 extResourceList ─────────────────────────────────
 
+
 def test_worker_no_longer_reads_ext_codes() -> None:
     """worker.py 的 start_heartbeat 不应再读取 _ext_codes（extResourceList 已废弃）。"""
     from pathlib import Path
 
-    worker_path = Path(
-        r"D:\data\code\baiying\byclaw-all\byclaw-data\src\byclaw_data\worker.py"
-    )
+    worker_path = Path(r"D:\data\code\baiying\byclaw-all\byclaw-data\src\byclaw_data\worker.py")
     if not worker_path.exists():
         pytest.skip("worker.py not found in expected path")
 
@@ -207,7 +207,7 @@ def test_worker_no_longer_reads_ext_codes() -> None:
     assert tool_pool_block_start > 0, "应包含 _init_ext_tool_pool 调用"
 
     # 找该调用前后约200字符的上下文，不应含 _ext_codes
-    context = source[max(0, tool_pool_block_start - 300):tool_pool_block_start + 300]
+    context = source[max(0, tool_pool_block_start - 300) : tool_pool_block_start + 300]
     assert "_ext_codes" not in context, (
         "TOOL_POOL 初始化区块不应再读取 _ext_codes（extResourceList 已废弃）\n"
         f"上下文：{context[:200]}"

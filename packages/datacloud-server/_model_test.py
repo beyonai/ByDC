@@ -3,17 +3,13 @@
 import json
 
 from datacloud_server.models import (
-    Action,
     Datasource,
-    InstanceHit,
     MetadataHit,
     ObjectType,
     ObjectTypeSummary,
     Relation,
-    Scene,
     SearchResult,
     SearchTotalCount,
-    View,
 )
 
 # ObjectType

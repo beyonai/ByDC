@@ -177,11 +177,13 @@ class OntologyLoader:
                         raw = json.loads(json_file.read_text(encoding="utf-8"))
                         normalized = _normalize_object_json(raw)
                         if normalized.get("object_code"):
-                            self.load_from_content({
-                                "objects": [normalized],
-                                "relations": [],
-                                "views": [],
-                            })
+                            self.load_from_content(
+                                {
+                                    "objects": [normalized],
+                                    "relations": [],
+                                    "views": [],
+                                }
+                            )
                     except Exception:  # noqa: BLE001
                         pass
 
@@ -191,11 +193,13 @@ class OntologyLoader:
                     rel_data = json.loads(relations_file.read_text(encoding="utf-8"))
                     rels = rel_data.get("relations", [])
                     if rels:
-                        self.load_from_content({
-                            "objects": [],
-                            "relations": rels,
-                            "views": [],
-                        })
+                        self.load_from_content(
+                            {
+                                "objects": [],
+                                "relations": rels,
+                                "views": [],
+                            }
+                        )
                 except Exception:  # noqa: BLE001
                     pass
 
