@@ -75,16 +75,21 @@ def _build_effective_scope_clause(scope_code: str | None, *, strict: bool = Fals
 
     Args:
         scope_code: View/object code to filter by. Empty = no filter.
+            Special prefixes:
+            - "task:{task_id}" → filter by owner_type=task and task_id
+            - other values → standard view/object scope filter
         strict: If True, exclude legacy ``search_scope = '{}'`` rows.
                 Use strict=True for ontology-term recall (prop aliases only).
                 Use strict=False for value-term recall (enterprise names etc.).
-
-    Notes:
-        ``search_scope = '{}'`` rows are only allowed when their term belongs to the
-        current ontology root subtree anchored at ``scope_code``.
     """
     if not scope_code:
         return ""
+
+    # task scope 过滤：owner_type=task + task_id
+    if scope_code.startswith("task:"):
+        return """
+                  AND tn.search_scope @> CAST(:task_scope AS jsonb)"""
+
     base = """
                   AND (
                         tn.search_scope @> CAST(:view_scope AS jsonb)
@@ -118,9 +123,19 @@ def _build_effective_scope_clause(scope_code: str | None, *, strict: bool = Fals
 
 
 def _build_scope_params(scope_code: str | None) -> dict[str, str]:
-    """为 scope 过滤生成绑定参数（view_scope / obj_scope JSON 值）。"""
+    """为 scope 过滤生成绑定参数（view_scope / obj_scope JSON 值）。
+
+    task scope 格式：scope_code = "task:{task_id}"
+    → 生成 task_scope = {"owner_type":"task","task_id":"{task_id}"}
+    """
     if not scope_code:
         return {}
+    if scope_code.startswith("task:"):
+        task_id = scope_code[len("task:"):]
+        return {
+            "scope_code": scope_code,
+            "task_scope": json.dumps({"owner_type": "task", "task_id": task_id}),
+        }
     return {
         "scope_code": scope_code,
         "view_scope": json.dumps({"scope": "view", "code": scope_code}),

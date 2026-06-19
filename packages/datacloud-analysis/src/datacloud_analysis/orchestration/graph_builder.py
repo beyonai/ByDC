@@ -17,7 +17,11 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
-from datacloud_analysis.i18n.prompts import get_execution_prompt, get_system_prompt
+from datacloud_analysis.i18n.prompts import (
+    _build_ontology_rules_zh,
+    get_execution_prompt,
+    get_system_prompt,
+)
 from datacloud_analysis.orchestration.clarification.analyze_clarify_node import (
     analyze_clarify_node,
 )
@@ -52,6 +56,16 @@ def should_continue(state: AgentState) -> str:
     if state.get("agent_abort"):
         logger.info("[should_continue] agent_abort=True → __end__ (bad checkpoint activation)")
         return "__end__"
+
+    # dead_end 全覆盖兜底：所有节点均为 dead_end 且 findings 为空 → 强制 respond
+    rg = state.get("reasoning_graph") or {}
+    nodes = rg.get("nodes") or {}
+    if nodes:
+        all_dead = all(n.get("is_dead_end", False) for n in nodes.values())
+        has_findings = bool(rg.get("findings"))
+        if all_dead and not has_findings:
+            logger.warning("[should_continue] all nodes dead_end and no findings, forcing respond")
+            return "respond"
 
     status = str(state.get("execution_status") or "")
     if status == "max_rounds_exceeded":
@@ -446,6 +460,13 @@ def _build_prebuilt_graph(
     system_parts = [custom_system if custom_system else base_system, base_execution]
     if custom_task:
         system_parts.append(custom_task)
+    # 注入本体推理规则段（三种机制触发时机 + 持续努力规则）
+    try:
+        ontology_rules = _build_ontology_rules_zh()
+        if ontology_rules:
+            system_parts.append(ontology_rules)
+    except Exception:  # noqa: BLE001
+        logger.debug("_build_prebuilt_graph: ontology_rules injection skipped", exc_info=True)
     _available_skills_xml_v04 = str(overwrite.get("available_skills") or "").strip()
     if _available_skills_xml_v04:
         system_parts.append(_available_skills_xml_v04)

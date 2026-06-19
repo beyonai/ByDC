@@ -133,6 +133,7 @@ class LocalOntologyAdapter:
             base_path = self.data_dir / base_id
             if base_path.exists():
                 loader.load_from_owl_resource_directory(str(base_path))
+                loader.load_from_json_resource_directory(str(base_path))
             self._loaders[base_id] = loader
         return self._loaders[base_id]
 
@@ -142,6 +143,7 @@ class LocalOntologyAdapter:
         base_path = self.data_dir / base_id
         if base_path.exists():
             loader.load_from_owl_resource_directory(str(base_path))
+            loader.load_from_json_resource_directory(str(base_path))
         self._loaders[base_id] = loader
         return loader
 

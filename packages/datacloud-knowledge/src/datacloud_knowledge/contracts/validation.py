@@ -361,7 +361,7 @@ def validate_layer2_field_completeness(pkg: KnowledgePackage) -> list[str]:
 
     # 检查关系 relation_category 是否为已知类型
     known_categories: frozenset[str] = frozenset(
-        {"HAS_FIELD", "HAS_OBJECT", "HAS_TERM", "MANY_TO_ONE"}
+        {"HAS_FIELD", "HAS_OBJECT", "HAS_TERM", "MANY_TO_ONE", "HAS_ACTION"}
     )
     for rel in pkg.relations:
         if rel.relation_category not in known_categories:

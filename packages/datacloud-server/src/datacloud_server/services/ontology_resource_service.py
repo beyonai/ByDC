@@ -5,7 +5,8 @@ Injects AdapterRouter only — no duplicated _get_adapter logic.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import logging
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from datacloud_server.models.action import Action
@@ -14,6 +15,8 @@ if TYPE_CHECKING:
     from datacloud_server.models.relation import Relation
     from datacloud_server.models.view import View
     from datacloud_server.services.adapter_router import AdapterRouter
+
+logger = logging.getLogger(__name__)
 
 
 class OntologyResourceService:
@@ -30,8 +33,44 @@ class OntologyResourceService:
     def get_object_detail(self, base_id: str, scene_id: str, object_code: str) -> dict | None:
         return self._router.get(base_id).get_object_detail(base_id, scene_id, object_code)
 
-    def create_object(self, base_id: str, scene_id: str, obj: ObjectType) -> ObjectType:
-        return self._router.get(base_id).create_object(base_id, scene_id, obj)
+    def create_object(
+        self,
+        base_id: str,
+        scene_id: str,
+        obj: ObjectType,
+        search_scope_extra: dict[str, Any] | None = None,
+    ) -> ObjectType:
+        result = self._router.get(base_id).create_object(base_id, scene_id, obj)
+        # 扩展：若传入 search_scope_extra，写入 term 表（供 search_ontology 向量搜索命中）
+        if search_scope_extra:
+            try:
+                from datacloud_knowledge.ingestion.ontology_terms import build_terms  # noqa: PLC0415
+
+                fields = [
+                    {
+                        "property_code": p.propertyCode if hasattr(p, "propertyCode") else str(p),
+                        "property_name": p.propertyName if hasattr(p, "propertyName") else str(p),
+                        "data_type": "STRING",
+                    }
+                    for p in (obj.properties or [])
+                ]
+                build_terms(
+                    entity_code=obj.objectCode,
+                    entity_name=obj.objectName or obj.objectCode,
+                    fields=fields,
+                    entity_desc=obj.objectDesc or "",
+                    search_scope_extra=search_scope_extra,
+                )
+                logger.info(
+                    "create_object: build_terms done for %s scope=%s",
+                    obj.objectCode,
+                    search_scope_extra,
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "create_object: build_terms failed for %s", obj.objectCode, exc_info=True
+                )
+        return result
 
     def update_object(
         self, base_id: str, scene_id: str, object_code: str, obj: ObjectType

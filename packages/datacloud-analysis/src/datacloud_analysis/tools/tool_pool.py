@@ -30,6 +30,14 @@ TOOL_TO_OBJECT: dict[str, str] = {}
 # OntologyRelationGraph 进程级单例
 _RELATION_GRAPH: Any = None  # OntologyRelationGraph | None
 
+# AOCI 格式本体索引（进程级缓存，构建一次复用）
+_ONTOLOGY_INDEX: str = ""
+
+
+def get_ontology_index() -> str:
+    """返回 AOCI 格式本体索引字符串，未初始化时返回空字符串。"""
+    return _ONTOLOGY_INDEX
+
 # 工具池阈值：工具数超过此值时启用锚点驱动模式（LLM 自选锚点 + 渐进式解锁）
 # 低于或等于阈值时全量挂载（原有行为不变）
 TOOL_POOL_THRESHOLD: int = int(os.getenv("TOOL_POOL_THRESHOLD", "30"))
