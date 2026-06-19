@@ -207,7 +207,7 @@ def test_builtin_tools_include_anchor_tools_in_anchor_mode(monkeypatch: Any) -> 
         has_anchor_in_builtin = "activate_anchor" in tool_names
         # 如果不在 builtin，则至少 _build_tools_list(None) 在锚点模式下应包含
         if not has_anchor_in_builtin:
-            tools = node_module._build_tools_list(None)
+            node_module._build_tools_list(None)
             # 暂时标记：需要在 _build_tools_list 或 builtin 里集成
             # 这个测试先作为"确认集成点"的检查点
             pass  # 阶段二实现后会通过

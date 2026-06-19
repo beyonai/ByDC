@@ -112,7 +112,7 @@ class TestGetObjects:
     def test_no_cache_when_disabled(self, adapter: RemoteOntologyAdapter) -> None:
         """Cache is always enabled; verify the method works."""
         transport = httpx.MockTransport(
-            lambda req: httpx.Response(
+            lambda _req: httpx.Response(
                 200,
                 json={"code": 200, "data": {"objects": [{"objectCode": "o1"}]}},
             ),

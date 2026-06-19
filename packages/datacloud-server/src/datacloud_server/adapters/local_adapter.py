@@ -1057,7 +1057,7 @@ class LocalOntologyAdapter:
                 for i, vec in enumerate(vecs):
                     pname = f"vec_{i}"
                     selects.append(
-                        f"SELECT {i} AS keyword_index,"
+                        f"SELECT {i} AS keyword_index,"  # noqa: S608
                         " tn.name_text, t.term_code, t.term_type_code,"
                         " t.term_name, t.desc_summary,"
                         f" 1 - (tn.name_embedding <=> :{pname}) AS score"
@@ -1096,7 +1096,7 @@ class LocalOntologyAdapter:
                 for i, vec in enumerate(vecs):
                     pname = f"vec_{i}"
                     selects.append(
-                        f"SELECT {i} AS keyword_index,"
+                        f"SELECT {i} AS keyword_index,"  # noqa: S608
                         " tn.name_text, t.term_code, t.term_type_code,"
                         " t.term_name, t.term_id,"
                         f" 1 - (tn.name_embedding <=> :{pname}) AS score"

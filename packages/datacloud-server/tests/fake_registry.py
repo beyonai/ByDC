@@ -5,7 +5,10 @@ Mirrors OntologyBaseRegistry interface.
 
 from __future__ import annotations
 
-from datacloud_server.registry.registry import OntologyBaseEntry
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from datacloud_server.registry.registry import OntologyBaseEntry
 
 
 class FakeRegistry:

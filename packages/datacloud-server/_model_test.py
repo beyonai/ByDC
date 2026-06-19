@@ -1,3 +1,4 @@
+# ruff: noqa: T201 S101
 """Quick model dump validation."""
 
 import json

@@ -21,49 +21,49 @@ class FakeRemoteOntologyRepository(FakeOntologyRepository):
 
     _ERR_MSG = "Remote ontology base is read-only"
 
-    def create_object(self, *args, **kwargs) -> dict:
+    def create_object(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def delete_object(self, *args, **kwargs) -> None:
+    def delete_object(self, *_args, **_kwargs) -> None:
         raise PermissionError(self._ERR_MSG)
 
-    def update_object(self, *args, **kwargs) -> dict:
+    def update_object(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def create_view(self, *args, **kwargs) -> dict:
+    def create_view(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def update_view(self, *args, **kwargs) -> dict:
+    def update_view(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def delete_view(self, *args, **kwargs) -> None:
+    def delete_view(self, *_args, **_kwargs) -> None:
         raise PermissionError(self._ERR_MSG)
 
-    def create_relation(self, *args, **kwargs) -> dict:
+    def create_relation(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def update_relation(self, *args, **kwargs) -> dict:
+    def update_relation(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def delete_relation(self, *args, **kwargs) -> None:
+    def delete_relation(self, *_args, **_kwargs) -> None:
         raise PermissionError(self._ERR_MSG)
 
-    def create_datasource(self, *args, **kwargs) -> dict:
+    def create_datasource(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def delete_datasource(self, *args, **kwargs) -> None:
+    def delete_datasource(self, *_args, **_kwargs) -> None:
         raise PermissionError(self._ERR_MSG)
 
-    def create_action(self, *args, **kwargs) -> dict:
+    def create_action(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def update_action(self, *args, **kwargs) -> dict:
+    def update_action(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
-    def delete_action(self, *args, **kwargs) -> None:
+    def delete_action(self, *_args, **_kwargs) -> None:
         raise PermissionError(self._ERR_MSG)
 
-    def import_owl(self, *args, **kwargs) -> dict:
+    def import_owl(self, *_args, **_kwargs) -> dict:
         raise PermissionError(self._ERR_MSG)
 
 
