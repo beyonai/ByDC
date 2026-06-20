@@ -1,84 +1,85 @@
-"""Unified exception hierarchy — re-exports from datacloud-data SDK.
+"""datacloud_platform errors — re-exported from underlying SDKs.
 
-All exceptions inherit from :class:`DatacloudError`, which serves as the common base
-for catching any SDK-originated error.
+All exception classes are re-exported from datacloud_data_sdk and
+datacloud_knowledge so downstream packages import from a single place.
 """
 
 from __future__ import annotations
 
+from datacloud_data_sdk.exceptions import (
+    ActionNotConfiguredError,
+    ActionNotFoundError,
+    ApiExecutionError,
+    CannotAnswerError,
+    DatacloudError,
+    DataSourceUnavailableError,
+    InvalidOntologyFormatError,
+    ObjectNotFoundError,
+    OntologyError,
+    PermissionDeniedError,
+    PlanError,
+    ScriptExecutionError,
+    SqlExecutionError,
+    StepDependencyError,
+    TermAmbiguousError,
+    TermNotFoundError,
+    TermResolutionError,
+)
+
 try:
-    from datacloud_data_sdk.exceptions import (
-        ActionNotConfiguredError,
-        ActionNotFoundError,
-        AggregationError,
-        ApiExecutionError,
-        CannotAnswerError,
-        DatacloudError,
-        DataSourceUnavailableError,
-        ExecutionError,
-        InvalidOntologyFormatError,
-        KbExecutionError,
-        ObjectNotFoundError,
-        PermissionDeniedError,
-        PermissionNotConfiguredError,
-        PlanError,
-        PlanGenerationError,
-        PlanValidationError,
-        ScriptExecutionError,
-        SqlExecutionError,
-        StepDependencyError,
-        TermAmbiguousError,
-        TermNotFoundError,
-        TermResolutionError,
+    from datacloud_knowledge.file_store.errors import (
+        BackendMisconfiguredError,
+        FileNotFoundInStoreError,
+        FileStoreError,
     )
-except ImportError:
-    # Fallback when datacloud-data is not installed.
-    _Base = Exception
-    DatacloudError = _Base
-    OntologyError = _Base
-    TermResolutionError = _Base
-    TermNotFoundError = _Base
-    TermAmbiguousError = _Base
-    ObjectNotFoundError = _Base
-    ActionNotFoundError = _Base
-    InvalidOntologyFormatError = _Base
-    PlanError = _Base
-    PlanGenerationError = _Base
-    PlanValidationError = _Base
-    CannotAnswerError = _Base
-    ExecutionError = _Base
-    ApiExecutionError = _Base
-    SqlExecutionError = _Base
-    KbExecutionError = _Base
-    ScriptExecutionError = _Base
-    ActionNotConfiguredError = _Base
-    PermissionNotConfiguredError = _Base
-    PermissionDeniedError = _Base
-    DataSourceUnavailableError = _Base
-    StepDependencyError = _Base
-    AggregationError = _Base
+except ImportError:  # pragma: no cover
+    BackendMisconfiguredError = type(
+        "BackendMisconfiguredError",
+        (Exception,),
+        {},
+    )
+    FileNotFoundInStoreError = type(
+        "FileNotFoundInStoreError",
+        (Exception,),
+        {},
+    )
+    FileStoreError = type(
+        "FileStoreError",
+        (Exception,),
+        {},
+    )
+
+try:
+    from datacloud_knowledge.search.vector_validation import (
+        TermVectorValidationError,
+    )
+except ImportError:  # pragma: no cover
+    TermVectorValidationError = type(
+        "TermVectorValidationError",
+        (Exception,),
+        {},
+    )
 
 __all__ = [
     "ActionNotConfiguredError",
     "ActionNotFoundError",
-    "AggregationError",
     "ApiExecutionError",
+    "BackendMisconfiguredError",
     "CannotAnswerError",
     "DataSourceUnavailableError",
     "DatacloudError",
-    "ExecutionError",
+    "FileNotFoundInStoreError",
+    "FileStoreError",
     "InvalidOntologyFormatError",
-    "KbExecutionError",
     "ObjectNotFoundError",
+    "OntologyError",
     "PermissionDeniedError",
-    "PermissionNotConfiguredError",
     "PlanError",
-    "PlanGenerationError",
-    "PlanValidationError",
     "ScriptExecutionError",
     "SqlExecutionError",
     "StepDependencyError",
     "TermAmbiguousError",
     "TermNotFoundError",
     "TermResolutionError",
+    "TermVectorValidationError",
 ]

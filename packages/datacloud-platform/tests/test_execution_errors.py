@@ -32,23 +32,32 @@ class FailingExecutionBackend:
     def __init__(self) -> None:
         self._executed: list[dict[str, Any]] = []
 
-    def execute_action(  # type: ignore[override]
+    async def execute_action(  # type: ignore[override]
         self,
-        _action: Any,
-        context: Any,  # noqa: ARG002
-        **_params: Any,
-    ) -> Any:
+        loader: Any,
+        object_code: str,
+        action_code: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
         raise PermissionDeniedError("用户无权执行此 Action")
 
     def generate_action_tools(
         self,
-        loader: Any,  # noqa: ARG002
-        mounted_objects: list[str],  # noqa: ARG002
+        loader: Any,
+        object_code: str,
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def generate_dynamic_query_tools(
+        self,
+        loader: Any,
+        object_code: str,
     ) -> list[dict[str, Any]]:
         return []
 
 
-def test_execute_action_permission_denied() -> None:
+@pytest.mark.asyncio
+async def test_execute_action_permission_denied() -> None:
     """platform.execute_action propagates PermissionDeniedError from backend."""
     onto = FakeOntologyBackend()
     know = FakeKnowledgeBackend()
@@ -80,4 +89,10 @@ def test_execute_action_permission_denied() -> None:
 
     p = DatacloudPlatform(_base_registry=registry)
     with pytest.raises(PermissionDeniedError, match="用户无权执行此 Action"):
-        p.execute_action("local-base", action=None, context=None)
+        await p.execute_action(
+            "local-base",
+            loader=None,
+            object_code="obj",
+            action_code="act",
+            arguments={},
+        )

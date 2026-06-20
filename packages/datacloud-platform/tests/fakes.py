@@ -616,6 +616,23 @@ class FakeKnowledgeBackend:
         """Return preset _graph_path_result or empty path."""
         return dict(self._graph_path_result)
 
+    # -- Field aliases & clarification results (fake) --
+
+    def resolve_field_aliases(
+        self,
+        field_aliases: dict[str, list[str]],  # noqa: ARG002
+    ) -> dict[str, list[tuple[str, str]]]:
+        """Return empty dict."""
+        return {}
+
+    def store_clarification_results(
+        self,
+        results: dict[str, Any],
+        user_id: str,  # noqa: ARG002
+    ) -> list[str]:
+        """Return empty list."""
+        return []
+
 
 class FakeExecutionBackend:
     """In-memory execution backend — captures executed actions and tool definitions."""
@@ -624,23 +641,35 @@ class FakeExecutionBackend:
         self._executed: list[dict[str, Any]] = []
         self._tools: list[dict[str, Any]] = []
 
-    def execute_action(self, action: Any, context: Any, **params: Any) -> Any:  # noqa: ARG002
+    async def execute_action(  # type: ignore[override]
+        self,
+        loader: Any,
+        object_code: str,
+        action_code: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
         """Record execution and return ok status."""
-        self._executed.append({"action": action, "params": params})
+        self._executed.append(
+            {
+                "object_code": object_code,
+                "action_code": action_code,
+                "arguments": arguments,
+            }
+        )
         return {"status": "ok"}
 
     def generate_action_tools(
         self,
-        loader: OntologyQueryable,
-        mounted_objects: list[str],
+        loader: Any,
+        object_code: str,
     ) -> list[dict[str, Any]]:
         """Return preset _tools."""
         return list(self._tools)
 
     def generate_dynamic_query_tools(
         self,
-        loader: OntologyQueryable,
-        mounted_objects: list[str],
+        loader: Any,
+        object_code: str,
     ) -> list[dict[str, Any]]:
         """Return empty list."""
         return []

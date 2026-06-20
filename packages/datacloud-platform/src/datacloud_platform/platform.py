@@ -278,9 +278,14 @@ class DatacloudPlatform:
 
     # ── Execution: Action execution ──
 
-    def execute_action(
-        self, base_id: str, action: Any, *, context: Any, **params: Any
-    ) -> Any:
+    async def execute_action(
+        self,
+        base_id: str,
+        loader: Any,
+        object_code: str,
+        action_code: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
         """Execute an Action via the execution backend.
 
         Raises:
@@ -289,15 +294,15 @@ class DatacloudPlatform:
         backend = self._execution_for(base_id)
         if backend is None:
             raise PermissionError(f"Execution not available for base '{base_id}'")
-        return backend.execute_action(action, context=context, **params)
+        return await backend.execute_action(loader, object_code, action_code, arguments)
 
     def generate_action_tools(
         self,
         base_id: str,
-        loader: OntologyQueryable,
-        mounted_objects: list[str],
+        loader: Any,
+        object_code: str,
     ) -> list[dict[str, Any]]:
-        """Generate LangChain Tool descriptors for ontology objects.
+        """Generate LangChain Tool descriptors for a single ontology object.
 
         Raises:
             PermissionError: If execution is ``"none"`` for this base.
@@ -305,7 +310,45 @@ class DatacloudPlatform:
         backend = self._execution_for(base_id)
         if backend is None:
             raise PermissionError(f"Execution not available for base '{base_id}'")
-        return backend.generate_action_tools(loader, mounted_objects)
+        return backend.generate_action_tools(loader, object_code)
+
+    def generate_dynamic_query_tools(
+        self,
+        base_id: str,
+        loader: Any,
+        object_code: str,
+    ) -> list[dict[str, Any]]:
+        """Generate dynamic query tool descriptors for a single ontology object.
+
+        Raises:
+            PermissionError: If execution is ``"none"`` for this base.
+        """
+        backend = self._execution_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Execution not available for base '{base_id}'")
+        return backend.generate_dynamic_query_tools(loader, object_code)
+
+    def inject_virtual_actions(self, base_id: str, loader: Any) -> None:
+        """Inject virtual Actions into a loader via execution backend.
+
+        Raises:
+            PermissionError: If execution is ``"none"`` for this base.
+        """
+        backend = self._execution_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Execution not available for base '{base_id}'")
+        backend.inject_virtual_actions(loader)
+
+    def build_filters_schema(self, base_id: str, fields: list[Any]) -> dict[str, Any]:
+        """Build a JSON Schema object for virtual-action filter fields.
+
+        Raises:
+            PermissionError: If execution is ``"none"`` for this base.
+        """
+        backend = self._execution_for(base_id)
+        if backend is None:
+            raise PermissionError(f"Execution not available for base '{base_id}'")
+        return backend.build_filters_schema(fields)
 
     # ── Storage: file / result persistence ──
 
@@ -608,6 +651,54 @@ class DatacloudPlatform:
             start_node=start_node,
             end_node=end_node,
             direction=direction,
+        )
+
+    # ── Field aliases & clarification results ──
+
+    def resolve_field_aliases(
+        self, base_id: str, field_aliases: dict[str, list[str]]
+    ) -> dict[str, list[tuple[str, str]]]:
+        """Resolve field aliases to (actual_field, confidence_score) tuples."""
+        return self._knowledge_for(base_id).resolve_field_aliases(field_aliases)
+
+    def store_clarification_results(
+        self, base_id: str, results: dict[str, Any], user_id: str
+    ) -> list[str]:
+        """Store clarification results, return stored record IDs."""
+        return self._knowledge_for(base_id).store_clarification_results(
+            results, user_id
+        )
+
+    def finalize_clarification(
+        self,
+        base_id: str,
+        *,
+        query: str,
+        ontology_code: str,
+        structured_input: dict[str, Any],
+        mode: str,
+        needs_clarification: bool,
+        form: Any = None,
+        metadata: Any = None,
+        user_id: str | None = None,
+        persist_confirmed_synonyms: bool = True,
+        language: str = "zh_CN",
+    ) -> dict[str, Any]:
+        """Complete clarification via knowledge backend.
+
+        Returns ``{"structured_input": ..., "persisted_synonyms": ...}``.
+        """
+        return self._knowledge_for(base_id).finalize_clarification(
+            query=query,
+            ontology_code=ontology_code,
+            structured_input=structured_input,
+            mode=mode,
+            needs_clarification=needs_clarification,
+            form=form,
+            metadata=metadata,
+            user_id=user_id,
+            persist_confirmed_synonyms=persist_confirmed_synonyms,
+            language=language,
         )
 
     # ── Backward-compatible convenience methods (optional transition bridge) ──

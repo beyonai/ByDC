@@ -88,10 +88,13 @@ def test_remote_search_falls_back_to_default(platform: DatacloudPlatform) -> Non
     assert results[0] == result
 
 
-def test_remote_execution_permission_error(platform: DatacloudPlatform) -> None:
+@pytest.mark.asyncio
+async def test_remote_execution_permission_error(platform: DatacloudPlatform) -> None:
     """REMOTE base execute_action raises PermissionError because execution=none."""
     with pytest.raises(PermissionError, match="Execution not available"):
-        platform.execute_action(REMOTE, {"name": "test"}, context={})
+        await platform.execute_action(
+            REMOTE, loader=None, object_code="obj", action_code="act", arguments={}
+        )
 
 
 def test_nonexistent_base_id_key_error(platform: DatacloudPlatform) -> None:
@@ -100,7 +103,10 @@ def test_nonexistent_base_id_key_error(platform: DatacloudPlatform) -> None:
         platform.create_object("no-such-base", "scene1", {})
 
 
-def test_manual_backends_fine_grained_override(platform: DatacloudPlatform) -> None:
+@pytest.mark.asyncio
+async def test_manual_backends_fine_grained_override(
+    platform: DatacloudPlatform,
+) -> None:
     """manual_backends={'execution': 'none'} on a LOCAL base overrides the
     preset default, making execute_action raise PermissionError."""
     from datacloud_platform import OntologyBaseEntry
@@ -114,7 +120,13 @@ def test_manual_backends_fine_grained_override(platform: DatacloudPlatform) -> N
     platform.create_base(entry)
 
     with pytest.raises(PermissionError, match="Execution not available"):
-        platform.execute_action("local-noexec", {"name": "test"}, context={})
+        await platform.execute_action(
+            "local-noexec",
+            loader=None,
+            object_code="obj",
+            action_code="act",
+            arguments={},
+        )
 
 
 def test_two_local_bases_share_ontology_instance(platform: DatacloudPlatform) -> None:

@@ -103,4 +103,15 @@ __all__ = [
     "register_storage_backend",
     "resolve_backend_names",
     "verify_backend_registration",
+    "get_platform",
 ]
+
+_platform: DatacloudPlatform | None = None
+
+
+def get_platform() -> DatacloudPlatform:
+    """Return the module-level DatacloudPlatform singleton, lazily initialised."""
+    global _platform  # noqa: PLW0603
+    if _platform is None:
+        _platform = DatacloudPlatform(_base_registry=OntologyBaseRegistry())
+    return _platform
