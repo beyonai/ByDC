@@ -42,8 +42,21 @@ class KnowledgeBackend(Protocol):
         """Prepare clarification flow. Returns unstable structure (LLM output), keep as dict."""
         ...
 
-    def finalize_clarification(self, clarification_id: str) -> dict[str, Any]:
-        """Complete clarification, return resolved result."""
+    def finalize_clarification(
+        self,
+        *,
+        query: str,
+        ontology_code: str,
+        structured_input: dict[str, Any],
+        mode: str,
+        needs_clarification: bool,
+        form: Any = None,
+        metadata: Any = None,
+        user_id: str | None = None,
+        persist_confirmed_synonyms: bool = True,
+        language: str = "zh_CN",
+    ) -> dict[str, Any]:
+        """Complete clarification, return resolved result with structured_input and persisted_synonyms."""
         ...
 
     # -- Term CRUD --
@@ -191,4 +204,18 @@ class KnowledgeBackend(Protocol):
     ) -> dict[str, Any]:
         """Find shortest path between two objects.
         Returns ``{"path": [...], "edges": [...], "hops": N}``."""
+        ...
+
+    # -- Field aliases & clarification results --
+
+    def resolve_field_aliases(
+        self, field_aliases: dict[str, list[str]]
+    ) -> dict[str, list[tuple[str, str]]]:
+        """Resolve field aliases to (actual_field, confidence_score) tuples."""
+        ...
+
+    def store_clarification_results(
+        self, results: dict[str, Any], user_id: str
+    ) -> list[str]:
+        """Store clarification results, return stored record IDs."""
         ...

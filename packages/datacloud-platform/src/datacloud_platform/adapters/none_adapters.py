@@ -228,9 +228,25 @@ class _NoopKnowledgeBackend:
         """Return empty dict."""
         return {}
 
-    def finalize_clarification(self, clarification_id: str) -> dict[str, Any]:
-        """Return empty dict."""
-        return {}
+    def finalize_clarification(
+        self,
+        *,
+        query: str = "",
+        ontology_code: str = "",
+        structured_input: dict[str, Any] | None = None,
+        mode: str = "",
+        needs_clarification: bool = False,
+        form: Any = None,
+        metadata: Any = None,
+        user_id: str | None = None,
+        persist_confirmed_synonyms: bool = True,
+        language: str = "zh_CN",
+    ) -> dict[str, Any]:
+        """No-op — return structured_input unchanged, no synonyms persisted."""
+        return {
+            "structured_input": structured_input or {},
+            "persisted_synonyms": None,
+        }
 
     def sync_terms(
         self,
@@ -362,22 +378,36 @@ class _NoopKnowledgeBackend:
         """Return empty path."""
         return {"path": [], "edges": [], "hops": -1}
 
+    def resolve_field_aliases(
+        self, field_aliases: dict[str, list[str]]
+    ) -> dict[str, list[tuple[str, str]]]:
+        """Return empty dict."""
+        return {}
+
+    def store_clarification_results(
+        self, results: dict[str, Any], user_id: str
+    ) -> list[str]:
+        """Return empty list."""
+        return []
+
 
 class _NoopExecutionBackend:
     """Execution backend where all operations are forbidden."""
 
-    def execute_action(self, action: Any, context: Any, **params: Any) -> Any:
+    async def execute_action(
+        self, loader: Any, object_code: str, action_code: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
         """Raise PermissionError — execution not available."""
         raise PermissionError("Execution not available")
 
     def generate_action_tools(
-        self, loader: Any, mounted_objects: list[str]
+        self, loader: Any, object_code: str
     ) -> list[dict[str, Any]]:
         """Return empty list."""
         return []
 
     def generate_dynamic_query_tools(
-        self, loader: Any, mounted_objects: list[str]
+        self, loader: Any, object_code: str
     ) -> list[dict[str, Any]]:
         """Return empty list."""
         return []
@@ -388,9 +418,16 @@ class _NoopExecutionBackend:
         """Return empty list."""
         return []
 
+    def inject_virtual_actions(self, loader: Any) -> None:
+        """No-op."""
+
     def generate_plan(self, query: str, loader: Any, context: Any) -> Any:
         """Return empty plan."""
         return {"steps": []}
+
+    def build_filters_schema(self, fields: list[Any]) -> dict[str, Any]:
+        """Return empty schema."""
+        return {}
 
 
 class _NoopStorageBackend:

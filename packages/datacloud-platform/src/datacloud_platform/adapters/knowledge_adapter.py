@@ -227,23 +227,51 @@ class DataCloudKnowledgeBackend:
             "metadata": analysis.metadata,
         }
 
-    def finalize_clarification(self, clarification_id: str) -> dict[str, Any]:
-        """Complete clarification, return resolved result.
+    def finalize_clarification(
+        self,
+        *,
+        query: str,
+        ontology_code: str,
+        structured_input: dict[str, Any],
+        mode: str,
+        needs_clarification: bool,
+        form: Any = None,
+        metadata: Any = None,
+        user_id: str | None = None,
+        persist_confirmed_synonyms: bool = True,
+        language: str = "zh_CN",
+    ) -> dict[str, Any]:
+        """Complete clarification via the knowledge SDK.
 
-        Args:
-            clarification_id: Clarification session identifier.
-
-        Returns:
-            Resolved structured input as dict.
+        Delegates to ``datacloud_knowledge.provider.finalize_query_clarification``.
+        Returns a dict with ``structured_input`` and ``persisted_synonyms`` keys.
         """
-        _ = clarification_id
-        logger.warning(
-            "finalize_clarification is a no-op: the SDK function requires "
-            "full structured_input which cannot be reconstructed from "
-            "clarification_id alone. Consider calling "
-            "datacloud_knowledge.provider.finalize_query_clarification directly."
+        from datacloud_knowledge.intent.types import ClarificationMode  # noqa: PLC0415
+        from datacloud_knowledge.provider import (  # noqa: PLC0415
+            finalize_query_clarification as sdk_finalize,
         )
-        return {}
+
+        result = sdk_finalize(
+            query=query,
+            ontology_code=ontology_code,
+            structured_input=structured_input,
+            mode=ClarificationMode(mode),
+            needs_clarification=needs_clarification,
+            form=form,
+            metadata=metadata,
+            user_id=user_id,
+            persist_confirmed_synonyms=persist_confirmed_synonyms,
+            language=language,
+        )
+        persisted = result.persisted_synonyms
+        return {
+            "structured_input": result.structured_input,
+            "persisted_synonyms": (
+                {"created_ids": getattr(persisted, "created_ids", [])}
+                if persisted is not None
+                else None
+            ),
+        }
 
     # ── Term CRUD ──────────────────────────────────────────────────────────
 
@@ -788,6 +816,43 @@ class DataCloudKnowledgeBackend:
             "graph_path not implemented in knowledge adapter — returning empty result"
         )
         return {"path": [], "edges": [], "hops": -1}
+
+    # -- Field aliases & clarification results --
+
+    def resolve_field_aliases(
+        self, field_aliases: dict[str, list[str]]
+    ) -> dict[str, list[tuple[str, str]]]:
+        """Resolve field aliases via the knowledge SDK.
+
+        Args:
+            field_aliases: Mapping from field name to list of alias strings.
+
+        Returns:
+            Mapping from field name to list of (actual_field, confidence_score) tuples.
+        """
+        from datacloud_knowledge.provider import (  # noqa: PLC0415
+            resolve_field_aliases as sdk_resolve,
+        )
+
+        return sdk_resolve(field_aliases)  # type: ignore[no-any-return]
+
+    def store_clarification_results(
+        self, results: dict[str, Any], user_id: str
+    ) -> list[str]:
+        """Store clarification results via the knowledge SDK.
+
+        Args:
+            results: Clarification result data.
+            user_id: User identifier.
+
+        Returns:
+            List of stored record IDs.
+        """
+        from datacloud_knowledge.adapters import (  # noqa: PLC0415
+            store_clarification_results as sdk_store,
+        )
+
+        return sdk_store(results, user_id)  # type: ignore[no-any-return]
 
     # ── Scoring ────────────────────────────────────────────────────────────
 
