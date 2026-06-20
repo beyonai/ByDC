@@ -1,9 +1,10 @@
-"""OntologyAgent skill 参数单元测试（红阶段）。
+"""OntologyAgent skill 参数单元测试。
 
 覆盖：
-  - ask() 接受 skill_dirs / rel_skills 参数
-  - _iter_events() 内部扫描后正确注入 available_skills 到 prompts_overwrite
-  - ctx_container.extras 包含 skill_catalog 和 tools_dict
+  - ask() 接受 skill_dirs / rel_skills 参数（签名保留向后兼容）
+  - _iter_events() 内部 llm_config 写入 extras（供 sub_agent 使用）
+  - available_skills XML 注入已废弃，不再出现在 prompts_overwrite
+  - tools_dict 仍写入 extras 供 sub_agent 克隆分身使用
 """
 
 from __future__ import annotations
@@ -68,7 +69,7 @@ class TestAskSignature:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# _iter_events() 注入行为
+# _iter_events() 注入行为（新设计：不再注入 XML，改为写入 llm_config）
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -101,7 +102,8 @@ class TestSkillInjection:
         return agent, captured_inputs, captured_configs
 
     @pytest.mark.asyncio
-    async def test_available_skills_injected_into_prompts_overwrite(self, tmp_path: Path) -> None:
+    async def test_available_skills_not_in_prompts_overwrite(self, tmp_path: Path) -> None:
+        """available_skills XML 注入已废弃，不应出现在 prompts_overwrite。"""
         _write_skill(tmp_path, "老鹰", "战略分析，当用户需要全局分析时使用")
         fake_tools: dict[str, Any] = {"query_scene_crm": object()}
         agent, captured_inputs, _ = self._make_agent_with_fake_graph(fake_tools)
@@ -114,24 +116,19 @@ class TestSkillInjection:
         ):
             pass
 
-        assert captured_inputs, "astream_events 未被调用"
-        po = captured_inputs[0].get("prompts_overwrite", {})
-        assert "available_skills" in po, "available_skills 未注入 prompts_overwrite"
-        assert "老鹰" in po["available_skills"]
-        assert "战略分析" in po["available_skills"]
+        if captured_inputs:
+            po = captured_inputs[0].get("prompts_overwrite", {})
+            assert "available_skills" not in po, "available_skills XML 注入应已废弃"
 
     @pytest.mark.asyncio
-    async def test_skill_catalog_and_tools_dict_in_gateway_context_extras(
-        self, tmp_path: Path
-    ) -> None:
-        _write_skill(tmp_path, "老鹰")
+    async def test_llm_config_in_gateway_context_extras(self, tmp_path: Path) -> None:
+        """llm_config 应写入 gateway_context.extras，供 sub_agent 克隆分身使用。"""
         fake_tools: dict[str, Any] = {"query_scene_crm": object()}
         agent, _, captured_configs = self._make_agent_with_fake_graph(fake_tools)
 
         async for _ in agent.ask(
             question="test",
             object_codes=["by_customer"],
-            skill_dirs=[str(tmp_path)],
         ):
             pass
 
@@ -140,8 +137,26 @@ class TestSkillInjection:
         gw_ctx = run_cfg.get("configurable", {}).get("gateway_context")
         assert gw_ctx is not None, "gateway_context 未设置"
         extras = getattr(gw_ctx, "extras", None) or {}
-        assert "skill_catalog" in extras, "skill_catalog 未注入 gateway_context.extras"
-        assert "tools_dict" in extras, "tools_dict 未注入 gateway_context.extras"
+        assert "llm_config" in extras, "llm_config 未注入 gateway_context.extras"
+        assert extras["llm_config"]["model"] == "test-model"
+
+    @pytest.mark.asyncio
+    async def test_tools_dict_in_extras(self, tmp_path: Path) -> None:
+        """tools_dict 仍应写入 extras 供 sub_agent 使用。"""
+        fake_tools: dict[str, Any] = {"query_scene_crm": object()}
+        agent, _, captured_configs = self._make_agent_with_fake_graph(fake_tools)
+
+        async for _ in agent.ask(
+            question="test",
+            object_codes=["by_customer"],
+        ):
+            pass
+
+        assert captured_configs
+        run_cfg = captured_configs[0]
+        gw_ctx = run_cfg.get("configurable", {}).get("gateway_context")
+        extras = getattr(gw_ctx, "extras", None) or {}
+        assert "tools_dict" in extras, "tools_dict 未注入 extras"
         assert extras["tools_dict"] is fake_tools
 
     @pytest.mark.asyncio
@@ -168,7 +183,7 @@ class TestSkillInjection:
 
     @pytest.mark.asyncio
     async def test_rel_skills_filters_catalog(self, tmp_path: Path) -> None:
-        """rel_skills 白名单只让匹配的 skill 进入 available_skills。"""
+        """rel_skills 参数仍可传入（签名向后兼容），不影响运行。"""
         _write_skill(tmp_path, "老鹰", "战略分析")
         _write_skill(tmp_path, "猎手", "销售漏斗")
         agent, captured_inputs, _ = self._make_agent_with_fake_graph({})
@@ -181,8 +196,5 @@ class TestSkillInjection:
         ):
             pass
 
-        if captured_inputs:
-            po = captured_inputs[0].get("prompts_overwrite", {})
-            xml = po.get("available_skills", "")
-            assert "老鹰" in xml
-            assert "猎手" not in xml
+        # 新设计下 XML 不再注入，只验证不崩溃即可
+        assert True

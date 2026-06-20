@@ -180,12 +180,16 @@ def build_analysis_graph(
     tools: dict[str, Any] | None = None,
     loader: Any = None,
     redirect_tools: dict[str, Any] | None = None,
+    is_sub_agent: bool = False,
 ) -> StateGraph[AgentState]:
     """Return an uncompiled StateGraph.
 
     路由由 DATACLOUD_USE_PREBUILT_REACT 环境变量控制：
     - true（默认）：V0.4 prebuilt ToolNode 图拓扑（当前生产路径）
     - false：V0.3 自研图拓扑（旧路径，已废弃）
+
+    Args:
+        is_sub_agent: True 时为分身模式，不追加 sub_agent 工具（防递归）。
     """
     use_prebuilt = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "true").strip().lower() == "true"
     if use_prebuilt:
@@ -195,6 +199,7 @@ def build_analysis_graph(
             tools=tools,
             loader=loader,
             redirect_tools=redirect_tools,
+            is_sub_agent=is_sub_agent,
         )
     return _build_legacy_graph(
         prompts_overwrite=prompts_overwrite,
@@ -228,9 +233,7 @@ def _build_legacy_graph(
     system_parts = [custom_system if custom_system else base_system, base_execution]
     if custom_task:
         system_parts.append(custom_task)
-    _available_skills_xml = str(overwrite.get("available_skills") or "").strip()
-    if _available_skills_xml:
-        system_parts.append(_available_skills_xml)
+    # available_skills XML 注入已废弃：Skill 通过 search_ontology + TOOL_POOL 动态发现
     stable_system_prompt = "\n\n".join(p for p in system_parts if p)
 
     # ── 构建 tools_list ──────────────────────────────────────────────────────────
@@ -430,6 +433,7 @@ def _build_prebuilt_graph(
     tools: dict[str, Any] | None = None,
     loader: Any = None,
     redirect_tools: dict[str, Any] | None = None,
+    is_sub_agent: bool = False,
 ) -> StateGraph[AgentState]:
     """V0.4 新图拓扑：intend → agent → HookAwareToolNode(tools) → respond。
 
@@ -467,9 +471,7 @@ def _build_prebuilt_graph(
             system_parts.append(ontology_rules)
     except Exception:  # noqa: BLE001
         logger.debug("_build_prebuilt_graph: ontology_rules injection skipped", exc_info=True)
-    _available_skills_xml_v04 = str(overwrite.get("available_skills") or "").strip()
-    if _available_skills_xml_v04:
-        system_parts.append(_available_skills_xml_v04)
+    # available_skills XML 注入已废弃：Skill 通过 search_ontology + TOOL_POOL 动态发现
     stable_system_prompt = "\n\n".join(p for p in system_parts if p)
 
     # ── tools_list（含 finish_react sentinel 工具）────────────────────────────────
@@ -493,6 +495,16 @@ def _build_prebuilt_graph(
             )
     except Exception:  # noqa: BLE001
         logger.debug("_build_prebuilt_graph: anchor tools init skipped", exc_info=True)
+
+    # 仅主 Agent 追加 sub_agent 工具；分身（is_sub_agent=True）不追加，防递归
+    if not is_sub_agent:
+        try:
+            from datacloud_analysis.tools.skill_executor import sub_agent as _sub_agent  # noqa: PLC0415, I001
+
+            tools_list = [*tools_list, _sub_agent]
+            logger.info("_build_prebuilt_graph: sub_agent tool added (main agent)")
+        except Exception:  # noqa: BLE001
+            logger.debug("_build_prebuilt_graph: sub_agent tool init skipped", exc_info=True)
 
     # finish_react 必须在 ToolNode tools 列表中，ToolNode 才能执行它
     all_tools = [*tools_list, finish_react]

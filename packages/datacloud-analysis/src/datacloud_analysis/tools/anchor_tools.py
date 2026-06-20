@@ -67,7 +67,7 @@ def _do_search_ontology(
         router = AdapterRouter(registry=registry, adapters={"LOCAL": adapter})  # type: ignore[arg-type]
         engine = SearchEngine(
             router=router,
-            scopes=[(base_id, "object")],
+            scopes=[(base_id, "object"), (base_id, "skill")],
             strategy=RRFStrategy(),
         )
         hits = engine.search(
@@ -310,6 +310,10 @@ def make_anchor_tools(
             lines.append(f"  - {obj_code}（{obj_name}）score={score:.2f}")
         if activated:
             lines.append(f"\n已解锁 {len(activated)} 个工具：{', '.join(activated[:5])}")
+        # after_hook 通过 hits_json 注释块解析结构化命中（包含 skill 类型），不依赖人类可读文本
+        import json as _json  # noqa: PLC0415
+
+        lines.append(f"\n<!-- hits_json:{_json.dumps(hits, ensure_ascii=False)} -->")
         return "\n".join(lines)
 
     # ── get_reasoning_map ──────────────────────────────────────────────────────

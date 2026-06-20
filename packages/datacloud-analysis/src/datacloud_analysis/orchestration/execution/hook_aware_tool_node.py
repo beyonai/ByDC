@@ -682,3 +682,105 @@ def _try_parse_query_data(content: str) -> dict[str, Any] | None:
     ):
         return data_block
     return None
+
+
+# ── Skill Level1/2 preconditions ────────────────────────────────────────────
+
+
+def _apply_skill_preconditions_from_message(
+    msg: Any,
+    state_dict: dict[str, Any],
+    extra_state: dict[str, Any],
+) -> None:
+    """解析 search_ontology ToolMessage 的 hits_json，对 skill 命中执行 Level1/2 preconditions。
+
+    通过 context_has + keyword_match 的 skill wrapper 写入 extra_state["active_tools"]。
+    调用方（after_hook）负责将 extra_state 的变更写回 state_dict 和 tools_by_name。
+
+    Args:
+        msg: search_ontology 的 ToolMessage。
+        state_dict: 当前 AgentState dict（有真实 user_query / trace_id 等字段）。
+        extra_state: 待写回的 state 更新 dict。
+    """
+    import json as _json  # noqa: PLC0415
+    import re as _re  # noqa: PLC0415
+
+    content = str(getattr(msg, "content", "") or "")
+    m = _re.search(r"<!-- hits_json:(.*?) -->", content, _re.DOTALL)
+    if not m:
+        return
+
+    try:
+        hits: list[dict[str, Any]] = _json.loads(m.group(1))
+    except Exception:  # noqa: BLE001
+        logger.debug("[skill-preconditions] hits_json parse failed, content=%r", content[:200])
+        return
+
+    user_query = str(state_dict.get("user_query") or "")
+    existing = set(extra_state.get("active_tools") or state_dict.get("active_tools") or [])
+
+    try:
+        from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+            TOOL_POOL,
+            _parse_skill_frontmatter_cached,
+        )
+    except ImportError:
+        return
+
+    for hit in hits:
+        if hit.get("resultType") != "skill":
+            continue
+        skill_path = hit.get("skillPath") or ""
+        if not skill_path:
+            continue
+
+        fm = _parse_skill_frontmatter_cached(skill_path)
+        if not fm:
+            continue
+
+        # Level1: context_has
+        if not _check_context_has(fm, state_dict):
+            logger.debug("[skill-preconditions] context_has failed for skill_path=%s", skill_path)
+            continue
+
+        # Level2: keyword_match
+        if not _check_keyword_match(fm, user_query):
+            logger.debug(
+                "[skill-preconditions] keyword_match failed for skill_path=%s query=%r",
+                skill_path,
+                user_query,
+            )
+            continue
+
+        wrapper_name = f"activate_skill_{fm['name'].replace('-', '_')}"
+        if wrapper_name in TOOL_POOL and wrapper_name not in existing:
+            existing.add(wrapper_name)
+            if "active_tools" not in extra_state:
+                extra_state["active_tools"] = list(state_dict.get("active_tools") or [])
+            extra_state["active_tools"].append(wrapper_name)
+            logger.debug("[skill-preconditions] unlocked wrapper %s", wrapper_name)
+
+
+def _check_context_has(fm: dict[str, Any], state_dict: dict[str, Any]) -> bool:
+    """执行 preconditions 中所有 context_has 规则，全部通过返回 True。"""
+    for rule in fm.get("preconditions") or []:
+        if rule.get("type") != "context_has":
+            continue
+        field = rule.get("field", "")
+        if not state_dict.get(field):
+            return False
+    return True
+
+
+def _check_keyword_match(fm: dict[str, Any], user_query: str) -> bool:
+    """执行 preconditions 中所有 keyword_match 规则，全部通过返回 True。
+
+    每条 keyword_match 规则：关键词列表中任一匹配即该条规则通过。
+    """
+    for rule in fm.get("preconditions") or []:
+        if rule.get("type") != "keyword_match":
+            continue
+        keywords: list[str] = rule.get("keywords") or []
+        if not any(kw in user_query for kw in keywords):
+            return False
+    return True
