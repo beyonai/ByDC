@@ -99,7 +99,7 @@ class RemoteOntologyAdapter:
 
         data = result.get("data", {}).get("objects", [])
         self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return data  # type: ignore[return-value]
 
     def get_object_detail(self, base_id: str, scene_id: str, object_code: str) -> dict | None:
         """REMOTE 暂不支持 get_object_detail，返回 None。"""

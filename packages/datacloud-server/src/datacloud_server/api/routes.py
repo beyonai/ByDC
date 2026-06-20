@@ -94,8 +94,8 @@ def list_scenes(
     try:
         if keyword:
             return ok(
-                data=svc.query_scenes(base_id, keyword),
-                totalCount=svc.count_scenes(base_id, keyword),
+                data={"items": svc.query_scenes(base_id, keyword),
+                      "totalCount": svc.count_scenes(base_id, keyword)},
             )
         return ok(data=svc.list_scenes(base_id))
     except KeyError as e:
@@ -144,7 +144,7 @@ def query_ontologies_by_scene(
         result = svc.query_ontologies_by_scene(
             base_id, scene_id, page=page, page_size=page_size, keyword=keyword
         )
-        return ok(data=result["data"], totalCount=result["totalCount"])
+        return ok(data={"items": result["data"], "totalCount": result["totalCount"]})
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 

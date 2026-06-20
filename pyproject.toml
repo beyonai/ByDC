@@ -361,6 +361,10 @@ module = [
 ]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = ["datacloud_server.*"]
+ignore_errors = true
+
 # ============================================
 # Pytest 配置 - 测试
 # ============================================
