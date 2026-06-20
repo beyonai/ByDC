@@ -16,7 +16,7 @@ members = [
     "datacloud-analysis",
     "datacloud-data",
     "datacloud-knowledge",
-    "datacloud-server",
+    "datacloud-platform",
 ]
 
 [[package]]
@@ -872,6 +872,7 @@ source = { editable = "packages/datacloud-analysis" }
 dependencies = [
     { name = "datacloud-data", extra = ["sql"] },
     { name = "datacloud-knowledge" },
+    { name = "datacloud-platform" },
     { name = "deepagents" },
     { name = "httpx" },
     { name = "langchain" },
@@ -902,6 +903,7 @@ dev = [
 requires-dist = [
     { name = "datacloud-data", extras = ["sql"], editable = "packages/datacloud-data" },
     { name = "datacloud-knowledge", editable = "packages/datacloud-knowledge" },
+    { name = "datacloud-platform", editable = "packages/datacloud-platform" },
     { name = "deepagents", specifier = ">=0.4.7" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "langchain", specifier = ">=0.3.0" },
@@ -1139,48 +1141,35 @@ dev = [
 ]
 
 [[package]]
-name = "datacloud-server"
+name = "datacloud-platform"
 version = "0.1.0"
-source = { editable = "packages/datacloud-server" }
+source = { editable = "packages/datacloud-platform" }
 dependencies = [
-    { name = "datacloud-data" },
-    { name = "datacloud-knowledge" },
-    { name = "fastapi" },
-    { name = "httpx" },
     { name = "pydantic" },
-    { name = "requests" },
-    { name = "sqlalchemy" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-httpx" },
+    { name = "pydantic-settings" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "ruff" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "datacloud-data", editable = "packages/datacloud-data" },
-    { name = "datacloud-knowledge", editable = "packages/datacloud-knowledge" },
-    { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.30" },
-    { name = "requests", specifier = ">=2.31" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
 ]
-provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ruff", specifier = ">=0.15.5" }]
+dev = [
+    { name = "mypy", specifier = ">=1.13" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "ruff", specifier = ">=0.8" },
+]
 
 [[package]]
 name = "deepagents"
@@ -3633,19 +3622,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5e/f7/c933acc76f5208b3b00089573cf6a2bc26dc80a8aece8f52bb7d6b1855ca/pytest_cov-7.0.0.tar.gz", hash = "sha256:33c97eda2e049a0c5298e91f519302a1334c26ac65c1a483d6206fd458361af1", size = 54328, upload-time = "2025-09-09T10:57:02.113Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ee/49/1377b49de7d0c1ce41292161ea0f721913fa8722c19fb9c1e3aa0367eecb/pytest_cov-7.0.0-py3-none-any.whl", hash = "sha256:3b8e9558b16cc1479da72058bdecf8073661c7f57f7d3c5f22a1c23507f2d861", size = 22424, upload-time = "2025-09-09T10:57:00.695Z" },
-]
-
-[[package]]
-name = "pytest-httpx"
-version = "0.36.2"
-source = { registry = "https://pypi.org/simple/" }
-dependencies = [
-    { name = "httpx" },
-    { name = "pytest" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/42/f53c58570e80d503ade9dd42ce57f2915d14bcbe25f6308138143950d1d6/pytest_httpx-0.36.2.tar.gz", hash = "sha256:05a56527484f7f4e8c856419ea379b8dc359c36801c4992fdb330f294c690356", size = 57683, upload-time = "2026-04-09T13:57:19.837Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/55/1fa65f8e4fceb19dd6daa867c162ad845d547f6058cd92b4b02384a44777/pytest_httpx-0.36.2-py3-none-any.whl", hash = "sha256:d42ebd5679442dc7bfb0c48e0767b6562e9bc4534d805127b0084171886a5e22", size = 20315, upload-time = "2026-04-09T13:57:18.587Z" },
 ]
 
 [[package]]
