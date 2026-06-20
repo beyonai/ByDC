@@ -94,8 +94,10 @@ def list_scenes(
     try:
         if keyword:
             return ok(
-                data={"items": svc.query_scenes(base_id, keyword),
-                      "totalCount": svc.count_scenes(base_id, keyword)},
+                data={
+                    "items": svc.query_scenes(base_id, keyword),
+                    "totalCount": svc.count_scenes(base_id, keyword),
+                },
             )
         return ok(data=svc.list_scenes(base_id))
     except KeyError as e:

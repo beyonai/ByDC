@@ -81,6 +81,7 @@ def _submit_object_async(
                 if not mount:
                     return {"ok": False, "error": "FILE_STORAGE_MINIO_MOUNT_PATH 环境变量未设置"}
                 from pathlib import Path as _Path
+
                 db_dir = _Path(mount) / "byclaw-datacloud"
                 db_dir.mkdir(parents=True, exist_ok=True)
                 db_path = db_dir / "personal_object.db"
