@@ -162,6 +162,23 @@ async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[s
 
     logger.info("[finish_react] result_type=%s stop_reason=%s", result_type, stop_reason)
 
+    # 从 reasoning_graph 提取 findings，合并到 execution_summary
+    rg = state.get("reasoning_graph") or {}
+    findings: list[str] = list(rg.get("findings") or [])
+    task_objects: list[dict[str, Any]] = list(rg.get("task_objects") or [])
+    execution_summary: str | None = None
+    if findings:
+        parts = ["## 推理结论汇总", *[f"- {f}" for f in findings]]
+        if task_objects:
+            parts.append("\n## 已物化任务对象")
+            for t_obj in task_objects:
+                parts.append(
+                    f"- {t_obj.get('code', '')}（{t_obj.get('row_count', 0)}行）："
+                    f"{t_obj.get('summary', '')}"
+                )
+        execution_summary = "\n".join(parts)
+        logger.info("[finish_react] execution_summary built from %d findings", len(findings))
+
     react_final: dict[str, Any] = {
         "result_type": result_type,
         "answer": answer,
@@ -180,4 +197,5 @@ async def finish_react_node(state: AgentState, config: RunnableConfig) -> dict[s
         "react_last_query_data": None,
         "answer_streamed": None,
         "execution_status": None,
+        **({"execution_summary": execution_summary} if execution_summary is not None else {}),
     }

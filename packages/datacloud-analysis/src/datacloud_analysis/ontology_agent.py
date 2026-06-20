@@ -258,8 +258,6 @@ def _build_input_payload(question: str, workspace_dir: str | None = None) -> dic
         "clarify_needed": False,
         "results": [],
         "execution_status": "",
-        "todo_active_id": "",
-        "todo_tool_plan": [],
         "active_tools": [],
         "execution_trace": [],
         "invocation_dedup": [],

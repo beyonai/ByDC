@@ -166,7 +166,9 @@ def test_TC05_catchall_field_description_contains_yuanci() -> None:
         .get("field", {})
         .get("description", "")
     )
-    assert "原词" in field_desc, f"relaxed filters.field description 应含'原词'，实际: {field_desc!r}"
+    assert "原词" in field_desc, (
+        f"relaxed filters.field description 应含'原词'，实际: {field_desc!r}"
+    )
 
 
 # ---------------------------------------------------------------------------

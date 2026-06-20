@@ -101,9 +101,35 @@ def make_langfuse_callback(
 
     try:
         from langfuse.langchain import (
-            CallbackHandler,  # type: ignore[import-untyped]  # noqa: PLC0415
+            CallbackHandler as _BaseCallbackHandler,  # type: ignore[import-untyped]  # noqa: PLC0415
         )
         from langfuse.types import TraceContext  # noqa: PLC0415
+
+        class _PatchedCallbackHandler(_BaseCallbackHandler):  # type: ignore[misc]
+            """修复 MiniMax 等模型 total_characters=0 导致 token 计数全为0的问题。
+
+            Langfuse 看到 token_usage 里有 total_characters 字段时会切换为字符计费模式，
+            total_characters=0 会覆盖真实的 prompt_tokens / completion_tokens。
+            在 on_llm_end 里把无效的 total_characters 字段移除，走标准 token 计费路径。
+            """
+
+            def on_llm_end(self, response: Any, **kwargs: Any) -> Any:  # type: ignore[override]
+                # 修复 total_characters=0 覆盖 prompt_tokens 的问题
+                try:
+                    llm_output = getattr(response, "llm_output", None) or {}
+                    if isinstance(llm_output, dict):
+                        token_usage: dict = llm_output.get("token_usage") or {}
+                        if (
+                            isinstance(token_usage, dict)
+                            and token_usage.get("total_characters") == 0
+                            and (token_usage.get("prompt_tokens") or 0) > 0
+                        ):
+                            token_usage.pop("total_characters", None)
+                            token_usage.pop("completion_tokens_details", None)
+                            token_usage.pop("prompt_tokens_details", None)
+                except Exception:  # noqa: BLE001
+                    pass
+                return super().on_llm_end(response, **kwargs)
 
         _is_valid = bool(lf_trace_id and re.fullmatch(r"[0-9a-f]{32}", lf_trace_id))
         if _is_valid:
@@ -114,7 +140,7 @@ def make_langfuse_callback(
         else:
             trace_context = None
 
-        return CallbackHandler(trace_context=trace_context)
+        return _PatchedCallbackHandler(trace_context=trace_context)
     except Exception:
         logger.warning("LangfuseCallbackHandler 创建失败，已跳过追踪", exc_info=True)
         return None

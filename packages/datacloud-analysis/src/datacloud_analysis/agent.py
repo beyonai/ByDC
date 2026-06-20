@@ -162,6 +162,11 @@ def _log_create_agent_diagnostics(
                     "redis_host": os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", ""),
                     "redis_port": os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", ""),
                 },
+                "DeployInfo": {
+                    "host": os.getenv("HOST", ""),
+                    "container_name": os.getenv("CONTAINER_NAME", "byclaw-data-standalone"),
+                    "worker_id": os.getenv("DATACLOUD_GATEWAY_WORKER_ID", ""),
+                },
             }
         )
         # 工具挂载评分：tool_count=0 说明 OWL 路径配错或无本体，必然幻觉

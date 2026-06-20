@@ -9,11 +9,13 @@ AgentState.active_tools 只存工具名（list[str]），llm_call_node 每轮按
   - 所有 ops_* 对象的工具在 start_heartbeat() 时一次性全量注册
   - TOOL_TO_OBJECT 反查表：工具名 → 所属对象 code，供 after_hook 查询 OntologyRelationGraph
   - _RELATION_GRAPH：OntologyRelationGraph 单例，after_hook 调用 get_next_objects()
+  - TOOL_POOL_THRESHOLD：工具数超过阈值时启用锚点驱动模式
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +29,38 @@ TOOL_TO_OBJECT: dict[str, str] = {}
 
 # OntologyRelationGraph 进程级单例
 _RELATION_GRAPH: Any = None  # OntologyRelationGraph | None
+
+# AOCI 格式本体索引（进程级缓存，构建一次复用）
+_ONTOLOGY_INDEX: str = ""
+
+
+def get_ontology_index() -> str:
+    """返回 AOCI 格式本体索引字符串，未初始化时返回空字符串。"""
+    return _ONTOLOGY_INDEX
+
+
+# 工具池阈值：工具数超过此值时启用锚点驱动模式（LLM 自选锚点 + 渐进式解锁）
+# 低于或等于阈值时全量挂载（原有行为不变）
+TOOL_POOL_THRESHOLD: int = int(os.getenv("TOOL_POOL_THRESHOLD", "30"))
+
+
+def is_anchor_mode() -> bool:
+    """当前是否处于锚点驱动模式。
+
+    工具池中工具数量超过 TOOL_POOL_THRESHOLD 时返回 True，
+    此时 LLM 需要先选择锚点对象（activate_anchor），再渐进式展开。
+    低于阈值时全量挂载，直接可用，返回 False。
+    """
+    return len(TOOL_POOL) > TOOL_POOL_THRESHOLD
+
+
+# 进程级 OntologyLoader 单例（供 anchor_tools.py 判断 View/Object 用）
+_SHARED_LOADER: Any = None  # OntologyLoader | None
+
+
+def _get_shared_loader() -> Any:
+    """返回进程级 OntologyLoader 单例，未初始化时返回 None。"""
+    return _SHARED_LOADER
 
 
 def register_tool(name: str, tool: Any, *, object_code: str = "") -> None:
@@ -67,21 +101,26 @@ def get_relation_graph() -> Any:
     return _RELATION_GRAPH
 
 
-def _init_ops_tool_pool(
+def _init_ext_tool_pool(
     resource_path: str | Path,
     loader: Any = None,
+    ext_codes: list[str] | None = None,
+    name_prefix: str | None = None,
 ) -> None:
-    """扫描 OWL 目录下所有 ops_* 对象，全量加载到 TOOL_POOL（初始全部 LOCKED）。
+    """扫描 OWL 目录下的对象，全量加载到 TOOL_POOL（初始全部 LOCKED）。
 
-    只在 start_heartbeat() 里调用一次，进程级单例。
-    LOCKED 含义：注册到 TOOL_POOL 但不加入 bind_tools，
-    可见性由 AgentState.active_tools 字段控制。
+    两种调用模式：
+    - ext_codes 指定（byclaw-data worker 模式）：只加载列表中的对象，由 extResourceList 控制
+    - ext_codes=None（直接调用模式）：扫描 object/ 目录，name_prefix 过滤前缀（None=全量）
 
     Args:
         resource_path: 本体资源根目录（含 object/ 子目录）。
         loader: 已 load 好的 OntologyLoader 实例，与 TOOL_POOL 工具生成共用同一实例。
+        ext_codes: 指定加载的对象 code 列表。None 表示扫描目录。
+        name_prefix: ext_codes=None 时的目录扫描前缀过滤（None=全量，"ops_"=只加载ops_*）。
     """
-    global _RELATION_GRAPH  # noqa: PLW0603
+    global _RELATION_GRAPH, _SHARED_LOADER  # noqa: PLW0603
+    _SHARED_LOADER = loader
 
     resource_path = Path(resource_path)
     object_dir = resource_path / "object"
@@ -89,15 +128,32 @@ def _init_ops_tool_pool(
         logger.warning("TOOL_POOL init: object dir not found: %s", object_dir)
         return
 
-    # 扫描所有 ops_* 前缀的对象目录
-    ops_codes = sorted(
-        [d.name for d in object_dir.iterdir() if d.is_dir() and d.name.startswith("ops_")]
-    )
-    if not ops_codes:
-        logger.warning("TOOL_POOL init: no ops_* objects found in %s", object_dir)
-        return
+    # 确定要加载的对象列表
+    if ext_codes is not None:
+        ops_codes = list(ext_codes)
+        logger.info(
+            "TOOL_POOL init: ext_codes mode, loading %d objects: %s",
+            len(ops_codes),
+            ops_codes,
+        )
+    else:
+        ops_codes = sorted(
+            [
+                d.name
+                for d in object_dir.iterdir()
+                if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
+            ]
+        )
+        logger.info(
+            "TOOL_POOL init: scan mode (prefix=%r), found %d objects: %s",
+            name_prefix,
+            len(ops_codes),
+            ops_codes,
+        )
 
-    logger.info("TOOL_POOL init: loading %d ops_* objects: %s", len(ops_codes), ops_codes)
+    if not ops_codes:
+        logger.warning("TOOL_POOL init: no objects to load")
+        return
 
     # 如果没有传入 loader，用独立 OntologyLoader 加载（避免影响 Agent 的 loader）
     if loader is None:
@@ -114,24 +170,7 @@ def _init_ops_tool_pool(
             logger.warning("TOOL_POOL init: failed to create OntologyLoader", exc_info=True)
             return
 
-    # 用 OntologyToolLoader 生成工具（所有 ops_* 对象，全量）
-    try:
-        from datacloud_analysis.tools.ontology_tool_loader import (
-            OntologyToolLoader,  # noqa: PLC0415
-        )
-
-        tool_loader = OntologyToolLoader(
-            mounted_objects=ops_codes,
-            loader=loader,
-            resource_path=str(resource_path),
-        )
-        tools: dict[str, Any] = tool_loader.load()
-    except Exception:  # noqa: BLE001
-        logger.warning("TOOL_POOL init: OntologyToolLoader failed", exc_info=True)
-        tools = {}
-
-    # 注册到 TOOL_POOL（全部 LOCKED：不加入初始 bind_tools，由 active_tools 控制可见性）
-    # 逐对象注册：用 OntologyToolLoader 单独为每个对象生成工具，object_code 精确对应
+    # 逐对象注册到 TOOL_POOL
     from datacloud_analysis.tools.ontology_tool_loader import OntologyToolLoader  # noqa: PLC0415
 
     registered_total = 0
@@ -155,7 +194,7 @@ def _init_ops_tool_pool(
             logger.debug("TOOL_POOL init: %s → %s", obj_code, sorted(obj_tools.keys()))
 
     logger.info(
-        "TOOL_POOL init: registered %d tools from %d ops_* objects",
+        "TOOL_POOL init: registered %d tools from %d objects",
         registered_total,
         len(ops_codes),
     )

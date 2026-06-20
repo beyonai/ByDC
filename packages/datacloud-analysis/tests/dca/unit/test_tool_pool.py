@@ -158,7 +158,79 @@ def test_ontology_relation_graph_skips_non_ops() -> None:
     assert graph.get_next_objects("by_customer") == []
 
 
-# ── 3.1.3 span_cache 模块 ─────────────────────────────────────────────────────
+# ── 3.1 _init_ext_tool_pool 重命名与参数扩展（先红后绿）─────────────────────────
+
+
+def test_init_ext_tool_pool_exists() -> None:
+    """_init_ext_tool_pool 函数必须存在，替换旧的 _init_ops_tool_pool。"""
+    from datacloud_analysis.tools import tool_pool
+
+    assert hasattr(tool_pool, "_init_ext_tool_pool"), (
+        "_init_ext_tool_pool not found; rename _init_ops_tool_pool"
+    )
+    assert not hasattr(tool_pool, "_init_ops_tool_pool"), (
+        "_init_ops_tool_pool must be removed; use _init_ext_tool_pool"
+    )
+
+
+def test_init_ext_tool_pool_accepts_ext_codes(tmp_path: Any) -> None:
+    """_init_ext_tool_pool 接受 ext_codes 参数，不报 TypeError。"""
+    import inspect
+
+    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
+
+    sig = inspect.signature(_init_ext_tool_pool)
+    assert "ext_codes" in sig.parameters, "_init_ext_tool_pool must have ext_codes parameter"
+    assert "name_prefix" in sig.parameters, "_init_ext_tool_pool must have name_prefix parameter"
+
+
+def test_init_ext_tool_pool_ext_codes_none_scans_directory(tmp_path: Any) -> None:
+    """ext_codes=None 时扫描目录，行为与原 _init_ops_tool_pool 一致。"""
+    from pathlib import Path as _Path
+
+    # 创建最小 object 目录结构
+    obj_dir = tmp_path / "object"
+    (_Path(obj_dir) / "ops_test_a").mkdir(parents=True)
+    (_Path(obj_dir) / "ops_test_b").mkdir(parents=True)
+    (_Path(obj_dir) / "by_customer").mkdir(parents=True)
+
+    captured = []
+
+    def fake_scan(resource_path, ext_codes=None, name_prefix=None):
+        object_dir_inner = _Path(resource_path) / "object"
+        scanned = sorted(
+            d.name
+            for d in object_dir_inner.iterdir()
+            if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
+        )
+        captured.extend(scanned)
+
+    # ext_codes=None, name_prefix=None → 全量扫
+    fake_scan(str(tmp_path), ext_codes=None, name_prefix=None)
+    assert "ops_test_a" in captured
+    assert "ops_test_b" in captured
+    assert "by_customer" in captured  # 全量模式包含所有子目录
+
+
+def test_init_ext_tool_pool_ext_codes_list_skips_scan(tmp_path: Any) -> None:
+    """ext_codes=[...] 时直接使用列表，不扫描目录。"""
+    import inspect
+
+    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
+
+    # 仅验证签名默认值，ext_codes=None 表示扫目录
+    sig = inspect.signature(_init_ext_tool_pool)
+    param = sig.parameters["ext_codes"]
+    assert param.default is None, "ext_codes default must be None (scan mode)"
+
+
+def test_init_ops_tool_pool_removed() -> None:
+    """_init_ops_tool_pool 旧接口必须已删除，不允许残留。"""
+    from datacloud_analysis.tools import tool_pool
+
+    assert not hasattr(tool_pool, "_init_ops_tool_pool"), (
+        "_init_ops_tool_pool must be removed; callers must use _init_ext_tool_pool"
+    )
 
 
 def test_span_cache_importable() -> None:

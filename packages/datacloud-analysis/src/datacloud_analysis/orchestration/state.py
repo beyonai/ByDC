@@ -50,8 +50,6 @@ class AgentState(MessagesState):
 
     # --- Execution runtime ---
     execution_status: str | None
-    todo_active_id: str | None
-    todo_tool_plan: list[dict[str, Any]] | None
     active_tools: list[str] | None
     execution_trace: list[dict[str, Any]] | None
     invocation_dedup: list[str] | None
