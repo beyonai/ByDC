@@ -49,12 +49,13 @@ def _field_table_row(f: Any) -> str:
     fc = f.field_code if hasattr(f, "field_code") else f.property_code
     fn = f.field_name if hasattr(f, "field_name") else getattr(f, "property_name", fc)
     role = getattr(f, "analytic_role", "-") or "-"
+    dtype = (getattr(f, "field_type", "") or "").strip() or "-"
     kind = getattr(f, "analytic_kind", "-") or "-"
     filter_ops = "/".join(getattr(f, "filter_ops", []) or []) or "-"
     group_ops = "/".join(getattr(f, "group_ops", []) or []) or "-"
     agg_ops = "/".join(getattr(f, "aggregate_ops", []) or []) or "-"
     note = _field_special_note(f)
-    return f"| {fc} | {fn} | {role} | {kind} | {filter_ops} | {group_ops} | {agg_ops} | {note} |"
+    return f"| {fc} | {fn} | {role} | {dtype} | {kind} | {filter_ops} | {group_ops} | {agg_ops} | {note} |"
 
 
 def _required_restrictions(required_filter_groups: list[str]) -> str:
@@ -763,7 +764,7 @@ def build_query_description(
 
     lines.append("")
     lines.append("**可用字段**：")
-    lines.append("| 字段编码 | 中文名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
+    lines.append("| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
     lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for f in queryable:
         lines.append(_field_table_row(f))
@@ -1099,8 +1100,8 @@ def build_compute_description(
 
     lines.append("")
     lines.append("**字段能力**：")
-    lines.append("| 字段编码 | 中文名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append("| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for f in fields:
         lines.append(_field_table_row(f))
 
