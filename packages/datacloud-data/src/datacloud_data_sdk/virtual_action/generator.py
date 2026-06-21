@@ -397,7 +397,7 @@ def build_search_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
             f"在知识库 {scope_name} 中检索文件。"
             "协议与 query 明细查询一致，额外必须填写 query 语义检索文本；"
             "filters.field、order_by.field 只能填写当前工具列出的属性编码。"
-            "filters.value 按字段数据类型填写对应的基本类型值。"
+            "filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
         ),
         "x-dc-action-family": "search",
         "x-dc-scope-type": "object",
@@ -669,7 +669,7 @@ def build_query_schema(
         "description": (
             f"查询{scope_label}{scope_name}的明细记录。"
             "select、filters.field、order_by.field 只能填写当前工具列出的属性编码。"
-            "filters.value 按字段数据类型填写对应的基本类型值。"
+            "filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
             "适合查记录列表，不适合做统计汇总。"
             f"{required_hint}"
         ),
@@ -946,7 +946,7 @@ def build_compute_schema(
         "description": (
             f"对{scope_label}{scope_name}执行分组统计。"
             "dimensions.field、metrics.field、filters.field 只能填写当前工具列出的属性编码。"
-            "filters.value 按字段数据类型填写对应的基本类型值。"
+            "filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
             "必须至少提供一个 metrics；如需看明细，请改用 query 动作。"
             f"{required_hint}"
         ),
