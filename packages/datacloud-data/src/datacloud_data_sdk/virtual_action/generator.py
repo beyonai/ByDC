@@ -85,6 +85,7 @@ def build_search_description(
     )
     lines.append("")
     lines.append("**何时使用**：语义相似度检索时使用；不适用于精确 SQL 查询。")
+    lines.append("**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。")
 
     filterable = [f for f in fields if getattr(f, "filter_ops", [])]
     if filterable:
@@ -760,6 +761,7 @@ def build_query_description(
     lines.append(
         "**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 compute 动作。"
     )
+    lines.append("**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。")
 
     restrictions = _required_restrictions(req_groups)
     if restrictions:
@@ -1084,6 +1086,7 @@ def build_compute_description(
         "**何时使用**：需要分组统计、聚合指标时使用；"
         "不适用于查看明细列表，如需明细请用 query 动作。"
     )
+    lines.append("**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。")
 
     restrictions = _required_restrictions(req_groups)
     if restrictions:
