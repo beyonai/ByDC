@@ -207,7 +207,6 @@ class DataCloudKnowledgeBackend:
         Returns:
             Clarification analysis as a dict.
         """
-        from datacloud_knowledge.intent.types import ClarificationMode  # noqa: PLC0415
         from datacloud_knowledge.provider import (  # noqa: PLC0415
             prepare_query_clarification as sdk_prepare,
         )
@@ -219,7 +218,7 @@ class DataCloudKnowledgeBackend:
             query=query,
             ontology_code="",
             structured_input=structured_input,
-            mode=ClarificationMode.QUERY,
+            mode="query",
         )
         return {
             "needs_clarification": analysis.needs_clarification,
@@ -246,7 +245,6 @@ class DataCloudKnowledgeBackend:
         Delegates to ``datacloud_knowledge.provider.finalize_query_clarification``.
         Returns a dict with ``structured_input`` and ``persisted_synonyms`` keys.
         """
-        from datacloud_knowledge.intent.types import ClarificationMode  # noqa: PLC0415
         from datacloud_knowledge.provider import (  # noqa: PLC0415
             finalize_query_clarification as sdk_finalize,
         )
@@ -255,7 +253,7 @@ class DataCloudKnowledgeBackend:
             query=query,
             ontology_code=ontology_code,
             structured_input=structured_input,
-            mode=ClarificationMode(mode),
+            mode=mode,  # type: ignore[arg-type]
             needs_clarification=needs_clarification,
             form=form,
             metadata=metadata,
@@ -508,7 +506,7 @@ class DataCloudKnowledgeBackend:
             resolve_object_for_property as sdk_resolve,
         )
 
-        return sdk_resolve(property_code)  # type: ignore[no-any-return]
+        return sdk_resolve(property_code)
 
     # ── Ontology search & graph ────────────────────────────────────────────
 
@@ -834,7 +832,7 @@ class DataCloudKnowledgeBackend:
             resolve_field_aliases as sdk_resolve,
         )
 
-        return sdk_resolve(field_aliases)  # type: ignore[no-any-return]
+        return sdk_resolve(terms=list(field_aliases.keys()), scope_code="")  # type: ignore[return-value]
 
     def store_clarification_results(
         self, results: dict[str, Any], user_id: str
@@ -852,7 +850,7 @@ class DataCloudKnowledgeBackend:
             store_clarification_results as sdk_store,
         )
 
-        return sdk_store(results, user_id)  # type: ignore[no-any-return]
+        return sdk_store(results, user_id)
 
     # ── Scoring ────────────────────────────────────────────────────────────
 
