@@ -7,8 +7,9 @@ import os
 import subprocess
 from typing import Annotated
 
+# TODO(Phase 3): pass InvocationContext explicitly instead of global get_current_context
 from datacloud_data_sdk.context import get_current_context
-from datacloud_data_sdk.exceptions import DatacloudError
+from datacloud_platform.errors import DatacloudError
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)

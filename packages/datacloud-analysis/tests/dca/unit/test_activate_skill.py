@@ -191,7 +191,7 @@ class TestActivateSkill:
 
     @pytest.mark.asyncio
     async def test_no_context_returns_error(self, tmp_path: Path) -> None:
-        from datacloud_data_sdk.exceptions import DatacloudError
+        from datacloud_platform.errors import DatacloudError
 
         with patch(
             "datacloud_analysis.tools.activate_skill.get_current_context",
