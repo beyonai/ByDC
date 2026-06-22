@@ -75,10 +75,9 @@ class OntologyRelationGraph:
                 # 兜底：从 description JSON 里读
                 desc_raw = getattr(rel, "description", "") or ""
                 if desc_raw:
-                    try:
+                    from contextlib import suppress
+                    with suppress(json.JSONDecodeError, TypeError, ValueError):
                         resolve_action = json.loads(desc_raw).get("resolve_action_code", "") or ""
-                    except (json.JSONDecodeError, TypeError, ValueError):
-                        pass
             if not resolve_action:
                 continue  # 仍然没有 resolve_action_code，跳过
 

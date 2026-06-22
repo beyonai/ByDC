@@ -12,7 +12,10 @@ import logging
 import os
 from typing import Any
 
+from datacloud_platform import ScoreUpdateRecord, get_platform
 from langchain_core.messages import HumanMessage, SystemMessage
+
+_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +120,11 @@ async def search_all_candidates(
     top_k: int = 5,
 ) -> dict[str, list[CandidateDict]]:
     """对所有概念术语执行 strict→bm25→vector 漏斗搜索。"""
-    from datacloud_knowledge.retrieval.candidate_search import search_all_candidates_with_name_id
-
     if not concept_terms:
         return {}
     return await asyncio.to_thread(
-        search_all_candidates_with_name_id,
+        get_platform().search_candidates,
+        _base_id,
         concept_terms,
         user_id=user_id,
         top_k=top_k,
@@ -149,11 +151,7 @@ async def disambiguate_candidates(
     llm: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """三层消歧，返回 (confirmed_terms, ambiguous_terms)。"""
-    from datacloud_knowledge.intent import (
-        MatchCandidate,
-        MatchResult,
-        disambiguate,
-    )
+    from datacloud_platform.models.shared import MatchCandidate, MatchResult  # noqa: PLC0415
 
     if not candidates_map:
         return [], []
@@ -177,7 +175,7 @@ async def disambiguate_candidates(
         else:
             fuzzy[word] = converted
 
-    dis_result = await asyncio.to_thread(disambiguate, MatchResult(exact=exact, fuzzy=fuzzy), None)
+    dis_result = get_platform().disambiguate(_base_id, MatchResult(exact=exact, fuzzy=fuzzy), None)
     confirmed_raw = dis_result.confirmed
     ambiguous_raw = dis_result.ambiguous
 
@@ -321,9 +319,7 @@ async def save_clarification_results(
     user_id: str,
 ) -> list[str]:
     """持久化澄清结果，返回创建的 name_id 列表。"""
-    from datacloud_knowledge.adapters import store_clarification_results
-
-    return await asyncio.to_thread(store_clarification_results, clarification_results, user_id)
+    return get_platform().store_clarification_results(_base_id, clarification_results, user_id)
 
 
 async def update_term_scores(
@@ -365,15 +361,11 @@ async def update_term_scores(
                 "update_term_scores: async call_agent failed, fallback to local update: %s", exc
             )
 
-    from datacloud_knowledge.adapters import create_writer
-    from datacloud_knowledge.intent import ScoreUpdateRecord, batch_update_scores
-
     records = tuple(
         ScoreUpdateRecord(name_id=item["name_id"], success=item["success"]) for item in normalized
     )
 
     def _do_update(recs: tuple[ScoreUpdateRecord, ...]) -> None:
-        with create_writer() as writer:
-            batch_update_scores(recs, writer)
+        get_platform().update_scores(_base_id, recs)
 
     await asyncio.to_thread(_do_update, records)
