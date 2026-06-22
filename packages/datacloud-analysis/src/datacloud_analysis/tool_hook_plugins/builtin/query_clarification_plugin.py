@@ -24,12 +24,13 @@ import re
 from typing import Any
 
 try:
-    from datacloud_knowledge.provider import (
-        finalize_query_clarification as _sdk_finalize_clarification,
-    )
-    from datacloud_knowledge.provider import (
-        prepare_query_clarification as _sdk_analyze_clarification,
-    )
+    from datacloud_platform import get_platform  # noqa: PLC0415
+
+    def _sdk_finalize_clarification(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
+        return get_platform().finalize_clarification(_base_id, *args, **kwargs)
+
+    def _sdk_analyze_clarification(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
+        return get_platform().prepare_clarification(_base_id, *args, **kwargs)
 
     _HAS_SDK_CLARIFICATION = True
 except ImportError:  # pragma: no cover
@@ -38,14 +39,17 @@ except ImportError:  # pragma: no cover
     _sdk_finalize_clarification = None  # type: ignore[assignment]
 
 try:
-    from datacloud_knowledge.provider import resolve_field_aliases
+    from datacloud_platform import get_platform as _get_platform_resolve  # noqa: PLC0415
+
+    def resolve_field_aliases(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
+        return _get_platform_resolve().resolve_field_aliases(_base_id, *args, **kwargs)
 
     _HAS_RESOLVE_ALIASES = True
 except ImportError:  # pragma: no cover
     resolve_field_aliases = None  # type: ignore[assignment]
     _HAS_RESOLVE_ALIASES = False
 
-from datacloud_data_service.config import get_settings
+from datacloud_platform.config import get_settings
 
 from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.orchestration.gateway_user import get_gateway_user_id
@@ -63,6 +67,11 @@ except ImportError:  # pragma: no cover
 PLUGIN_ID = "builtin.query_clarification"
 PRIORITY = 100
 ENABLED = True
+
+# ── 平台路由 ──────────────────────────────────────────────────────────────────
+from datacloud_platform import get_platform as _module_platform  # noqa: E402
+
+_base_id = _module_platform()._default_base_id()  # fixme: pass base_id explicitly
 
 logger = logging.getLogger(__name__)
 

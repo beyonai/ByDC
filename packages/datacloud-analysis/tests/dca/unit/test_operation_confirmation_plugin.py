@@ -13,8 +13,8 @@ from datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin 
     restore_action_params,
 )
 from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError, HookContext
-from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
 from datacloud_data_sdk.ontology.term_loader import KbTermLoader
+from datacloud_platform.errors import TermAmbiguousError, TermNotFoundError
 
 
 @dataclass
