@@ -168,7 +168,51 @@ def build_terms(
     if len(terms) <= 1:  # 只有实体术语，无字段
         return {"ok": True, "message": "无字段术语需要入库"}
 
-    # ── 2. 计算所有 term_id，构建映射表 ──────────────────────────────────
+    return _write_kps_batch(
+        terms=terms,
+        relations=relations,
+        term_types=term_types,
+        entity_term_id=entity_term_id,
+        entity_code=entity_code,
+        entity_type=entity_type,
+        schema=schema,
+        db_url=db_url,
+        backfill_vectors=True,
+        caller_label="build_terms",
+    )
+
+
+def _write_kps_batch(
+    *,
+    terms: list[TermDef],
+    relations: list[RelationDef],
+    term_types: list[TermTypeDef],
+    entity_term_id: str,
+    entity_code: str,
+    entity_type: str,
+    schema: str | None,
+    db_url: str | None,
+    backfill_vectors: bool,
+    caller_label: str,
+) -> dict[str, Any]:
+    """将 KPS 对象列表通过 BulkImportAdapter 批量写入术语库（共享逻辑）。
+
+    Args:
+        terms: TermDef 列表（含 entity + prop + value）。
+        relations: RelationDef 列表。
+        term_types: TermTypeDef 列表。
+        entity_term_id: 实体术语 ID。
+        entity_code: 实体编码。
+        entity_type: "object" 或 "view"。
+        schema: 知识库 schema。
+        db_url: 数据库 URL。
+        backfill_vectors: 是否回填 tsvector + embedding。
+        caller_label: 调用方标识（用于日志）。
+
+    Returns:
+        {"ok": True, "stats": {...}} 或 {"ok": False, "error": "..."}
+    """
+    # ── 1. 计算所有 term_id，构建映射表 ──────────────────────────────────
     term_id_by_key: dict[tuple[str, str, str | None], str] = {}
     for t in terms:
         key = (t.term_code, t.term_type_code, t.parent_term_code)
@@ -179,7 +223,6 @@ def build_terms(
         elif t.term_type_code == "prop":
             term_id_by_key[key] = t.compute_term_id(parent_term_id=entity_term_id)
         elif t.parent_term_code:
-            # 值术语：父项是 prop
             parent_key = (t.parent_term_code, "prop", entity_code)
             parent_id = term_id_by_key.get(parent_key, "")
             term_id_by_key[key] = (
@@ -188,7 +231,7 @@ def build_terms(
         else:
             term_id_by_key[key] = t.compute_term_id()
 
-    # ── 3. KPS → Dict 转换 ───────────────────────────────────────────────
+    # ── 2. KPS → Dict 转换 ───────────────────────────────────────────────
     term_dicts: list[dict[str, Any]] = []
     for t in terms:
         tid = term_id_by_key[(t.term_code, t.term_type_code, t.parent_term_code)]
@@ -219,7 +262,7 @@ def build_terms(
 
     term_type_dicts = [term_type_kps_to_dict(tt) for tt in term_types]
 
-    # ── 4. 通过 BulkImportAdapter 写入术语库 ────────────────────────────
+    # ── 3. 通过 BulkImportAdapter 写入术语库 ────────────────────────────
     try:
         adapter = create_bulk_importer(schema=schema, db_url=db_url)
     except Exception as exc:
@@ -244,32 +287,34 @@ def build_terms(
         adapter.commit()
 
         logger.info(
-            "build_terms 完成: entity=%s, terms=%d, relations=%d, types=%d",
+            "%s 完成: entity=%s, terms=%d, relations=%d, types=%d",
+            caller_label,
             entity_code,
             len(term_dicts),
             len(relation_dicts),
             len(term_type_dicts),
         )
 
-        # 回填 name_keywords tsvector（本地 SQL，瞬间完成）
-        try:
-            backfill_tsvector(schema=schema, db_url=db_url)
-        except Exception:
-            logger.warning(
-                "name_keywords 回填失败，请稍后运行: datacloud-knowledge backfill-tsvector"
-            )
+        if backfill_vectors:
+            # 回填 name_keywords tsvector（本地 SQL，瞬间完成）
+            try:
+                backfill_tsvector(schema=schema, db_url=db_url)
+            except Exception:
+                logger.warning(
+                    "name_keywords 回填失败，请稍后运行: datacloud-knowledge backfill-tsvector"
+                )
 
-        # 回填向量嵌入（仅本次创建的术语，30s 超时，失败不阻塞）
-        _backfill_embeddings_optional(
-            term_ids=list(term_id_by_key.values()),
-            schema=schema,
-            db_url=db_url,
-            entity_code=entity_code,
-        )
+            # 回填向量嵌入（仅本次创建的术语，30s 超时，失败不阻塞）
+            _backfill_embeddings_optional(
+                term_ids=list(term_id_by_key.values()),
+                schema=schema,
+                db_url=db_url,
+                entity_code=entity_code,
+            )
 
         return {"ok": True, "stats": stats}
     except Exception as exc:
-        logger.exception("build_terms 写入失败")
+        logger.exception("%s 写入失败", caller_label)
         with contextlib.suppress(Exception):
             adapter.rollback()
         return {"ok": False, "error": f"术语写入失败: {exc}"}
