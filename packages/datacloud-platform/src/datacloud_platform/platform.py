@@ -24,6 +24,11 @@ if TYPE_CHECKING:
     from datacloud_platform.base_entry import OntologyBaseEntry, OntologyBaseRegistry
     from datacloud_platform.models.shared import MatchResult, ObjectSummary
 
+try:
+    from datacloud_knowledge.ingestion.ontology_terms import build_terms as _build_terms
+except ImportError:
+    _build_terms = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 
@@ -181,8 +186,43 @@ class DatacloudPlatform:
 
         REMOTE backends raise PermissionError internally — Platform does not
         check permissions.
+
+        Side effect: if datacloud-knowledge is installed, writes term data
+        so the new object can be hit by vector search.
         """
-        return self._ontology_for(base_id).create_object(base_id, scene_id, obj)
+        result = self._ontology_for(base_id).create_object(base_id, scene_id, obj)
+        if _build_terms is not None:
+            try:
+                fields = [
+                    {
+                        "property_code": (
+                            p.property_code if hasattr(p, "property_code") else str(p)
+                        ),
+                        "property_name": (
+                            p.property_name if hasattr(p, "property_name") else str(p)
+                        ),
+                        "data_type": "STRING",
+                    }
+                    for p in (getattr(obj, "properties", None) or [])
+                ]
+                _build_terms(
+                    entity_code=getattr(obj, "object_code", ""),
+                    entity_name=getattr(obj, "object_name", None)
+                    or getattr(obj, "object_code", ""),
+                    fields=fields,
+                    entity_desc=getattr(obj, "object_desc", "") or "",
+                )
+                logger.info(
+                    "create_object: build_terms done for %s",
+                    getattr(obj, "object_code", "?"),
+                )
+            except Exception:
+                logger.warning(
+                    "create_object: build_terms failed for %s",
+                    getattr(obj, "object_code", "?"),
+                    exc_info=True,
+                )
+        return result
 
     def update_object(
         self, base_id: str, scene_id: str, object_code: str, obj: Any
