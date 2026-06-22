@@ -20,7 +20,7 @@ from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin imp
     _is_query_or_compute_tool,
     _scope_code_from_tool,
 )
-from datacloud_data_service.config import get_settings
+from datacloud_platform.config import get_settings
 
 
 @pytest.fixture(autouse=True)

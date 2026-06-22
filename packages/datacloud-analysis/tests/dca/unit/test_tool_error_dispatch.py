@@ -20,7 +20,7 @@ from datacloud_analysis.orchestration.execution.tool_wrapper import (
     _format_agent_error_message,
     dispatch_tool,
 )
-from datacloud_data_sdk.exceptions import (
+from datacloud_platform.errors import (
     ActionNotConfiguredError,
     ActionNotFoundError,
     ApiExecutionError,
