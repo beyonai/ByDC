@@ -1,6 +1,6 @@
 """Provide locale-specific system prompts for DataCloud agent.
 
-虚拟工具前缀（query_/compute_）由 ``datacloud_data_service.config.Settings``
+虚拟工具前缀（query_/compute_）由 ``datacloud_platform.config.Settings``
 配置决定，可通过环境变量 ``DATACLOUD_VIRTUAL_ACTION_QUERY_PREFIX`` /
 ``DATACLOUD_VIRTUAL_ACTION_COMPUTE_PREFIX`` 覆盖。
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 
-from datacloud_data_service.config import get_settings
+from datacloud_platform.config import get_settings
 
 
 def _virtual_prefixes() -> tuple[str, str]:

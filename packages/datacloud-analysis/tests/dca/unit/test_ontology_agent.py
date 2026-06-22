@@ -576,7 +576,7 @@ def test_build_loader_passes_result_file_storage_to_configure_loader() -> None:
     with (
         patch("datacloud_data_sdk.ontology.loader.OntologyLoader") as m_loader_cls,
         patch(
-            "datacloud_data_service.tools.virtual_action_injector.inject_virtual_actions"
+            "datacloud_platform.execution.virtual_action_injector.inject_virtual_actions"
         ) as _m_inject,
         patch("datacloud_analysis.tools.ontology_tool_loader.configure_loader") as m_configure,
     ):

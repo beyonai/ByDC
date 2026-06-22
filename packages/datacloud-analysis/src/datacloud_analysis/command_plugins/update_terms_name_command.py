@@ -4,36 +4,20 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
+
+from datacloud_platform import ScoreUpdateRecord, get_platform
+
+_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
 
 BatchUpdater = Callable[[tuple[Any, ...]], None]
 
-try:
-    from datacloud_knowledge.adapters import create_writer as imported_create_writer
-    from datacloud_knowledge.intent import ScoreUpdateRecord as ImportedScoreUpdateRecord
-    from datacloud_knowledge.intent import (
-        batch_update_scores as imported_batch_update_scores,
-    )
 
-    def _do_batch_update(records: tuple[Any, ...]) -> None:
-        with imported_create_writer() as writer:
-            imported_batch_update_scores(records, writer)
+def _do_batch_update(records: tuple[Any, ...]) -> None:
+    get_platform().update_scores(_base_id, records)
 
-    updater_impl: BatchUpdater | None = _do_batch_update
-except ModuleNotFoundError:
 
-    @dataclass(frozen=True)
-    class FallbackScoreUpdateRecord:
-        """Fallback record type used when datacloud_knowledge is unavailable."""
-
-        name_id: str
-        success: bool
-
-    ImportedScoreUpdateRecord = FallbackScoreUpdateRecord
-    updater_impl = None
-
-ScoreUpdateRecord = ImportedScoreUpdateRecord
+updater_impl: BatchUpdater | None = _do_batch_update
 
 logger = logging.getLogger(__name__)
 
