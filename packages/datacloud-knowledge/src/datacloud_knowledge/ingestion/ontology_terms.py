@@ -180,6 +180,7 @@ def build_terms(
         db_url=db_url,
         backfill_vectors=True,
         caller_label="build_terms",
+        search_scope_extra=search_scope_extra,
     )
 
 
@@ -195,6 +196,7 @@ def _write_kps_batch(
     db_url: str | None,
     backfill_vectors: bool,
     caller_label: str,
+    search_scope_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """将 KPS 对象列表通过 BulkImportAdapter 批量写入术语库（共享逻辑）。
 

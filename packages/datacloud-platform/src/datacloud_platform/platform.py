@@ -207,8 +207,10 @@ class DatacloudPlatform:
                 ]
                 _build_terms(
                     entity_code=getattr(obj, "object_code", ""),
-                    entity_name=getattr(obj, "object_name", None)
-                    or getattr(obj, "object_code", ""),
+                    entity_name=str(
+                        getattr(obj, "object_name", None)
+                        or getattr(obj, "object_code", "")
+                    ),
                     fields=fields,
                     entity_desc=getattr(obj, "object_desc", "") or "",
                 )

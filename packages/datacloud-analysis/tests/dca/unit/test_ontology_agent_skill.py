@@ -42,7 +42,7 @@ def _write_skill(root: Path, name: str, description: str = "测试描述") -> No
 async def _astream_stub(*args: Any, **kwargs: Any):  # type: ignore[return]
     """空 async generator，用于替换 compiled.astream_events。"""
     return
-    yield  # noqa: unreachable
+    yield  # type: ignore[misc]  # noqa: F704
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ class TestSkillInjection:
             captured_inputs.append(graph_input)
             captured_configs.append(config)
             return
-            yield  # noqa: unreachable
+            yield  # type: ignore[misc]  # noqa: F704
 
         fake_graph = MagicMock()
         fake_graph.astream_events = fake_astream_events
