@@ -249,8 +249,8 @@ class ViewAnalyzeExecutor:
                     metric_filters,
                     field_to_alias_col,
                     db_type,
-                    lambda _prefix, field_code, filter_idx: _safe_pkey(
-                        f"m{metric_idx}", field_code, filter_idx
+                    lambda _prefix, field_code, filter_idx, _mi=metric_idx: _safe_pkey(
+                        f"m{_mi}", field_code, filter_idx
                     ),
                     str(mtr.get("filter_relation") or "AND"),
                     context.field_to_analytic_kind,

@@ -5,7 +5,8 @@ from __future__ import annotations
 import os
 import sqlite3
 import tempfile
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 import pytest
 from datacloud_data_sdk.sql_executor.connector_registry import ConnectorRegistry

@@ -320,9 +320,7 @@ async def term_types_values(body: dict, request: Request):
 
 def _delete_resource_by_code(resource_code: str) -> None:
     """通过服务发现下架本体资源。"""
-    import json
 
-    import httpx
 
     from by_framework.core.discovery import DiscoveryClient
     from by_framework.util.discovery_http_client import DiscoveryHttpClient
