@@ -113,7 +113,10 @@ def _build_exec_zh() -> str:
     parts.extend(
         [
             "- 每次工具调用必须填写 reason 字段，说明选择该工具的理由。\n",
-            "- 工具返回 [工具调用失败] 时，必须分析错误原因并用正确参数重新调用该工具，禁止直接调用 finish_react 放弃。\n",
+            "- 工具调用失败时，先诊断再行动：\n"
+            "  相同参数失败 → 不许盲目重试，分析原因后换参数或换对象；\n"
+            "  工具返回空结果 → 换策略重试（不同过滤条件或不同对象）；\n"
+            "  工具被用户拒绝 → 不许重试同一调用，思考原因后调整方案。\n",
         ]
     )
     # 插入模式感知的查询工具命名提示
@@ -237,6 +240,82 @@ def get_execution_prompt(locale: str | None = None) -> str:
         return _build_exec_en()
 
     return _build_exec_zh()
+
+
+def _build_ontology_rules_zh() -> str:
+    """本体推理规则段（中文，XML 结构化）。
+
+    当前针对 Anthropic Claude 优化（XML 标签格式、cache_control 友好）。
+    未来接入 GPT/Gemini 时，在 graph_builder.py 的 ontology_rules 拼装处
+    根据 model_provider 选择对应规则段（参考 Hermes OPENAI_MODEL_EXECUTION_GUIDANCE）。
+    """
+    return (
+        "## 本体推理规则\n\n"
+        "### 任务分解（可选）\n"
+        "<task_decomposition>\n"
+        "问题需要经过 3 步以上本体对象推理时，先调 manage_todo 分解为步骤，全部设为 pending。\n"
+        "每完成一步立即标记 completed。单对象简单查询无需分解。\n"
+        "</task_decomposition>\n\n"
+        "### 锚点工具\n"
+        "<anchor_tools>\n"
+        'search_ontology(query, scope="all", type="all")\n'
+        "  不确定从哪个对象入手时调用。冷启动时框架已自动调用一次，结果工具已解锁。\n"
+        "  推理中发现当前工具不够用时再次调用。\n\n"
+        "goto_ontology(object_code, reason)\n"
+        "  工具返回结果中出现关联对象的 ID 字段，且需要继续分析该对象时调用。\n"
+        "  已知目标时用此工具，跳过搜索直接解锁。reason 写入推理轨迹。\n\n"
+        "get_reasoning_map()\n"
+        "  当前路径无法解答问题（dead_end）→ 调此工具换方向。\n"
+        "  推理接近完成需要汇总 → 调此工具回顾所有 findings 整合输出。\n\n"
+        "mark_dead_end(object_code, reason)\n"
+        "  沿某个对象展开后发现无相关信号时调用，避免后续重复尝试。\n"
+        "  标记后立即调 get_reasoning_map() 或 search_ontology 换方向。\n"
+        "</anchor_tools>\n\n"
+        "### 结论记录\n"
+        "<finding_tools>\n"
+        "record_finding(summary)\n"
+        "  推理出阶段性发现时立即调用，写入推理轨迹。\n"
+        "  不要等到最后才汇总——每步有结论就记录。\n"
+        "  纯文字结论用此工具，不要物化数据。\n"
+        "</finding_tools>\n\n"
+        "### 数据物化（自举）\n"
+        "<task_materialization>\n"
+        "工具返回含 file_id（数据超阈值）时：\n"
+        "  后续需多次引用或联合分析 → create_task_object(file_id, object_code, description)\n"
+        "  一次性用完 → 忽略 file_id，直接推理\n\n"
+        "create_task_object 提示'无法自动推断关系'时：\n"
+        "  → create_task_relation(from_object, to_object, join_keys, description)\n\n"
+        "多个任务对象已建立关系后需联合分析：\n"
+        "  → query_task_graph(sql)\n"
+        "</task_materialization>\n\n"
+        "### 推理执行纪律（持续努力 + 验证）\n"
+        "<reasoning_discipline>\n"
+        "完成性要求：\n"
+        "  推理结果必须真正回答用户问题——不要过度分析，但不许半途而废。\n\n"
+        "不许只描述意图，必须立即调工具执行：\n"
+        "  说'我需要查询 xxx'时，必须在同一轮次内调用对应工具。\n\n"
+        "不确定时继续探索，而不是停下来等：\n"
+        "  问自己：我还不知道什么？哪里可能出问题？结束前我想验证什么？\n"
+        "  遇到模糊场景，主动调 search_ontology 探索，而不是等用户指示。\n\n"
+        "工具调用失败时，区分处理：\n"
+        "  相同参数调同一工具失败 → 不许盲目重试，换参数或换对象\n"
+        "  工具返回空结果 → 换策略重试，不能直接 finish_react\n"
+        "  路径走不通 → mark_dead_end + get_reasoning_map 换方向，不是放弃\n\n"
+        "行动优先，不许等确认：\n"
+        "  两种方案都合理时，选一个执行，可以纠偏，不要停下来等用户选择。\n\n"
+        "结束前自检（调 finish_react 之前必须完成）：\n"
+        "  findings 是否直接回答了用户的原始问题？\n"
+        "  是否还有明显未探索的相关本体对象？\n"
+        "  结论是否有工具调用数据支撑，而不只是推断？\n"
+        "</reasoning_discipline>\n\n"
+        "### 推理终止\n"
+        "<reasoning_termination>\n"
+        "finish_react(summary)\n"
+        "  通过结束前自检后调用，summary 写核心结论。\n"
+        "  所有方向均为 dead_end → 调用，说明无法得出结论的原因。\n"
+        "  禁止直接输出文字回复，必须通过 finish_react 提交。\n"
+        "</reasoning_termination>\n"
+    )
 
 
 # ── UI 运行时文本（推送给用户可见的进度/状态字符串）────────────────────────────
@@ -363,12 +442,12 @@ _UI_TEXT: dict[str, dict[str, str]] = {
         "en_US": "The user cancelled this operation. The business submission will not run.",
     },
     "operation_term_ambiguous_recommended": {
-        "zh_CN": "模型识别为“{original}”，匹配到多个，已默认选择“{display}”（code: {code}），请确认或重新选择。",
-        "en_US": 'The model recognized "{original}" and found multiple matches. "{display}" (code: {code}) was selected by default. Please confirm or choose again.',
+        "zh_CN": "模型识别为“{original}”，匹配到多个，已默认选择“{display}”（code: {code}）",
+        "en_US": 'The model recognized "{original}" and found multiple matches. "{display}" (code: {code}) was selected by default',
     },
     "operation_term_recommended": {
-        "zh_CN": "模型识别为“{original}”，未精确命中，已推荐“{display}”（code: {code}），请确认或重新选择。",
-        "en_US": 'The model recognized "{original}" but did not find an exact match. "{display}" (code: {code}) is recommended. Please confirm or choose again.',
+        "zh_CN": "模型识别为“{original}”，未精确命中，已推荐“{display}”（code: {code}）",
+        "en_US": 'The model recognized "{original}" but did not find an exact match. "{display}" (code: {code}) is recommended',
     },
     "operation_term_not_found": {
         "zh_CN": "模型识别为“{original}”，未能找到可推荐值，请重新选择。",

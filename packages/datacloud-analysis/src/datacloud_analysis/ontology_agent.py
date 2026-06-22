@@ -263,8 +263,6 @@ def _build_input_payload(question: str, workspace_dir: str | None = None) -> dic
         "clarify_needed": False,
         "results": [],
         "execution_status": "",
-        "todo_active_id": "",
-        "todo_tool_plan": [],
         "active_tools": [],
         "execution_trace": [],
         "invocation_dedup": [],
@@ -677,24 +675,19 @@ class OntologyAgent:
 
         effective_locale = locale or self._config.locale
 
-        # 方案A：skill_dirs 由调用方直接传入，在创建 ctx_container 前完成 extras 合并，
-        # 确保 skill_catalog / tools_dict 随 extras 流入 InvocationContext
         _effective_extras: dict[str, Any] = dict(extras or {})
-        if skill_dirs:
-            from datacloud_analysis.skills.catalog import (  # noqa: PLC0415
-                build_available_skills_xml,
-                scan_skill_catalog,
-            )
-
-            _catalog = scan_skill_catalog(
-                [str(d) for d in skill_dirs],
-                rel_skills=rel_skills or set(),
-            )
-            _xml = build_available_skills_xml(_catalog)
-            if _xml:
-                _effective_extras["available_skills"] = _xml
-                _effective_extras["skill_catalog"] = _catalog
-                _effective_extras["tools_dict"] = tools_dict
+        # skill_dirs 参数已废弃：Skill 通过 TOOL_POOL + search_ontology 进程级发现
+        # tools_dict 仍写入 extras 供 sub_agent 克隆分身时使用
+        if tools_dict:
+            _effective_extras["tools_dict"] = tools_dict
+        # llm_config 写入 extras，供 sub_agent 工具函数克隆分身时读取
+        _effective_extras["llm_config"] = {
+            "model": self._config.model,
+            "api_key": self._config.api_key,
+            "base_url": self._config.base_url,
+            "temperature": self._config.temperature,
+            "model_kwargs": self._config.model_kwargs,
+        }
 
         # 无 Gateway 部署使用 NoOpExecutionReporter（实现 ExecutionReporter 协议），
         # 让 tool_wrapper.py 等业务代码不需感知是否有真实 Gateway。
@@ -747,10 +740,7 @@ class OntologyAgent:
             _skill_ws = str(_effective_extras.get("skill_workspace_dir") or "").strip()
             if _skill_ws:
                 graph_input["prompts_overwrite"]["skill_workspace_dir"] = _skill_ws
-            # 注入 available_skills XML（路径B via worker.py extras，或方案A via skill_dirs）
-            _available_skills = str(_effective_extras.get("available_skills") or "").strip()
-            if _available_skills:
-                graph_input["prompts_overwrite"]["available_skills"] = _available_skills
+            # available_skills XML 注入已废弃：Skill 通过 search_ontology + TOOL_POOL 动态发现
             if target_tool:
                 graph_input["target_tool"] = target_tool
         elif isinstance(resume_input, str | dict):

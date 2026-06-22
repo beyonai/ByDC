@@ -192,3 +192,93 @@ class TestScanSkillCatalog:
         result = scan_skill_catalog([tmp_path], rel_skills=set())
         names = [s["name"] for s in result]
         assert "skill-B" in names
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 新字段：delegation / required_tools / step_count
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _write_skill_full(
+    root: Path,
+    name: str,
+    description: str = "描述",
+    delegation: str | None = None,
+    required_tools: list[str] | None = None,
+    steps: int = 0,
+) -> Path:
+    """写带新字段的 SKILL.md。"""
+    d = root / name
+    d.mkdir(parents=True, exist_ok=True)
+    lines = ["---", f"name: {name}", f"description: {description}"]
+    if delegation:
+        lines.append(f"delegation: {delegation}")
+    if required_tools:
+        lines.append("required_tools:")
+        for t in required_tools:
+            lines.append(f"  - {t}")
+    lines.append("---")
+    lines.append("")
+    lines.append("## 执行步骤")
+    for i in range(1, steps + 1):
+        lines.append(f"\n### Step {i}：步骤{i}\n内容{i}")
+    (d / "SKILL.md").write_text("\n".join(lines), encoding="utf-8")
+    return d
+
+
+class TestNewFields:
+    def test_delegation_required_parsed(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-req", delegation="required")
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-req")
+        assert entry["delegation"] == "required"
+
+    def test_delegation_auto_parsed(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-auto", delegation="auto")
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-auto")
+        assert entry["delegation"] == "auto"
+
+    def test_delegation_never_parsed(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-never", delegation="never")
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-never")
+        assert entry["delegation"] == "never"
+
+    def test_delegation_missing_defaults_to_auto(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-nodelg")
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-nodelg")
+        assert entry["delegation"] == "auto"
+
+    def test_required_tools_parsed(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-rt", required_tools=["get_spans", "find_error_spans"])
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-rt")
+        assert entry["required_tools"] == ["get_spans", "find_error_spans"]
+
+    def test_required_tools_missing_returns_empty_list(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-nort")
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-nort")
+        assert entry["required_tools"] == []
+
+    def test_step_count_counted_correctly(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-3step", steps=3)
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-3step")
+        assert entry["step_count"] == 3
+
+    def test_step_count_zero_when_no_steps(self, tmp_path: Path) -> None:
+        _write_skill_full(tmp_path, "skill-nostep", steps=0)
+        _SKILL_CATALOG_CACHE.clear()
+        result = scan_skill_catalog([tmp_path])
+        entry = next(s for s in result if s["name"] == "skill-nostep")
+        assert entry["step_count"] == 0

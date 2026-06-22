@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 
 # ── dynamic_prompt 锚点注入测试 ─────────────────────────────────────────────────
 
+
 def _make_state(**kwargs: Any) -> Any:
     """构造一个最小 AgentState-like dict。"""
     base: dict[str, Any] = {
@@ -138,16 +139,19 @@ def test_dynamic_prompt_hides_activated_objects_from_list(monkeypatch: Any) -> N
         if result and "可选本体对象" in result:
             # 已激活的对象不应再出现在可选列表
             # （但可能出现在其他区域，这里只检查可选列表部分）
-            available_section = result.split("可选本体对象")[1].split("##")[0] if "##" in result.split("可选本体对象")[1] else result.split("可选本体对象")[1]
-            assert "ops_activated_obj" not in available_section, (
-                "已激活的对象不应出现在可选列表中"
+            available_section = (
+                result.split("可选本体对象")[1].split("##")[0]
+                if "##" in result.split("可选本体对象")[1]
+                else result.split("可选本体对象")[1]
             )
+            assert "ops_activated_obj" not in available_section, "已激活的对象不应出现在可选列表中"
     finally:
         tool_pool.TOOL_POOL.pop("get_spans_activated", None)
         tool_pool.TOOL_TO_OBJECT.pop("get_spans_activated", None)
 
 
 # ── graph_builder 集成测试 ──────────────────────────────────────────────────────
+
 
 def test_prebuilt_graph_includes_anchor_tools_when_anchor_mode(monkeypatch: Any) -> None:
     """锚点模式下，build_analysis_graph 构建的 tools 应包含 activate_anchor / mark_dead_end。"""
@@ -203,7 +207,8 @@ def test_builtin_tools_include_anchor_tools_in_anchor_mode(monkeypatch: Any) -> 
         has_anchor_in_builtin = "activate_anchor" in tool_names
         # 如果不在 builtin，则至少 _build_tools_list(None) 在锚点模式下应包含
         if not has_anchor_in_builtin:
-            # _build_tools_list 在锚点模式下应包含锚点工具
+            node_module._build_tools_list(None)
+            # 暂时标记：需要在 _build_tools_list 或 builtin 里集成
             # 这个测试先作为"确认集成点"的检查点
             pass  # 阶段二实现后会通过
     finally:

@@ -145,6 +145,64 @@ class OntologyLoader:
                 view_data = json.loads(view_file.read_text(encoding="utf-8"))
                 self.load_scene(view_data)
 
+    def load_from_json_resource_directory(self, base_dir: str | Path) -> None:
+        """从 JSON 格式本体资源目录增量加载，补充进 _classes（不清空已有内容）。
+
+        目录结构：
+          {base_dir}/
+            {scene_id}/
+              objects/
+                {object_code}.json   ← ObjectType 格式（snake_case 或 camelCase）
+              relations.json         ← 关系列表
+
+        与 load_from_owl_resource_directory() 的区别：
+          OWL 方法调用 _load_from_owl_content()，会 clear() 后重载；
+          本方法调用 load_from_content()，增量追加，不清空。
+
+        Args:
+            base_dir: 本体资源根目录，如 {ONTOLOGY_PATH}/tasks/{trace_id}/
+        """
+        base_path = Path(base_dir)
+        if not base_path.exists():
+            return
+
+        for scene_dir in sorted(base_path.iterdir()):
+            if not scene_dir.is_dir():
+                continue
+
+            objects_dir = scene_dir / "objects"
+            if objects_dir.exists():
+                for json_file in sorted(objects_dir.glob("*.json")):
+                    try:
+                        raw = json.loads(json_file.read_text(encoding="utf-8"))
+                        normalized = _normalize_object_json(raw)
+                        if normalized.get("object_code"):
+                            self.load_from_content(
+                                {
+                                    "objects": [normalized],
+                                    "relations": [],
+                                    "views": [],
+                                }
+                            )
+                    except Exception:  # noqa: BLE001
+                        pass
+
+            relations_file = scene_dir / "relations.json"
+            if relations_file.exists():
+                try:
+                    rel_data = json.loads(relations_file.read_text(encoding="utf-8"))
+                    rels = rel_data.get("relations", [])
+                    if rels:
+                        self.load_from_content(
+                            {
+                                "objects": [],
+                                "relations": rels,
+                                "views": [],
+                            }
+                        )
+                except Exception:  # noqa: BLE001
+                    pass
+
     def load_from_owl_directory(self, base_dir: str | Path) -> None:
         """
         从 OWL 目录加载本体定义
@@ -633,3 +691,25 @@ class OntologyLoader:
                 )
             )
         return result
+
+
+def _normalize_object_json(data: dict[str, Any]) -> dict[str, Any]:
+    """将 JSON 文件中的对象数据规范化为 load_from_content() 期望的 snake_case 格式。
+
+    JSONWriter 写入的是驼峰格式（objectCode/objectName），
+    load_from_content() 期望 snake_case（object_code/object_name）。
+    两种格式均支持，优先 snake_case。
+    """
+    return {
+        "object_code": data.get("object_code") or data.get("objectCode", ""),
+        "object_name": data.get("object_name") or data.get("objectName", ""),
+        "description": data.get("description") or data.get("objectDesc", ""),
+        "source_type": data.get("source_type") or data.get("sourceType", "DB"),
+        "fields": data.get("fields") or data.get("properties", []),
+        "actions": data.get("actions", []),
+        "datasource_alias": data.get("datasource_alias") or data.get("datasourceAlias"),
+        "table_name": data.get("table_name") or data.get("tableName"),
+        "source_config": data.get("source_config") or data.get("sourceConfig"),
+        "ext_property": data.get("ext_property") or data.get("extProperty", {}),
+        "tags": data.get("tags", []),
+    }

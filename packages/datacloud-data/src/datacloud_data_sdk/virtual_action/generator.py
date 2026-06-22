@@ -308,10 +308,7 @@ def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False)
     field_codes = [_fc(f) for f in filterable]
     ops = list(
         dict.fromkeys(
-            str(op)
-            for f in filterable
-            for op in (getattr(f, "filter_ops", []) or [])
-            if op
+            str(op) for f in filterable for op in (getattr(f, "filter_ops", []) or []) if op
         )
     )
     field_schema: dict[str, Any] = {
@@ -810,11 +807,7 @@ def build_compute_schema(
     def _flat_filter_item_schema(filter_fields: list[Any]) -> dict[str, Any]:
         field_codes = [_fc(f) for f in filter_fields]
         ops = _unique(
-            [
-                str(op)
-                for f in filter_fields
-                for op in (getattr(f, "filter_ops", []) or [])
-            ]
+            [str(op) for f in filter_fields for op in (getattr(f, "filter_ops", []) or [])]
         )
         return {
             "type": "object",

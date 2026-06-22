@@ -100,6 +100,9 @@ def _log_create_agent_diagnostics(
     question_context: str,
     merged_tools: dict[str, Any] | None,
     mounted_objects: list[str] | None,
+    model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
 ) -> None:
     """打印建图时的「agent_id + 问题上下文 + 工具清单」，便于线上对照核查。"""
 
@@ -124,15 +127,9 @@ def _log_create_agent_diagnostics(
         from langfuse import Langfuse  # noqa: PLC0415
 
         _tool_count = len(merged_tools or {})
-        lf = Langfuse(
-            secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-            public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-            host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
-        )
-        api_key = os.getenv("DATACLOUD_LLM_API_KEY", "")
+        lf = Langfuse()
         lf.update_current_span(
             metadata={
-                "object_type": "early_span",
                 "AgentDiag": {
                     "agent_id": agent_id_display,
                     "tool_count": _tool_count,
@@ -140,9 +137,11 @@ def _log_create_agent_diagnostics(
                     "mounted_objects": list(mounted_objects or []),
                 },
                 "LLMConfig": {
-                    "model": os.getenv("DATACLOUD_LLM_MODEL", ""),
-                    "base_url": os.getenv("DATACLOUD_LLM_API_BASE", ""),
-                    "api_key_status": "present" if api_key else "missing",
+                    "model": model or os.getenv("DATACLOUD_LLM_MODEL", ""),
+                    "base_url": base_url or os.getenv("DATACLOUD_LLM_API_BASE", ""),
+                    "api_key_status": "present"
+                    if api_key
+                    else os.getenv("DATACLOUD_LLM_API_KEY", "missing"),
                 },
                 "DatacloudConfig": {
                     "ontology_path": os.getenv("DATACLOUD_ONTOLOGY_PATH", ""),
@@ -253,6 +252,9 @@ def create_agent(
         question_context=question_ctx,
         merged_tools=merged_tools,
         mounted_objects=mounted_objects,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
     )
 
     logger.info("create_agent: locale=%s (Custom StateGraph)", resolved_locale)

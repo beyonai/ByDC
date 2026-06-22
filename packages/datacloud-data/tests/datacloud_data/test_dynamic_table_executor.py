@@ -76,8 +76,7 @@ async def test_dynamic_table_insert_returns_auto_increment_id() -> None:
 
     sql, params = connector.calls[0]
     assert sql == (
-        'INSERT INTO "sales_note" ("customer_name", "amount") '
-        'VALUES (:v_0, :v_1) RETURNING *'
+        'INSERT INTO "sales_note" ("customer_name", "amount") VALUES (:v_0, :v_1) RETURNING *'
     )
     assert params == {"v_0": "白银有色", "v_1": 12.5}
     assert result["records"] == [{"id": 1, "customer_name": "白银有色", "amount": 12.5}]

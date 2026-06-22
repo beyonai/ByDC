@@ -200,3 +200,29 @@ class TestActivateSkill:
             result = await activate_skill.ainvoke({"name": "老鹰"})
 
         assert "错误" in result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task #3：node.py 移除旧通用 activate_skill，内部函数保留
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestActivateSkillRemovedFromBuiltins:
+    def test_activate_skill_not_in_builtin_tools(self) -> None:
+        """activate_skill 通用工具不应再出现在 _BUILTIN_TOOLS。"""
+        from datacloud_analysis.orchestration.execution.node import _BUILTIN_TOOLS
+
+        names = [t.name for t in _BUILTIN_TOOLS]
+        assert "activate_skill" not in names
+
+    def test_load_skill_body_still_importable(self) -> None:
+        """_load_skill_body 内部函数应保留，供 wrapper 复用。"""
+        from datacloud_analysis.tools.activate_skill import _load_skill_body
+
+        assert callable(_load_skill_body)
+
+    def test_replace_placeholders_still_importable(self) -> None:
+        """_replace_placeholders 内部函数应保留，供 wrapper 复用。"""
+        from datacloud_analysis.tools.activate_skill import _replace_placeholders
+
+        assert callable(_replace_placeholders)

@@ -487,8 +487,7 @@ async def test_view_analyze_count_all_metric_filters_generate_case_when() -> Non
     )
 
     assert (
-        'SUM(CASE WHEN (t1."amount" > :m0_order_amount_0) THEN 1 ELSE 0 END) '
-        'AS "large_order_count"'
+        'SUM(CASE WHEN (t1."amount" > :m0_order_amount_0) THEN 1 ELSE 0 END) AS "large_order_count"'
     ) in connector.sql
     assert 'LEFT JOIN "orders" t1 ON t0."id" = t1."user_id"' in connector.sql
     assert connector.params == {"m0_order_amount_0": 10}

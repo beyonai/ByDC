@@ -35,6 +35,15 @@ TOOL_TO_OBJECT: dict[str, str] = {}
 # OntologyRelationGraph 进程级单例
 _RELATION_GRAPH: Any = None  # OntologyRelationGraph | None
 
+# AOCI 格式本体索引（进程级缓存，构建一次复用）
+_ONTOLOGY_INDEX: str = ""
+
+
+def get_ontology_index() -> str:
+    """返回 AOCI 格式本体索引字符串，未初始化时返回空字符串。"""
+    return _ONTOLOGY_INDEX
+
+
 # 工具池阈值：工具数超过此值时启用锚点驱动模式（LLM 自选锚点 + 渐进式解锁）
 # 低于或等于阈值时全量挂载（原有行为不变）
 TOOL_POOL_THRESHOLD: int = int(os.getenv("TOOL_POOL_THRESHOLD", "30"))
@@ -43,11 +52,12 @@ TOOL_POOL_THRESHOLD: int = int(os.getenv("TOOL_POOL_THRESHOLD", "30"))
 def is_anchor_mode() -> bool:
     """当前是否处于锚点驱动模式。
 
-    工具池中工具数量超过 TOOL_POOL_THRESHOLD 时返回 True，
-    此时 LLM 需要先选择锚点对象（activate_anchor），再渐进式展开。
-    低于阈值时全量挂载，直接可用，返回 False。
+    只统计 object/view 工具数（排除 activate_skill_* skill wrapper），
+    避免 skill wrapper 注册后意外触发 anchor_mode。
+    工具数超过 TOOL_POOL_THRESHOLD 时返回 True。
     """
-    return len(TOOL_POOL) > TOOL_POOL_THRESHOLD
+    object_tool_count = sum(1 for name in TOOL_POOL if not name.startswith("activate_skill_"))
+    return object_tool_count > TOOL_POOL_THRESHOLD
 
 
 # 进程级 OntologyLoader 单例（供 anchor_tools.py 判断 View/Object 用）
@@ -222,3 +232,192 @@ def _infer_object_code(tool_name: str, ops_codes: list[str]) -> str:
         if tool_name.endswith(code) or code in tool_name:
             return code
     return ""
+
+
+# ── Skill wrapper 注册 ────────────────────────────────────────────────────────
+
+
+def _make_skill_wrapper(skill: dict[str, Any]) -> Any:
+    """为单个 skill 生成 activate_skill_<name> StructuredTool。
+
+    wrapper 函数体负责：
+      1. 读 SKILL.md frontmatter（_parse_skill_frontmatter_cached）
+      2. 执行 Level3 data_check preconditions
+      3. 通过后加载 SKILL.md body，执行占位符替换，返回步骤指令
+    """
+    from langchain_core.tools import tool as _tool  # noqa: PLC0415
+
+    from datacloud_analysis.tools.activate_skill import (  # noqa: PLC0415
+        _load_skill_body,
+    )
+
+    skill_location: str = skill["location"]
+    skill_name: str = skill["name"]
+    delegation: str = skill.get("delegation", "auto")  # type: ignore[assignment]
+    step_count: int = int(skill.get("step_count", 0))  # type: ignore[arg-type]
+
+    # delegation 提示写入工具描述，LLM 据此决策是否用 sub_agent
+    if delegation == "required":
+        delegation_hint = "（步骤多，必须通过 sub_agent 分身执行）"
+    elif delegation == "never":
+        delegation_hint = "（轻量 skill，在主 Agent 直接执行）"
+    else:
+        delegation_hint = (
+            f"（共 {step_count} 步，步骤多时建议通过 sub_agent 分身执行）" if step_count > 5 else ""
+        )
+    description = f"{skill['description']}{delegation_hint}"
+
+    wrapper_tool_name = f"activate_skill_{skill_name.replace('-', '_')}"
+
+    @_tool(wrapper_tool_name, description=description)
+    async def wrapper() -> str:
+        fm = _parse_skill_frontmatter_cached(skill_location)
+        ok = await _check_preconditions_data_check(fm, cache=_get_request_cache())
+        if not ok:
+            return f"[skill '{skill_name}' 前置条件不满足，建议转 ReAct 自由探索]"
+        tools_dict = dict(TOOL_POOL.items())
+        body, warnings, err = _load_skill_body(skill_location, tools_dict)
+        if err:
+            return err
+        result = f"# Skill: {skill_name}\n\n{body}"
+        if warnings:
+            result += "\n\n" + "\n".join(warnings)
+        return result
+
+    return wrapper
+
+
+def register_skill_wrappers(catalog: list[dict[str, Any]]) -> None:
+    """扫描 skill catalog，为每个 skill 注册 activate_skill_<name> wrapper 到 TOOL_POOL。
+
+    跳过 required_tools 不满足的 skill。
+    skill wrapper 不加入 OntologyRelationGraph，OWL after_hook 不会解锁它。
+    """
+    for skill in catalog:
+        required: list[str] = skill.get("required_tools") or []  # type: ignore[assignment]
+        missing = [t for t in required if t not in TOOL_POOL]
+        if missing:
+            logger.warning(
+                "skill %r 跳过注册：required_tools %s 未全部加载",
+                skill.get("name"),
+                missing,
+            )
+            continue
+        name: str = skill["name"]  # type: ignore[assignment]
+        wrapper_name = f"activate_skill_{name.replace('-', '_')}"
+        TOOL_POOL[wrapper_name] = _make_skill_wrapper(skill)
+        TOOL_TO_OBJECT[wrapper_name] = f"skill_{name}"
+        logger.debug("register_skill_wrappers: registered %s", wrapper_name)
+
+    logger.info(
+        "register_skill_wrappers: registered %d skill wrappers",
+        sum(1 for k in TOOL_POOL if k.startswith("activate_skill_")),
+    )
+
+
+def _parse_skill_frontmatter_cached(abs_path: str) -> dict[str, Any]:
+    """读取并缓存 SKILL.md frontmatter（进程级，TTL=300s）。"""
+    import time  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    from datacloud_analysis.skills.catalog import parse_skill_frontmatter  # noqa: PLC0415
+
+    now = time.monotonic()
+    cached = _SKILL_FM_CACHE.get(abs_path)
+    if cached is not None:
+        ts, fm = cached
+        if now - ts < _SKILL_FM_CACHE_TTL:
+            return fm
+
+    skill_dir = Path(abs_path).parent
+    result = parse_skill_frontmatter(skill_dir) or {}
+    _SKILL_FM_CACHE[abs_path] = (now, result)
+    return result
+
+
+def _get_request_cache() -> dict[str, Any]:
+    """返回当前请求级的 data_check 缓存 dict（生命周期 = 单次请求）。"""
+    try:
+        from datacloud_data_sdk.context import get_current_context  # noqa: PLC0415
+
+        ctx = get_current_context()
+        extras: dict[str, Any] = getattr(ctx, "extras", None) or {}
+        if "_skill_data_check_cache" not in extras:
+            extras["_skill_data_check_cache"] = {}
+        return extras["_skill_data_check_cache"]  # type: ignore[return-value]
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+async def _check_preconditions_data_check(
+    fm: dict[str, Any],
+    cache: dict[str, Any],
+) -> bool:
+    """执行 preconditions 中的 data_check 规则，全部通过返回 True。
+
+    cache key = f"{action}:{json(params_resolved)}"
+    """
+    import json  # noqa: PLC0415
+    import re  # noqa: PLC0415
+
+    preconditions: list[dict[str, Any]] = fm.get("preconditions") or []
+    data_checks = [r for r in preconditions if r.get("type") == "data_check"]
+    if not data_checks:
+        return True
+
+    try:
+        from datacloud_data_sdk.context import get_current_context  # noqa: PLC0415
+
+        ctx = get_current_context()
+        extras: dict[str, Any] = getattr(ctx, "extras", None) or {}
+        state_dict: dict[str, Any] = extras.get("_current_state") or {}
+    except Exception:  # noqa: BLE001
+        state_dict = {}
+
+    def _resolve_params(params: dict[str, Any]) -> dict[str, Any]:
+        def _sub(v: str) -> str:
+            def replacer(m: re.Match[str]) -> str:
+                key = m.group(1)
+                return str(state_dict.get(key) or extras.get(key) or "")
+
+            return re.sub(r"\{\{ctx\.(\w+)\}\}", replacer, v)
+
+        return {k: _sub(v) if isinstance(v, str) else v for k, v in params.items()}
+
+    for rule in data_checks:
+        action: str = rule.get("action", "")
+        params = _resolve_params(dict(rule.get("params") or {}))
+        cache_key = f"{action}:{json.dumps(params, sort_keys=True, ensure_ascii=False)}"
+
+        if cache_key in cache:
+            result = cache[cache_key]
+        else:
+            # 找到对应工具并调用
+            tool_name = action.split(".")[-1] if "." in action else action
+            tool_obj = TOOL_POOL.get(tool_name)
+            if tool_obj is None:
+                logger.warning("data_check: tool %r not in TOOL_POOL, skipping", tool_name)
+                continue
+            try:
+                result = await tool_obj.ainvoke(params)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("data_check: tool %r failed: %s", tool_name, exc)
+                cache[cache_key] = None
+                return False
+            cache[cache_key] = result
+
+        assert_expr: str = rule.get("assert", "")
+        if assert_expr:
+            try:
+                passed = bool(eval(assert_expr, {"result": result}))  # noqa: S307
+            except Exception:  # noqa: BLE001
+                passed = False
+            if not passed:
+                return False
+
+    return True
+
+
+# 进程级 skill frontmatter 缓存
+_SKILL_FM_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_SKILL_FM_CACHE_TTL: float = 300.0

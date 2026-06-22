@@ -180,12 +180,8 @@ def test_init_ext_tool_pool_accepts_ext_codes(tmp_path: Any) -> None:
     from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
 
     sig = inspect.signature(_init_ext_tool_pool)
-    assert "ext_codes" in sig.parameters, (
-        "_init_ext_tool_pool must have ext_codes parameter"
-    )
-    assert "name_prefix" in sig.parameters, (
-        "_init_ext_tool_pool must have name_prefix parameter"
-    )
+    assert "ext_codes" in sig.parameters, "_init_ext_tool_pool must have ext_codes parameter"
+    assert "name_prefix" in sig.parameters, "_init_ext_tool_pool must have name_prefix parameter"
 
 
 def test_init_ext_tool_pool_ext_codes_none_scans_directory(tmp_path: Any) -> None:
@@ -203,7 +199,8 @@ def test_init_ext_tool_pool_ext_codes_none_scans_directory(tmp_path: Any) -> Non
     def fake_scan(resource_path, ext_codes=None, name_prefix=None):
         object_dir_inner = _Path(resource_path) / "object"
         scanned = sorted(
-            d.name for d in object_dir_inner.iterdir()
+            d.name
+            for d in object_dir_inner.iterdir()
             if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
         )
         captured.extend(scanned)
@@ -236,7 +233,6 @@ def test_init_ops_tool_pool_removed() -> None:
     )
 
 
-
 def test_span_cache_importable() -> None:
     from datacloud_analysis.tools import span_cache  # noqa: F401
 
@@ -266,3 +262,97 @@ def test_span_cache_operations() -> None:
 
     # 不同 trace_id 隔离
     assert get_cached_observations("other_trace") == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Task #2：skill wrapper 注册 + is_anchor_mode 修正
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestRegisterSkillWrappers:
+    def setup_method(self) -> None:
+        from datacloud_analysis.tools.tool_pool import TOOL_POOL, TOOL_TO_OBJECT
+
+        # 清理可能残留的 skill wrapper
+        for k in list(TOOL_POOL.keys()):
+            if k.startswith("activate_skill_"):
+                del TOOL_POOL[k]
+        for k in list(TOOL_TO_OBJECT.keys()):
+            if k.startswith("activate_skill_"):
+                del TOOL_TO_OBJECT[k]
+
+    def test_register_skill_wrappers_exists(self) -> None:
+        from datacloud_analysis.tools.tool_pool import register_skill_wrappers
+
+        assert callable(register_skill_wrappers)
+
+    def test_wrapper_registered_in_tool_pool(self, tmp_path: Any) -> None:
+        from datacloud_analysis.skills.catalog import _SKILL_CATALOG_CACHE
+        from datacloud_analysis.tools.tool_pool import (
+            TOOL_POOL,
+            TOOL_TO_OBJECT,
+            register_skill_wrappers,
+        )
+
+        _SKILL_CATALOG_CACHE.clear()
+        catalog = [
+            {
+                "name": "diagnose-fault",
+                "description": "故障诊断",
+                "location": str(tmp_path / "diagnose-fault" / "SKILL.md"),
+                "delegation": "auto",
+                "required_tools": [],
+                "step_count": 2,
+            }
+        ]
+        register_skill_wrappers(catalog)
+
+        assert "activate_skill_diagnose_fault" in TOOL_POOL
+        assert TOOL_TO_OBJECT["activate_skill_diagnose_fault"] == "skill_diagnose-fault"
+
+    def test_required_tools_missing_skips_registration(self, tmp_path: Any) -> None:
+        from datacloud_analysis.tools.tool_pool import TOOL_POOL, register_skill_wrappers
+
+        catalog = [
+            {
+                "name": "diagnose-fault",
+                "description": "故障诊断",
+                "location": str(tmp_path / "diagnose-fault" / "SKILL.md"),
+                "delegation": "auto",
+                "required_tools": ["nonexistent_tool_xyz"],
+                "step_count": 2,
+            }
+        ]
+        register_skill_wrappers(catalog)
+        assert "activate_skill_diagnose_fault" not in TOOL_POOL
+
+    def test_is_anchor_mode_excludes_skill_wrappers(self, tmp_path: Any) -> None:
+        """skill wrapper 不应计入 anchor_mode 阈值判断。"""
+        from datacloud_analysis.tools.tool_pool import (
+            TOOL_POOL,
+            TOOL_POOL_THRESHOLD,
+            is_anchor_mode,
+            register_skill_wrappers,
+        )
+
+        # 先清空非 skill 工具，确保 object 工具数 <= 阈值
+        original_pool = {k: v for k, v in TOOL_POOL.items() if not k.startswith("activate_skill_")}
+        object_count = len(original_pool)
+
+        # 注册大量 skill wrapper 使总数超过阈值
+        catalog = [
+            {
+                "name": f"skill-{i}",
+                "description": f"skill {i}",
+                "location": str(tmp_path / f"skill-{i}" / "SKILL.md"),
+                "delegation": "auto",
+                "required_tools": [],
+                "step_count": 1,
+            }
+            for i in range(TOOL_POOL_THRESHOLD + 5)
+        ]
+        register_skill_wrappers(catalog)
+
+        # is_anchor_mode 应只看 object 工具数，不看 skill wrapper
+        expected = object_count > TOOL_POOL_THRESHOLD
+        assert is_anchor_mode() == expected

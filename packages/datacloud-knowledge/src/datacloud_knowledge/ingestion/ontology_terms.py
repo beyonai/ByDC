@@ -40,6 +40,7 @@ def build_terms(
     entity_desc: str = "",
     schema: str | None = None,
     db_url: str | None = None,
+    search_scope_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """本体术语入库 — 直接写术语库，不走 OWL 文件解析。
 
@@ -247,6 +248,7 @@ def _write_kps_batch(
             "aliases": [],
             "owl_doc_file": None,
             "ext_field": "{}",
+            "search_scope": search_scope_extra or {},
             "parent_term_type_code": (
                 entity_type
                 if t.parent_term_code == entity_code

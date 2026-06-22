@@ -63,6 +63,47 @@ def _format_todo_snapshot(active_todos: list[dict[str, Any]], user_query: str) -
     return "\n".join(lines)
 
 
+def _build_message_tail(state: AgentState, user_query: str) -> str | None:
+    """构建每轮消息末尾追加的 L3 动态内容。
+
+    包含：findings 收敛引导 + task_objects 摘要 + 任务锚定 + todos 快照。
+    注入消息末尾而非 system，不破坏 Anthropic prompt cache。
+    """
+    parts: list[str] = []
+    rg = state.get("reasoning_graph") or {}
+
+    # 1. findings 收敛引导（从 system 移出，每轮变化）
+    findings = list(rg.get("findings") or [])
+    if findings:
+        parts.append(
+            f"**已确认 {len(findings)} 条结论。**"
+            "如证据足够回答用户问题，直接调用 finish_react 输出结论。"
+        )
+
+    # 2. task_objects 摘要（物化后才出现）
+    task_objects = list(rg.get("task_objects") or [])
+    if task_objects:
+        lines = ["**已物化任务级对象：**"]
+        for t_obj in task_objects:
+            summary = str(t_obj.get("summary") or "")[:80]
+            lines.append(f"  - {t_obj.get('code', '')}（{t_obj.get('row_count', 0)}行）：{summary}")
+        parts.append("\n".join(lines))
+
+    # 3. 任务锚定（防止原始任务被消息窗口裁剪丢失）
+    if user_query:
+        parts.append(f"[任务锚定] 原始任务：{user_query}")
+
+    # 4. todos 快照（pending/in_progress 项）
+    todos = list(state.get("todos") or [])
+    active_todos = [t for t in todos if t.get("status") in ("pending", "in_progress")]
+    if active_todos:
+        parts.append(_format_todo_snapshot(active_todos, user_query))
+
+    if not parts:
+        return None
+    return "\n\n".join(parts)
+
+
 def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> str | None:
     """从 state 的 knowledge_snippets 和 gateway_context 构建每次请求的动态 prompt 部分。"""
     parts: list[str] = []
