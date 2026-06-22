@@ -114,7 +114,7 @@ class TestReadFileSkillBranch:
     @pytest.mark.asyncio
     async def test_no_context_uses_storage(self) -> None:
         """无 InvocationContext 时走原有 storage 逻辑，不抛异常。"""
-        from datacloud_data_sdk.exceptions import DatacloudError
+        from datacloud_platform.errors import DatacloudError
 
         mock_storage = MagicMock()
         mock_storage.read_text.return_value = "fallback content"

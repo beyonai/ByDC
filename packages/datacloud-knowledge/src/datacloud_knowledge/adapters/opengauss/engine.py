@@ -1010,6 +1010,81 @@ class PostgresSearchEngine(TermSearchEngine):
             log.exception("向量搜索失败")
             raise
 
+    def search_terms_by_embedding(
+        self,
+        vector: list[float],
+        *,
+        term_types: Sequence[str] | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """用向量做 pgvector 余弦相似度搜索，返回 term 信息。
+
+        Args:
+            vector: embedding 向量。
+            term_types: 过滤的 term_type_code 列表（如 ['object','view','prop']）。
+                        None = 不过滤。
+            limit: 返回条数上限。
+
+        Returns:
+            [{"term_code": ..., "term_name": ..., "term_type_code": ...,
+              "name_text": ..., "score": ...}, ...]
+        """
+        vector_str = "[" + ",".join(map(str, vector)) + "]"
+
+        if term_types:
+            placeholders = ", ".join(f":type_{i}" for i in range(len(term_types)))
+            type_filter = f"AND t.term_type_code IN ({placeholders})"
+        else:
+            type_filter = ""
+
+        sql = text(
+            f"""
+            SELECT
+                tn.name_text,
+                t.term_code,
+                t.term_type_code,
+                1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
+            FROM
+                term_name tn,
+                term t
+            WHERE
+                tn.name_embedding IS NOT NULL
+                AND tn.term_id = t.term_id
+                {type_filter}
+            ORDER BY
+                tn.name_embedding <=> CAST(:vector AS vector)
+            LIMIT :limit
+            """
+        )
+
+        try:
+            params: dict[str, Any] = {"vector": vector_str, "limit": limit}
+            if term_types:
+                for i, tt in enumerate(term_types):
+                    params[f"type_{i}"] = tt
+
+            rows = self._session.execute(sql, params).fetchall()
+
+            results: list[dict[str, Any]] = []
+            for row in rows:
+                name_text, term_code, term_type_code, score = row
+                results.append(
+                    {
+                        "term_code": str(term_code) if term_code else "",
+                        "term_name": str(name_text),
+                        "term_type_code": str(term_type_code),
+                        "name_text": str(name_text),
+                        "score": float(score),
+                    }
+                )
+
+            log.debug("向量术语搜索找到 %d 条结果", len(results))
+            return results
+
+        except Exception:
+            log.exception("向量术语搜索失败")
+            raise
+
     # ═══════════════════════════════════════════════════════════════
     # 批量召回方法（供 intent.recall 使用）
     # ═══════════════════════════════════════════════════════════════

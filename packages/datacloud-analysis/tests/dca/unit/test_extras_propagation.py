@@ -12,6 +12,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
+# TODO(Phase 3): pass InvocationContext explicitly instead of global get_current_context
 from datacloud_data_sdk.context import get_current_context
 from langchain_core.tools import tool
 

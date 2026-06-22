@@ -1,0 +1,53 @@
+[project]
+name = "datacloud-platform"
+version = "0.1.0"
+description = "DataCloud Platform — 统一本体/知识/执行/存储 Backend 抽象层"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Whale DataCloud Team" }
+]
+maintainers = [
+    { name = "Whale DataCloud Team" }
+]
+keywords = ["data", "ontology", "knowledge", "platform", "backend", "protocol"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: Apache Software License",
+]
+
+dependencies = [
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/beyonai/by-datacloud"
+Repository = "https://github.com/beyonai/by-datacloud"
+Issues = "https://github.com/beyonai/by-datacloud/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/datacloud_platform"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/fakes.py" = ["ARG002"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]

@@ -5,7 +5,7 @@ import logging
 from contextlib import nullcontext
 from typing import Any, TypedDict
 
-from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
+from datacloud_platform.stream import coerce_stream_chunk_text
 from langchain_core.tools import BaseTool
 
 try:
@@ -13,9 +13,13 @@ try:
 except ImportError:  # langgraph not installed or older version
     GraphBubbleUp = type(None)  # type: ignore[assignment,misc]
 
+from datacloud_platform import get_platform
+
 from datacloud_analysis.tool_hook_plugins import get_tool_hook_plugin_manager
 from datacloud_analysis.tool_hook_plugins.types import HookContext, HookSignalError
 from datacloud_analysis.workspace.runtime import resolve_shared_workspace_dir
+
+_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +121,7 @@ def _summarize_output(output: Any) -> str:
 
 def _build_tool_error(exc: Exception) -> ToolErrorDict:  # noqa: C901, PLR0912
     """Convert an exception to a structured ToolErrorDict with classification metadata."""
-    from datacloud_data_sdk.exceptions import (  # noqa: PLC0415
+    from datacloud_platform.errors import (  # noqa: PLC0415
         ActionNotConfiguredError,
         ActionNotFoundError,
         ApiExecutionError,
@@ -193,12 +197,10 @@ def _build_tool_error(exc: Exception) -> ToolErrorDict:  # noqa: C901, PLR0912
         hint = f"步骤「{exc.step_id}」的依赖步骤「{exc.depends_on}」缺失，请检查执行计划。"
     else:
         try:
-            from datacloud_knowledge.file_store.errors import (  # noqa: PLC0415
+            from datacloud_platform.errors import (  # noqa: PLC0415  # noqa: PLC0415
                 BackendMisconfiguredError,
                 FileNotFoundInStoreError,
                 FileStoreError,
-            )
-            from datacloud_knowledge.search.vector_validation import (  # noqa: PLC0415
                 TermVectorValidationError,
             )
         except ImportError:

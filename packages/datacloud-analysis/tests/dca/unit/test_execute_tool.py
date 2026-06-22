@@ -127,7 +127,7 @@ class TestExecuteTool:
     @pytest.mark.asyncio
     async def test_no_context_falls_back_gracefully(self) -> None:
         """无 InvocationContext 时不抛异常，降级到 os.getcwd()。"""
-        from datacloud_data_sdk.exceptions import DatacloudError
+        from datacloud_platform.errors import DatacloudError
 
         with patch(
             "datacloud_analysis.tools.execute.get_current_context",

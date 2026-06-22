@@ -124,7 +124,7 @@ async def _emit_thinking_token(
     if not token:
         return
     try:
-        from datacloud_data_sdk.stream_text import (
+        from datacloud_platform.stream import (
             coerce_stream_chunk_text,  # type: ignore  # noqa: PLC0415
         )
         from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
@@ -153,7 +153,7 @@ async def _emit_stream_token(
     if not token:
         return
     try:
-        from datacloud_data_sdk.stream_text import (
+        from datacloud_platform.stream import (
             coerce_stream_chunk_text,  # type: ignore  # noqa: PLC0415
         )
         from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
@@ -179,7 +179,7 @@ async def _emit_answer_token(
     if not token:
         return
     try:
-        from datacloud_data_sdk.stream_text import (
+        from datacloud_platform.stream import (
             coerce_stream_chunk_text,  # type: ignore  # noqa: PLC0415
         )
         from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415

@@ -8,7 +8,7 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
-from datacloud_knowledge.provider import finalize_query_clarification
+from datacloud_platform import get_platform
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
@@ -22,6 +22,8 @@ from datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin 
 from datacloud_analysis.tool_hook_plugins.builtin.query_clarification_plugin import (
     _scope_code_from_tool,
 )
+
+_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
 
 logger = logging.getLogger(__name__)
 
@@ -570,7 +572,8 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
 
     scope_code = _scope_code_from_tool(tool_name)
     user_id = _get_gateway_user_id(config)
-    finalized = finalize_query_clarification(
+    result = get_platform().finalize_clarification(
+        base_id=_base_id,
         query=query,
         ontology_code=scope_code,
         structured_input=_effective_structured_input,
@@ -582,12 +585,14 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
         persist_confirmed_synonyms=True,
         language=language,
     )
-    formatted_params = finalized.structured_input
-    if finalized.persisted_synonyms is not None:
+    formatted_params = result["structured_input"]
+    persisted_synonyms = result.get("persisted_synonyms")
+    if persisted_synonyms is not None:
+        created_ids = persisted_synonyms.get("created_ids", [])
         logger.info(
             "[user_clarify] persisted confirmed synonyms user_id=%s count=%d",
             user_id or "",
-            len(finalized.persisted_synonyms.created_ids),
+            len(created_ids),
         )
     elif not user_id:
         logger.info("[user_clarify] skip synonym persistence: gateway user_id is empty")

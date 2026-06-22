@@ -19,8 +19,12 @@ import logging
 import re
 import threading
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol, cast
 
 from datacloud_knowledge.adapters import create_reader
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,30 @@ _MIN_TOKEN_LEN = 2
 
 
 # ── 数据模型 ──────────────────────────────────────────────
+
+
+class _DimValueReader(Protocol):
+    """Reader 协议：仅暴露 resolve_value_to_property / get_referenced_by 所需方法。"""
+
+    def get_relation_target_ids(
+        self,
+        *,
+        source_term_ids: Sequence[str] | None = None,
+        target_term_ids: Sequence[str] | None = None,
+        relation_category: str | None = None,
+    ) -> Sequence[str]: ...
+
+    def get_terms_batch_raw(
+        self,
+        *,
+        term_ids: Sequence[str] | None = None,
+        term_codes: Sequence[str] | None = None,
+    ) -> Sequence[dict[str, str | None]]: ...
+
+
+def _get_reader() -> _DimValueReader:
+    """获取 reader 并 cast 为内部协议。"""
+    return cast(_DimValueReader, create_reader())
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +224,139 @@ class DimensionValueResolver:
         if _looks_like_measure(prop_name):
             return "度量"
         return "unknown"
+
+    # ── 正向/反向属性解析 ──────────────────────────────
+
+    def resolve_value_to_property(self, value_term_id: str) -> dict[str, str]:  # noqa: PLR0911
+        """给定 value term_id，解析所属 property 和 object。
+
+        Chain: term_val -> parent -> type_root
+               type_root <- HAS_TERM(target) <- prop -> parent -> object
+
+        Args:
+            value_term_id: 维度值术语的 term_id（cat=2 枚举项）。
+
+        Returns:
+            {"propertyCode": "...", "objectCode": "..."}。
+            解析失败时返回空 dict。
+        """
+        if not value_term_id:
+            return {}
+        try:
+            reader = _get_reader()
+
+            # Step 1: 获取 value term，提取 type_root（parent_term_id）
+            value_rows = reader.get_terms_batch_raw(term_ids=[value_term_id])
+            if not value_rows:
+                return {}
+            type_root_id = value_rows[0].get("parent_term_id")
+            if not type_root_id:
+                return {}
+
+            # Step 2: 查找引用该 type 的 property（反向 HAS_TERM）
+            prop_ids = reader.get_relation_target_ids(
+                target_term_ids=[type_root_id],
+                relation_category="HAS_TERM",
+            )
+            if not prop_ids:
+                return {}
+
+            # Step 3: 取第一个 property，获取其 parent（object）
+            prop_rows = reader.get_terms_batch_raw(term_ids=[prop_ids[0]])
+            if not prop_rows:
+                return {}
+            prop_row = prop_rows[0]
+            object_id = prop_row.get("parent_term_id")
+            if not object_id:
+                return {}
+
+            # Step 4: 获取 object
+            obj_rows = reader.get_terms_batch_raw(term_ids=[object_id])
+            if not obj_rows:
+                return {}
+
+            return {
+                "propertyCode": prop_row.get("term_code") or "",
+                "objectCode": obj_rows[0].get("term_code") or "",
+            }
+        except Exception:
+            logger.warning(
+                "[dim_values] resolve_value_to_property 失败: value_term_id=%s",
+                value_term_id,
+                exc_info=True,
+            )
+            return {}
+
+    def get_referenced_by(self, value_term_id: str) -> list[dict[str, str]]:  # noqa: PLR0911
+        """给定 value term_id，查找所有引用该值类型的 property。
+
+        Chain: term_val -> parent -> type_root
+               type_root <- HAS_TERM <- prop -> parent -> object
+
+        Args:
+            value_term_id: 维度值术语的 term_id（cat=2 枚举项）。
+
+        Returns:
+            [{"objectCode": ..., "objectName": ...,
+              "propertyCode": ..., "propertyName": ...}, ...]
+        """
+        if not value_term_id:
+            return []
+        try:
+            reader = _get_reader()
+
+            # Step 1: 获取 value term，提取 type_root
+            value_rows = reader.get_terms_batch_raw(term_ids=[value_term_id])
+            if not value_rows:
+                return []
+            type_root_id = value_rows[0].get("parent_term_id")
+            if not type_root_id:
+                return []
+
+            # Step 2: 查找所有引用该 type 的 property
+            prop_ids = reader.get_relation_target_ids(
+                target_term_ids=[type_root_id],
+                relation_category="HAS_TERM",
+            )
+            if not prop_ids:
+                return []
+
+            # Step 3: 批量获取 property 详情
+            prop_rows = reader.get_terms_batch_raw(term_ids=list(prop_ids))
+            if not prop_rows:
+                return []
+
+            # Step 4: 收集 object IDs 并批量获取
+            object_ids: list[str] = [pid for r in prop_rows if (pid := r.get("parent_term_id"))]
+            object_map: dict[str, dict[str, str | None]] = {}
+            if object_ids:
+                obj_rows = reader.get_terms_batch_raw(term_ids=list(dict.fromkeys(object_ids)))
+                for row in obj_rows:
+                    tid = row.get("term_id")
+                    if tid is not None:
+                        object_map[tid] = row
+
+            # Step 5: 组装结果
+            results: list[dict[str, str]] = []
+            for prop_row in prop_rows:
+                obj_id = prop_row.get("parent_term_id")
+                obj_row = object_map.get(obj_id) if obj_id else None
+                results.append(
+                    {
+                        "objectCode": (obj_row.get("term_code") or "") if obj_row else "",
+                        "objectName": (obj_row.get("term_name") or "") if obj_row else "",
+                        "propertyCode": prop_row.get("term_code") or "",
+                        "propertyName": prop_row.get("term_name") or "",
+                    }
+                )
+            return results
+        except Exception:
+            logger.warning(
+                "[dim_values] get_referenced_by 失败: value_term_id=%s",
+                value_term_id,
+                exc_info=True,
+            )
+            return []
 
 
 # ── 工具函数 ──────────────────────────────────────────────

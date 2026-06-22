@@ -74,10 +74,10 @@ class OntologyRelationGraph:
             if not resolve_action:
                 # 兜底：从 description JSON 里读
                 desc_raw = getattr(rel, "description", "") or ""
-                import contextlib  # noqa: PLC0415
-
-                with contextlib.suppress(json.JSONDecodeError, TypeError, ValueError):
-                    resolve_action = json.loads(desc_raw).get("resolve_action_code", "") or ""
+                if desc_raw:
+                    from contextlib import suppress
+                    with suppress(json.JSONDecodeError, TypeError, ValueError):
+                        resolve_action = json.loads(desc_raw).get("resolve_action_code", "") or ""
             if not resolve_action:
                 continue  # 仍然没有 resolve_action_code，跳过
 

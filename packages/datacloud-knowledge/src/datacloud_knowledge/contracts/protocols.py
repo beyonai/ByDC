@@ -362,6 +362,49 @@ class TermReader(Protocol):
         """
         ...
 
+    def get_term(
+        self,
+        *,
+        term_code: str,
+        term_type_code: str,
+        library_id: str | None = None,
+    ) -> str | None:
+        """根据 term_code + term_type_code 查询 term_name。
+
+        内部通过 get_term_by_ids 获取 term_id，再用 get_term_names 获取名称。
+        返回第一个名称（标准名优先），不存在则返回 None。
+
+        Args:
+            term_code: 术语编码。
+            term_type_code: 术语类型编码。
+            library_id: 可选术语库 ID，传入 None 则由实现方按默认策略处理。
+
+        Returns:
+            术语名称字符串，不存在时返回 None。
+        """
+        ...
+
+    def term_exists(
+        self,
+        *,
+        term_code: str,
+        term_type_code: str,
+        library_id: str | None = None,
+    ) -> bool:
+        """检查指定 term_code + term_type_code 的术语是否存在。
+
+        内部通过 get_term_by_ids 判空。
+
+        Args:
+            term_code: 术语编码。
+            term_type_code: 术语类型编码。
+            library_id: 可选术语库 ID，传入 None 则由实现方按默认策略处理。
+
+        Returns:
+            True 如果存在，否则 False。
+        """
+        ...
+
     # ── TermProvider 协议新增方法 ──────────────────────────────────────
 
     def query_terms(

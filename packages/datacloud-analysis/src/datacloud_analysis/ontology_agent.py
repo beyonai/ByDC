@@ -21,6 +21,11 @@ from datacloud_analysis.reporter import NoOpExecutionReporter
 
 logger = logging.getLogger(__name__)
 
+# ── 平台路由 ──────────────────────────────────────────────────────────────────
+from datacloud_platform import get_platform  # noqa: E402
+
+_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
+
 # ── 进程级图缓存上限（与 worker.py 原有 LRU 上限对齐） ──────────────────────
 _CACHE_MAX: int = 32
 
@@ -558,9 +563,6 @@ class OntologyAgent:
     ) -> tuple[Any, list[str]]:
         """解析 OWL 文件，返回 (OntologyLoader, mounted_objects)。"""
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
-        from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
-            inject_virtual_actions,
-        )
 
         from datacloud_analysis.tools.ontology_tool_loader import configure_loader  # noqa: PLC0415
 
@@ -575,7 +577,8 @@ class OntologyAgent:
         # for obj_code in object_codes or []:
         #     loader.load_object_with_deps(resource_path, obj_code)
 
-        inject_virtual_actions(loader)
+        # fixme: pass base_id explicitly — _base_id is module-level
+        get_platform().inject_virtual_actions(_base_id, loader)
         configure_loader(
             loader,
             model=self._config.model,

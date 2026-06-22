@@ -12,7 +12,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from datacloud_data_sdk.stream_text import coerce_stream_chunk_text
+from datacloud_platform.stream import coerce_stream_chunk_text
 from langchain_core.runnables import RunnableConfig
 
 from datacloud_analysis.i18n.prompts import get_ui_text

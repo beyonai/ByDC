@@ -80,9 +80,7 @@ def _submit_object_async(
                 mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
                 if not mount:
                     return {"ok": False, "error": "FILE_STORAGE_MINIO_MOUNT_PATH 环境变量未设置"}
-                from pathlib import Path as _Path
-
-                db_dir = _Path(mount) / "byclaw-datacloud"
+                db_dir = Path(mount) / "byclaw-datacloud"
                 db_dir.mkdir(parents=True, exist_ok=True)
                 db_path = db_dir / "personal_object.db"
                 _conn = _sqlite3.connect(db_path)
@@ -576,7 +574,7 @@ class OntologyBuildSession:
             # 调试：把 zip 复制到 /tmp 方便检查
             import shutil
 
-            debug_zip = Path(f"tmp/debug_{actual_entity_code}.zip")
+            debug_zip = Path(f"/mnt/d/tmp/debug_{actual_entity_code}.zip")
             debug_zip.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(zip_path, debug_zip)
             logger.info("DEBUG zip saved to %s", debug_zip)
