@@ -1610,45 +1610,106 @@ class PostgresTermReader:
             raise
         return tuple((str(r.term_code), int(r.matched_count)) for r in rows)
 
-    def get_relation_target_ids(self, *, source_term_ids: Sequence[str]) -> Sequence[str]:
-        """查询给定源术语的所有目标术语 ID（distinct）。"""
-        if not source_term_ids:
-            return ()
-        try:
-            with self._session_factory() as session:
-                rows = session.execute(
-                    text(
-                        "SELECT DISTINCT target_term_id FROM term_relation "
-                        "WHERE source_term_id IN :ids"
-                    ).bindparams(bindparam("ids", expanding=True)),
-                    {"ids": tuple(source_term_ids)},
-                ).fetchall()
-        except Exception:
-            logger.exception("get_relation_target_ids failed: source_ids=%s", source_term_ids)
-            raise
-        return tuple(str(r.target_term_id) for r in rows)
+    def get_relation_target_ids(
+        self,
+        *,
+        source_term_ids: Sequence[str] | None = None,
+        target_term_ids: Sequence[str] | None = None,
+        relation_category: str | None = None,
+    ) -> Sequence[str]:
+        """查询术语关系的目标/源术语 ID（distinct）。
 
-    def get_terms_batch_raw(self, *, term_ids: Sequence[str]) -> Sequence[dict[str, str | None]]:
-        """批量查询术语的基本字段（term_id, term_name, term_type_code, owl_doc_id）。"""
-        if not term_ids:
+        正向查询（source→target）：传入 source_term_ids，返回 target_term_ids。
+        反向查询（target→source）：传入 target_term_ids，返回 source_term_ids。
+        可选 relation_category 过滤。
+        """
+        if source_term_ids is not None and target_term_ids is not None:
+            raise ValueError("source_term_ids 和 target_term_ids 不能同时指定")
+        if source_term_ids is not None:
+            ids = tuple(source_term_ids)
+            if not ids:
+                return ()
+            select_col = "target_term_id"
+            where_col = "source_term_id"
+        elif target_term_ids is not None:
+            ids = tuple(target_term_ids)
+            if not ids:
+                return ()
+            select_col = "source_term_id"
+            where_col = "target_term_id"
+        else:
+            return ()
+        try:
+            with self._session_factory() as session:
+                where_clause = f"{where_col} IN :ids"
+                params: dict[str, object] = {"ids": ids}
+                if relation_category:
+                    where_clause += " AND relation_category = :cat"
+                    params["cat"] = relation_category
+                rows = session.execute(
+                    text(
+                        f"SELECT DISTINCT {select_col} FROM term_relation WHERE {where_clause}"
+                    ).bindparams(bindparam("ids", expanding=True)),
+                    params,
+                ).fetchall()
+        except Exception:
+            logger.exception(
+                "get_relation_target_ids failed: source_ids=%s target_ids=%s category=%s",
+                source_term_ids,
+                target_term_ids,
+                relation_category,
+            )
+            raise
+        return tuple(str(r[0]) for r in rows)
+
+    def get_terms_batch_raw(
+        self,
+        *,
+        term_ids: Sequence[str] | None = None,
+        term_codes: Sequence[str] | None = None,
+    ) -> Sequence[dict[str, str | None]]:
+        """批量查询术语的基本字段（term_id, term_code, term_name, term_type_code, parent_term_id, owl_doc_id）。
+
+        支持按 term_ids 或 term_codes 查询。
+        """
+        if term_ids is not None and term_codes is not None:
+            raise ValueError("term_ids 和 term_codes 不能同时指定")
+        if term_ids is not None:
+            ids = tuple(term_ids)
+            if not ids:
+                return ()
+            where_col = "term_id"
+        elif term_codes is not None:
+            ids = tuple(term_codes)
+            if not ids:
+                return ()
+            where_col = "term_code"
+        else:
             return ()
         try:
             with self._session_factory() as session:
                 rows = session.execute(
                     text(
-                        "SELECT term_id, term_name, term_type_code, owl_doc_id "
-                        "FROM term WHERE term_id IN :ids"
+                        "SELECT term_id, term_code, term_name, term_type_code, "
+                        "parent_term_id, owl_doc_id "
+                        f"FROM term WHERE {where_col} IN :ids"
                     ).bindparams(bindparam("ids", expanding=True)),
-                    {"ids": tuple(term_ids)},
+                    {"ids": ids},
                 ).fetchall()
         except Exception:
-            logger.exception("get_terms_batch_raw failed: ids=%s", term_ids)
+            logger.exception(
+                "get_terms_batch_raw failed: term_ids=%s term_codes=%s",
+                term_ids,
+                term_codes,
+            )
             raise
         return tuple(
             {
                 "term_id": str(r.term_id),
+                "term_code": str(r.term_code),
                 "term_name": str(r.term_name),
                 "term_type_code": str(r.term_type_code),
+                "parent_term_id": None if r.parent_term_id is None else str(r.parent_term_id),
                 "owl_doc_id": None if r.owl_doc_id is None else str(r.owl_doc_id),
             }
             for r in rows
@@ -1736,6 +1797,107 @@ class PostgresTermReader:
             if tid not in mapping:
                 mapping[tid] = str(name_id)
         return mapping
+
+    def get_term(
+        self,
+        *,
+        term_code: str,
+        term_type_code: str,
+        library_id: str | None = None,
+    ) -> str | None:
+        """根据 term_code + term_type_code 查询 term_name。
+
+        优先通过 get_term_by_ids 获取 term_id，再用 get_term_names 获取名称。
+        返回标准名（is_primary=True）或第一个可用名称，不存在则返回 None。
+
+        Args:
+            term_code: 术语编码。
+            term_type_code: 术语类型编码。
+            library_id: 可选术语库 ID，传入时走 get_term_by_ids 精确匹配；
+                None 时不按 library 过滤。
+
+        Returns:
+            术语名称字符串，不存在时返回 None。
+        """
+        if library_id is not None:
+            id_map = self.get_term_by_ids(keys=[(library_id, term_type_code, term_code)])
+            if not id_map:
+                return None
+            term_id = next(iter(id_map.values()))
+        else:
+            try:
+                with self._session_factory() as session:
+                    row = session.execute(
+                        select(Term.term_id)
+                        .where(
+                            Term.term_code == term_code,
+                            Term.term_type_code == term_type_code,
+                        )
+                        .limit(1)
+                    ).one_or_none()
+            except Exception:
+                logger.exception(
+                    "get_term failed: term_code=%s term_type_code=%s",
+                    term_code,
+                    term_type_code,
+                )
+                raise
+            if row is None:
+                return None
+            term_id = str(row[0])
+
+        names = self.get_term_names(term_ids=[term_id])
+        name_list = names.get(term_id, [])
+        if not name_list:
+            return None
+        for name_item in name_list:
+            if name_item.is_primary:
+                return name_item.name_text
+        return name_list[0].name_text
+
+    def term_exists(
+        self,
+        *,
+        term_code: str,
+        term_type_code: str,
+        library_id: str | None = None,
+    ) -> bool:
+        """检查指定 term_code + term_type_code 的术语是否存在。
+
+        优先通过 get_term_by_ids 判空。
+
+        Args:
+            term_code: 术语编码。
+            term_type_code: 术语类型编码。
+            library_id: 可选术语库 ID，传入时走 get_term_by_ids 精确匹配；
+                None 时不按 library 过滤。
+
+        Returns:
+            True 如果存在，否则 False。
+        """
+        if library_id is not None:
+            id_map = self.get_term_by_ids(keys=[(library_id, term_type_code, term_code)])
+            return len(id_map) > 0
+
+        try:
+            with self._session_factory() as session:
+                row = session.execute(
+                    select(text("1"))
+                    .select_from(Term)
+                    .where(
+                        Term.term_code == term_code,
+                        Term.term_type_code == term_type_code,
+                    )
+                    .limit(1)
+                ).one_or_none()
+        except Exception:
+            logger.exception(
+                "term_exists failed: term_code=%s term_type_code=%s",
+                term_code,
+                term_type_code,
+            )
+            raise
+        return row is not None
 
     # ── TermProvider 协议新增方法 ──────────────────────────────────────
 
