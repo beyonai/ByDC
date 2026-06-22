@@ -9,7 +9,7 @@
   执行路径：view.invoke_action(action_code, args)
 - 降级兜底：若 inject_virtual_actions 未调用（cls.actions 为空），退回 DynamicQueryToolGenerator
 
-工具命名约定（由 datacloud_data_service 工具生成器决定）：
+工具命名约定（由平台工具生成器决定）：
 - query_{object_code}   : DB/KB 对象查询工具（由 inject_virtual_actions 注入）
 - compute_{object_code} : 聚合计算工具（由 inject_virtual_actions 注入）
 - 其它动作工具由本体 OWL 定义决定命名
@@ -22,7 +22,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from datacloud_data_service.config import get_settings
+from datacloud_platform.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,11 @@ try:
 except ImportError:
     TermLoader = None  # type: ignore[assignment]
     LangGraphPlanGenerator = None  # type: ignore[assignment]
+
+# ── 平台路由 ──────────────────────────────────────────────────────────────────
+from datacloud_platform import get_platform  # noqa: E402
+
+_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
 
 # ---------------------------------------------------------------------------
 # 哨兵对象：区分"未传 loader"与"显式传 loader=None"
@@ -244,12 +249,11 @@ def _make_object_action_coroutine(obj_code: str, action_code: str, loader: Any) 
             type(kwargs.get("metrics")).__name__,
         )
         try:
-            from datacloud_data_service.tools.action_executor import (  # noqa: PLC0415
-                ActionExecutor,
-            )
+            from datacloud_platform import get_platform  # noqa: PLC0415
 
-            executor = ActionExecutor(loader)
-            return await executor.execute(obj_code, action_code, kwargs)
+            return await get_platform().execute_action(
+                _base_id, loader, obj_code, action_code, kwargs
+            )
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 "OntologyToolLoader: OBJECT 工具执行失败 (%s/%s): %s",
@@ -299,7 +303,7 @@ def _make_view_action_coroutine(view_code: str, action_code: str, loader: Any) -
 
 class OntologyToolLoader:
     """
-    根据 mounted_objects 列表，从 datacloud_data_service 的工具生成器
+    根据 mounted_objects 列表，从平台工具生成器
     生成对应的 LangChain StructuredTool 字典。
 
     执行路径（统一对齐 MCP Server / ToolRegistry）：
@@ -342,7 +346,7 @@ class OntologyToolLoader:
     注意：
     - ``loader`` 与 ``ontology_path`` 必须提供其一（显式传 loader=None 保留旧的 skip 行为）。
     - 两者均未传时抛 ValueError。
-    - 若 ``datacloud_data_service`` 未安装，记录 warning 并返回空字典。
+    - 若平台后端不可用，记录 warning 并返回空字典。
     - 同名工具只生成一次；caller 传入的 ``tools`` 参数可在 ``create_agent`` 层覆盖。
     """
 
@@ -393,22 +397,6 @@ class OntologyToolLoader:
             )
             return {}
 
-        try:
-            from datacloud_data_service.tools.action_tool_generator import (  # noqa: PLC0415
-                ActionToolGenerator,
-            )
-            from datacloud_data_service.tools.dynamic_query_tool_generator import (  # noqa: PLC0415
-                DynamicQueryToolGenerator,
-            )
-        except ImportError as exc:
-            logger.warning(
-                "OntologyToolLoader: datacloud_data_service 未安装，跳过本体工具生成: %s",
-                exc,
-            )
-            return {}
-
-        query_gen = DynamicQueryToolGenerator(self._loader)
-        action_gen = ActionToolGenerator(self._loader)
         tools: dict[str, Any] = {}
 
         for obj_code in self._mounted_objects:
@@ -417,18 +405,18 @@ class OntologyToolLoader:
                 view_tools = self._build_view_tools(obj_code)
                 tools.update(view_tools)
             elif self._is_database_object(obj_code):
-                # DB OBJECT：优先通过 ActionToolGenerator 生成所有动作工具
+                # DB OBJECT：优先通过平台 generate_action_tools 生成所有动作工具
                 # 前提：_build_shared_loader 已调用 inject_virtual_actions
-                action_tools = self._build_action_tools(action_gen, obj_code)
+                action_tools = self._build_action_tools(self._loader, obj_code)
                 tools.update(action_tools)
 
-                # 降级兜底：若未产出 query 族工具且未要求跳过，尝试 DynamicQueryToolGenerator
+                # 降级兜底：若未产出 query 族工具且未要求跳过，尝试 generate_dynamic_query_tools
                 # 场景：inject_virtual_actions 未调用（旧环境或直接调用方跳过了注入）
                 _query_prefix = get_settings().virtual_action_query_prefix
                 if "query" not in self._skip_action_families and not any(
                     k.startswith(f"{_query_prefix}{obj_code}") for k in action_tools
                 ):
-                    query_tool = self._build_query_tool(query_gen, obj_code)
+                    query_tool = self._build_query_tool(self._loader, obj_code)
                     if query_tool is not None:
                         tools[query_tool.name] = query_tool
             else:
@@ -456,8 +444,8 @@ class OntologyToolLoader:
         """
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
         from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
-        from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
-            inject_virtual_actions,
+        from datacloud_platform.execution.virtual_action_injector import (
+            inject_virtual_actions,  # noqa: PLC0415
         )
 
         loader = OntologyLoader()
@@ -490,10 +478,6 @@ class OntologyToolLoader:
           5. complex_conditions → description 替换为 AGENT_COMPLEX_CONDITIONS_DESCRIPTION
         loader 查找失败时原样返回，降级为原始行为。
         """
-        from datacloud_data_sdk.virtual_action.generator import (  # noqa: PLC0415
-            _build_filters_schema,
-        )
-
         from datacloud_analysis.tools._agent_schema_patches import (  # noqa: PLC0415
             AGENT_COMPLEX_CONDITIONS_DESCRIPTION,
             AGENT_ORDER_BY_FIELD_DESCRIPTION,
@@ -526,7 +510,7 @@ class OntologyToolLoader:
             input_schema = {**input_schema, "required": required}
 
         # 2. filters：替换为 relaxed 版本（含 catch-all + 原词透传描述）
-        props["filters"] = _build_filters_schema(fields)
+        props["filters"] = get_platform().build_filters_schema(_base_id, fields)
 
         # 2. select：覆写 description，保留 enum 供 LLM 参考
         if "select" in props:
@@ -663,17 +647,17 @@ class OntologyToolLoader:
             logger.warning("OntologyToolLoader: 构建 OBJECT %s 工具失败: %s", obj_code, exc)
         return result
 
-    def _build_action_tools(self, action_gen: Any, obj_code: str) -> dict[str, Any]:
-        """为 DB OBJECT 生成动作工具（含 query / compute / OWL 自定义）。
+    def _build_action_tools(self, loader: Any, obj_code: str) -> dict[str, Any]:
+        """为 DB OBJECT 通过平台生成动作工具（含 query / compute / OWL 自定义）。
 
-        执行路径对齐 MCP call_tool 对象分支：ActionExecutor.execute(obj_code, action_code, args)。
+        执行路径对齐 MCP call_tool 对象分支。
         需要 inject_virtual_actions 已在 loader 上调用，否则 cls.actions 为空，返回 {}。
         """
         result: dict[str, Any] = {}
         try:
             from langchain_core.tools import StructuredTool  # noqa: PLC0415
 
-            for tool_def in action_gen.generate_tools(obj_code):
+            for tool_def in get_platform().generate_action_tools(_base_id, loader, obj_code):
                 name: str = tool_def.get("name", "")
                 if not name:
                     continue
@@ -726,32 +710,26 @@ class OntologyToolLoader:
             )
         return result
 
-    def _build_query_tool(self, query_gen: Any, obj_code: str) -> Any | None:
-        """降级兜底：为对象生成 query_{code} 工具（inject_virtual_actions 未调用时使用）。
+    def _build_query_tool(self, loader: Any, obj_code: str) -> Any | None:
+        """降级兜底：为对象通过平台生成 query_{code} 工具（inject_virtual_actions 未调用时使用）。
 
         正常路径（inject_virtual_actions 已调用）不走此处，通过 _build_action_tools 覆盖。
         """
         try:
             from langchain_core.tools import StructuredTool  # noqa: PLC0415
 
-            tool_def = query_gen.generate(obj_code)
-            if tool_def is None:
+            tool_defs = get_platform().generate_dynamic_query_tools(_base_id, loader, obj_code)
+            if not tool_defs:
                 logger.debug(
                     "OntologyToolLoader: %s 不是 DB/KB 类型，跳过 query 工具降级生成",
                     obj_code,
                 )
                 return None
 
-            ont_action = query_gen.generate_ontology_action(obj_code)
-            if ont_action is None:
-                logger.warning(
-                    "OntologyToolLoader: generate_ontology_action(%s) 返回 None，跳过",
-                    obj_code,
-                )
-                return None
+            tool_def = tool_defs[0]
 
             logger.debug(
-                "OntologyToolLoader: FALLBACK — 使用 DynamicQueryToolGenerator 为 %s 生成 query 工具"
+                "OntologyToolLoader: FALLBACK — 使用 generate_dynamic_query_tools 为 %s 生成 query 工具"
                 "（请确认 inject_virtual_actions 已在 _build_shared_loader 中调用）",
                 obj_code,
             )
@@ -760,7 +738,7 @@ class OntologyToolLoader:
                 description=tool_def.get("description", tool_def["name"]),
                 metadata={"title": str(tool_def.get("title") or tool_def["name"])},
                 args_schema=tool_def.get("inputSchema", {}),
-                coroutine=_make_tool_coroutine(ont_action, self._loader),
+                coroutine=_make_tool_coroutine(None, loader),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("OntologyToolLoader: 构建 query_%s 工具失败: %s", obj_code, exc)

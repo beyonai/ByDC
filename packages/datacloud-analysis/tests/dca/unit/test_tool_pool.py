@@ -175,8 +175,9 @@ def test_init_ext_tool_pool_exists() -> None:
 
 def test_init_ext_tool_pool_accepts_ext_codes(tmp_path: Any) -> None:
     """_init_ext_tool_pool 接受 ext_codes 参数，不报 TypeError。"""
-    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
     import inspect
+
+    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
 
     sig = inspect.signature(_init_ext_tool_pool)
     assert "ext_codes" in sig.parameters, (
@@ -216,8 +217,9 @@ def test_init_ext_tool_pool_ext_codes_none_scans_directory(tmp_path: Any) -> Non
 
 def test_init_ext_tool_pool_ext_codes_list_skips_scan(tmp_path: Any) -> None:
     """ext_codes=[...] 时直接使用列表，不扫描目录。"""
-    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
     import inspect
+
+    from datacloud_analysis.tools.tool_pool import _init_ext_tool_pool
 
     # 仅验证签名默认值，ext_codes=None 表示扫目录
     sig = inspect.signature(_init_ext_tool_pool)

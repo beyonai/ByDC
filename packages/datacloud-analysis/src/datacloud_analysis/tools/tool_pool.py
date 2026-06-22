@@ -21,6 +21,11 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# ── 平台路由 ──────────────────────────────────────────────────────────────────
+from datacloud_platform import get_platform  # noqa: E402
+
+_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
+
 # 工具名 → StructuredTool（进程级内存，不可 checkpoint）
 TOOL_POOL: dict[str, Any] = {}
 
@@ -128,10 +133,13 @@ def _init_ext_tool_pool(
             ops_codes,
         )
     else:
-        ops_codes = sorted([
-            d.name for d in object_dir.iterdir()
-            if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
-        ])
+        ops_codes = sorted(
+            [
+                d.name
+                for d in object_dir.iterdir()
+                if d.is_dir() and (name_prefix is None or d.name.startswith(name_prefix))
+            ]
+        )
         logger.info(
             "TOOL_POOL init: scan mode (prefix=%r), found %d objects: %s",
             name_prefix,
@@ -147,8 +155,8 @@ def _init_ext_tool_pool(
     if loader is None:
         try:
             from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
-            from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
-                inject_virtual_actions,
+            from datacloud_platform.execution.virtual_action_injector import (
+                inject_virtual_actions,  # noqa: PLC0415
             )
 
             loader = OntologyLoader()
