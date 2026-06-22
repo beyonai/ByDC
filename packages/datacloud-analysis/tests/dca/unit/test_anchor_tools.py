@@ -15,7 +15,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ── 3.2.1 阈值常量与 is_anchor_mode ────────────────────────────────────────────
 
 def test_tool_pool_threshold_constant_exists() -> None:

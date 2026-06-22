@@ -11,10 +11,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from unittest.mock import MagicMock
 
 # ── dynamic_prompt 锚点注入测试 ─────────────────────────────────────────────────
 
@@ -164,7 +161,6 @@ def test_prebuilt_graph_includes_anchor_tools_when_anchor_mode(monkeypatch: Any)
     try:
         # 直接调用 _build_tools_list 看是否含锚点工具
         # graph_builder 里使用局部 import，所以通过 tool_pool.TOOL_POOL 非空来触发
-        from datacloud_analysis.orchestration.execution.node import _build_tools_list
         from datacloud_analysis.tools.anchor_tools import make_anchor_tools
 
         # 确认在锚点模式下 make_anchor_tools 工厂能产生两个工具
@@ -175,6 +171,7 @@ def test_prebuilt_graph_includes_anchor_tools_when_anchor_mode(monkeypatch: Any)
 
         # 确认 graph_builder 中实际已经 import 并调用
         import inspect
+
         from datacloud_analysis.orchestration import graph_builder
 
         src = inspect.getsource(graph_builder._build_prebuilt_graph)
@@ -206,8 +203,7 @@ def test_builtin_tools_include_anchor_tools_in_anchor_mode(monkeypatch: Any) -> 
         has_anchor_in_builtin = "activate_anchor" in tool_names
         # 如果不在 builtin，则至少 _build_tools_list(None) 在锚点模式下应包含
         if not has_anchor_in_builtin:
-            tools = node_module._build_tools_list(None)
-            # 暂时标记：需要在 _build_tools_list 或 builtin 里集成
+            # _build_tools_list 在锚点模式下应包含锚点工具
             # 这个测试先作为"确认集成点"的检查点
             pass  # 阶段二实现后会通过
     finally:
