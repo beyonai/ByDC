@@ -137,6 +137,7 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
             _obj_names: dict[str, str] = {}
             try:
                 from datacloud_analysis.tools.tool_pool import _get_shared_loader  # noqa: PLC0415
+
                 _loader = _get_shared_loader()
                 if _loader is not None:
                     for ocode in obj_tools:
