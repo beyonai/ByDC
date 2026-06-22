@@ -130,6 +130,7 @@ class OntologyActionParam:
     param_type: str
     required: bool = False
     default_value: Any = None
+    data_format: str | None = None
     mapping_path: str = ""
     term_set: str | None = None
     term_type: str | None = None

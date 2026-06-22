@@ -65,9 +65,7 @@ async def test_execute(tmp_mount: str) -> None:
 async def test_params_are_bound(tmp_mount: str) -> None:
     _init_db(tmp_mount)
     connector = ByclawSqlExecuteConnector(_make_config())
-    records = await connector.execute(
-        "SELECT name FROM users WHERE id = :uid", {"uid": 2}
-    )
+    records = await connector.execute("SELECT name FROM users WHERE id = :uid", {"uid": 2})
     assert records == [{"name": "bob"}]
     await connector.close()
 

@@ -60,7 +60,7 @@ _FIELD_NAME_OVERRIDES: dict[str, str] = {
     "source_text": "正文内容",
     "file_description": "文件描述",
 }
-_LABEL_DESCRIPTION_MAX_LEN = 24
+_LABEL_DESCRIPTION_MAX_LEN = 30
 _SENTENCE_PUNCTUATION = frozenset("，。；：、,.;:!?！？\n\r")
 _NULL_FILTER_OPERATORS = frozenset({"is_null", "is_not_null"})
 
@@ -528,6 +528,9 @@ def _build_flat_input_schema(params: list[Any]) -> dict[str, Any]:
         term = _term_from_param(param)
         if term is not None:
             properties[code]["term"] = term
+        data_format = str(getattr(param, "data_format", "") or "").strip()
+        if data_format:
+            properties[code]["x-data-format"] = data_format
         if bool(getattr(param, "required", False)):
             required.append(code)
     result: dict[str, Any] = {"type": "object", "properties": properties}
@@ -582,6 +585,9 @@ def _build_param_schema(param: Any) -> dict[str, Any]:
     default_value = getattr(param, "default_value", None)
     if default_value is not None:
         schema["default"] = default_value
+    data_format = str(getattr(param, "data_format", "") or "").strip()
+    if data_format:
+        schema["x-data-format"] = data_format
     return schema
 
 
@@ -667,9 +673,14 @@ def _build_fields_from_schema(
         children: list[list[dict[str, Any]]] | None = None
         if normalized_field_type == "object":
             child_values = field_value if isinstance(field_value, dict) else {}
+            child_schema = property_schema
+            if property_schema.get("x-dc-provided-only") and child_values:
+                orig_props = property_schema.get("properties") or {}
+                filtered_props = {k: v for k, v in orig_props.items() if k in child_values}
+                child_schema = {**property_schema, "properties": filtered_props}
             children = [
                 _build_fields_from_schema(
-                    property_schema,
+                    child_schema,
                     child_values,
                     item_id=f"{item_id}_{code}_001",
                     parent_path=field_path,
@@ -721,6 +732,7 @@ def _build_fields_from_schema(
                 or _term_from_field_meta(meta)
             ),
             optional=_schema_options(property_schema),
+            data_format=str(property_schema.get("x-data-format") or "").strip() or None,
             term_loader=term_loader,
             locale=locale,
         )
@@ -754,6 +766,7 @@ def _build_field_from_param(
         required=bool(getattr(param, "required", False)),
         term=_term_from_param(param),
         optional=[],
+        data_format=str(getattr(param, "data_format", "") or "").strip() or None,
         term_loader=term_loader,
         locale=locale,
     )
@@ -774,11 +787,12 @@ def _build_field(
     required: bool,
     term: dict[str, Any] | None,
     optional: list[str],
+    data_format: str | None = None,
     term_loader: Any | None = None,
     locale: str | None = None,
 ) -> dict[str, Any]:
     field: dict[str, Any] = {
-        "formType": _field_form_type(field_type, term, optional),
+        "formType": _field_form_type(field_type, term, optional, data_format),
         "fieldCode": field_code,
         "fieldPath": field_path,
         "fieldName": field_name,
@@ -790,6 +804,8 @@ def _build_field(
         "isHidden": False,
         "defaultFiles": [],
     }
+    if data_format:
+        field["format"] = data_format
     if children is not None:
         field["children"] = children
     else:
@@ -814,6 +830,7 @@ def _field_form_type(
     field_type: str,
     term: dict[str, Any] | None,
     optional: list[str],
+    data_format: str | None = None,
 ) -> str:
     if field_type == "object":
         return "object"
@@ -823,6 +840,8 @@ def _field_form_type(
         return "term_select"
     if optional:
         return "select"
+    if data_format and field_type == "string":
+        return "date_time"
     return {
         "number": "number",
         "integer": "number",

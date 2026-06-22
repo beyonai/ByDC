@@ -96,7 +96,9 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
     try:
         from datacloud_analysis.langfuse_handler import lf  # noqa: PLC0415
 
-        _lf_span = getattr(lf, "_current_span", None) or getattr(lf, "get_current_span", lambda: None)()
+        _lf_span = (
+            getattr(lf, "_current_span", None) or getattr(lf, "get_current_span", lambda: None)()
+        )
         _span_id = getattr(_lf_span, "id", None) if _lf_span else None
 
         _meta = {
@@ -114,6 +116,7 @@ async def analyze_clarify_node(state: AgentState, config: RunnableConfig) -> dic
         }
 
         from langfuse import Langfuse  # noqa: PLC0415
+
         _langfuse = Langfuse()
         if _span_id:
             # 显式传 span_id，避免异步 context 切换导致写入错误的 span

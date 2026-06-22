@@ -85,7 +85,9 @@ def build_search_description(
     )
     lines.append("")
     lines.append("**何时使用**：语义相似度检索时使用；不适用于精确 SQL 查询。")
-    lines.append("**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。")
+    lines.append(
+        "**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
+    )
 
     filterable = [f for f in fields if getattr(f, "filter_ops", [])]
     if filterable:
@@ -301,7 +303,6 @@ _FILTER_CATCHALL_SCHEMA: dict[str, Any] = {
 }
 
 
-
 def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False) -> dict[str, Any]:
     """构建 filters 数组 schema。"""
     filterable = [f for f in fields if getattr(f, "filter_ops", [])]
@@ -311,10 +312,7 @@ def _build_filters_schema(fields: list[Any], *, strict_field_code: bool = False)
     field_codes = [_fc(f) for f in filterable]
     ops = list(
         dict.fromkeys(
-            str(op)
-            for f in filterable
-            for op in (getattr(f, "filter_ops", []) or [])
-            if op
+            str(op) for f in filterable for op in (getattr(f, "filter_ops", []) or []) if op
         )
     )
     field_schema: dict[str, Any] = {
@@ -497,6 +495,9 @@ def _field_value_property(field: Any) -> dict[str, Any]:
     }
     if schema["type"] == "array":
         schema["items"] = {"type": "string"}
+    data_format = str(getattr(field, "data_format", "") or "").strip()
+    if data_format:
+        schema["x-data-format"] = data_format
     return schema
 
 
@@ -604,6 +605,7 @@ def build_update_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
             "values": {
                 "type": "object",
                 "additionalProperties": False,
+                "x-dc-provided-only": True,
                 "properties": {_fc(field): _field_value_property(field) for field in writable},
                 "description": "需要修改的字段值，字段统一填写对象属性编码。",
             },
@@ -761,7 +763,9 @@ def build_query_description(
     lines.append(
         "**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 compute 动作。"
     )
-    lines.append("**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。")
+    lines.append(
+        "**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
+    )
 
     restrictions = _required_restrictions(req_groups)
     if restrictions:
@@ -769,7 +773,9 @@ def build_query_description(
 
     lines.append("")
     lines.append("**可用字段**：")
-    lines.append("| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
+    lines.append(
+        "| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |"
+    )
     lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for f in queryable:
         lines.append(_field_table_row(f))
@@ -816,11 +822,7 @@ def build_compute_schema(
     def _flat_filter_item_schema(filter_fields: list[Any]) -> dict[str, Any]:
         field_codes = [_fc(f) for f in filter_fields]
         ops = _unique(
-            [
-                str(op)
-                for f in filter_fields
-                for op in (getattr(f, "filter_ops", []) or [])
-            ]
+            [str(op) for f in filter_fields for op in (getattr(f, "filter_ops", []) or [])]
         )
         return {
             "type": "object",
@@ -1086,7 +1088,9 @@ def build_compute_description(
         "**何时使用**：需要分组统计、聚合指标时使用；"
         "不适用于查看明细列表，如需明细请用 query 动作。"
     )
-    lines.append("**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。")
+    lines.append(
+        "**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
+    )
 
     restrictions = _required_restrictions(req_groups)
     if restrictions:
@@ -1107,7 +1111,9 @@ def build_compute_description(
 
     lines.append("")
     lines.append("**字段能力**：")
-    lines.append("| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
+    lines.append(
+        "| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |"
+    )
     lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for f in fields:
         lines.append(_field_table_row(f))

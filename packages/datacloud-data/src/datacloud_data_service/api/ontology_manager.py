@@ -72,7 +72,9 @@ def _with_env(body: dict, request: Request) -> dict:
     """提取并注入环境变量，返回纯净参数。"""
     env_map: dict[str, str] = {}
     # 从 header 提取 token / user_code
-    token = request.headers.get("Beyond-Token") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    token = request.headers.get("Beyond-Token") or request.headers.get(
+        "Authorization", ""
+    ).removeprefix("Bearer ")
     user_code = request.headers.get("X-User-Code", "")
     if token:
         env_map["BEYOND_TOKEN"] = token
@@ -341,6 +343,7 @@ def _delete_resource_by_code(resource_code: str) -> None:
         headers["Beyond-Token"] = token
 
     _init_discovery_redis()
+
     async def _call() -> None:
         discovery_client = DiscoveryClient(cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
@@ -359,9 +362,7 @@ def _delete_resource_by_code(resource_code: str) -> None:
 
         body: dict = response.data if isinstance(response.data, dict) else {}
         if not response.is_success or body.get("code", 0) != 0:
-            raise RuntimeError(
-                f"下架失败 HTTP {response.status_code}: {body.get('msg', body)}"
-            )
+            raise RuntimeError(f"下架失败 HTTP {response.status_code}: {body.get('msg', body)}")
 
     import asyncio
 
