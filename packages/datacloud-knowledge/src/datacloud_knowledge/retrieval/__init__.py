@@ -18,7 +18,7 @@ from ._recall import build_scope_recall_layers, unified_recall
 from .dimension_values import DimensionValueResolver
 from .mention_matching import match_mentions, match_mentions_with_search
 from .name_cache import UserNameCache
-from .owl_relation_resolver import resolve_related_owl_terms
+from .owl_relation_resolver import resolve_object_for_property, resolve_related_owl_terms
 from .recall import PreparedBatch, RecallRequest, ScopeRecallLayer, typed_multi_recall_batch
 from .rrf import RRFCandidate, rrf_fuse
 from .term_search import (
@@ -51,6 +51,7 @@ __all__ = [
     "match_mentions_with_search",
     "resolve_field_aliases",
     "resolve_field_aliases_with_names",
+    "resolve_object_for_property",
     "resolve_related_owl_terms",
     "resolve_value_aliases",
     "rrf_fuse",

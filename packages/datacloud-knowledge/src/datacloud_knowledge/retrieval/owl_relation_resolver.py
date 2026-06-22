@@ -16,10 +16,19 @@ if TYPE_CHECKING:
 
 
 class _OwlRelationReader(Protocol):
-    def get_relation_target_ids(self, *, source_term_ids: Sequence[str]) -> Sequence[str]: ...
+    def get_relation_target_ids(
+        self,
+        *,
+        source_term_ids: Sequence[str] | None = None,
+        target_term_ids: Sequence[str] | None = None,
+        relation_category: str | None = None,
+    ) -> Sequence[str]: ...
 
     def get_terms_batch_raw(
-        self, *, term_ids: Sequence[str]
+        self,
+        *,
+        term_ids: Sequence[str] | None = None,
+        term_codes: Sequence[str] | None = None,
     ) -> Sequence[dict[str, str | None]]: ...
 
 
@@ -76,6 +85,56 @@ def resolve_related_owl_terms(
 
     out.sort(key=lambda x: x.term_id)
     return out
+
+
+def resolve_object_for_property(property_term_code: str) -> str | None:
+    """给定属性 term_code，返回所属对象的 term_code。
+
+    查找顺序：
+    1. term_relation HAS_FIELD（对象 → 属性，反向查源）
+    2. prop.parent_term_id 回退（属性的父术语即为对象）
+
+    Args:
+        property_term_code: 属性术语的业务编码。
+
+    Returns:
+        所属对象的 term_code，未找到返回 None。
+    """
+    if not property_term_code:
+        return None
+
+    reader = cast(_OwlRelationReader, create_reader())
+
+    # 解析 property term_code → term_id
+    prop_rows = reader.get_terms_batch_raw(term_codes=[property_term_code])
+    if not prop_rows:
+        return None
+
+    prop_row = prop_rows[0]
+    prop_term_id = prop_row.get("term_id")
+    prop_parent_term_id = prop_row.get("parent_term_id")
+
+    # Path 1: HAS_FIELD relation（反向查源：目标=属性，找源对象）
+    if prop_term_id:
+        object_term_ids = reader.get_relation_target_ids(
+            target_term_ids=[prop_term_id],
+            relation_category="HAS_FIELD",
+        )
+        if object_term_ids:
+            obj_rows = reader.get_terms_batch_raw(term_ids=list(object_term_ids))
+            for row in obj_rows:
+                if _normalize_type_code(str(row.get("term_type_code") or "")) == "OBJ":
+                    return row.get("term_code") or None
+
+    # Path 2: parent_term_id 回退
+    if prop_parent_term_id:
+        parent_rows = reader.get_terms_batch_raw(term_ids=[prop_parent_term_id])
+        if parent_rows:
+            parent_row = parent_rows[0]
+            if _normalize_type_code(str(parent_row.get("term_type_code") or "")) == "OBJ":
+                return parent_row.get("term_code") or None
+
+    return None
 
 
 def _collect_from_view_root(reader: _OwlRelationReader, view_id: str, collected: set[str]) -> None:
