@@ -409,7 +409,8 @@ def make_llm_call_node(
         _usage = getattr(ai_msg, "usage_metadata", None) or {}
         _resp_meta = getattr(ai_msg, "response_metadata", None) or {}
 
-        # 将 token 用量写入 Langfuse span（兼容 MiniMax / OpenAI 等格式）
+        # token 用量由 LangfuseCallbackHandler（on_llm_end）自动记录到 Langfuse generation span。
+        # 此处仅做日志，不再手动调 update_current_span（会因无 span 上下文而静默失败）。
         _input_tokens = (
             _usage.get("input_tokens")
             or _usage.get("prompt_tokens")
@@ -421,30 +422,13 @@ def make_llm_call_node(
             or (_resp_meta.get("token_usage") or {}).get("completion_tokens", 0)
         )
         if _input_tokens or _output_tokens:
-            try:
-                from langfuse import Langfuse  # noqa: PLC0415
-
-                # LANGFUSE_HOST / LANGFUSE_BASE_URL 两个变量名都支持
-                _lf_host = (
-                    os.getenv("LANGFUSE_HOST")
-                    or os.getenv("LANGFUSE_BASE_URL")
-                    or "https://cloud.langfuse.com"
-                )
-                lf = Langfuse(
-                    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-                    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-                    host=_lf_host,
-                )
-                lf.update_current_span(
-                    usage={
-                        "input": _input_tokens,
-                        "output": _output_tokens,
-                        "total": _input_tokens + _output_tokens,
-                        "unit": "TOKENS",
-                    }
-                )
-            except Exception:  # noqa: BLE001
-                pass
+            logger.info(
+                "[llm_call] round=%d token_usage input=%d output=%d total=%d",
+                current_round,
+                _input_tokens,
+                _output_tokens,
+                _input_tokens + _output_tokens,
+            )
         # 诊断：打印 finish_react 的 answer 参数，确认 LLM 用哪种语言回答
         for _tc in calls:
             if _tc.get("name") == "finish_react":

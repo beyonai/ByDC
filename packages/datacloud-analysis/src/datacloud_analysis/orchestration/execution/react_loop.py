@@ -858,6 +858,9 @@ def _build_llm(state: Any, llm_config: dict[str, Any] | None = None) -> Any:
     if provider == "anthropic":
         return init_chat_model(model_provider="anthropic", **kwargs)
     else:
+        # stream_options={"include_usage": True}：让 OpenAI 兼容的流式响应
+        # 在最后一个 chunk 里携带 token usage，否则 usage_metadata 为空，Langfuse 记录全为 0
+        kwargs.setdefault("stream_options", {"include_usage": True})
         llm = init_chat_model(model_provider="openai", **kwargs)
         # 对 thinking 模型（kimi/deepseek-r 系列）包装，确保 reasoning_content 被正确发送
         return _ThinkingAwareChatOpenAI(llm)
