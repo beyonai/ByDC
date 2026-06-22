@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-import ast
 from pathlib import Path
-
-import pytest
 
 _GRAPH_BUILDER = Path(
     "packages/datacloud-analysis/src/datacloud_analysis/orchestration/graph_builder.py"
 )
-_ONTOLOGY_AGENT = Path(
-    "packages/datacloud-analysis/src/datacloud_analysis/ontology_agent.py"
-)
+_ONTOLOGY_AGENT = Path("packages/datacloud-analysis/src/datacloud_analysis/ontology_agent.py")
 
 
 class TestXmlInjectionRemoved:

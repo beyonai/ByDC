@@ -18,8 +18,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import HumanMessage
 
-
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
+
 
 def _make_state(active_tools: list[str] | None = None, **kwargs: Any) -> dict[str, Any]:
     state: dict[str, Any] = {
@@ -38,13 +38,12 @@ def _patch_command_router_no_match() -> Any:
     """Patch CommandRouter 总是返回 handled=False。"""
     return patch(
         "datacloud_analysis.orchestration.intend.command_router.CommandPluginManager.from_defaults",
-        return_value=MagicMock(
-            handle_ext_command=AsyncMock(return_value=(False, None))
-        ),
+        return_value=MagicMock(handle_ext_command=AsyncMock(return_value=(False, None))),
     )
 
 
 # ── TC-4.1-01a：冷启动触发，active_tools 被写入 ───────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cold_start_populates_active_tools_in_anchor_mode() -> None:
@@ -68,7 +67,7 @@ async def test_cold_start_populates_active_tools_in_anchor_mode() -> None:
         _patch_command_router_no_match(),
         patch.object(tool_pool, "TOOL_POOL", fake_pool),
         patch.object(tool_pool, "TOOL_TO_OBJECT", fake_tool_to_object),
-        patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 1),   # 2个工具 > 1 → anchor mode
+        patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 1),  # 2个工具 > 1 → anchor mode
         patch(
             "datacloud_analysis.orchestration.intend.node._do_search_ontology",
             return_value=fake_hits,
@@ -89,6 +88,7 @@ async def test_cold_start_populates_active_tools_in_anchor_mode() -> None:
 
 
 # ── TC-4.1-01b：多个 object hits → 所有对象的工具都写入 ──────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cold_start_unlocks_tools_from_multiple_hits() -> None:
@@ -116,7 +116,10 @@ async def test_cold_start_unlocks_tools_from_multiple_hits() -> None:
         patch.object(tool_pool, "TOOL_POOL", fake_pool),
         patch.object(tool_pool, "TOOL_TO_OBJECT", fake_tool_to_object),
         patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 1),
-        patch("datacloud_analysis.orchestration.intend.node._do_search_ontology", return_value=fake_hits),
+        patch(
+            "datacloud_analysis.orchestration.intend.node._do_search_ontology",
+            return_value=fake_hits,
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL", fake_pool),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT", fake_tool_to_object),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL_THRESHOLD", 999),
@@ -127,6 +130,7 @@ async def test_cold_start_unlocks_tools_from_multiple_hits() -> None:
 
 
 # ── TC-4.1-01c：active_tools 已有内容 → 跳过冷启动 ──────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cold_start_skipped_when_active_tools_not_empty() -> None:
@@ -154,6 +158,7 @@ async def test_cold_start_skipped_when_active_tools_not_empty() -> None:
 
 # ── TC-4.1-01d：非 anchor mode → 跳过冷启动 ──────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cold_start_skipped_when_not_anchor_mode() -> None:
     """工具数 ≤ 阈值（非 anchor mode）时，冷启动跳过。"""
@@ -177,6 +182,7 @@ async def test_cold_start_skipped_when_not_anchor_mode() -> None:
 
 
 # ── TC-4.1-01e：_do_search_ontology 抛异常 → 静默降级 ────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cold_start_silently_degrades_on_search_error() -> None:
@@ -204,6 +210,7 @@ async def test_cold_start_silently_degrades_on_search_error() -> None:
 
 # ── TC-4.1-01f：命中对象无工具 → active_tools=[] ─────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cold_start_returns_empty_list_when_hit_has_no_tools() -> None:
     """search_ontology 命中的对象在 TOOL_POOL 中没有注册工具 → active_tools=[]，不报错。"""
@@ -217,9 +224,15 @@ async def test_cold_start_returns_empty_list_when_hit_has_no_tools() -> None:
         patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 0),  # 配额=0，不补充
         patch.object(tool_pool, "TOOL_POOL", {"get_spans": MagicMock()}),
         patch.object(tool_pool, "TOOL_TO_OBJECT", {"get_spans": "ops_langfuse_trace"}),
-        patch("datacloud_analysis.orchestration.intend.node._do_search_ontology", return_value=fake_hits),
+        patch(
+            "datacloud_analysis.orchestration.intend.node._do_search_ontology",
+            return_value=fake_hits,
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL", {"get_spans": MagicMock()}),
-        patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT", {"get_spans": "ops_langfuse_trace"}),
+        patch(
+            "datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT",
+            {"get_spans": "ops_langfuse_trace"},
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL_THRESHOLD", 0),
     ):
         result = await intend_module.intend_node(_make_state(), _make_config())

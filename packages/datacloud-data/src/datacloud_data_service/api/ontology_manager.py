@@ -37,7 +37,6 @@ router = APIRouter()
 # 每次请求创建新 Session，确保 asyncio 对象在正确的 loop 中初始化。
 
 
-
 def _init_discovery_redis() -> None:
     """全局初始化服务发现 Redis（幂等）。"""
     from by_framework.common.redis_client import init_redis  # type: ignore[import-untyped]
@@ -53,7 +52,9 @@ def _init_discovery_redis() -> None:
 
 def _get_session() -> object:
     """每次调用返回新的 OntologyBuildSession，避免跨 event loop 复用 asyncio 对象。"""
-    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession  # type: ignore[import-untyped]
+    from datacloud_knowledge.ingestion.ontology_build import (
+        OntologyBuildSession,  # type: ignore[import-untyped]
+    )
 
     return OntologyBuildSession()
 

@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import HumanMessage
 
-
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
+
 
 def _make_state(active_tools: list[str] | None = None) -> dict[str, Any]:
     return {
@@ -36,6 +36,7 @@ def _patch_no_command() -> Any:
 
 # ── TC-FILL-01：冷启动后不足阈值，自动补充 ──────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cold_start_fills_to_threshold_when_under() -> None:
     """冷启动解锁 2 个工具，阈值=5，TOOL_POOL 有 8 个工具 → 补充到 5 个。"""
@@ -45,24 +46,24 @@ async def test_cold_start_fills_to_threshold_when_under() -> None:
     # search_ontology 只命中 ops_langfuse_trace，解锁 get_spans / find_error_spans
     fake_hits = [{"objectCode": "ops_langfuse_trace", "resultType": "object", "score": 0.9}]
     fake_pool = {
-        "get_spans":            MagicMock(),
-        "find_error_spans":     MagicMock(),
-        "get_agent_diag":       MagicMock(),
-        "get_tool_detail":      MagicMock(),
-        "get_llm_tool_calls":   MagicMock(),
-        "get_llm_metrics":      MagicMock(),
-        "check_db_connection":  MagicMock(),
-        "validate_jdbc_url":    MagicMock(),
+        "get_spans": MagicMock(),
+        "find_error_spans": MagicMock(),
+        "get_agent_diag": MagicMock(),
+        "get_tool_detail": MagicMock(),
+        "get_llm_tool_calls": MagicMock(),
+        "get_llm_metrics": MagicMock(),
+        "check_db_connection": MagicMock(),
+        "validate_jdbc_url": MagicMock(),
     }
     fake_tool_to_object = {
-        "get_spans":           "ops_langfuse_trace",
-        "find_error_spans":    "ops_langfuse_trace",
-        "get_agent_diag":      "ops_langfuse_trace",
-        "get_tool_detail":     "ops_langfuse_trace",
-        "get_llm_tool_calls":  "ops_langfuse_trace",
-        "get_llm_metrics":     "ops_langfuse_trace",
+        "get_spans": "ops_langfuse_trace",
+        "find_error_spans": "ops_langfuse_trace",
+        "get_agent_diag": "ops_langfuse_trace",
+        "get_tool_detail": "ops_langfuse_trace",
+        "get_llm_tool_calls": "ops_langfuse_trace",
+        "get_llm_metrics": "ops_langfuse_trace",
         "check_db_connection": "ops_opengauss",
-        "validate_jdbc_url":   "ops_owl_dbsource",
+        "validate_jdbc_url": "ops_owl_dbsource",
     }
 
     with (
@@ -70,11 +71,12 @@ async def test_cold_start_fills_to_threshold_when_under() -> None:
         patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 5),
         patch.object(tool_pool, "TOOL_POOL", fake_pool),
         patch.object(tool_pool, "TOOL_TO_OBJECT", fake_tool_to_object),
-        patch("datacloud_analysis.orchestration.intend.node._do_search_ontology",
-              return_value=fake_hits),
+        patch(
+            "datacloud_analysis.orchestration.intend.node._do_search_ontology",
+            return_value=fake_hits,
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL", fake_pool),
-        patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT",
-              fake_tool_to_object),
+        patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT", fake_tool_to_object),
         patch("datacloud_analysis.orchestration.intend.node.is_anchor_mode", return_value=True),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL_THRESHOLD", 5),
     ):
@@ -93,6 +95,7 @@ async def test_cold_start_fills_to_threshold_when_under() -> None:
 
 # ── TC-FILL-02：已等于阈值，不再补充 ────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cold_start_no_fill_when_at_threshold() -> None:
     """冷启动已解锁 3 个工具，阈值=3 → 不再补充。"""
@@ -101,16 +104,16 @@ async def test_cold_start_no_fill_when_at_threshold() -> None:
 
     fake_hits = [{"objectCode": "ops_langfuse_trace", "resultType": "object", "score": 0.9}]
     fake_pool = {
-        "get_spans":        MagicMock(),
+        "get_spans": MagicMock(),
         "find_error_spans": MagicMock(),
-        "get_agent_diag":   MagicMock(),
-        "extra_tool":       MagicMock(),
+        "get_agent_diag": MagicMock(),
+        "extra_tool": MagicMock(),
     }
     fake_t2o = {
-        "get_spans":        "ops_langfuse_trace",
+        "get_spans": "ops_langfuse_trace",
         "find_error_spans": "ops_langfuse_trace",
-        "get_agent_diag":   "ops_langfuse_trace",
-        "extra_tool":       "ops_other",
+        "get_agent_diag": "ops_langfuse_trace",
+        "extra_tool": "ops_other",
     }
 
     with (
@@ -118,8 +121,10 @@ async def test_cold_start_no_fill_when_at_threshold() -> None:
         patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 3),
         patch.object(tool_pool, "TOOL_POOL", fake_pool),
         patch.object(tool_pool, "TOOL_TO_OBJECT", fake_t2o),
-        patch("datacloud_analysis.orchestration.intend.node._do_search_ontology",
-              return_value=fake_hits),
+        patch(
+            "datacloud_analysis.orchestration.intend.node._do_search_ontology",
+            return_value=fake_hits,
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL", fake_pool),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT", fake_t2o),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL_THRESHOLD", 3),
@@ -133,6 +138,7 @@ async def test_cold_start_no_fill_when_at_threshold() -> None:
 
 # ── TC-FILL-03：超过阈值，不补充也不截断 ────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cold_start_no_fill_when_over_threshold() -> None:
     """冷启动已解锁 4 个工具，阈值=3 → 保留全部 4 个，不截断。"""
@@ -141,21 +147,21 @@ async def test_cold_start_no_fill_when_over_threshold() -> None:
 
     fake_hits = [
         {"objectCode": "ops_langfuse_trace", "resultType": "object", "score": 0.9},
-        {"objectCode": "ops_opengauss",      "resultType": "object", "score": 0.7},
+        {"objectCode": "ops_opengauss", "resultType": "object", "score": 0.7},
     ]
     fake_pool = {
-        "get_spans":           MagicMock(),
-        "find_error_spans":    MagicMock(),
+        "get_spans": MagicMock(),
+        "find_error_spans": MagicMock(),
         "check_db_connection": MagicMock(),
-        "execute_sql":         MagicMock(),
-        "extra_tool":          MagicMock(),
+        "execute_sql": MagicMock(),
+        "extra_tool": MagicMock(),
     }
     fake_t2o = {
-        "get_spans":           "ops_langfuse_trace",
-        "find_error_spans":    "ops_langfuse_trace",
+        "get_spans": "ops_langfuse_trace",
+        "find_error_spans": "ops_langfuse_trace",
         "check_db_connection": "ops_opengauss",
-        "execute_sql":         "ops_opengauss",
-        "extra_tool":          "ops_other",
+        "execute_sql": "ops_opengauss",
+        "extra_tool": "ops_other",
     }
 
     with (
@@ -163,7 +169,10 @@ async def test_cold_start_no_fill_when_over_threshold() -> None:
         patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 3),
         patch.object(tool_pool, "TOOL_POOL", fake_pool),
         patch.object(tool_pool, "TOOL_TO_OBJECT", fake_t2o),
-        patch("datacloud_analysis.orchestration.intend.node._do_search_ontology", return_value=fake_hits),
+        patch(
+            "datacloud_analysis.orchestration.intend.node._do_search_ontology",
+            return_value=fake_hits,
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL", fake_pool),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT", fake_t2o),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL_THRESHOLD", 3),
@@ -171,11 +180,12 @@ async def test_cold_start_no_fill_when_over_threshold() -> None:
         result = await intend_module.intend_node(_make_state(), {})
 
     active = result["active_tools"]
-    assert len(active) == 4        # 保留全部，不截断
+    assert len(active) == 4  # 保留全部，不截断
     assert "extra_tool" not in active  # 未补充额外工具
 
 
 # ── TC-FILL-04：TOOL_POOL 总数不足 THRESHOLD，全部解锁 ─────────────────────
+
 
 @pytest.mark.asyncio
 async def test_cold_start_fills_all_when_pool_smaller_than_threshold() -> None:
@@ -185,14 +195,14 @@ async def test_cold_start_fills_all_when_pool_smaller_than_threshold() -> None:
 
     fake_hits = [{"objectCode": "ops_langfuse_trace", "resultType": "object", "score": 0.9}]
     fake_pool = {
-        "get_spans":        MagicMock(),
+        "get_spans": MagicMock(),
         "find_error_spans": MagicMock(),
-        "get_agent_diag":   MagicMock(),
+        "get_agent_diag": MagicMock(),
     }
     fake_t2o = {
-        "get_spans":        "ops_langfuse_trace",
+        "get_spans": "ops_langfuse_trace",
         "find_error_spans": "ops_langfuse_trace",
-        "get_agent_diag":   "ops_langfuse_trace",
+        "get_agent_diag": "ops_langfuse_trace",
     }
 
     with (
@@ -200,8 +210,10 @@ async def test_cold_start_fills_all_when_pool_smaller_than_threshold() -> None:
         patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 10),
         patch.object(tool_pool, "TOOL_POOL", fake_pool),
         patch.object(tool_pool, "TOOL_TO_OBJECT", fake_t2o),
-        patch("datacloud_analysis.orchestration.intend.node._do_search_ontology",
-              return_value=fake_hits),
+        patch(
+            "datacloud_analysis.orchestration.intend.node._do_search_ontology",
+            return_value=fake_hits,
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL", fake_pool),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT", fake_t2o),
         patch("datacloud_analysis.orchestration.intend.node.is_anchor_mode", return_value=True),
@@ -216,6 +228,7 @@ async def test_cold_start_fills_all_when_pool_smaller_than_threshold() -> None:
 
 # ── TC-FILL-05：activate_skill_* 不计入阈值配额 ─────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_cold_start_fill_skips_skill_wrappers() -> None:
     """TOOL_POOL 有 2 个业务工具 + 2 个 skill wrapper，阈值=4 →
@@ -225,18 +238,18 @@ async def test_cold_start_fill_skips_skill_wrappers() -> None:
 
     fake_hits = [{"objectCode": "ops_langfuse_trace", "resultType": "object", "score": 0.9}]
     fake_pool = {
-        "get_spans":                    MagicMock(),
-        "find_error_spans":             MagicMock(),
-        "check_db_connection":          MagicMock(),
+        "get_spans": MagicMock(),
+        "find_error_spans": MagicMock(),
+        "check_db_connection": MagicMock(),
         "activate_skill_diagnose_fault": MagicMock(),
-        "activate_skill_slow_response":  MagicMock(),
+        "activate_skill_slow_response": MagicMock(),
     }
     fake_t2o = {
-        "get_spans":                    "ops_langfuse_trace",
-        "find_error_spans":             "ops_langfuse_trace",
-        "check_db_connection":          "ops_opengauss",
+        "get_spans": "ops_langfuse_trace",
+        "find_error_spans": "ops_langfuse_trace",
+        "check_db_connection": "ops_opengauss",
         "activate_skill_diagnose_fault": "ops_langfuse_trace",
-        "activate_skill_slow_response":  "ops_langfuse_trace",
+        "activate_skill_slow_response": "ops_langfuse_trace",
     }
 
     with (
@@ -244,8 +257,10 @@ async def test_cold_start_fill_skips_skill_wrappers() -> None:
         patch.object(tool_pool, "TOOL_POOL_THRESHOLD", 4),
         patch.object(tool_pool, "TOOL_POOL", fake_pool),
         patch.object(tool_pool, "TOOL_TO_OBJECT", fake_t2o),
-        patch("datacloud_analysis.orchestration.intend.node._do_search_ontology",
-              return_value=fake_hits),
+        patch(
+            "datacloud_analysis.orchestration.intend.node._do_search_ontology",
+            return_value=fake_hits,
+        ),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_POOL", fake_pool),
         patch("datacloud_analysis.orchestration.intend.node.TOOL_TO_OBJECT", fake_t2o),
         patch("datacloud_analysis.orchestration.intend.node.is_anchor_mode", return_value=True),

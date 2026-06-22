@@ -21,7 +21,12 @@ except Exception:  # noqa: BLE001
     _do_search_ontology = None  # type: ignore[assignment]
 
 try:
-    from datacloud_analysis.tools.tool_pool import TOOL_POOL, TOOL_TO_OBJECT, TOOL_POOL_THRESHOLD, is_anchor_mode
+    from datacloud_analysis.tools.tool_pool import (
+        TOOL_POOL,
+        TOOL_POOL_THRESHOLD,
+        TOOL_TO_OBJECT,
+        is_anchor_mode,
+    )
 except Exception:  # noqa: BLE001
     TOOL_POOL = {}  # type: ignore[assignment]
     TOOL_TO_OBJECT = {}  # type: ignore[assignment]

@@ -5,9 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 
 def _make_skill_md(tmp_path: Path, name: str, preconditions: list[dict]) -> str:
@@ -53,9 +51,7 @@ class TestAfterHookSkillPreconditions:
 
         return HookAwareToolNode
 
-    def test_context_has_pass_writes_wrapper_to_active_tools(
-        self, tmp_path: Path
-    ) -> None:
+    def test_context_has_pass_writes_wrapper_to_active_tools(self, tmp_path: Path) -> None:
         """context_has 通过时，skill wrapper 写入 active_tools。"""
         skill_path = _make_skill_md(
             tmp_path, "diagnose-fault", [{"type": "context_has", "field": "trace_id"}]
