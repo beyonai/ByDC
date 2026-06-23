@@ -10,28 +10,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
 
-from datacloud_platform.base_entry import OntologyBaseEntry
+from datacloud_platform.base_entry import (
+    OntologyBaseEntry,
+    generate_snowflake,
+    validate_base_id,
+)
+from datacloud_platform.models.base_entry import OntologyBaseCreate, OntologyBaseUpdate
 from datacloud_platform.models.common import ok
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
-
-
-class OntologyBaseCreate(BaseModel):
-    """Create ontology base request."""
-
-    base_id: str = Field(alias="baseId")
-    display_name: str = Field(alias="displayName")
-    owner_type: str = Field(default="personal", alias="ownerType")
-    source_url: str | None = Field(default=None, alias="sourceUrl")
-    auth_type: str | None = Field(default=None, alias="authType")
-    auth_config: dict[str, Any] | None = Field(default=None, alias="authConfig")
-    timeout_sec: int = Field(default=30, alias="timeoutSec")
-    description: str = ""
-
-    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
@@ -58,24 +47,41 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     def create_base(body: OntologyBaseCreate) -> Any:
         """Create an ontology base.
 
-        sourceType is auto-derived: sourceUrl present → REMOTE, else LOCAL.
+        - ``baseId`` is optional — a snowflake ID is generated when omitted.
+        - When provided, it must match ``^[a-z][a-z0-9_-]{{0,15}}$``.
+        - Duplicate ``baseId`` returns 409.
+        - sourceType is auto-derived: sourceUrl present → REMOTE, else LOCAL.
         """
-        try:
-            source_url = body.source_url
-            entry = OntologyBaseEntry(
-                base_id=body.base_id,
-                display_name=body.display_name,
-                description=body.description,
-                owner_type=body.owner_type,
-                source_type="REMOTE" if source_url else "LOCAL",
-                source_url=source_url,
-                auth_type=body.auth_type,
-                auth_config=body.auth_config,
-                timeout_sec=body.timeout_sec,
-            )
-            return ok(data=platform.create_base(entry), message="created")
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        base_id = body.base_id
+        if base_id is not None:
+            if not validate_base_id(base_id):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid baseId '{base_id}': must match "
+                    f"'^[a-z][a-z0-9_-]{{0,15}}$' (lowercase letter first, "
+                    f"1-16 chars, only a-z, 0-9, _, -)",
+                )
+            if platform.base_exists(base_id):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"OntologyBase '{base_id}' already exists",
+                )
+        else:
+            base_id = generate_snowflake()
+
+        source_url = body.source_url
+        entry = OntologyBaseEntry(
+            base_id=base_id,
+            display_name=body.display_name,
+            description=body.description,
+            owner_type=body.owner_type,
+            source_type="REMOTE" if source_url else "LOCAL",
+            source_url=source_url,
+            auth_type=body.auth_type,
+            auth_config=body.auth_config,
+            timeout_sec=body.timeout_sec,
+        )
+        return ok(data=platform.create_base(entry), message="created")
 
     @router.delete("/{owner_type}/{base_id}")
     def delete_base(owner_type: str, base_id: str) -> Any:
@@ -83,6 +89,19 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         try:
             platform.delete_base(base_id)
             return ok(message="deleted")
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.put("/{owner_type}/{base_id}")
+    def update_base(owner_type: str, base_id: str, body: OntologyBaseUpdate) -> Any:
+        """Update an ontology base.
+
+        Only the fields provided in the request body are updated.
+        ``baseId`` is read-only — passing it has no effect.
+        """
+        try:
+            result = platform.update_base(base_id, body)
+            return ok(data=result, message="updated")
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 

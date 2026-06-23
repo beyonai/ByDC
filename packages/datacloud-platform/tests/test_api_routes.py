@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -168,7 +169,7 @@ class TestOntologyBaseRoutes:
         assert REMOTE in base_ids
 
     def test_create_base(self, client: TestClient) -> None:
-        body = {"baseId": "new-base", "displayName": "新库"}
+        body = {"baseId": "new-base", "displayName": "新库", "description": "描述"}
         resp = client.post("/api/v1/ontologyBases", json=body)
         assert resp.status_code == 200
         data = resp.json()
@@ -181,15 +182,61 @@ class TestOntologyBaseRoutes:
         base_ids = [b["base_id"] for b in resp2.json()["data"]]
         assert "new-base" in base_ids
 
-    def test_create_base_duplicate(self, client: TestClient) -> None:
-        body = {"baseId": LOCAL, "displayName": "重复"}
+    def test_create_without_baseid_generates_snowflake(
+        self, client: TestClient
+    ) -> None:
+        """baseId not provided → snowflake auto-generated (16-char hex)."""
+        body = {"displayName": "雪花库", "description": "自动ID"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        base_id: str = data["data"]["base_id"]
+        assert len(base_id) == 16
+        assert set(base_id).issubset("0123456789abcdef")
+        assert data["data"]["display_name"] == "雪花库"
+        assert data["data"]["description"] == "自动ID"
+
+    def test_create_with_custom_baseid(self, client: TestClient) -> None:
+        """Valid custom baseId is used as-is."""
+        body = {"baseId": "my-custom_id", "displayName": "自定义", "description": "d"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 200
+        assert resp.json()["data"]["base_id"] == "my-custom_id"
+
+    def test_create_duplicate_baseid_returns_409(self, client: TestClient) -> None:
+        body = {"baseId": LOCAL, "displayName": "重复", "description": "d"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 409
+
+    def test_create_invalid_baseid_uppercase(self, client: TestClient) -> None:
+        body = {"baseId": "Invalid", "displayName": "大写", "description": "d"}
         resp = client.post("/api/v1/ontologyBases", json=body)
         assert resp.status_code == 400
+
+    def test_create_invalid_baseid_too_long(self, client: TestClient) -> None:
+        body = {
+            "baseId": "a" * 17,
+            "displayName": "太长",
+            "description": "d",
+        }
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 400
+
+    def test_create_invalid_baseid_non_alpha_first(self, client: TestClient) -> None:
+        body = {"baseId": "1badstart", "displayName": "数字开头", "description": "d"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 400
+
+    def test_create_missing_description(self, client: TestClient) -> None:
+        body = {"displayName": "缺描述"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 422
 
     def test_delete_base(self, client: TestClient) -> None:
         # First create a disposable base
         client.post(
-            "/api/v1/ontologyBases", json={"baseId": "del-base", "displayName": "待删"}
+            "/api/v1/ontologyBases",
+            json={"baseId": "del-base", "displayName": "待删", "description": "d"},
         )
         resp = client.delete(f"/api/v1/ontologyBases/{OWNER_TYPE}/del-base")
         assert resp.status_code == 200
@@ -198,6 +245,43 @@ class TestOntologyBaseRoutes:
 
     def test_delete_nonexistent_base(self, client: TestClient) -> None:
         resp = client.delete(f"/api/v1/ontologyBases/{OWNER_TYPE}/no-such-base")
+        assert resp.status_code == 404
+
+    def test_update_base_display_name(self, client: TestClient) -> None:
+        body = {"displayName": "新名字"}
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "updated"
+        assert data["data"]["display_name"] == "新名字"
+        # Other fields unchanged
+        assert data["data"]["base_id"] == LOCAL
+
+    def test_update_base_multiple_fields(self, client: TestClient) -> None:
+        body = {
+            "displayName": "多字段",
+            "description": "新描述",
+            "timeoutSec": 60,
+        }
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["data"]["display_name"] == "多字段"
+        assert data["data"]["description"] == "新描述"
+        assert data["data"]["timeout_sec"] == 60
+
+    def test_update_base_readonly_field_ignored(self, client: TestClient) -> None:
+        """Passing baseId in PUT body has no effect."""
+        body = {"baseId": "hacked", "displayName": "改名"}
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["data"]["base_id"] == LOCAL  # unchanged
+        assert data["data"]["display_name"] == "改名"
+
+    def test_update_nonexistent_base(self, client: TestClient) -> None:
+        body = {"displayName": "不存在"}
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/no-such", json=body)
         assert resp.status_code == 404
 
 
@@ -1162,3 +1246,166 @@ class TestOntologyBuildRoutes:
         assert resp.status_code in (200, 500)
         data = resp.json()
         assert "ok" in data
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 21. Snowflake & base_id validation (unit tests)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSnowflake:
+    """Unit tests for generate_snowflake and validate_base_id."""
+
+    def test_snowflake_length(self) -> None:
+        from datacloud_platform.base_entry import generate_snowflake
+
+        sid = generate_snowflake()
+        assert len(sid) == 16
+
+    def test_snowflake_hex(self) -> None:
+        from datacloud_platform.base_entry import generate_snowflake
+
+        sid = generate_snowflake()
+        assert set(sid).issubset("0123456789abcdef")
+
+    def test_snowflake_ordering(self) -> None:
+        """IDs generated later should be lexicographically greater."""
+        from datacloud_platform.base_entry import generate_snowflake
+
+        id1 = generate_snowflake()
+        import time
+
+        time.sleep(0.002)  # ensure timestamp advances
+        id2 = generate_snowflake()
+        assert id1 < id2, f"{id1=} should be < {id2=}"
+
+    def test_snowflake_uniqueness(self) -> None:
+        """1000 IDs should all be unique."""
+        from datacloud_platform.base_entry import generate_snowflake
+
+        ids = {generate_snowflake() for _ in range(1000)}
+        assert len(ids) == 1000
+
+    def test_validate_base_id_valid(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert validate_base_id("a")
+        assert validate_base_id("abc")
+        assert validate_base_id("my-base")
+        assert validate_base_id("a123_45-678")
+        assert validate_base_id("abcdefghijklmnop")  # exactly 16
+
+    def test_validate_base_id_invalid_uppercase(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("ABC")
+        assert not validate_base_id("aBc")
+
+    def test_validate_base_id_invalid_too_long(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("abcdefghijklmnopq")  # 17 chars
+
+    def test_validate_base_id_invalid_first_char(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("1abc")
+        assert not validate_base_id("-abc")
+        assert not validate_base_id("_abc")
+
+    def test_validate_base_id_invalid_special_chars(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("ab cd")
+        assert not validate_base_id("ab.cd")
+        assert not validate_base_id("ab/cd")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 22. Persistence tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPersistence:
+    """Tests for JSON file persistence of OntologyBaseRegistry."""
+
+    def test_persist_and_restore(self, tmp_path: Path) -> None:
+
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        registry = OntologyBaseRegistry()
+        registry.register(
+            OntologyBaseEntry(base_id="p1", display_name="P1", description="desc1")
+        )
+        registry.register(
+            OntologyBaseEntry(base_id="p2", display_name="P2", description="desc2")
+        )
+
+        path = tmp_path / "bases.json"
+        registry.persist(path)
+
+        restored = OntologyBaseRegistry.restore(path)
+        assert restored.exists("p1")
+        assert restored.exists("p2")
+        e = restored.get("p1")
+        assert e is not None
+        assert e.display_name == "P1"
+        assert e.description == "desc1"
+
+    def test_restore_nonexistent_file(self, tmp_path: Path) -> None:
+
+        from datacloud_platform.base_entry import OntologyBaseRegistry
+
+        registry = OntologyBaseRegistry.restore(tmp_path / "nonexistent.json")
+        assert registry.list() == []
+
+    def test_restore_corrupted_file(self, tmp_path: Path) -> None:
+
+        from datacloud_platform.base_entry import OntologyBaseRegistry
+
+        path = tmp_path / "corrupt.json"
+        path.write_text("not json")
+        registry = OntologyBaseRegistry.restore(path)
+        assert registry.list() == []
+
+    def test_delete_then_restore(self, tmp_path: Path) -> None:
+
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        registry = OntologyBaseRegistry()
+        registry.register(
+            OntologyBaseEntry(base_id="temp", display_name="T", description="d")
+        )
+        path = tmp_path / "bases.json"
+        registry.persist(path)
+        registry.unregister("temp")
+        registry.persist(path)
+
+        restored = OntologyBaseRegistry.restore(path)
+        assert not restored.exists("temp")
+
+    def test_persistence_survives_registry_reload(self, tmp_path: Path) -> None:
+
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        registry = OntologyBaseRegistry()
+        registry.register(
+            OntologyBaseEntry(base_id="survive", display_name="S", description="d")
+        )
+        path = tmp_path / "bases.json"
+        registry.persist(path)
+
+        restored = OntologyBaseRegistry.restore(path)
+        assert restored.exists("survive")
+        entry = restored.get("survive")
+        assert entry is not None
+        assert entry.display_name == "S"
