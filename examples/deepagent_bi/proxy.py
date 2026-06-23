@@ -6,6 +6,7 @@
 用法：
     python proxy.py
 """
+
 from __future__ import annotations
 
 import json
@@ -27,11 +28,13 @@ _client = httpx.AsyncClient(base_url=_API_URL, timeout=300.0)
 
 async def serve_index(_request: Request) -> HTMLResponse:
     """注入 auth 和 API 地址后返回 index.html。"""
-    config = json.dumps({
-        "auth": "anonymous",
-        "appName": "DataCloud BI",
-        "assistantId": "agent",
-    })
+    config = json.dumps(
+        {
+            "auth": "anonymous",
+            "appName": "DataCloud BI",
+            "assistantId": "agent",
+        }
+    )
     html = _INDEX_TEMPLATE.replace(
         'window.__DEEPAGENTS_CONFIG__ = {"__PLACEHOLDER__":true};',
         f"window.__DEEPAGENTS_CONFIG__ = {config};",
@@ -74,9 +77,18 @@ async def proxy(request: Request) -> Response:
 
 app = Starlette(
     routes=[
-        Route("/app", lambda r: __import__("starlette.responses", fromlist=["RedirectResponse"]).RedirectResponse("/app/", status_code=308)),
+        Route(
+            "/app",
+            lambda r: __import__(
+                "starlette.responses", fromlist=["RedirectResponse"]
+            ).RedirectResponse("/app/", status_code=308),
+        ),
         Route("/app/", serve_index),
         Mount("/app", app=StaticFiles(directory=str(_FRONTEND_DIR)), name="frontend"),
-        Route("/{path:path}", proxy, methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]),
+        Route(
+            "/{path:path}",
+            proxy,
+            methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
+        ),
     ],
 )

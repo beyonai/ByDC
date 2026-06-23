@@ -3,6 +3,7 @@
 用法：
     uvicorn app:app --port 3000
 """
+
 from __future__ import annotations
 
 import json

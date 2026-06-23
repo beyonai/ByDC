@@ -1,8 +1,9 @@
 """本体知识 BM25 检索 Tool。"""
+
 from __future__ import annotations
 
-import re
 import logging
+import re
 from pathlib import Path
 
 from langchain_core.tools import tool
@@ -61,13 +62,15 @@ def _load_docs(owl_docs_dir: Path) -> list[dict[str, str]]:
         name, code = _parse_header(first_line, md_file.stem)
         resource_type = "view" if "**类型**：view" in content else "object"
         summary = _extract_description(content)
-        docs.append({
-            "code": code,
-            "name": name,
-            "type": resource_type,
-            "summary": summary,
-            "content": content,
-        })
+        docs.append(
+            {
+                "code": code,
+                "name": name,
+                "type": resource_type,
+                "summary": summary,
+                "content": content,
+            }
+        )
     return docs
 
 
@@ -77,6 +80,7 @@ def _tokenize(text: str) -> list[str]:
     不依赖 jieba，避免环境编码问题。bigram 能覆盖"客户"、"销售分析"等词组。
     """
     import re
+
     tokens: list[str] = []
     # 英文单词和数字
     tokens.extend(re.findall(r"[a-z0-9_]+", text.lower()))
