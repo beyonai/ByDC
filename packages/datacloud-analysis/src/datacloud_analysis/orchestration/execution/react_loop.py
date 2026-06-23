@@ -363,13 +363,20 @@ async def _stream_llm_call(
 
     # 记录 config 中的 callbacks（用于排查 Langfuse 记录问题）
     if config:
-        _callbacks = config.get("callbacks") or []
-        logger.debug(
-            "[_stream_llm_call] round=%d config.callbacks=%s (count=%d)",
-            round_idx,
-            [type(cb).__name__ for cb in _callbacks] if _callbacks else "None",
-            len(_callbacks) if _callbacks else 0,
-        )
+        _callbacks = config.get("callbacks")
+        if _callbacks:
+            # callbacks 可能是 CallbackManager 对象或 list
+            _cb_type = type(_callbacks).__name__
+            logger.debug(
+                "[_stream_llm_call] round=%d config.callbacks=%s",
+                round_idx,
+                _cb_type,
+            )
+        else:
+            logger.debug(
+                "[_stream_llm_call] round=%d config.callbacks=None",
+                round_idx,
+            )
 
     try:
         async for chunk in llm_with_tools.astream(messages_window, config=config):
