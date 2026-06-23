@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 try:
     from datacloud_knowledge.ingestion.ontology_terms import build_terms as _build_terms
 except ImportError:
-    _build_terms = None  # type: ignore[assignment]
+    _build_terms = None
 
 logger = logging.getLogger(__name__)
 
@@ -203,21 +203,19 @@ class DatacloudPlatform:
         """Load ontology from a base_path, returning a queryable handle."""
         return self._ontology_for(base_id).load_ontology(Path(base_path))
 
-    def get_objects(self, base_id: str, scene_id: str) -> list[ObjectSummary]:
-        """Get all ontology object summaries under a scene."""
+    def get_objects(self, base_id: str) -> list[ObjectSummary]:
+        """Get all ontology object summaries under a base."""
         backend = self._ontology_for(base_id)
         loader = backend.load_ontology(self._base_path_for(base_id))
-        return backend.get_objects(loader, base_id, scene_id)
+        return backend.get_objects(loader, base_id)
 
-    def get_object_detail(
-        self, base_id: str, scene_id: str, object_code: str
-    ) -> ObjectSummary | None:
+    def get_object_detail(self, base_id: str, object_code: str) -> ObjectSummary | None:
         """Get a single object's detail by code."""
         backend = self._ontology_for(base_id)
         loader = backend.load_ontology(self._base_path_for(base_id))
         return backend.get_object_detail(loader, object_code)
 
-    def create_object(self, base_id: str, scene_id: str, obj: Any) -> Any:
+    def create_object(self, base_id: str, obj: Any) -> Any:
         """Create an ontology object.
 
         REMOTE backends raise PermissionError internally — Platform does not
@@ -226,7 +224,7 @@ class DatacloudPlatform:
         Side effect: if datacloud-knowledge is installed, writes term data
         so the new object can be hit by vector search.
         """
-        result = self._ontology_for(base_id).create_object(base_id, scene_id, obj)
+        result = self._ontology_for(base_id).create_object(base_id, obj)
         if _build_terms is not None:
             try:
                 fields = [
@@ -262,23 +260,19 @@ class DatacloudPlatform:
                 )
         return result
 
-    def update_object(
-        self, base_id: str, scene_id: str, object_code: str, obj: Any
-    ) -> Any:
+    def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
         """Update an ontology object.
 
         REMOTE backends raise PermissionError internally.
         """
-        return self._ontology_for(base_id).update_object(
-            base_id, scene_id, object_code, obj
-        )
+        return self._ontology_for(base_id).update_object(base_id, object_code, obj)
 
-    def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
+    def delete_object(self, base_id: str, object_code: str) -> None:
         """Delete an ontology object.
 
         REMOTE backends raise PermissionError internally.
         """
-        self._ontology_for(base_id).delete_object(base_id, scene_id, object_code)
+        self._ontology_for(base_id).delete_object(base_id, object_code)
 
     # ── Knowledge: search / disambiguation ──
 
@@ -499,7 +493,7 @@ class DatacloudPlatform:
         obj_count = 0
         for obj_dict in parsed.objects:
             try:
-                onto.create_object(base_id, scene_id, obj_dict)
+                onto.create_object(base_id, obj_dict)
                 obj_count += 1
             except Exception as exc:
                 logger.warning("Failed to create object from OWL import: %s", exc)
@@ -545,8 +539,8 @@ class DatacloudPlatform:
         base_id: str,
         scene_id: str,
         *,
-        view_code: str | None = None,
-        object_code: str | None = None,
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
     ) -> dict[str, Any]:
         """Get full scene details with optional filtering by view_code or object_code."""
         return self._ontology_for(base_id).get_scene_details(
@@ -567,134 +561,144 @@ class DatacloudPlatform:
             base_id, scene_id, page=page, page_size=page_size, keyword=keyword
         )
 
-    # ── View CRUD ──
+    # ── Scene CRUD ──
 
-    def get_views(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
-        """Get all views under a scene."""
-        return self._ontology_for(base_id).get_views(base_id, scene_id)
+    def create_scene(self, base_id: str, scene: Any) -> Any:
+        """Create a scene (grouping container)."""
+        return self._ontology_for(base_id).create_scene(base_id, scene)
 
-    def get_view_detail(
-        self, base_id: str, scene_id: str, view_code: str
-    ) -> dict[str, Any] | None:
-        """Get single view detail by code."""
-        return self._ontology_for(base_id).get_view_detail(base_id, scene_id, view_code)
+    def update_scene(self, base_id: str, scene_id: str, updates: Any) -> Any:
+        """Update scene metadata."""
+        return self._ontology_for(base_id).update_scene(base_id, scene_id, updates)
 
-    def create_view(self, base_id: str, scene_id: str, view: Any) -> Any:
-        """Create a view. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_view(base_id, scene_id, view)
+    def delete_scene(self, base_id: str, scene_id: str) -> None:
+        """Delete a scene — does NOT delete member resources."""
+        self._ontology_for(base_id).delete_scene(base_id, scene_id)
 
-    def update_view(
-        self, base_id: str, scene_id: str, view_code: str, view: Any
+    # ── Scene member management ──
+
+    def add_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
     ) -> Any:
-        """Update a view. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).update_view(
-            base_id, scene_id, view_code, view
+        """Add objects/views to a scene (idempotent)."""
+        return self._ontology_for(base_id).add_scene_members(
+            base_id, scene_id, object_codes, view_codes
         )
 
-    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+    def remove_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
+    ) -> Any:
+        """Remove objects/views from a scene — does NOT delete resources."""
+        return self._ontology_for(base_id).remove_scene_members(
+            base_id, scene_id, object_codes, view_codes
+        )
+
+    # ── View CRUD ──
+
+    def get_views(self, base_id: str) -> list[dict[str, Any]]:
+        """Get all views under a base."""
+        return self._ontology_for(base_id).get_views(base_id)
+
+    def get_view_detail(self, base_id: str, view_code: str) -> dict[str, Any] | None:
+        """Get single view detail by code."""
+        return self._ontology_for(base_id).get_view_detail(base_id, view_code)
+
+    def create_view(self, base_id: str, view: Any) -> Any:
+        """Create a view. Raises PermissionError on read-only backends."""
+        return self._ontology_for(base_id).create_view(base_id, view)
+
+    def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
+        """Update a view. Raises PermissionError on read-only backends."""
+        return self._ontology_for(base_id).update_view(base_id, view_code, view)
+
+    def delete_view(self, base_id: str, view_code: str) -> None:
         """Delete a view. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_view(base_id, scene_id, view_code)
+        self._ontology_for(base_id).delete_view(base_id, view_code)
 
     # ── Relation CRUD ──
 
-    def get_relations(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
-        """Get all relations under a scene."""
-        return self._ontology_for(base_id).get_relations(base_id, scene_id)
+    def get_relations(self, base_id: str) -> list[dict[str, Any]]:
+        """Get all relations under a base."""
+        return self._ontology_for(base_id).get_relations(base_id)
 
-    def get_relation_detail(
-        self, base_id: str, scene_id: str, rel_code: str
-    ) -> dict[str, Any] | None:
+    def get_relation_detail(self, base_id: str, rel_code: str) -> dict[str, Any] | None:
         """Get single relation detail by code."""
-        return self._ontology_for(base_id).get_relation_detail(
-            base_id, scene_id, rel_code
-        )
+        return self._ontology_for(base_id).get_relation_detail(base_id, rel_code)
 
-    def create_relation(self, base_id: str, scene_id: str, rel: Any) -> Any:
+    def create_relation(self, base_id: str, rel: Any) -> Any:
         """Create a relation. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_relation(base_id, scene_id, rel)
+        return self._ontology_for(base_id).create_relation(base_id, rel)
 
-    def update_relation(
-        self, base_id: str, scene_id: str, rel_code: str, rel: Any
-    ) -> Any:
+    def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
         """Update a relation. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).update_relation(
-            base_id, scene_id, rel_code, rel
-        )
+        return self._ontology_for(base_id).update_relation(base_id, rel_code, rel)
 
-    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+    def delete_relation(self, base_id: str, rel_code: str) -> None:
         """Delete a relation. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_relation(base_id, scene_id, rel_code)
+        self._ontology_for(base_id).delete_relation(base_id, rel_code)
 
     # ── Datasource CRUD ──
 
-    def get_datasources(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
-        """Get all datasources under a scene."""
-        return self._ontology_for(base_id).get_datasources(base_id, scene_id)
+    def get_datasources(self, base_id: str) -> list[dict[str, Any]]:
+        """Get all datasources under a base."""
+        return self._ontology_for(base_id).get_datasources(base_id)
 
-    def get_datasource_detail(
-        self, base_id: str, scene_id: str, db_id: str
-    ) -> dict[str, Any] | None:
+    def get_datasource_detail(self, base_id: str, db_id: str) -> dict[str, Any] | None:
         """Get single datasource detail by db_id."""
-        return self._ontology_for(base_id).get_datasource_detail(
-            base_id, scene_id, db_id
-        )
+        return self._ontology_for(base_id).get_datasource_detail(base_id, db_id)
 
-    def create_datasource(self, base_id: str, scene_id: str, ds: Any) -> Any:
+    def create_datasource(self, base_id: str, ds: Any) -> Any:
         """Create a datasource. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_datasource(base_id, scene_id, ds)
+        return self._ontology_for(base_id).create_datasource(base_id, ds)
 
-    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+    def delete_datasource(self, base_id: str, db_id: str) -> None:
         """Delete a datasource. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_datasource(base_id, scene_id, db_id)
+        self._ontology_for(base_id).delete_datasource(base_id, db_id)
 
     # ── Action CRUD ──
 
-    def get_actions(
-        self, base_id: str, scene_id: str, object_code: str
-    ) -> list[dict[str, Any]]:
+    def get_actions(self, base_id: str, object_code: str) -> list[dict[str, Any]]:
         """Get all actions on an object."""
-        return self._ontology_for(base_id).get_actions(base_id, scene_id, object_code)
+        return self._ontology_for(base_id).get_actions(base_id, object_code)
 
     def get_action_detail(
         self,
         base_id: str,
-        scene_id: str,
         object_code: str,
         action_code: str,
     ) -> dict[str, Any] | None:
         """Get single action detail by code."""
         return self._ontology_for(base_id).get_action_detail(
-            base_id, scene_id, object_code, action_code
+            base_id, object_code, action_code
         )
 
-    def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action: Any
-    ) -> Any:
+    def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
         """Create an action. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_action(
-            base_id, scene_id, object_code, action
-        )
+        return self._ontology_for(base_id).create_action(base_id, object_code, action)
 
     def update_action(
         self,
         base_id: str,
-        scene_id: str,
         object_code: str,
         action_code: str,
         action: Any,
     ) -> Any:
         """Update an action. Raises PermissionError on read-only backends."""
         return self._ontology_for(base_id).update_action(
-            base_id, scene_id, object_code, action_code, action
+            base_id, object_code, action_code, action
         )
 
-    def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str
-    ) -> None:
+    def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
         """Delete an action. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_action(
-            base_id, scene_id, object_code, action_code
-        )
+        self._ontology_for(base_id).delete_action(base_id, object_code, action_code)
 
     # ── Search & Graph (knowledge-backend routed) ──
 
