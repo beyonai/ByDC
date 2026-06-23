@@ -674,6 +674,7 @@ class OntologyLoader:
             param_type=p.get("param_type", "STRING"),
             required=p.get("required", False),
             default_value=p.get("default_value"),
+            data_format=p.get("data_format") or None,
             mapping_path=p.get("mapping_path", ""),
             json_path=p.get("json_path", ""),
             object_property=p.get("object_property"),

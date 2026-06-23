@@ -495,6 +495,7 @@ class OwlParser:
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
         term_data_type = self._get_predicate_value(g, subject, "term_data_type")
+        data_format = self._get_predicate_value(g, subject, "data_format")
         owl_mapping_path = self._get_predicate_value(g, subject, "mapping_path") or ""
         owl_json_path = self._get_predicate_value(g, subject, "json_path") or ""
         mapping_path = owl_mapping_path or owl_json_path
@@ -506,6 +507,7 @@ class OwlParser:
             field_code=param_code,
             field_name=description or param_code,
             field_type=param_type.upper(),
+            data_format=data_format if data_format else None,
             required=is_required.lower() == "true" if is_required else False,
             term_type_code_path=term_type_code_path if term_type_code_path else None,
             library_code=library_code if library_code else None,
@@ -529,6 +531,7 @@ class OwlParser:
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
         term_data_type = self._get_predicate_value(g, subject, "term_data_type")
+        data_format = self._get_predicate_value(g, subject, "data_format")
         owl_json_path = self._get_predicate_value(g, subject, "json_path") or ""
         owl_mapping_path = self._get_predicate_value(g, subject, "mapping_path") or ""
         mapping_path = owl_json_path or owl_mapping_path
@@ -540,6 +543,7 @@ class OwlParser:
             field_code=field_code,
             field_name=description or field_code,
             field_type=field_type.upper(),
+            data_format=data_format if data_format else None,
             description=description,
             term_type_code_path=term_type_code_path if term_type_code_path else None,
             library_code=library_code if library_code else None,
@@ -923,6 +927,8 @@ class OwlParser:
                             "required": f.required,
                             "direction": "IN",
                         }
+                        if f.data_format:
+                            param_dict["data_format"] = f.data_format
                         if f.mapping_path:
                             param_dict["mapping_path"] = f.mapping_path
                         if f.json_path:
@@ -953,6 +959,8 @@ class OwlParser:
                             "required": f.required,
                             "direction": "OUT",
                         }
+                        if f.data_format:
+                            param_dict["data_format"] = f.data_format
                         if f.mapping_path:
                             param_dict["mapping_path"] = f.mapping_path
                         if f.json_path:

@@ -130,6 +130,7 @@ class OntologyActionParam:
     param_type: str
     required: bool = False
     default_value: Any = None
+    data_format: str | None = None
     mapping_path: str = ""
     json_path: str = ""
     object_property: str | None = None
