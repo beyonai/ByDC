@@ -139,6 +139,180 @@ class DataCloudDataBackend:
             return None
         return self._to_summary(cls)
 
+    # ── Object CRUD (stub — datacloud-data SDK does not yet support) ────────
+
+    def create_object(self, base_id: str, scene_id: str, obj: Any) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Object creation not supported via datacloud-data SDK")
+
+    def update_object(
+        self, base_id: str, scene_id: str, object_code: str, obj: Any
+    ) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Object update not supported via datacloud-data SDK")
+
+    def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Object deletion not supported via datacloud-data SDK")
+
+    # ── View CRUD (stub — datacloud-data SDK does not yet support) ──────────
+
+    def get_views(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Return empty list — views not yet available via SDK."""
+        return []
+
+    def get_view_detail(
+        self, base_id: str, scene_id: str, view_code: str
+    ) -> dict[str, Any] | None:
+        """Return None — view details not yet available via SDK."""
+        return None
+
+    def create_view(self, base_id: str, scene_id: str, view: Any) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("View creation not supported via datacloud-data SDK")
+
+    def update_view(
+        self, base_id: str, scene_id: str, view_code: str, view: Any
+    ) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("View update not supported via datacloud-data SDK")
+
+    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("View deletion not supported via datacloud-data SDK")
+
+    # ── Relation CRUD (stub — datacloud-data SDK does not yet support) ──────
+
+    def get_relations(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Return empty list — relations not yet available via SDK."""
+        return []
+
+    def get_relation_detail(
+        self, base_id: str, scene_id: str, rel_code: str
+    ) -> dict[str, Any] | None:
+        """Return None — relation details not yet available via SDK."""
+        return None
+
+    def create_relation(self, base_id: str, scene_id: str, rel: Any) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Relation creation not supported via datacloud-data SDK")
+
+    def update_relation(
+        self, base_id: str, scene_id: str, rel_code: str, rel: Any
+    ) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Relation update not supported via datacloud-data SDK")
+
+    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Relation deletion not supported via datacloud-data SDK")
+
+    # ── Action CRUD (stub — datacloud-data SDK does not yet support) ────────
+
+    def get_actions(
+        self, base_id: str, scene_id: str, object_code: str
+    ) -> list[dict[str, Any]]:
+        """Return empty list — actions not yet available via SDK."""
+        return []
+
+    def get_action_detail(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> dict[str, Any] | None:
+        """Return None — action details not yet available via SDK."""
+        return None
+
+    def create_action(
+        self, base_id: str, scene_id: str, object_code: str, action: Any
+    ) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Action creation not supported via datacloud-data SDK")
+
+    def update_action(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_code: str,
+        action_code: str,
+        action: Any,
+    ) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Action update not supported via datacloud-data SDK")
+
+    def delete_action(
+        self, base_id: str, scene_id: str, object_code: str, action_code: str
+    ) -> None:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError("Action deletion not supported via datacloud-data SDK")
+
+    # ── Datasource CRUD (stub — datacloud-data SDK does not yet support) ────
+
+    def get_datasources(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
+        """Return empty list — datasources not yet available via SDK."""
+        return []
+
+    def get_datasource_detail(
+        self, base_id: str, scene_id: str, db_id: str
+    ) -> dict[str, Any] | None:
+        """Return None — datasource details not yet available via SDK."""
+        return None
+
+    def create_datasource(self, base_id: str, scene_id: str, ds: Any) -> Any:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError(
+            "Datasource creation not supported via datacloud-data SDK"
+        )
+
+    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+        """Raise PermissionError — write operations not supported via SDK."""
+        raise PermissionError(
+            "Datasource deletion not supported via datacloud-data SDK"
+        )
+
+    # ── Scene management (stub — datacloud-data SDK does not yet support) ───
+
+    def list_scenes(self, base_id: str) -> list[dict[str, Any]]:
+        """Return empty list — scene listing not yet available via SDK."""
+        return []
+
+    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict[str, Any]]:
+        """Return empty list — scene query not yet available via SDK."""
+        return []
+
+    def count_scenes(self, base_id: str, keyword: str | None) -> int:
+        """Return 0 — scene counting not yet available via SDK."""
+        return 0
+
+    def get_scene_details(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        view_code: str | None = None,
+        object_code: str | None = None,
+    ) -> dict[str, Any]:
+        """Return empty scene details — not yet available via SDK."""
+        return {
+            "scene": None,
+            "views": [],
+            "objects": [],
+            "actions": [],
+            "relations": [],
+            "dbsources": [],
+            "version": None,
+        }
+
+    def query_ontologies_by_scene(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 20,
+        keyword: str | None = None,
+    ) -> dict[str, Any]:
+        """Return empty result — ontology-by-scene query not yet available via SDK."""
+        return {"data": [], "totalCount": 0}
+
     # ── StorageBackend ─────────────────────────────────────────────────────
 
     def store_result(
