@@ -62,15 +62,10 @@ def _format_todo_snapshot(active_todos: list[dict[str, Any]], user_query: str) -
         lines.append(f"原始任务：{user_query}")
     return "\n".join(lines)
 
-
-def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> str | None:
-    """从 state 的 knowledge_snippets 和 gateway_context 构建每次请求的动态 prompt 部分。"""
-    parts: list[str] = []
-
-    knowledge_snippets = list(state.get("knowledge_snippets") or [])
-    if knowledge_snippets:
-        parts.append("\n\n## 数据查询知识增强\n" + "\n".join(str(s) for s in knowledge_snippets))
-
+def _get_user_info(gateway_context: Any):
+    from datacloud_analysis.reporter import NoOpExecutionReporter
+    if isinstance(gateway_context, NoOpExecutionReporter):
+        return gateway_context.user_id, ""
     _header_meta: dict[str, Any] = {}
     with contextlib.suppress(AttributeError):
         _header_meta = gateway_context.current_command.header.metadata or {}  # type: ignore[union-attr]
@@ -86,10 +81,19 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
     _user_name = str(
         getattr(_header, "user_name", "") or _header_meta.get("user_name") or ""
     ).strip()
+    return _user_code, _user_name
+
+def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> str | None:
+    """从 state 的 knowledge_snippets 和 gateway_context 构建每次请求的动态 prompt 部分。"""
+    parts: list[str] = []
+
+    knowledge_snippets = list(state.get("knowledge_snippets") or [])
+    if knowledge_snippets:
+        parts.append("\n\n## 数据查询知识增强\n" + "\n".join(str(s) for s in knowledge_snippets))
+    _user_code, _user_name = _get_user_info(gateway_context)
     logger.info(
-        "[_build_runtime_dynamic_prompt] gateway_context=%s header=%s user_code=%r user_name=%r",
+        "[_build_runtime_dynamic_prompt] gateway_context=%s user_code=%r user_name=%r",
         type(gateway_context).__name__,
-        type(_header).__name__ if _header is not None else "None",
         _user_code,
         _user_name,
     )
