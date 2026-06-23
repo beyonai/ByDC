@@ -221,7 +221,12 @@ class QueryExecutor:
         # ── 3. 确定 SELECT 字段 ────────────────────────────────────────────────
         select_codes: list[str] = arguments.get("select") or []
         if select_codes:
-            select_fields = [field_map[fc] for fc in select_codes if fc in field_map]
+            # 有显式 select 时，自动补充未包含的主键字段（去重，主键置前）
+            pk_fields = [f for f in cls.fields if getattr(f, "is_primary_key", False)]
+            select_codes_set = set(select_codes)
+            extra_pks = [f for f in pk_fields if f.field_code not in select_codes_set]
+            requested = [field_map[fc] for fc in select_codes if fc in field_map]
+            select_fields = extra_pks + requested
         else:
             select_fields = [
                 f for f in cls.fields if getattr(f, "property_kind", "physical") != "linked"

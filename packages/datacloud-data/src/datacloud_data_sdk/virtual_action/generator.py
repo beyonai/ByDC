@@ -598,7 +598,12 @@ def build_update_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "description": f"按 filters 修改动态表{scope_name}记录。必须提供 filters。",
+        "description": (
+            f"修改动态表{scope_name}的记录。必须提供 filters 和 values。"
+            "若要修改某条指定记录，请先调用对应的 query 动作查询该记录，从返回结果中获取主键字段的值，"
+            "再以该主键作为 filters 条件精确定位后执行修改；"
+            "若用户说明并非修改指定某条记录（如批量修改某一类数据），则直接按用户给出的过滤条件构造 filters。"
+        ),
         "x-dc-action-family": "update",
         "x-dc-scope-type": "object",
         "properties": {
@@ -626,7 +631,12 @@ def build_delete_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "description": f"按 filters 物理删除动态表{scope_name}记录。必须提供 filters。",
+        "description": (
+            f"物理删除动态表{scope_name}的记录。必须提供 filters。"
+            "若要删除某条指定记录，请先调用对应的 query 动作查询该记录，从返回结果中获取主键字段的值，"
+            "再以该主键作为 filters 条件精确定位后执行删除；"
+            "若用户说明并非删除指定某条记录（如批量删除某一类数据），则直接按用户给出的过滤条件构造 filters。"
+        ),
         "x-dc-action-family": "delete",
         "x-dc-scope-type": "object",
         "properties": {
