@@ -1224,7 +1224,7 @@ async def test_operation_returns_params_with_validation_status() -> None:
 
 @pytest.mark.asyncio
 async def test_object_virtual_action_converts_rel_term_code_result_to_name(tmp_path) -> None:
-    from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+    from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
     db_path = tmp_path / "virtual_terms.db"
     loader = OntologyLoader()
@@ -1286,7 +1286,7 @@ async def test_object_virtual_action_converts_rel_term_code_result_to_name(tmp_p
 
 @pytest.mark.asyncio
 async def test_view_virtual_action_converts_rel_term_code_result_to_name(tmp_path) -> None:
-    from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+    from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
     db_path = tmp_path / "view_virtual_terms.db"
     loader = OntologyLoader()

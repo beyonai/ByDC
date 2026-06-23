@@ -38,21 +38,27 @@ async def _post_via_discovery(
 ) -> Any:
     """通过服务发现调用指定服务的 POST 接口。"""
     from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
-    from by_framework.util.discovery_http_client import DiscoveryHttpClient  # type: ignore[import-untyped]
+    from by_framework.util.discovery_http_client import (
+        DiscoveryHttpClient,  # type: ignore[import-untyped]
+    )
     from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
 
     _init_discovery_redis()
     discovery_client = DiscoveryClient(cache_interval=5)
     retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
     try:
-        async with DiscoveryHttpClient(discovery_client, retry_config=retry_config, health_threshold_ms=-1) as client:
+        async with DiscoveryHttpClient(
+            discovery_client, retry_config=retry_config, health_threshold_ms=-1
+        ) as client:
             response = await client.post(service_name, path, headers=headers, json=payload)
     finally:
         await discovery_client.close()
 
     body: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
     if not response.is_success or body.get("code", 0) != 0:
-        raise ValueError(f"HTTP {response.status_code} {service_name}{path}: {body.get('msg', body)}")
+        raise ValueError(
+            f"HTTP {response.status_code} {service_name}{path}: {body.get('msg', body)}"
+        )
     if body and "data" in body:
         return body["data"]
     return body
@@ -79,7 +85,7 @@ def post_json(path: str, payload: dict[str, Any], service_env: str = "BE_DOMAINN
 
 
 def post_ontology_api(path: str, payload: dict[str, Any]) -> Any:
-    """调用 datacloud_data_service 的 ontology-manager API。
+    """调用 datacloud_platform 的 ontology-manager API。
 
     通过 DATACLOUD_SERVICE_NAME 环境变量指定服务发现名，默认 byclaw-datacloud。
 
@@ -113,7 +119,7 @@ def _run_async_in_thread(coro: Any) -> Any:
     def runner() -> None:
         try:
             result["value"] = asyncio.run(coro)
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             error["exc"] = exc
 
     thread = threading.Thread(target=runner, daemon=True)
@@ -159,8 +165,10 @@ def load_embedding_model_from_redis() -> bool:
             host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
             port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
             db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
-            password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")) or None,
-            username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
+            password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD"))
+            or None,
+            username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME"))
+            or None,
             decode_responses=True,
         )
 

@@ -2,7 +2,7 @@ import pytest
 from datacloud_data_sdk.context import InvocationContext
 from datacloud_data_sdk.exceptions import ActionNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
 REGISTRY = {
     "functions": [],

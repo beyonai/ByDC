@@ -8,16 +8,16 @@ Usage::
     app = create_app(platform)
 
     # Option B: selective assembly
-    from datacloud_platform.api.ontology_routes import create_ontology_routes
+    from datacloud_platform.api.routers.ontology_routes import create_ontology_routes
     app.include_router(create_ontology_routes(platform))
 """
 
 from __future__ import annotations
 
-from datacloud_platform.api.import_routes import create_import_routes
-from datacloud_platform.api.ontology_routes import create_ontology_routes
-from datacloud_platform.api.resource_routes import create_resource_routes
-from datacloud_platform.api.search_routes import create_search_routes
+from datacloud_platform.api.routers.import_routes import create_import_routes
+from datacloud_platform.api.routers.ontology_routes import create_ontology_routes
+from datacloud_platform.api.routers.resource_routes import create_resource_routes
+from datacloud_platform.api.routers.search_routes import create_search_routes
 from datacloud_platform.api.server import create_app
 
 __all__ = [

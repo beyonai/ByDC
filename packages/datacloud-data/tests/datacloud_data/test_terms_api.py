@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
-from datacloud_data_service.api.terms import router
+from datacloud_platform.api.routers.terms_routes import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 

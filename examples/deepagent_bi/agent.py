@@ -1,4 +1,5 @@
 """DeepAgent BI 示例入口。"""
+
 from __future__ import annotations
 
 import os
@@ -7,7 +8,6 @@ from pathlib import Path
 from deepagents import create_deep_agent
 from deepagents.backends.local_shell import LocalShellBackend
 from langchain_anthropic import ChatAnthropic
-
 from tools.datacloud_tool import build_datacloud_tool
 from tools.ontology_search_tool import build_ontology_search_tool
 

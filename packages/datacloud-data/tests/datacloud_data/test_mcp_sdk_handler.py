@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from datacloud_data_service.api.mcp_sdk_handler import (
+from datacloud_platform.api.mcp_handler import (
     _build_sdk_envelope_text,
     _McpGatewayContext,
     _parse_bool_header,
@@ -73,7 +73,7 @@ def test_validate_tool_arguments_logs_validation_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "datacloud_data_service.api.mcp_sdk_handler._resolve_tool_input_schema",
+        "datacloud_platform.api.mcp_handler._resolve_tool_input_schema",
         lambda *args, **kwargs: {
             "type": "object",
             "properties": {
@@ -91,7 +91,7 @@ def test_validate_tool_arguments_logs_validation_failures(
         log_messages.append(message % args)
 
     monkeypatch.setattr(
-        "datacloud_data_service.api.mcp_sdk_handler.logger.exception",
+        "datacloud_platform.api.mcp_handler.logger.exception",
         _fake_exception,
     )
 

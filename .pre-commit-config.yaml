@@ -10,13 +10,16 @@ repos:
         entry: uv run --frozen --all-packages ruff format src/by_datacloud packages --check
         language: system
         pass_filenames: false
+        always_run: true
       - id: ci-ruff-check
         name: ci / ruff check
         entry: uv run --frozen --all-packages ruff check src/by_datacloud packages
         language: system
         pass_filenames: false
+        always_run: true
       - id: ci-mypy
         name: ci / mypy
         entry: uv run --frozen --all-packages mypy src/by_datacloud packages
         language: system
         pass_filenames: false
+        always_run: true

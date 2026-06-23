@@ -1,4 +1,5 @@
 """dataCloud Query Tool — 封装 (resource_code, resource_type, question) 接口。"""
+
 from __future__ import annotations
 
 import logging
@@ -20,7 +21,7 @@ def _get_loader(resource_dir: Path) -> Any:
 
         from datacloud_analysis.tools.ontology_tool_loader import configure_loader  # noqa: PLC0415
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
-        from datacloud_data_service.tools.virtual_action_injector import (  # noqa: PLC0415
+        from datacloud_platform.execution.virtual_action_injector import (  # noqa: PLC0415
             inject_virtual_actions,
         )
 
@@ -32,7 +33,8 @@ def _get_loader(resource_dir: Path) -> Any:
             loader=loader,
             model=os.environ.get("DATACLOUD_LLM_MODEL") or os.environ.get("LLM_MODEL", ""),
             base_url=os.environ.get("DATACLOUD_LLM_URL") or os.environ.get("LLM_URL") or None,
-            api_key=os.environ.get("DATACLOUD_LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", ""),
+            api_key=os.environ.get("DATACLOUD_LLM_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY", ""),
             temperature=float(os.environ.get("DEMO_TEMPERATURE", "0")),
             sql_execution_mode="http_sql",
             sql_execute_url=os.environ.get("DEMO_SQL_EXECUTE_URL") or None,
@@ -80,7 +82,7 @@ def build_datacloud_tool(resource_dir: Path):  # type: ignore[return]
                     entity = loader.get_object(resource_code)
                 result = await entity.query(question=question)
             return str(result)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.error("datacloud_query 失败 (%s/%s): %s", resource_type, resource_code, exc)
             return f"查询失败：{exc}"
 

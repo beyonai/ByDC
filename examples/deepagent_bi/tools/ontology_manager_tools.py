@@ -3,6 +3,7 @@
 把 skill 脚本的 main() 逻辑直接封装为 LangChain Tool，
 绕开 Windows 下 LocalShellBackend 不支持 bash 的问题。
 """
+
 from __future__ import annotations
 
 import json
@@ -13,10 +14,15 @@ from typing import Any
 
 from langchain_core.tools import tool
 
-_SCRIPTS_DIR = Path(os.environ.get(
-    "ONTOLOGY_MANAGER_SKILL_DIR",
-    str(Path(__file__).parent.parent / "skills" / "ontology-manager"),
-)) / "scripts"
+_SCRIPTS_DIR = (
+    Path(
+        os.environ.get(
+            "ONTOLOGY_MANAGER_SKILL_DIR",
+            str(Path(__file__).parent.parent / "skills" / "ontology-manager"),
+        )
+    )
+    / "scripts"
+)
 
 
 def _run_script(script_name: str, stdin_data: str = "") -> str:

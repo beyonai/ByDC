@@ -547,7 +547,12 @@ def test_load_from_owl_resource_directory_supports_new_resource_layout() -> None
     pytest.importorskip("rdflib")
 
     resource_dir = (
-        Path(__file__).resolve().parents[2] / "src" / "datacloud_data_service" / "resource"
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "datacloud-platform"
+        / "src"
+        / "datacloud_platform"
+        / "resource"
     )
 
     loader = OntologyLoader()

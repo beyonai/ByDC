@@ -23,7 +23,7 @@ from datacloud_data_sdk.executor.kb_search_backend import (
 from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.models import OntologyClass, OntologyField
-from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
 
 @dataclass

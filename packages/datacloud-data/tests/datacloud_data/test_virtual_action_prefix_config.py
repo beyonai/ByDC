@@ -7,7 +7,7 @@ UC-P1（默认值）、UC-P2（自定义前缀）、UC-P3（空前缀）、UC-P4
 from __future__ import annotations
 
 import pytest
-from datacloud_data_service.config import Settings, get_settings
+from datacloud_platform.config import Settings, get_settings
 
 
 @pytest.fixture(autouse=True)

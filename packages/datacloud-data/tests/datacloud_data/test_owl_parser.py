@@ -8,7 +8,7 @@ from datacloud_data_sdk.ontology.owl_parser import (
     ParsedField,
     ParsedObject,
 )
-from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
 
 def test_owl_parser_synthesizes_function_from_request_url() -> None:
@@ -552,7 +552,12 @@ def test_owl_parser_parse_resource_directory_returns_legacy_content_shape() -> N
     pytest.importorskip("rdflib")
 
     resource_dir = (
-        Path(__file__).resolve().parents[2] / "src" / "datacloud_data_service" / "resource"
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "datacloud-platform"
+        / "src"
+        / "datacloud_platform"
+        / "resource"
     )
 
     parser = OwlParser()
@@ -584,7 +589,12 @@ def test_owl_parser_parse_resource_directory_filters_objects() -> None:
     pytest.importorskip("rdflib")
 
     resource_dir = (
-        Path(__file__).resolve().parents[2] / "src" / "datacloud_data_service" / "resource"
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "datacloud-platform"
+        / "src"
+        / "datacloud_platform"
+        / "resource"
     )
 
     parser = OwlParser()
@@ -601,7 +611,12 @@ def test_owl_parser_empty_filters_load_all() -> None:
     pytest.importorskip("rdflib")
 
     resource_dir = (
-        Path(__file__).resolve().parents[2] / "src" / "datacloud_data_service" / "resource"
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "datacloud-platform"
+        / "src"
+        / "datacloud_platform"
+        / "resource"
     )
 
     parser = OwlParser()
@@ -621,7 +636,12 @@ def test_owl_parser_parse_resource_directory_loads_view_related_objects() -> Non
     pytest.importorskip("rdflib")
 
     resource_dir = (
-        Path(__file__).resolve().parents[2] / "src" / "datacloud_data_service" / "resource"
+        Path(__file__).resolve().parents[3]
+        / "packages"
+        / "datacloud-platform"
+        / "src"
+        / "datacloud_platform"
+        / "resource"
     )
 
     parser = OwlParser()
