@@ -76,6 +76,7 @@ class OntologyRelationGraph:
                 desc_raw = getattr(rel, "description", "") or ""
                 if desc_raw:
                     from contextlib import suppress
+
                     with suppress(json.JSONDecodeError, TypeError, ValueError):
                         resolve_action = json.loads(desc_raw).get("resolve_action_code", "") or ""
             if not resolve_action:

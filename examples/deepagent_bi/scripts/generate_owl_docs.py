@@ -3,6 +3,7 @@
 用法：
     python scripts/generate_owl_docs.py --resource-dir /path/to/resource --output-dir ./owl_docs
 """
+
 from __future__ import annotations
 
 import argparse
@@ -16,7 +17,7 @@ from datacloud_data_sdk.virtual_action.generator import (
     build_compute_description,
     build_query_description,
 )
-from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
 logger = logging.getLogger(__name__)
 
@@ -35,17 +36,13 @@ def generate_object_md(obj_code: str, loader: OntologyLoader) -> str:
     query_actions = [a for a in cls.actions if getattr(a, "action_family", "") == "query"]
     if query_actions:
         lines += ["## 查询能力（query）", ""]
-        lines.append(
-            build_query_description(cls.object_name, cls.description or "", cls.fields)
-        )
+        lines.append(build_query_description(cls.object_name, cls.description or "", cls.fields))
         lines.append("")
 
     compute_actions = [a for a in cls.actions if getattr(a, "action_family", "") == "compute"]
     if compute_actions:
         lines += ["## 统计能力（compute）", ""]
-        lines.append(
-            build_compute_description(cls.object_name, cls.description or "", cls.fields)
-        )
+        lines.append(build_compute_description(cls.object_name, cls.description or "", cls.fields))
         lines.append("")
 
     op_actions = [a for a in cls.actions if getattr(a, "action_family", "") == "operation"]
@@ -87,9 +84,7 @@ def generate_view_md(view_code: str, loader: OntologyLoader) -> str:
     compute_actions = [a for a in actions if getattr(a, "action_family", "") == "compute"]
     if compute_actions:
         lines += ["## 统计能力（compute）", ""]
-        lines.append(
-            build_compute_description(view_name, view_desc, fields, scope_type="view")
-        )
+        lines.append(build_compute_description(view_name, view_desc, fields, scope_type="view"))
         lines.append("")
 
     return "\n".join(lines)
@@ -108,7 +103,11 @@ def _format_action_detail(schema: dict[str, Any]) -> list[str]:
     input_props: dict[str, Any] = input_schema.get("properties") or {}
     required: set[str] = set(input_schema.get("required") or [])
     if input_props:
-        lines += ["**请求参数**：", "| 参数编码 | 类型 | 必填 | 描述 |", "| --- | --- | --- | --- |"]
+        lines += [
+            "**请求参数**：",
+            "| 参数编码 | 类型 | 必填 | 描述 |",
+            "| --- | --- | --- | --- |",
+        ]
         for name, prop in input_props.items():
             lines.append(
                 f"| {name} | {prop.get('type', '-')} "
@@ -157,7 +156,7 @@ def main() -> None:
             out_path = output_dir / f"{view_code}.md"
             out_path.write_text(md, encoding="utf-8")
             logger.info("生成 %s", out_path)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("跳过视图 %s：%s", view_code, exc)
 
     total = len(list(output_dir.glob("*.md")))
