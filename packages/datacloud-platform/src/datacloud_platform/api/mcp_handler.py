@@ -625,7 +625,7 @@ def _find_action_scope(
                 return "object", cls.object_code
 
     # 3. 视图动作遍历
-    for view_id, scene in getattr(loader, "_scenes", {}).items():
+    for view_id, scene in getattr(loader, "_views", {}).items():
         for action in scene.get("_virtual_actions", []):
             if getattr(action, "action_code", None) == action_code:
                 return "view", view_id

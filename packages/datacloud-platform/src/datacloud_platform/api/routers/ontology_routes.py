@@ -18,9 +18,21 @@ from datacloud_platform.base_entry import (
 )
 from datacloud_platform.models.base_entry import OntologyBaseCreate, OntologyBaseUpdate
 from datacloud_platform.models.common import ok
+from datacloud_platform.models.scene import (
+    SceneCreate,
+    SceneMembersRequest,
+    SceneUpdate,
+)
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
+
+
+def _parse_csv(param: str | None) -> list[str] | None:
+    """Split a comma-separated query string into a list, or return None if empty."""
+    if param is None or not param.strip():
+        return None
+    return [v.strip() for v in param.split(",") if v.strip()]
 
 
 def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
@@ -143,8 +155,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
             result = platform.get_scene_details(
                 base_id,
                 scene_id,
-                view_code=view_code,
-                object_code=object_code,
+                view_code=_parse_csv(view_code),
+                object_code=_parse_csv(object_code),
             )
             return ok(data=result)
         except KeyError as e:
@@ -165,6 +177,87 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
                 base_id, scene_id, page=page, page_size=page_size, keyword=keyword
             )
             return ok(data=result["data"], totalCount=result["totalCount"])
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ══════════════════════════════════════════════════
+    # Scene CRUD
+    # ══════════════════════════════════════════════════
+
+    @router.post("/{owner_type}/{base_id}/scenes")
+    def create_scene(owner_type: str, base_id: str, body: SceneCreate) -> Any:
+        """Create a scene (grouping container) under a base."""
+        try:
+            result = platform.create_scene(base_id, body)
+            return ok(data=result, message="created")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.put("/{owner_type}/{base_id}/scenes/{scene_id}")
+    def update_scene(
+        owner_type: str, base_id: str, scene_id: str, body: SceneUpdate
+    ) -> Any:
+        """Update scene metadata."""
+        try:
+            result = platform.update_scene(base_id, scene_id, body)
+            return ok(data=result, message="updated")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}")
+    def delete_scene(owner_type: str, base_id: str, scene_id: str) -> Any:
+        """Delete a scene — does NOT delete member resources."""
+        try:
+            platform.delete_scene(base_id, scene_id)
+            return ok(message="deleted")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ══════════════════════════════════════════════════
+    # Scene member management
+    # ══════════════════════════════════════════════════
+
+    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/members")
+    def add_scene_members(
+        owner_type: str, base_id: str, scene_id: str, body: SceneMembersRequest
+    ) -> Any:
+        """Add objects/views to a scene (idempotent)."""
+        try:
+            result = platform.add_scene_members(
+                base_id, scene_id, body.object_codes, body.view_codes
+            )
+            return ok(data=result, message="members added")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/members")
+    def remove_scene_members(
+        owner_type: str, base_id: str, scene_id: str, body: SceneMembersRequest
+    ) -> Any:
+        """Remove objects/views from a scene — does NOT delete resources."""
+        try:
+            result = platform.remove_scene_members(
+                base_id, scene_id, body.object_codes, body.view_codes
+            )
+            return ok(data=result, message="members removed")
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
