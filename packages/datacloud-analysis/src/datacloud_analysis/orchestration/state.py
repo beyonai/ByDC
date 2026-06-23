@@ -93,6 +93,14 @@ class AgentState(MessagesState):
     # reasoning_graph: 推理节点记录（附05 3.2.5，全 JSON 可序列化）
     reasoning_graph: dict[str, Any] | None
 
+    # --- ParamLinkGraph 工具链路图常驻提示 ---
+    # chain_hint_anchor: 已注入全量 chain hint 时对应的锚点 object_code。
+    #   非空时说明对话历史里已有该锚点的全量工具链路图消息，llm_call_node 只注入 delta。
+    #   锚点切换时由 after_hook 清空并重新注入。
+    chain_hint_anchor: str | None
+    # prev_active_tools: 上一轮结束时的 active_tools 快照，用于计算 delta。
+    prev_active_tools: list[str] | None
+
     # --- 澄清插件 interrupt/resume 缓存（方案 A）---
     # interrupt 前写入，resume 后 format 完成时清除，避免 _analyze_clarification 被重复调用。
     _clarification_cache: dict[str, Any] | None

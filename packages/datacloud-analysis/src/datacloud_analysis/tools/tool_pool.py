@@ -35,6 +35,15 @@ TOOL_TO_OBJECT: dict[str, str] = {}
 # OntologyRelationGraph 进程级单例
 _RELATION_GRAPH: Any = None  # OntologyRelationGraph | None
 
+# ParamLinkGraph 进程级单例
+_PARAM_LINK_GRAPH: Any = None  # ParamLinkGraph | None
+
+
+def get_param_link_graph() -> Any:
+    """返回进程级 ParamLinkGraph，未初始化时返回 None。"""
+    return _PARAM_LINK_GRAPH
+
+
 # AOCI 格式本体索引（进程级缓存，构建一次复用）
 _ONTOLOGY_INDEX: str = ""
 
@@ -219,6 +228,16 @@ def _init_ext_tool_pool(
             )
         except Exception:  # noqa: BLE001
             logger.warning("OntologyRelationGraph: init failed", exc_info=True)
+
+    # 构建 ParamLinkGraph 单例（从 OWL 参数绑定读取，零额外 IO）
+    if loader is not None:
+        try:
+            global _PARAM_LINK_GRAPH  # noqa: PLW0603
+            from datacloud_analysis.tools.param_link_graph import ParamLinkGraph  # noqa: PLC0415
+            _PARAM_LINK_GRAPH = ParamLinkGraph()
+            _PARAM_LINK_GRAPH.build(TOOL_POOL, loader)
+        except Exception:  # noqa: BLE001
+            logger.warning("ParamLinkGraph: init failed", exc_info=True)
 
 
 def _infer_object_code(tool_name: str, ops_codes: list[str]) -> str:

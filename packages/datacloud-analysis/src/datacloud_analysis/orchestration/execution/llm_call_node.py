@@ -363,6 +363,21 @@ def make_llm_call_node(
         if _active_todos:
             _snapshot = _format_todo_snapshot(_active_todos, _user_query)
             messages_window.append(HumanMessage(content=_snapshot))
+
+        # ParamLinkGraph 串联提示（delta）：只注入本轮新解锁工具的数据流方向。
+        # 全量链路图在锚点激活时已写入 state["messages"]（对话历史），此处只补增量。
+        try:
+            from datacloud_analysis.tools.param_link_graph import _build_delta_chain_hint  # noqa: PLC0415
+            from datacloud_analysis.tools.tool_pool import get_param_link_graph  # noqa: PLC0415
+            _plg_delta = get_param_link_graph()
+            _prev_active: list[str] = state.get("prev_active_tools") or []
+            _curr_active: list[str] = state.get("active_tools") or []
+            _delta_hint = _build_delta_chain_hint(_plg_delta, _prev_active, _curr_active)
+            if _delta_hint:
+                messages_window.append(HumanMessage(content=_delta_hint))
+        except Exception:  # noqa: BLE001
+            pass
+
         logger.debug(
             "[i18n-diag] llm_call_node messages_window: count=%d "
             "system_preview=%r "
