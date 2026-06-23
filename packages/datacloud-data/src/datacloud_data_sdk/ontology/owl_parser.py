@@ -130,7 +130,9 @@ class ParsedField:
     term_data_type: str | None = None
     ext_property: str | None = None  # OWL ext_property JSON 字符串（含 property_role_rule）
     mapping_path: str = ""
+    json_path: str = ""
     object_property: str | None = None
+    object_code: str | None = None
 
 
 @dataclass
@@ -493,11 +495,12 @@ class OwlParser:
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
         term_data_type = self._get_predicate_value(g, subject, "term_data_type")
-        mapping_path = (
-            self._get_predicate_value(g, subject, "mapping_path")
-            or self._get_predicate_value(g, subject, "json_path")
-            or ""
-        )
+        owl_mapping_path = self._get_predicate_value(g, subject, "mapping_path") or ""
+        owl_json_path = self._get_predicate_value(g, subject, "json_path") or ""
+        mapping_path = owl_mapping_path or owl_json_path
+        json_path = owl_json_path or owl_mapping_path
+        object_property = self._get_predicate_value(g, subject, "object_property")
+        object_code = self._get_predicate_value(g, subject, "object_code")
 
         fld = ParsedField(
             field_code=param_code,
@@ -509,6 +512,9 @@ class OwlParser:
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
             mapping_path=mapping_path,
+            json_path=json_path,
+            object_property=object_property if object_property else None,
+            object_code=object_code if object_code else None,
         )
         self._request_params_by_uri[str(subject)] = fld
 
@@ -523,12 +529,12 @@ class OwlParser:
         library_code = self._get_predicate_value(g, subject, "library_code")
         rel_term_codeorname = self._get_predicate_value(g, subject, "rel_term_codeorname")
         term_data_type = self._get_predicate_value(g, subject, "term_data_type")
-        mapping_path = (
-            self._get_predicate_value(g, subject, "json_path")
-            or self._get_predicate_value(g, subject, "mapping_path")
-            or ""
-        )
+        owl_json_path = self._get_predicate_value(g, subject, "json_path") or ""
+        owl_mapping_path = self._get_predicate_value(g, subject, "mapping_path") or ""
+        mapping_path = owl_json_path or owl_mapping_path
+        json_path = owl_json_path or owl_mapping_path
         object_property = self._get_predicate_value(g, subject, "object_property")
+        object_code = self._get_predicate_value(g, subject, "object_code")
 
         fld = ParsedField(
             field_code=field_code,
@@ -540,7 +546,9 @@ class OwlParser:
             rel_term_codeorname=rel_term_codeorname if rel_term_codeorname else None,
             term_data_type=term_data_type if term_data_type else None,
             mapping_path=mapping_path,
+            json_path=json_path,
             object_property=object_property if object_property else None,
+            object_code=object_code if object_code else None,
         )
         self._response_params_by_uri[str(subject)] = fld
 
@@ -809,7 +817,9 @@ class OwlParser:
             rel_term_codeorname=param_field.rel_term_codeorname or object_field.rel_term_codeorname,
             term_data_type=param_field.term_data_type or object_field.term_data_type,
             mapping_path=param_field.mapping_path,
+            json_path=param_field.json_path,
             object_property=param_field.object_property,
+            object_code=param_field.object_code,
         )
 
     def parse_directory(
@@ -915,6 +925,12 @@ class OwlParser:
                         }
                         if f.mapping_path:
                             param_dict["mapping_path"] = f.mapping_path
+                        if f.json_path:
+                            param_dict["json_path"] = f.json_path
+                        if f.object_property:
+                            param_dict["object_property"] = f.object_property
+                        if f.object_code:
+                            param_dict["object_code"] = f.object_code
                         if f.term_type_code_path:
                             term_meta = self._build_term_meta(f)
                             if term_meta:
@@ -939,6 +955,12 @@ class OwlParser:
                         }
                         if f.mapping_path:
                             param_dict["mapping_path"] = f.mapping_path
+                        if f.json_path:
+                            param_dict["json_path"] = f.json_path
+                        if f.object_property:
+                            param_dict["object_property"] = f.object_property
+                        if f.object_code:
+                            param_dict["object_code"] = f.object_code
                         if f.term_type_code_path:
                             term_meta = self._build_term_meta(f)
                             if term_meta:

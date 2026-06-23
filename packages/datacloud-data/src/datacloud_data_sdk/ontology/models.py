@@ -131,6 +131,9 @@ class OntologyActionParam:
     required: bool = False
     default_value: Any = None
     mapping_path: str = ""
+    json_path: str = ""
+    object_property: str | None = None
+    object_code: str | None = None
     term_set: str | None = None
     term_type: str | None = None
     term_field: str | None = None
