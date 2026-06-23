@@ -217,6 +217,41 @@ class ParamLinkGraph:
         header = "[参数串联提示] 以下工具间存在参数数据流，可按顺序调用："
         return header + "\n" + "\n".join(lines)
 
+    def get_chain_hint_involving(self, tools: list[str]) -> str:
+        """生成与给定工具相关的串联提示（工具作为起点或终点均纳入）。
+
+        用于冷启动全量注入和 delta 增量注入：本轮关注的工具可能是下游
+        （to_tool），若只看它们作为起点（from_tool）会得到空结果。这里同时
+        纳入"上游 → 关注工具"和"关注工具 → 下游"两个方向，让 LLM 知道
+        这些工具如何接入数据流。
+
+        Args:
+            tools: 关注的工具名集合（冷启动时为全部挂载工具，delta 时为新解锁工具）。
+
+        Returns:
+            多行提示文本；无相关串联时返回 ""。
+        """
+        if not tools:
+            return ""
+        focus = set(tools)
+        lines: list[str] = []
+        seen: set[tuple[str, str, str]] = set()
+        for lnk in self._links:
+            if lnk.from_tool in focus or lnk.to_tool in focus:
+                key = (lnk.from_tool, lnk.to_tool, lnk.via_prop)
+                if key in seen:
+                    continue
+                seen.add(key)
+                lines.append(
+                    f"- {lnk.from_tool}.{lnk.from_field} "
+                    f"→ {lnk.to_tool}.{lnk.to_field} "
+                    f"(via {lnk.via_prop})"
+                )
+        if not lines:
+            return ""
+        header = "[参数串联提示] 以下工具间存在参数数据流，可按顺序调用："
+        return header + "\n" + "\n".join(lines)
+
     def summary(self) -> str:
         """返回索引摘要字符串，包含工具数和串联关系数。"""
         tool_count = len(self._from_index)
@@ -318,45 +353,9 @@ def _build_delta_chain_hint(
     if plg is None:
         return ""
     prev_set = set(prev_active or [])
-    curr_set = set(curr_active or [])
     delta = [t for t in curr_active if t not in prev_set]
     if not delta:
         return ""
-    return plg.get_chain_hint(delta)
-
-    def get_chain_hint(self, active_tools: list[str]) -> str:
-        """生成当前已激活工具集的参数数据流串联提示（注入 LLM messages_window）。
-
-        只显示 active_tools 中工具作为出发点的串联关系。
-        若无任何串联，返回空字符串。
-
-        Args:
-            active_tools: 当前 AgentState.active_tools（工具名列表）。
-
-        Returns:
-            多行提示文本；无串联时返回 ""。
-        """
-        if not active_tools:
-            return ""
-
-        lines: list[str] = []
-        for tool_name in active_tools:
-            links = self._from_index.get(tool_name) or []
-            for lnk in links:
-                lines.append(
-                    f"- {lnk.from_tool}.{lnk.from_field} "
-                    f"→ {lnk.to_tool}.{lnk.to_field} "
-                    f"(via {lnk.via_prop})"
-                )
-
-        if not lines:
-            return ""
-
-        header = "[参数串联提示] 以下工具间存在参数数据流，可按顺序调用："
-        return header + "\n" + "\n".join(lines)
-
-    def summary(self) -> str:
-        """返回索引摘要字符串，包含工具数和串联关系数。"""
-        tool_count = len(self._from_index)
-        link_count = len(self._links)
-        return f"ParamLinkGraph: {tool_count} source tools, {link_count} links"
+    # 新解锁工具多为下游（to_tool），需同时展示其作为起点和终点的串联，
+    # 否则只看起点对纯下游工具恒返回空。
+    return plg.get_chain_hint_involving(delta)
