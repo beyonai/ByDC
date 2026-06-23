@@ -364,19 +364,57 @@ def make_llm_call_node(
             _snapshot = _format_todo_snapshot(_active_todos, _user_query)
             messages_window.append(HumanMessage(content=_snapshot))
 
-        # ParamLinkGraph 串联提示（delta）：只注入本轮新解锁工具的数据流方向。
-        # 全量链路图在锚点激活时已写入 state["messages"]（对话历史），此处只补增量。
+        # ParamLinkGraph 串联提示：按"本轮实际挂载给 LLM 的工具集"构建并注入。
+        # 挂几个工具就建几个工具的参数图谱，与 anchor 模式 / 阈值无关。
+        # 仅在冷启动首轮（round=0）注入一次全量图谱，避免每轮重复刷屏；
+        # 后续新解锁的工具由 delta 增量补充。
         try:
             from datacloud_analysis.tools.param_link_graph import _build_delta_chain_hint  # noqa: PLC0415
             from datacloud_analysis.tools.tool_pool import get_param_link_graph  # noqa: PLC0415
             _plg_delta = get_param_link_graph()
-            _prev_active: list[str] = state.get("prev_active_tools") or []
-            _curr_active: list[str] = state.get("active_tools") or []
-            _delta_hint = _build_delta_chain_hint(_plg_delta, _prev_active, _curr_active)
-            if _delta_hint:
-                messages_window.append(HumanMessage(content=_delta_hint))
+            # 本轮真正 bind 给 LLM 的工具名（build-time + active_tools 解锁 + finish_react）
+            _mounted_names = [n for n in tools_map if n != "finish_react"]
+
+            if current_round == 0:
+                # 冷启动：注入当前挂载的全部工具之间的参数数据流图谱
+                _full_hint = (
+                    _plg_delta.get_chain_hint_involving(_mounted_names)
+                    if _plg_delta is not None
+                    else ""
+                )
+                if _full_hint:
+                    messages_window.append(HumanMessage(content=_full_hint))
+                    logger.info(
+                        "[ChainHint] full graph injected (round=0): mounted_tools=%d "
+                        "hint_lines=%d (plg=%s)",
+                        len(_mounted_names),
+                        _full_hint.count("\n- "),
+                        "ready" if _plg_delta is not None else "None",
+                    )
+                else:
+                    logger.info(
+                        "[ChainHint] full graph skipped (round=0): plg=%s mounted_tools=%d "
+                        "(no plg or no links among mounted tools)",
+                        "ready" if _plg_delta is not None else "None",
+                        len(_mounted_names),
+                    )
+            else:
+                # 后续轮次：只补本轮相对上一轮新解锁的工具
+                _prev_active: list[str] = state.get("prev_active_tools") or []
+                _curr_active: list[str] = state.get("active_tools") or []
+                _delta_new = [t for t in _curr_active if t not in set(_prev_active)]
+                _delta_hint = _build_delta_chain_hint(_plg_delta, _prev_active, _curr_active)
+                if _delta_hint:
+                    messages_window.append(HumanMessage(content=_delta_hint))
+                    logger.info(
+                        "[ChainHint] delta injected (round=%d): new_tools=%s hint_lines=%d (plg=%s)",
+                        current_round,
+                        _delta_new,
+                        _delta_hint.count("\n- "),
+                        "ready" if _plg_delta is not None else "None",
+                    )
         except Exception:  # noqa: BLE001
-            pass
+            logger.warning("[ChainHint] injection failed", exc_info=True)
 
         logger.debug(
             "[i18n-diag] llm_call_node messages_window: count=%d "

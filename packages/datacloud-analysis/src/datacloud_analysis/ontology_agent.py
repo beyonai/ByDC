@@ -616,6 +616,22 @@ class OntologyAgent:
         tools = tool_loader.load()
         redirect_tools = tool_loader.build_all_nl_query_tools()
 
+        # 将动态加载的工具接入全局 TOOL_POOL，并构建 ParamLinkGraph /
+        # OntologyRelationGraph 单例。否则 get_param_link_graph() 恒为 None、
+        # TOOL_POOL 为空，串联提示注入与锚点解锁机制在运行时全程短路。
+        try:
+            from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+                register_runtime_tool_pool,
+            )
+
+            register_runtime_tool_pool(
+                list(mounted or []),
+                loader,
+                resource_path=self._config.resource_path,
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("register_runtime_tool_pool failed", exc_info=True)
+
         # 与 create_agent() 保持一致：写入 Langfuse span 的 AgentDiag / LLMConfig 等快照
         _log_create_agent_diagnostics(
             agent_id_display="(dynamic)",

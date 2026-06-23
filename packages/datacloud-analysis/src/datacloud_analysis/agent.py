@@ -226,6 +226,20 @@ def create_agent(
         skip_action_families=skip_action_families,
     ).load()
 
+    # 将本体工具接入全局 TOOL_POOL 并构建 ParamLinkGraph / OntologyRelationGraph
+    # 单例。create_agent 是线上 react 路径的入口，若缺这一步，
+    # get_param_link_graph() 恒为 None，工具链路图（串联提示）在
+    # llm_call_node / hook_aware_tool_node 中全程短路、不注入。
+    if loader is not None and mounted_objects:
+        try:
+            from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+                register_runtime_tool_pool,
+            )
+
+            register_runtime_tool_pool(list(mounted_objects), loader)
+        except Exception:  # noqa: BLE001
+            logger.warning("create_agent: register_runtime_tool_pool failed", exc_info=True)
+
     # 合并工具：本体工具为基础，caller 传入的 tools 优先覆盖同名工具。
     # data_query_* 工具（redirect_tools）不加入 LLM 可见的 merged_tools，
     # 单独通过 redirect_tools 传入 graph，仅供 before_callback redirect 使用。

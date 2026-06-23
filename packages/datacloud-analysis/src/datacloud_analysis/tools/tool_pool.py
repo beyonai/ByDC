@@ -240,6 +240,88 @@ def _init_ext_tool_pool(
             logger.warning("ParamLinkGraph: init failed", exc_info=True)
 
 
+def register_runtime_tool_pool(
+    mounted_objects: list[str],
+    loader: Any,
+    *,
+    resource_path: str | Path | None = None,
+) -> None:
+    """运行时把动态加载的工具注册进全局 TOOL_POOL 并构建推理索引。
+
+    供 OntologyAgent 动态路径调用：线上不走 ``_init_ext_tool_pool``（那是
+    demo/进程级冷启动入口），而是用已构建好的 ``loader`` 逐对象生成工具。
+    本函数复用同一套逐对象注册逻辑，确保：
+
+      1. 全局 TOOL_POOL / TOOL_TO_OBJECT 被填充
+         → ``is_anchor_mode()`` 能按工具数判定、after_hook 解锁可用
+      2. OntologyRelationGraph 单例构建（对象级解锁 fallback）
+      3. ParamLinkGraph 单例构建（工具链串联索引，注入提示的数据来源）
+
+    没有这一步，``get_param_link_graph()`` 恒为 None、TOOL_POOL 为空，
+    串联提示在 llm_call_node / hook_aware_tool_node 中全程短路、不注入。
+
+    Args:
+        mounted_objects: 本次挂载的对象/视图编码列表。
+        loader: 已 load + inject_virtual_actions 的 OntologyLoader。
+        resource_path: 资源根路径，传给 OntologyToolLoader（可选）。
+    """
+    global _RELATION_GRAPH, _PARAM_LINK_GRAPH  # noqa: PLW0603
+
+    if loader is None or not mounted_objects:
+        return
+
+    from datacloud_analysis.tools.ontology_tool_loader import OntologyToolLoader  # noqa: PLC0415
+
+    registered_total = 0
+    for obj_code in mounted_objects:
+        try:
+            single_loader = OntologyToolLoader(
+                mounted_objects=[obj_code],
+                loader=loader,
+                resource_path=str(resource_path) if resource_path else None,
+            )
+            obj_tools: dict[str, Any] = single_loader.load()
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "register_runtime_tool_pool: tool gen failed for %s", obj_code, exc_info=True
+            )
+            continue
+        for tool_name, tool_obj in obj_tools.items():
+            register_tool(tool_name, tool_obj, object_code=obj_code)
+        registered_total += len(obj_tools)
+
+    logger.info(
+        "register_runtime_tool_pool: registered %d tools from %d objects (TOOL_POOL=%d)",
+        registered_total,
+        len(mounted_objects),
+        len(TOOL_POOL),
+    )
+
+    # 构建 OntologyRelationGraph 单例（对象级解锁 fallback）
+    try:
+        from datacloud_analysis.tools.ontology_relation_graph import (  # noqa: PLC0415
+            OntologyRelationGraph,
+        )
+
+        _RELATION_GRAPH = OntologyRelationGraph(loader)
+        logger.info(
+            "OntologyRelationGraph: built %d relations (runtime)",
+            len(_RELATION_GRAPH._relations),
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("OntologyRelationGraph: runtime init failed", exc_info=True)
+
+    # 构建 ParamLinkGraph 单例（工具链串联索引）
+    try:
+        from datacloud_analysis.tools.param_link_graph import ParamLinkGraph  # noqa: PLC0415
+
+        _PARAM_LINK_GRAPH = ParamLinkGraph()
+        _PARAM_LINK_GRAPH.build(TOOL_POOL, loader)
+        logger.info("ParamLinkGraph: %s (runtime)", _PARAM_LINK_GRAPH.summary())
+    except Exception:  # noqa: BLE001
+        logger.warning("ParamLinkGraph: runtime init failed", exc_info=True)
+
+
 def _infer_object_code(tool_name: str, ops_codes: list[str]) -> str:
     """从工具名推断所属 object_code。
 

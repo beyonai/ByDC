@@ -228,22 +228,47 @@ class ParamLinkGraph:
 
 
 # 触发全量注入的工具名集合
-_ANCHOR_TRIGGER_TOOLS: frozenset[str] = frozenset({"activate_anchor", "search_ontology"})
+# 注：goto_ontology 是 activate_anchor 的新名（主工具），两者都要触发；
+# search_ontology 命中后也会把对象工具写入 active_tools，同样触发。
+_ANCHOR_TRIGGER_TOOLS: frozenset[str] = frozenset(
+    {"goto_ontology", "activate_anchor", "search_ontology"}
+)
+
+# 从锚点工具的人类可读返回文本中提取 object_code，
+# 形如「已激活 ops_langfuse_trace，解锁 …」「已跳转到 ops_xxx，…」。
+_ANCHOR_TEXT_RE = re.compile(r"已(?:激活|跳转到)\s*([A-Za-z_][\w]*)")
+
+
+def _extract_anchor_object(tool_result: Any) -> str:
+    """从锚点工具返回结果中提取 object_code，兼容 dict 与 str 两种形态。
+
+    - dict：直接读 object_code 键（结构化场景）。
+    - str ：从返回文本正则提取（activate_anchor / goto_ontology 实际返回字符串）。
+    """
+    if isinstance(tool_result, dict):
+        return str(tool_result.get("object_code") or "").strip()
+    if isinstance(tool_result, str):
+        m = _ANCHOR_TEXT_RE.search(tool_result)
+        if m:
+            return m.group(1).strip()
+    return ""
 
 
 def _build_anchor_chain_hint_update(
     tool_name: str,
-    tool_result: dict[str, Any],
+    tool_result: "dict[str, Any] | str",
     current_anchor: str | None,
     plg: "ParamLinkGraph | None",
 ) -> "dict[str, Any] | None":
     """计算锚点激活后需要写入 state 的 chain hint 更新。
 
-    仅在 activate_anchor / search_ontology 工具返回时触发，且新锚点与当前不同。
+    在 goto_ontology / activate_anchor / search_ontology 工具返回时触发，
+    且新锚点与当前不同。
 
     Args:
         tool_name: 刚执行完的工具名。
-        tool_result: 工具返回结果（已解析的 dict）。
+        tool_result: 工具返回结果。可能是已解析的 dict，也可能是工具实际
+            返回的人类可读字符串（如「已激活 ops_langfuse_trace，…」）。
         current_anchor: state["chain_hint_anchor"] 当前值。
         plg: ParamLinkGraph 单例，None 时安全跳过。
 
@@ -256,7 +281,7 @@ def _build_anchor_chain_hint_update(
     if plg is None:
         return None
 
-    new_anchor: str = str(tool_result.get("object_code") or "").strip()
+    new_anchor: str = _extract_anchor_object(tool_result)
     if not new_anchor or new_anchor == current_anchor:
         return None
 
