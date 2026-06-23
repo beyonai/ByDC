@@ -21,7 +21,12 @@ from datacloud_platform.models.object_type import ObjectType, ObjectTypeSummary
 from datacloud_platform.models.ontology import OntologySummary
 from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
-from datacloud_platform.models.scene import Scene
+from datacloud_platform.models.scene import (
+    Scene,
+    SceneCreate,
+    SceneMembersRequest,
+    SceneUpdate,
+)
 from datacloud_platform.models.search import (
     InstanceHit,
     MetadataHit,
@@ -72,6 +77,9 @@ __all__ = [
     "Relation",
     "RelationSummary",
     "Scene",
+    "SceneCreate",
+    "SceneMembersRequest",
+    "SceneUpdate",
     "ScoreUpdateRecord",
     "SearchRequest",
     "SearchResult",
