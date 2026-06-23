@@ -183,7 +183,7 @@ async def main6() -> None:
         sql_execution_mode="internal",
     )
     obj = loader.get_object("ads_enterprise_analysis")
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 
@@ -221,7 +221,7 @@ async def main7() -> None:
         sql_execution_mode="internal",
     )
     obj = loader.get_view("scene_enterprise_analysis")
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 
@@ -254,7 +254,7 @@ async def main8() -> None:
         sql_execution_mode="internal",
     )
     obj = loader.get_object("by_opportunity")
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 
@@ -288,7 +288,7 @@ async def main9() -> None:
         sql_execution_mode="internal",
     )
     obj = loader.get_object("sales_meeting_note_0027024630")
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 
@@ -516,7 +516,7 @@ async def main10() -> None:
         # default_kb_backend="http_knowledge_import",
     )
     obj = loader.get_object("by_customer")
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 
@@ -683,7 +683,7 @@ async def main11() -> None:
         sql_execution_mode="internal",
     )
     obj = loader.get_object(ORDER_OBJECT_CODE)
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 
@@ -902,7 +902,7 @@ async def main12() -> None:
         sql_execution_mode="internal",
     )
     obj = loader.get_object("p_by_visit_record_0027024630_a85910")
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 
@@ -998,7 +998,7 @@ async def main13() -> None:
         sql_execution_mode="internal",
     )
     obj = loader.get_object("p_by_meeting_minutes_0027024630_bec24c")
-    from datacloud_data_service.tools.virtual_action_injector import (
+    from datacloud_platform.execution.virtual_action_injector import (
         inject_virtual_actions,
     )
 

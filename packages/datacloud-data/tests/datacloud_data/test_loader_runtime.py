@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datacloud_data_service.config import Settings
-from datacloud_data_service.loader_runtime import LoaderRuntimeManager
+from datacloud_platform.config import Settings
+from datacloud_platform.loader_runtime import LoaderRuntimeManager
 
 
 def _build_runtime(mode: str) -> LoaderRuntimeManager:
     settings = Settings.model_validate(
         {
-            "DATACLOUD_ONTOLOGY_PATH": "packages/datacloud-data/src/datacloud_data_service/resource",
+            "DATACLOUD_ONTOLOGY_PATH": "packages/datacloud-platform/src/datacloud_platform/resource",
             "DATACLOUD_LOADER_MODE": mode,
         }
     )

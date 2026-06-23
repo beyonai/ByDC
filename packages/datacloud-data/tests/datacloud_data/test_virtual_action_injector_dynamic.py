@@ -3,7 +3,7 @@ from __future__ import annotations
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.models import OntologyClass, OntologyField
 from datacloud_data_sdk.ontology.term_loader import KbTermLoader
-from datacloud_data_service.tools.virtual_action_injector import inject_virtual_actions
+from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
 
 def test_inject_virtual_actions_adds_dynamic_table_write_actions() -> None:
