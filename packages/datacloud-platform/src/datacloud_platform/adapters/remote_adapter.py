@@ -97,20 +97,20 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — DDL is not supported."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def get_objects(self, loader: Any, base_id: str, scene_id: str) -> list[Any]:
+    def get_objects(self, loader: Any, base_id: str) -> list[Any]:
         """Fetch objects from remote scene details endpoint.
 
         5-minute TTL cache on the response.
         """
-        cache_key = f"objects:{base_id}:{scene_id}"
+        cache_key = f"objects:{base_id}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
             return cast("list[Any]", entry.data)
 
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/sceneDetails"
-        response = client.post(url, json={"sceneId": scene_id}, headers=headers)
+        url = f"{self._source_url}/OntologyEntityController/listObjects"
+        response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
         data = cast("list[Any]", result.get("data", {}).get("objects", []))
@@ -123,109 +123,99 @@ class RemoteOntologyBackend:
 
     # -- View CRUD (remote, read-only) --
 
-    def get_views(self, base_id: str, scene_id: str) -> list[Any]:
+    def get_views(self, base_id: str) -> list[Any]:
         """Fetch views from remote endpoint."""
-        cache_key = f"views:{base_id}:{scene_id}"
+        cache_key = f"views:{base_id}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
             return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/sceneDetails"
-        response = client.post(url, json={"sceneId": scene_id}, headers=headers)
+        url = f"{self._source_url}/OntologyEntityController/listViews"
+        response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
         data = cast("list[Any]", result.get("data", {}).get("views", []))
         self._cache[cache_key] = _CacheEntry(data, ttl=300)
         return data
 
-    def get_view_detail(
-        self, base_id: str, scene_id: str, view_code: str
-    ) -> Any | None:
+    def get_view_detail(self, base_id: str, view_code: str) -> Any | None:
         """Look up view detail from cached views."""
-        for v in self.get_views(base_id, scene_id):
+        for v in self.get_views(base_id):
             if v.get("viewCode") == view_code:
                 return v
         return None
 
-    def create_view(self, base_id: str, scene_id: str, obj: Any) -> Any:
+    def create_view(self, base_id: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_view(
-        self, base_id: str, scene_id: str, object_code: str, obj: Any
-    ) -> Any:
+    def update_view(self, base_id: str, object_code: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def delete_view(self, base_id: str, scene_id: str, object_code: str) -> None:
+    def delete_view(self, base_id: str, object_code: str) -> None:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
     # -- Relation CRUD (remote, read-only) --
 
-    def get_relations(self, base_id: str, scene_id: str) -> list[Any]:
+    def get_relations(self, base_id: str) -> list[Any]:
         """Fetch relations from remote endpoint."""
-        cache_key = f"relations:{base_id}:{scene_id}"
+        cache_key = f"relations:{base_id}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
             return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/sceneDetails"
-        response = client.post(url, json={"sceneId": scene_id}, headers=headers)
+        url = f"{self._source_url}/OntologyEntityController/listRelations"
+        response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
         data = cast("list[Any]", result.get("data", {}).get("relations", []))
         self._cache[cache_key] = _CacheEntry(data, ttl=300)
         return data
 
-    def get_relation_detail(
-        self, base_id: str, scene_id: str, rel_code: str
-    ) -> Any | None:
+    def get_relation_detail(self, base_id: str, rel_code: str) -> Any | None:
         """Look up relation detail from cached relations."""
-        for r in self.get_relations(base_id, scene_id):
+        for r in self.get_relations(base_id):
             if r.get("relationCode") == rel_code:
                 return r
         return None
 
-    def create_relation(self, base_id: str, scene_id: str, obj: Any) -> Any:
+    def create_relation(self, base_id: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_relation(
-        self, base_id: str, scene_id: str, object_code: str, obj: Any
-    ) -> Any:
+    def update_relation(self, base_id: str, object_code: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def delete_relation(self, base_id: str, scene_id: str, object_code: str) -> None:
+    def delete_relation(self, base_id: str, object_code: str) -> None:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
     # -- Datasource CRUD (remote, read-only) --
 
-    def get_datasources(self, base_id: str, scene_id: str) -> list[Any]:
+    def get_datasources(self, base_id: str) -> list[Any]:
         """Fetch datasources from remote endpoint."""
-        cache_key = f"datasources:{base_id}:{scene_id}"
+        cache_key = f"datasources:{base_id}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
             return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/sceneDetails"
-        response = client.post(url, json={"sceneId": scene_id}, headers=headers)
+        url = f"{self._source_url}/OntologyEntityController/listDatasources"
+        response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
         data = cast("list[Any]", result.get("data", {}).get("dbsources", []))
         self._cache[cache_key] = _CacheEntry(data, ttl=300)
         return data
 
-    def get_datasource_detail(
-        self, base_id: str, scene_id: str, db_id: str
-    ) -> Any | None:
+    def get_datasource_detail(self, base_id: str, db_id: str) -> Any | None:
         """Look up datasource from cached datasources."""
-        for ds in self.get_datasources(base_id, scene_id):
+        for ds in self.get_datasources(base_id):
             db_list = ds.get("db", [])
             if db_list and isinstance(db_list, list) and db_list:
                 if str(db_list[0].get("dbId", "")) == db_id:
@@ -234,28 +224,28 @@ class RemoteOntologyBackend:
                 return ds
         return None
 
-    def create_datasource(self, base_id: str, scene_id: str, obj: Any) -> Any:
+    def create_datasource(self, base_id: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+    def delete_datasource(self, base_id: str, db_id: str) -> None:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
     # -- Action CRUD (remote, read-only) --
 
-    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[Any]:
+    def get_actions(self, base_id: str, object_code: str) -> list[Any]:
         """Fetch actions from remote endpoint."""
-        cache_key = f"actions:{base_id}:{scene_id}:{object_code}"
+        cache_key = f"actions:{base_id}:{object_code}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
             return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/sceneDetails"
+        url = f"{self._source_url}/OntologyEntityController/listActions"
         response = client.post(
             url,
-            json={"sceneId": scene_id, "objectCode": object_code},
+            json={"baseId": base_id, "objectCode": object_code},
             headers=headers,
         )
         response.raise_for_status()
@@ -267,26 +257,22 @@ class RemoteOntologyBackend:
     def get_action_detail(
         self,
         base_id: str,
-        scene_id: str,
         object_code: str,
         action_code: str,
     ) -> Any | None:
         """Look up action from cached actions."""
-        for a in self.get_actions(base_id, scene_id, object_code):
+        for a in self.get_actions(base_id, object_code):
             if a.get("actionCode") == action_code:
                 return a
         return None
 
-    def create_action(
-        self, base_id: str, scene_id: str, object_code: str, obj: Any
-    ) -> Any:
+    def create_action(self, base_id: str, object_code: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
     def update_action(
         self,
         base_id: str,
-        scene_id: str,
         object_code: str,
         action_code: str,
         obj: Any,
@@ -294,9 +280,7 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str
-    ) -> None:
+    def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
@@ -339,8 +323,8 @@ class RemoteOntologyBackend:
         base_id: str,
         scene_id: str,
         *,
-        view_code: str | None = None,
-        object_code: str | None = None,
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
     ) -> dict[str, Any]:
         """Fetch scene details from remote endpoint."""
         cache_key = f"scene_details:{base_id}:{scene_id}:{view_code}:{object_code}"
@@ -352,9 +336,9 @@ class RemoteOntologyBackend:
         url = f"{self._source_url}/OntologyEntityController/sceneDetails"
         body: dict[str, Any] = {"sceneId": scene_id}
         if view_code:
-            body["viewCode"] = view_code
+            body["viewCode"] = ",".join(view_code)
         if object_code:
-            body["objectCode"] = object_code
+            body["objectCode"] = ",".join(object_code)
         response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
         data: dict[str, Any] = response.json()
@@ -375,19 +359,51 @@ class RemoteOntologyBackend:
         logger.debug("Remote ontology: query_ontologies_by_scene not supported")
         return {"data": [], "totalCount": 0}
 
-    # -- Object CRUD (remote, read-only) --
+    # -- Scene CRUD (remote, read-only) --
 
-    def create_object(self, base_id: str, scene_id: str, obj: Any) -> Any:
+    def create_scene(self, base_id: str, scene: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def update_object(
-        self, base_id: str, scene_id: str, object_code: str, obj: Any
+    def update_scene(self, base_id: str, scene_id: str, updates: Any) -> Any:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def delete_scene(self, base_id: str, scene_id: str) -> None:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def add_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
     ) -> Any:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
+    def remove_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
+    ) -> Any:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    # -- Object CRUD (remote, read-only) --
+
+    def create_object(self, base_id: str, obj: Any) -> Any:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def delete_object(self, base_id: str, object_code: str) -> None:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 

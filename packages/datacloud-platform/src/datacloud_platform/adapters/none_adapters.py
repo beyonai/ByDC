@@ -33,7 +33,7 @@ class _NoopOntologyBackend:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def get_objects(self, loader: Any, base_id: str, scene_id: str) -> list[Any]:
+    def get_objects(self, loader: Any, base_id: str) -> list[Any]:
         """Return empty list."""
         return []
 
@@ -43,78 +43,67 @@ class _NoopOntologyBackend:
 
     # -- View CRUD (no-op) --
 
-    def get_views(self, base_id: str, scene_id: str) -> list[Any]:
+    def get_views(self, base_id: str) -> list[Any]:
         """Return empty list."""
         return []
 
-    def get_view_detail(
-        self, base_id: str, scene_id: str, view_code: str
-    ) -> Any | None:
+    def get_view_detail(self, base_id: str, view_code: str) -> Any | None:
         """Return None."""
         return None
 
-    def create_view(self, base_id: str, scene_id: str, view: Any) -> Any:
+    def create_view(self, base_id: str, view: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def update_view(
-        self, base_id: str, scene_id: str, view_code: str, view: Any
-    ) -> Any:
+    def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+    def delete_view(self, base_id: str, view_code: str) -> None:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
     # -- Relation CRUD (no-op) --
 
-    def get_relations(self, base_id: str, scene_id: str) -> list[Any]:
+    def get_relations(self, base_id: str) -> list[Any]:
         """Return empty list."""
         return []
 
-    def get_relation_detail(
-        self, base_id: str, scene_id: str, rel_code: str
-    ) -> Any | None:
+    def get_relation_detail(self, base_id: str, rel_code: str) -> Any | None:
         """Return None."""
         return None
 
-    def create_relation(self, base_id: str, scene_id: str, rel: Any) -> Any:
+    def create_relation(self, base_id: str, rel: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def update_relation(
-        self, base_id: str, scene_id: str, rel_code: str, rel: Any
-    ) -> Any:
+    def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+    def delete_relation(self, base_id: str, rel_code: str) -> None:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
     # -- Action CRUD (no-op) --
 
-    def get_actions(self, base_id: str, scene_id: str, object_code: str) -> list[Any]:
+    def get_actions(self, base_id: str, object_code: str) -> list[Any]:
         """Return empty list."""
         return []
 
     def get_action_detail(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str
+        self, base_id: str, object_code: str, action_code: str
     ) -> Any | None:
         """Return None."""
         return None
 
-    def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action: Any
-    ) -> Any:
+    def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
     def update_action(
         self,
         base_id: str,
-        scene_id: str,
         object_code: str,
         action_code: str,
         action: Any,
@@ -122,45 +111,39 @@ class _NoopOntologyBackend:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str
-    ) -> None:
+    def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
     # -- Datasource CRUD (no-op) --
 
-    def get_datasources(self, base_id: str, scene_id: str) -> list[Any]:
+    def get_datasources(self, base_id: str) -> list[Any]:
         """Return empty list."""
         return []
 
-    def get_datasource_detail(
-        self, base_id: str, scene_id: str, db_id: str
-    ) -> Any | None:
+    def get_datasource_detail(self, base_id: str, db_id: str) -> Any | None:
         """Return None."""
         return None
 
-    def create_datasource(self, base_id: str, scene_id: str, ds: Any) -> Any:
+    def create_datasource(self, base_id: str, ds: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+    def delete_datasource(self, base_id: str, db_id: str) -> None:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
     # -- Object CRUD (no-op) --
 
-    def create_object(self, base_id: str, scene_id: str, obj: Any) -> Any:
+    def create_object(self, base_id: str, obj: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def update_object(
-        self, base_id: str, scene_id: str, object_code: str, obj: Any
-    ) -> Any:
+    def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
+    def delete_object(self, base_id: str, object_code: str) -> None:
         """No-op — delete is safe to be idempotent."""
 
     # -- Scene management (no-op) --
@@ -182,8 +165,8 @@ class _NoopOntologyBackend:
         base_id: str,
         scene_id: str,
         *,
-        view_code: str | None = None,
-        object_code: str | None = None,
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return empty scene details."""
         return {
@@ -207,6 +190,40 @@ class _NoopOntologyBackend:
     ) -> dict[str, Any]:
         """Return empty result."""
         return {"data": [], "totalCount": 0}
+
+    # -- Scene CRUD (no-op) --
+
+    def create_scene(self, base_id: str, scene: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_scene(self, base_id: str, scene_id: str, updates: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_scene(self, base_id: str, scene_id: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def add_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def remove_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
 
 
 class _NoopKnowledgeBackend:
