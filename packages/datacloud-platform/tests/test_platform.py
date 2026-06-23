@@ -31,7 +31,7 @@ def test_load_ontology(platform: DatacloudPlatform) -> None:
     )
     loader = platform.load_ontology(LOCAL, "/fake/path")
     assert loader is not None
-    objs = onto_local.get_objects(loader, LOCAL, "scene1")
+    objs = onto_local.get_objects(loader, LOCAL)
     assert len(objs) == 1
     assert objs[0].object_code == "test_obj"
     assert objs[0].object_name == "测试对象"

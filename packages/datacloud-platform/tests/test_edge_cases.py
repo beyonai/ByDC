@@ -158,8 +158,8 @@ class TestDataCloudDataBackendCompleteness:
             "objects": [],
             "actions": [],
             "relations": [],
-            "dbsources": [],
-            "version": None,
+            "dbsources": {"db": [], "doc": [], "api": []},
+            "version": "v0.1.0",
         }
 
     def test_query_ontologies_by_scene_returns_empty(self) -> None:
@@ -169,102 +169,100 @@ class TestDataCloudDataBackendCompleteness:
     # ── View CRUD ──
 
     def test_get_views_returns_empty(self) -> None:
-        result = self._backend().get_views("any-base", "any-scene")
+        result = self._backend().get_views("any-base")
         assert result == []
 
     def test_get_view_detail_returns_none(self) -> None:
-        result = self._backend().get_view_detail("any-base", "any-scene", "vw-1")
+        result = self._backend().get_view_detail("any-base", "vw-1")
         assert result is None
 
     def test_create_view_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().create_view("any-base", "any-scene", {})
+            self._backend().create_view("any-base", {})
 
     def test_update_view_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().update_view("any-base", "any-scene", "vw-1", {})
+            self._backend().update_view("any-base", "vw-1", {})
 
     def test_delete_view_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().delete_view("any-base", "any-scene", "vw-1")
+            self._backend().delete_view("any-base", "vw-1")
 
     # ── Relation CRUD ──
 
     def test_get_relations_returns_empty(self) -> None:
-        result = self._backend().get_relations("any-base", "any-scene")
+        result = self._backend().get_relations("any-base")
         assert result == []
 
     def test_get_relation_detail_returns_none(self) -> None:
-        result = self._backend().get_relation_detail("any-base", "any-scene", "rel-1")
+        result = self._backend().get_relation_detail("any-base", "rel-1")
         assert result is None
 
     def test_create_relation_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().create_relation("any-base", "any-scene", {})
+            self._backend().create_relation("any-base", {})
 
     def test_update_relation_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().update_relation("any-base", "any-scene", "rel-1", {})
+            self._backend().update_relation("any-base", "rel-1", {})
 
     def test_delete_relation_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().delete_relation("any-base", "any-scene", "rel-1")
+            self._backend().delete_relation("any-base", "rel-1")
 
     # ── Action CRUD ──
 
     def test_get_actions_returns_empty(self) -> None:
-        result = self._backend().get_actions("any-base", "any-scene", "obj-1")
+        result = self._backend().get_actions("any-base", "obj-1")
         assert result == []
 
     def test_get_action_detail_returns_none(self) -> None:
-        result = self._backend().get_action_detail(
-            "any-base", "any-scene", "obj-1", "act-1"
-        )
+        result = self._backend().get_action_detail("any-base", "obj-1", "act-1")
         assert result is None
 
     def test_create_action_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().create_action("any-base", "any-scene", "obj-1", {})
+            self._backend().create_action("any-base", "obj-1", {})
 
     def test_update_action_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().update_action("any-base", "any-scene", "obj-1", "act-1", {})
+            self._backend().update_action("any-base", "obj-1", "act-1", {})
 
     def test_delete_action_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().delete_action("any-base", "any-scene", "obj-1", "act-1")
+            self._backend().delete_action("any-base", "obj-1", "act-1")
 
     # ── Object CRUD ──
 
     def test_create_object_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().create_object("any-base", "any-scene", {})
+            self._backend().create_object("any-base", {})
 
     def test_update_object_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().update_object("any-base", "any-scene", "obj-1", {})
+            self._backend().update_object("any-base", "obj-1", {})
 
     def test_delete_object_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().delete_object("any-base", "any-scene", "obj-1")
+            self._backend().delete_object("any-base", "obj-1")
 
     # ── Datasource CRUD ──
 
     def test_get_datasources_returns_empty(self) -> None:
-        result = self._backend().get_datasources("any-base", "any-scene")
+        result = self._backend().get_datasources("any-base")
         assert result == []
 
     def test_get_datasource_detail_returns_none(self) -> None:
-        result = self._backend().get_datasource_detail("any-base", "any-scene", "db-1")
+        result = self._backend().get_datasource_detail("any-base", "db-1")
         assert result is None
 
     def test_create_datasource_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().create_datasource("any-base", "any-scene", {})
+            self._backend().create_datasource("any-base", {})
 
     def test_delete_datasource_raises_permission_error(self) -> None:
         with pytest.raises(PermissionError):
-            self._backend().delete_datasource("any-base", "any-scene", "db-1")
+            self._backend().delete_datasource("any-base", "db-1")
 
     # ── Existing methods still work (no regression) ──
 
@@ -298,33 +296,26 @@ class TestEmptyDataScenarios:
         assert data["data"] == []
 
     def test_list_objects_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_views_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_relations_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_actions_no_data_returns_200_empty(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}"
-            f"/objects/obj-1/actions"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-1/actions"
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -333,9 +324,7 @@ class TestEmptyDataScenarios:
     def test_list_datasources_no_data_returns_200_empty(
         self, client: TestClient
     ) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True

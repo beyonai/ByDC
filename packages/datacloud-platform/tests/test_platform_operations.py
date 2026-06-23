@@ -93,7 +93,7 @@ class TestOntologyPassthrough:
         onto_local._objects["obj_b"] = ObjectSummary(  # type: ignore[index]
             object_code="obj_b", object_name="B"
         )
-        objs = platform.get_objects(LOCAL, "scene1")
+        objs = platform.get_objects(LOCAL)
         assert len(objs) == 2
         codes = {o.object_code for o in objs}
         assert codes == {"obj_a", "obj_b"}
@@ -104,11 +104,11 @@ class TestOntologyPassthrough:
         onto_local._objects["obj_x"] = ObjectSummary(  # type: ignore[index]
             object_code="obj_x", object_name="X"
         )
-        detail = platform.get_object_detail(LOCAL, "scene1", "obj_x")
+        detail = platform.get_object_detail(LOCAL, "obj_x")
         assert detail is not None
         assert detail.object_code == "obj_x"
 
-        missing = platform.get_object_detail(LOCAL, "scene1", "no_such")
+        missing = platform.get_object_detail(LOCAL, "no_such")
         assert missing is None
 
 
@@ -224,11 +224,11 @@ class TestRemoteWriteDenied:
     ) -> None:
         """REMOTE update_object raises PermissionError from the readonly backend."""
         with pytest.raises(PermissionError, match="read-only"):
-            platform.update_object(REMOTE, "scene1", "obj1", {})
+            platform.update_object(REMOTE, "obj1", {})
 
     def test_remote_delete_object_permission_error(
         self, platform: DatacloudPlatform
     ) -> None:
         """REMOTE delete_object raises PermissionError from the readonly backend."""
         with pytest.raises(PermissionError, match="read-only"):
-            platform.delete_object(REMOTE, "scene1", "obj1")
+            platform.delete_object(REMOTE, "obj1")

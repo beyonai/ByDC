@@ -22,17 +22,17 @@ def test_local_create_object_passthrough(platform: DatacloudPlatform) -> None:
     """LOCAL base create_object passes through to the LOCAL ontology backend."""
     onto_local, *_ = platform._fakes  # type: ignore[attr-defined]
     obj_data: dict[str, str] = {"object_code": "obj1", "object_name": "Test"}
-    result = platform.create_object(LOCAL, "scene1", obj_data)
+    result = platform.create_object(LOCAL, obj_data)
     assert result == obj_data
     assert len(onto_local._created_objects) == 1  # type: ignore[attr-defined]
-    assert onto_local._created_objects[0] == (LOCAL, "scene1", obj_data)  # type: ignore[attr-defined]
+    assert onto_local._created_objects[0] == (LOCAL, obj_data)  # type: ignore[attr-defined]
 
 
 def test_remote_create_object_permission_error(platform: DatacloudPlatform) -> None:
     """REMOTE base create_object raises PermissionError because the backend is readonly."""
     obj_data: dict[str, str] = {"object_code": "obj1", "object_name": "Test"}
     with pytest.raises(PermissionError, match="read-only"):
-        platform.create_object(REMOTE, "scene1", obj_data)
+        platform.create_object(REMOTE, obj_data)
 
 
 def test_local_search_routes_to_knowledge(platform: DatacloudPlatform) -> None:
@@ -100,7 +100,7 @@ async def test_remote_execution_permission_error(platform: DatacloudPlatform) ->
 def test_nonexistent_base_id_key_error(platform: DatacloudPlatform) -> None:
     """An unregistered base_id raises KeyError."""
     with pytest.raises(KeyError, match="not found"):
-        platform.create_object("no-such-base", "scene1", {})
+        platform.create_object("no-such-base", {})
 
 
 @pytest.mark.asyncio
