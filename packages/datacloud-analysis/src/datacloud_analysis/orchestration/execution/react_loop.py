@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import contextlib
 import contextvars
@@ -587,8 +587,130 @@ async def _invoke_llm_with_fallback(
 
 _DEFAULT_MAX_ROUNDS = 10
 _TOOL_MSG_MAX_LEN = 2000  # ToolMessage 内容最大字符数
-_TRIM_KEEP_ROUNDS = 6  # 滑动窗口：保留最近 N 轮 AI+Tool 消息对
+_TRIM_RATIO = float(os.getenv("DATACLOUD_TRIM_RATIO", "0.75"))  # 预算比例：maxContentToken * ratio
+_TRIM_FALLBACK_CONTENT_TOKEN = 128000  # Redis 无 maxContentToken 时的保守兜底值
 _MESSAGES_WINDOW_LOG_CHUNK_SIZE = 8000
+
+
+def _resolve_trim_budget() -> int:
+    """从环境变量读取当前模型的上下文窗口上限，按比例计算裁剪预算。
+
+    预算公式：floor(maxContentToken * _TRIM_RATIO)
+    - maxContentToken 由 model_environment.py:build_llm_config 从 Redis 模型配置读取并透传。
+    - Redis 无值/解析失败 → 兜底到 _TRIM_FALLBACK_CONTENT_TOKEN（128000）。
+
+    Returns:
+        裁剪预算（token 上限），默认模型（200k）→ 150000，128k 模型 → 96000。
+    """
+    raw = os.getenv("DATACLOUD_LLM_MAX_CONTENT_TOKEN", "")
+    try:
+        max_content = int(raw) if raw else _TRIM_FALLBACK_CONTENT_TOKEN
+    except ValueError:
+        logger.warning(
+            "[react_loop] _resolve_trim_budget: invalid DATACLOUD_LLM_MAX_CONTENT_TOKEN=%r, fallback to %d",
+            raw,
+            _TRIM_FALLBACK_CONTENT_TOKEN,
+        )
+        max_content = _TRIM_FALLBACK_CONTENT_TOKEN
+    budget = int(max_content * _TRIM_RATIO)
+    logger.debug(
+        "[react_loop] _resolve_trim_budget: maxContentToken=%d ratio=%.2f → budget=%d",
+        max_content,
+        _TRIM_RATIO,
+        budget,
+    )
+    return budget
+
+
+def _drop_orphan_ai_messages(messages: list) -> list:
+    """二次兜底清洗：移除孤立的 AIMessage（有 tool_calls 但后面无对应 ToolMessage）。
+
+    断点恢复场景可能出现不成对的 AIMessage（checkpoint blob 丢失/恢复失败），
+    官方 trim_messages 的 start_on/end_on 可能未完全覆盖这类边界情况，
+    所以保留手写清洗作为 trim 之后的二次保险，避免 LLM API 返回 400 (2013)。
+
+    Args:
+        messages: trim_messages 返回的裁剪后消息列表。
+
+    Returns:
+        清洗后的消息列表（孤立 AIMessage 及其后的孤立 ToolMessage 被移除）。
+    """
+    cleaned: list = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        if isinstance(msg, AIMessage) and (msg.tool_calls or []):
+            # 收集该 AIMessage 对应的 tool_call_ids
+            tc_ids = {tc.get("id") for tc in (msg.tool_calls or []) if tc.get("id")}
+            # 向后扫描，找到对应的 ToolMessage 或下一个 AIMessage
+            j = i + 1
+            found_tool_msgs: list = []
+            matched_ids: set = set()
+            while j < len(messages):
+                m = messages[j]
+                if isinstance(m, AIMessage):
+                    break  # 遇到下一个 AIMessage，停止扫描
+                if isinstance(m, ToolMessage):
+                    tid = getattr(m, "tool_call_id", None)
+                    if tid in tc_ids:
+                        matched_ids.add(tid)
+                    found_tool_msgs.append(m)
+                j += 1
+            if tc_ids and not matched_ids:
+                # 孤立 AIMessage：没有任何对应的 ToolMessage，删除该 AIMessage 及其后的孤立 ToolMessage
+                logger.warning(
+                    "[react_loop] _drop_orphan_ai_messages: orphan AIMessage tool_calls detected"
+                    " (no matching ToolMessage) → removing AIMessage and %d trailing ToolMessages"
+                    " to avoid 400 (2013) tool_call_ids=%s",
+                    len(found_tool_msgs),
+                    tc_ids,
+                )
+                i = j  # 跳过孤立的 AIMessage 和其后的 ToolMessage
+                continue
+        cleaned.append(msg)
+        i += 1
+    return cleaned
+
+
+def _normalize_tool_call_ids(messages: list) -> list:
+    """清洗 tool_call_id 格式：去掉首尾单引号（glm 等模型兼容）。
+
+    部分模型（如 glm）生成的 tool_call_id 带外层单引号（如 "'call_xxx'"），
+    切换模型后对端会拒绝该格式返回 400。统一去掉首尾单引号。
+
+    Args:
+        messages: 清洗孤儿后的消息列表。
+
+    Returns:
+        id 规范化后的消息列表（AIMessage.tool_calls[].id 和 ToolMessage.tool_call_id 已去单引号）。
+    """
+    final: list = []
+    for msg in messages:
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            fixed_tcs = []
+            for tc in msg.tool_calls:
+                tc_id = tc.get("id") or ""
+                if tc_id.startswith("'") and tc_id.endswith("'") and len(tc_id) > 2:
+                    tc = {**tc, "id": tc_id[1:-1]}
+                fixed_tcs.append(tc)
+            if fixed_tcs != list(msg.tool_calls):
+                logger.warning(
+                    "[react_loop] _normalize_tool_call_ids: fixed quoted tool_call_ids: %s → %s",
+                    [tc.get("id") for tc in msg.tool_calls],
+                    [tc.get("id") for tc in fixed_tcs],
+                )
+                msg = msg.model_copy(update={"tool_calls": fixed_tcs})
+        elif isinstance(msg, ToolMessage):
+            tc_id = getattr(msg, "tool_call_id", "") or ""
+            if tc_id.startswith("'") and tc_id.endswith("'") and len(tc_id) > 2:
+                logger.warning(
+                    "[react_loop] _normalize_tool_call_ids: fixed quoted ToolMessage tool_call_id: %r → %r",
+                    tc_id,
+                    tc_id[1:-1],
+                )
+                msg = msg.model_copy(update={"tool_call_id": tc_id[1:-1]})
+        final.append(msg)
+    return final
 
 
 class _LlmUnavailableError(RuntimeError):
@@ -1020,118 +1142,68 @@ class _ThinkingAwareChatOpenAI:
 
 
 def _trim_messages_window(messages: list) -> list:
-    """滑动窗口裁剪：保留 SystemMessage + HumanMessage + 最近 _TRIM_KEEP_ROUNDS 轮。
+    """按 token 预算裁剪消息窗口（官方 trim_messages + 兜底清洗 + id 规范化）。
 
     只裁剪送给 LLM 的副本，原始 messages 列表不受影响。
-    裁剪后确保 tail 不以孤儿 ToolMessage 开头（其对应 AIMessage 已被截断），
-    避免 LLM API 返回 400 tool_call_id not found 错误。
+    裁剪后保证序列合法：不以孤儿 ToolMessage 开头、不以悬空 tool_call 的 AIMessage 结尾。
+
+    流程：
+    1. 官方 trim_messages 按 token 预算裁剪（保留 system + 最近消息）
+    2. 二次兜底清洗：移除断点恢复态残留的孤立 AIMessage
+    3. id 规范化：去掉 glm 等模型的 tool_call_id 单引号
 
     说明：中断恢复阶段允许 state 里暂时保留不成对的消息历史，但真正发送给 LLM
-    之前必须再次清洗成合法序列。这里的处理只针对“送入 LLM 的窗口副本”，不会
+    之前必须再次清洗成合法序列。这里的处理只针对送入 LLM 的窗口副本，不会
     回写或破坏原始恢复态，目的是把非法半截消息拦在模型调用前。
     """
-    head: list[Any] = []
-    tail: list[Any] = []
-    for i, m in enumerate(messages):
-        if isinstance(m, (SystemMessage, HumanMessage)):
-            head.append(m)
-        else:
-            tail = messages[i:]
-            break
-    if not tail:
-        return list(messages)
-    # 每轮 = 1 AIMessage + N ToolMessage，保留最近 _TRIM_KEEP_ROUNDS * 2 条（保守估计）
-    keep = _TRIM_KEEP_ROUNDS * 2
-    if len(tail) > keep:
-        trimmed_count = len(tail) - keep
-        tail = tail[-keep:]
-        # 截断后 tail 头部可能残留孤儿 ToolMessage（其 AIMessage 已被截断）。
-        # 判定准则：任何出现在第一个 AIMessage 之前的 ToolMessage 都是孤儿——
-        # 合法对话结构保证 ToolMessage 只能跟在其对应的 AIMessage 之后。
-        # 不做 tool_call_id 比对，避免同名工具在不同轮次复用相同 id 时误判。
-        first_ai_idx = next(
-            (i for i, m in enumerate(tail) if isinstance(m, AIMessage)),
-            0,
-        )
-        orphan_count = first_ai_idx
-        if first_ai_idx:
-            tail = tail[first_ai_idx:]
-        logger.debug(
-            "[react_loop] trim_messages: dropped %d old messages, kept %d, orphans_removed=%d",
-            trimmed_count,
-            len(tail),
-            orphan_count,
-        )
-    result = head + tail
-    # 检查消息历史中是否存在孤立的 AIMessage（有 tool_calls 但后面紧跟另一个 AIMessage 而非 ToolMessage）。
-    # checkpoint blob 丢失或中断恢复失败时会出现此情况，恢复态可以暂时不完整，
-    # 但发给 LLM 之前必须清成合法序列，否则会返回 400 (2013)。
-    # 修复策略：删除孤立的 AIMessage 及其后直到下一个 AIMessage 之间的所有 ToolMessage，
-    # 只影响本次送入 LLM 的副本，不回写原始 state。这样能把“恢复态可不成对”与
-    # “真正给 LLM 前必须成对”这两个边界分开，避免前面的工具 call 配对错继续传到模型侧。
-    cleaned: list[Any] = []
-    i = 0
-    while i < len(result):
-        msg = result[i]
-        if isinstance(msg, AIMessage) and (msg.tool_calls or []):
-            # 收集该 AIMessage 对应的 tool_call_ids
-            tc_ids = {tc.get("id") for tc in (msg.tool_calls or []) if tc.get("id")}
-            # 向后扫描，找到对应的 ToolMessage 或下一个 AIMessage
-            j = i + 1
-            found_tool_msgs: list[Any] = []
-            matched_ids: set[str] = set()
-            while j < len(result):
-                m = result[j]
-                if isinstance(m, AIMessage):
-                    break  # 遇到下一个 AIMessage，停止扫描
-                if isinstance(m, ToolMessage):
-                    tid = getattr(m, "tool_call_id", None)
-                    if tid in tc_ids:
-                        matched_ids.add(tid)
-                    found_tool_msgs.append(m)
-                j += 1
-            if tc_ids and not matched_ids:
-                # 孤立 AIMessage：没有任何对应的 ToolMessage，删除该 AIMessage 及其后的孤立 ToolMessage
-                logger.warning(
-                    "[react_loop] trim_messages: orphan AIMessage tool_calls detected"
-                    " (no matching ToolMessage) → removing AIMessage and %d trailing ToolMessages"
-                    " to avoid 400 (2013) tool_call_ids=%s",
-                    len(found_tool_msgs),
-                    tc_ids,
-                )
-                i = j  # 跳过孤立的 AIMessage 和其后的 ToolMessage
-                continue
-        cleaned.append(msg)
-        i += 1
+    from langchain_core.messages.utils import trim_messages, count_tokens_approximately
 
-    # 清洗 tool_call_id 格式：部分模型（如 glm）生成的 id 带外层单引号（如 "'call_xxx'"），
-    # 切换模型后对端会拒绝该格式返回 400。统一去掉首尾单引号。
-    final: list[Any] = []
-    for msg in cleaned:
-        if isinstance(msg, AIMessage) and msg.tool_calls:
-            fixed_tcs = []
-            for tc in msg.tool_calls:
-                tc_id = tc.get("id") or ""
-                if tc_id.startswith("'") and tc_id.endswith("'") and len(tc_id) > 2:
-                    tc = {**tc, "id": tc_id[1:-1]}
-                fixed_tcs.append(tc)
-            if fixed_tcs != list(msg.tool_calls):
-                logger.warning(
-                    "[react_loop] trim_messages: fixed quoted tool_call_ids: %s → %s",
-                    [tc.get("id") for tc in msg.tool_calls],
-                    [tc.get("id") for tc in fixed_tcs],
-                )
-                msg = msg.model_copy(update={"tool_calls": fixed_tcs})
-        elif isinstance(msg, ToolMessage):
-            tc_id = getattr(msg, "tool_call_id", "") or ""
-            if tc_id.startswith("'") and tc_id.endswith("'") and len(tc_id) > 2:
-                logger.warning(
-                    "[react_loop] trim_messages: fixed quoted ToolMessage tool_call_id: %r → %r",
-                    tc_id,
-                    tc_id[1:-1],
-                )
-                msg = msg.model_copy(update={"tool_call_id": tc_id[1:-1]})
-        final.append(msg)
+    before_count = len(messages)
+    budget = _resolve_trim_budget()
+
+    # 1) 官方按 token 裁剪：保留 system + 最近消息，保证序列合法
+    try:
+        trimmed = trim_messages(
+            messages,
+            max_tokens=budget,
+            token_counter=count_tokens_approximately,
+            strategy="last",
+            include_system=True,
+            start_on="human",  # 不以孤儿 ToolMessage 开头
+            end_on=("human", "tool"),  # 末尾停在 human/tool，不留悬空 tool_call
+            allow_partial=False,
+        )
+    except Exception as e:
+        logger.warning(
+            "[react_loop] trim_messages: official trim_messages failed, fallback to original messages: %s",
+            e,
+            exc_info=True,
+        )
+        trimmed = list(messages)  # 降级：原样返回
+
+    # 2) 二次兜底：清洗断点恢复态可能残留的不成对 AIMessage
+    cleaned = _drop_orphan_ai_messages(trimmed)
+
+    # 3) tool_call_id 去单引号（glm 等模型兼容）
+    final = _normalize_tool_call_ids(cleaned)
+
+    after_count = len(final)
+    if after_count < before_count:
+        logger.info(
+            "[react_loop] trim_messages: before=%d after=%d budget=%d (dropped %d messages)",
+            before_count,
+            after_count,
+            budget,
+            before_count - after_count,
+        )
+    else:
+        logger.debug(
+            "[react_loop] trim_messages: before=%d after=%d budget=%d (no trim)",
+            before_count,
+            after_count,
+            budget,
+        )
+
     return final
 
 
