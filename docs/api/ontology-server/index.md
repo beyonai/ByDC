@@ -5,8 +5,9 @@
 | API | Method | Path | Description |
 |---|---|---|---|
 | [listOntologyBases](OntologyBase/listOntologyBases.md) | GET | `/api/v1/ontologyBases` | 列出所有本体库。 |
-| [createOntologyBase](OntologyBase/createOntologyBase.md) | POST | `/api/v1/ontologyBases` | 创建本体库。LOCAL 可完整 CRUD，REMOTE 注册转发。 |
-| [deleteOntologyBase](OntologyBase/deleteOntologyBase.md) | DELETE | `/api/v1/ontologyBases/{baseId}` | 删除本体库。 |
+| [createOntologyBase](OntologyBase/createOntologyBase.md) | POST | `/api/v1/ontologyBases` | 创建本体库。baseId 可选，不传时雪花算法自动生成。 |
+| [updateOntologyBase](OntologyBase/updateOntologyBase.md) | PUT | `/api/v1/ontologyBases/{ownerType}/{baseId}` | 更新本体库元信息。所有字段可选。 |
+| [deleteOntologyBase](OntologyBase/deleteOntologyBase.md) | DELETE | `/api/v1/ontologyBases/{ownerType}/{baseId}` | 删除本体库。 |
 
 ## Scene
 
