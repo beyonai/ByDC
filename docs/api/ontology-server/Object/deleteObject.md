@@ -1,7 +1,7 @@
 # 删除对象类型
 
 ```
-DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{objectCode}
+DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}
 ```
 
 删除对象类型。仅 LOCAL 可用。删除前校验无 relation/action 引用。
@@ -14,7 +14,6 @@ DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{obje
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 | `objectCode` | string | 对象编码。 |
 
 ---
@@ -85,7 +84,7 @@ DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{obje
 
 ```bash
 curl -X DELETE \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/objects/by_customer"
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects/by_customer"
 ```
 
 #### Response

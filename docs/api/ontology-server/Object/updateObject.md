@@ -1,7 +1,7 @@
 # 更新对象类型
 
 ```
-PUT /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{objectCode}
+PUT /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}
 ```
 
 全量替换对象类型定义。仅 LOCAL 可用。
@@ -14,7 +14,6 @@ PUT /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{objectC
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 | `objectCode` | string | 对象编码。必须已存在。 |
 
 ---
@@ -92,7 +91,7 @@ UpdateObjectRequest
 ```bash
 curl -X PUT \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/objects/by_customer" \
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects/by_customer" \
   -d '{
     "objectCode": "by_customer",
     "objectName": "客户信息表（已更新）",

@@ -1,7 +1,7 @@
 # 删除数据源
 
 ```
-DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/datasources/{dbId}
+DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/datasources/{dbId}
 ```
 
 仅 LOCAL 可用。删除前检查是否有对象引用此数据源。
@@ -14,7 +14,6 @@ DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/datasources/{
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 | `dbId` | string | 数据源 ID。获取方式见 [listDatasources](listDatasources.md)。 |
 
 ---

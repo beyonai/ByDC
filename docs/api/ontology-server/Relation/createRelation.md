@@ -1,7 +1,7 @@
 # 创建关系
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/relations
+POST /api/v1/ontologyBases/{ownerType}/{baseId}/relations
 ```
 
 创建关系。仅 LOCAL 可用。
@@ -14,7 +14,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/relations
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 
 ---
 
@@ -87,7 +86,7 @@ CreateRelationRequest
 ```bash
 curl -X POST \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/relations" \
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/relations" \
   -d '{
     "relationCode": "rel_customer_orders",
     "relationName": "客户关联订单",

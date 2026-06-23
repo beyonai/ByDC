@@ -4,7 +4,7 @@
 POST /api/v1/ontologyBases
 ```
 
-创建本体库。`sourceType` 由服务端根据是否提供 `sourceUrl` 自动推导：提供 `sourceUrl` 时为 `REMOTE`，否则为 `LOCAL`。LOCAL 时自动初始化 `default` 场景及目录结构；REMOTE 时注册外部服务连接信息并执行健康检查。
+创建本体库。`sourceType` 由服务端根据是否提供 `sourceUrl` 自动推导：提供 `sourceUrl` 时为 `REMOTE`，否则为 `LOCAL`。LOCAL 时注册本地 Backend；REMOTE 时转发到外部服务。
 
 ---
 

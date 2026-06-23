@@ -1,7 +1,7 @@
 # 创建视图
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/views
+POST /api/v1/ontologyBases/{ownerType}/{baseId}/views
 ```
 
 仅 LOCAL 可用。
@@ -14,7 +14,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/views
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 
 ---
 

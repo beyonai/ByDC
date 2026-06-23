@@ -1,10 +1,10 @@
 # 列出数据源
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/datasources
+GET /api/v1/ontologyBases/{ownerType}/{baseId}/datasources
 ```
 
-列出场景下的数据源列表。
+列出本体库下的数据源列表。
 
 ---
 
@@ -14,7 +14,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/datasources
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 
 ---
 
@@ -73,7 +72,7 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/datasources
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/datasources"
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/datasources"
 ```
 
 #### Response
