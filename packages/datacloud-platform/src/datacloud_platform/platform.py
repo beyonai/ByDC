@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from datacloud_platform.backends.registry import get_backend_factory
 from datacloud_platform.backends.resolution import resolve_backend_names
+from datacloud_platform.base_entry import _default_registry_path, generate_snowflake
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
     from datacloud_platform.backends.storage import StorageBackend
     from datacloud_platform.base_entry import OntologyBaseEntry, OntologyBaseRegistry
+    from datacloud_platform.models.base_entry import OntologyBaseUpdate
     from datacloud_platform.models.shared import MatchResult, ObjectSummary
 
 try:
@@ -51,6 +53,10 @@ class DatacloudPlatform:
 
     # ── Backend instance cache ──
     _backend_cache: dict[str, Any] = field(default_factory=dict, init=False)
+
+    # ── Persist path ──
+    _registry_path: Path = field(default_factory=_default_registry_path, init=False)
+    """Filesystem path for base registry JSON persistence."""
 
     # ── Config params ──
     workspace: str = field(default="")
@@ -144,22 +150,52 @@ class DatacloudPlatform:
         """List all registered ontology bases as dicts."""
         return [asdict(e) for e in self._base_registry.list()]
 
+    def base_exists(self, base_id: str) -> bool:
+        """Return True if *base_id* is registered."""
+        return self._base_registry.exists(base_id)
+
     def create_base(self, entry: OntologyBaseEntry) -> dict[str, Any]:
         """Register a new ontology base.
+
+        If *entry.base_id* is empty, a snowflake ID is auto-generated.
+
+        Persists the registry to disk after registering.
 
         Raises:
             ValueError: If a base with the same base_id already exists.
         """
+        if not entry.base_id:
+            entry.base_id = generate_snowflake()
         self._base_registry.register(entry)
+        self._base_registry.persist(self._registry_path)
         return asdict(entry)
 
     def delete_base(self, base_id: str) -> None:
         """Remove a registered ontology base.
 
+        Persists the registry to disk after removing.
+
         Raises:
             KeyError: If base_id is not registered.
         """
         self._base_registry.unregister(base_id)
+        self._base_registry.persist(self._registry_path)
+
+    def update_base(self, base_id: str, updates: OntologyBaseUpdate) -> dict[str, Any]:
+        """Update fields of an existing ontology base.
+
+        *updates* is an ``OntologyBaseUpdate``; only non-None fields are applied.
+        ``baseId`` is read-only and ignored.
+
+        Returns the full updated entry as a dict.
+
+        Raises:
+            KeyError: If base_id is not registered.
+        """
+        fields: dict[str, Any] = updates.model_dump(exclude_none=True)
+        entry = self._base_registry.update(base_id, **fields)
+        self._base_registry.persist(self._registry_path)
+        return asdict(entry)
 
     # ── Ontology: query / CRUD ──
 

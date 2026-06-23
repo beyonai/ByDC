@@ -44,7 +44,16 @@ from datacloud_platform.backends.registry import (
     verify_backend_registration,
 )
 from datacloud_platform.backends.resolution import resolve_backend_names
-from datacloud_platform.base_entry import OntologyBaseEntry, OntologyBaseRegistry
+from datacloud_platform.base_entry import (
+    OntologyBaseEntry,
+    OntologyBaseRegistry,
+    generate_snowflake,
+    validate_base_id,
+)
+from datacloud_platform.models.base_entry import (
+    OntologyBaseCreate,
+    OntologyBaseUpdate,
+)
 from datacloud_platform.models.shared import (
     DimensionProperty,
     EmbeddingHit,
@@ -74,8 +83,10 @@ __all__ = [
     "ObjectSummary",
     "OntologyBackend",
     "OntologyBackendFactory",
+    "OntologyBaseCreate",
     "OntologyBaseEntry",
     "OntologyBaseRegistry",
+    "OntologyBaseUpdate",
     "OntologyQueryable",
     "ParsedOwlContent",
     "ReferenceProperty",
@@ -89,10 +100,12 @@ __all__ = [
     "_HasKnowledgeBackend",
     "_HasOntologyBackend",
     "_HasStorageBackend",
+    "generate_snowflake",
     "get_backend_factory",
     "get_execution_backend",
     "get_knowledge_backend",
     "get_ontology_backend",
+    "get_platform",
     "get_storage_backend",
     "register_backend_type",
     "register_execution_backend",
@@ -102,8 +115,8 @@ __all__ = [
     "register_preset",
     "register_storage_backend",
     "resolve_backend_names",
+    "validate_base_id",
     "verify_backend_registration",
-    "get_platform",
 ]
 
 _platform: DatacloudPlatform | None = None

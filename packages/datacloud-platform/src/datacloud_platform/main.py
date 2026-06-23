@@ -21,7 +21,10 @@ from datacloud_platform.backends.registry import (
     register_backend_type,
     register_implementation,
 )
-from datacloud_platform.base_entry import OntologyBaseRegistry
+from datacloud_platform.base_entry import (
+    OntologyBaseRegistry,
+    _default_registry_path,
+)
 from datacloud_platform.platform import DatacloudPlatform
 
 
@@ -69,5 +72,5 @@ def _init_platform() -> DatacloudPlatform:
     )
 
     # ── Create platform ─────────────────────────────────────────────────
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry.restore(_default_registry_path())
     return DatacloudPlatform(_base_registry=registry)
