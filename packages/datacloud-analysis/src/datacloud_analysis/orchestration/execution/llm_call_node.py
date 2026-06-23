@@ -386,10 +386,11 @@ def make_llm_call_node(
                     messages_window.append(HumanMessage(content=_full_hint))
                     logger.info(
                         "[ChainHint] full graph injected (round=0): mounted_tools=%d "
-                        "hint_lines=%d (plg=%s)",
+                        "hint_lines=%d (plg=%s) messages_window_length=%d",
                         len(_mounted_names),
                         _full_hint.count("\n- "),
                         "ready" if _plg_delta is not None else "None",
+                        len(messages_window),
                     )
                 else:
                     logger.info(
@@ -435,6 +436,20 @@ def make_llm_call_node(
             )[:120],
             (_dynamic or "")[:120],
         )
+
+        # [DIAG] 在调用 LLM 前记录最后几条消息，验证 ChainHint 是否成功追加
+        if current_round == 0 and len(messages_window) > 0:
+            _last_3_msgs = messages_window[-3:]
+            _last_3_preview = [
+                f"{type(m).__name__}({str(m.content)[:60]}...)"
+                for m in _last_3_msgs
+            ]
+            logger.info(
+                "[ChainHint DIAG] round=0 messages_window_length=%d last_3_messages=%s",
+                len(messages_window),
+                _last_3_preview,
+            )
+
         try:
             ai_msg, _did_stream = await asyncio.wait_for(
                 _invoke_llm_with_fallback(

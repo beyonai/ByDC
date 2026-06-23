@@ -360,8 +360,19 @@ async def _stream_llm_call(
 
     _thinking_notified = False
     _reasoning_content_acc: str = ""  # 累积 kimi/deepseek-r 的 reasoning_content
+
+    # 记录 config 中的 callbacks（用于排查 Langfuse 记录问题）
+    if config:
+        _callbacks = config.get("callbacks") or []
+        logger.debug(
+            "[_stream_llm_call] round=%d config.callbacks=%s (count=%d)",
+            round_idx,
+            [type(cb).__name__ for cb in _callbacks] if _callbacks else "None",
+            len(_callbacks) if _callbacks else 0,
+        )
+
     try:
-        async for chunk in llm_with_tools.astream(messages_window):
+        async for chunk in llm_with_tools.astream(messages_window, config=config):
             # 首个 chunk 到达：计算等待耗时并推送通知（仅首轮，无论耗时长短）
             if not _thinking_notified:
                 _thinking_notified = True
@@ -446,7 +457,7 @@ async def _stream_llm_call(
     if full_msg is None:
         logger.warning("[react_loop] astream returned nothing, fallback to ainvoke")
         try:
-            full_msg = await llm_with_tools.ainvoke(messages_window)
+            full_msg = await llm_with_tools.ainvoke(messages_window, config=config)
         except Exception as exc:
             _dump_bound_tools_diagnostic(llm_with_tools, exc)
             raise
