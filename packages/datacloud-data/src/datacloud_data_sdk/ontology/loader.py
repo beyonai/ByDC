@@ -493,6 +493,54 @@ class OntologyLoader:
     def get_function_config(self, function_code: str) -> dict[str, Any]:
         return self._functions.get(function_code, {})
 
+    def get_action_params(self, action_code: str) -> dict[str, Any]:
+        """读取指定 action 的入参/出参绑定信息，供 ParamLinkGraph 构建串联索引。
+
+        遍历所有已加载的 OntologyClass，找到包含 action_code 的 class，
+        返回参数绑定信息。
+
+        Returns:
+            {
+              "belong_entity": "ops_langfuse_trace",
+              "request_params": [
+                  {"param_code": "trace_id", "object_property": "trace_id", "json_path": "..."},
+                  ...
+              ],
+              "response_params": [
+                  {"field_code": "span_id", "object_property": "span_id", "json_path": "..."},
+                  ...
+              ],
+            }
+
+        Raises:
+            KeyError: action_code 在所有已加载对象中均未找到。
+        """
+        for cls in self._classes.values():
+            for action in cls.actions:
+                if action.action_code != action_code:
+                    continue
+                request_params = []
+                response_params = []
+                for p in action.params:
+                    if p.direction in ("OUT",):
+                        response_params.append({
+                            "field_code": p.param_code,
+                            "object_property": p.object_property or "",
+                            "json_path": p.json_path or "",
+                        })
+                    else:
+                        request_params.append({
+                            "param_code": p.param_code,
+                            "object_property": p.object_property or "",
+                            "json_path": p.json_path or "",
+                        })
+                return {
+                    "belong_entity": cls.object_code,
+                    "request_params": request_params,
+                    "response_params": response_params,
+                }
+        raise KeyError(action_code)
+
     # --- 核心层 API ---
 
     def get_action(self, object_code: str, action_code: str) -> Action:
@@ -634,6 +682,7 @@ class OntologyLoader:
             param_type=p.get("param_type", "STRING"),
             required=p.get("required", False),
             default_value=p.get("default_value"),
+            data_format=p.get("data_format") or None,
             mapping_path=p.get("mapping_path", ""),
             json_path=p.get("json_path", ""),
             object_property=p.get("object_property"),

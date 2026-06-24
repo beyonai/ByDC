@@ -49,12 +49,13 @@ def _field_table_row(f: Any) -> str:
     fc = f.field_code if hasattr(f, "field_code") else f.property_code
     fn = f.field_name if hasattr(f, "field_name") else getattr(f, "property_name", fc)
     role = getattr(f, "analytic_role", "-") or "-"
+    dtype = (getattr(f, "field_type", "") or "").strip() or "-"
     kind = getattr(f, "analytic_kind", "-") or "-"
     filter_ops = "/".join(getattr(f, "filter_ops", []) or []) or "-"
     group_ops = "/".join(getattr(f, "group_ops", []) or []) or "-"
     agg_ops = "/".join(getattr(f, "aggregate_ops", []) or []) or "-"
     note = _field_special_note(f)
-    return f"| {fc} | {fn} | {role} | {kind} | {filter_ops} | {group_ops} | {agg_ops} | {note} |"
+    return f"| {fc} | {fn} | {role} | {dtype} | {kind} | {filter_ops} | {group_ops} | {agg_ops} | {note} |"
 
 
 def _required_restrictions(required_filter_groups: list[str]) -> str:
@@ -84,6 +85,9 @@ def build_search_description(
     )
     lines.append("")
     lines.append("**何时使用**：语义相似度检索时使用；不适用于精确 SQL 查询。")
+    lines.append(
+        "**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
+    )
 
     filterable = [f for f in fields if getattr(f, "filter_ops", [])]
     if filterable:
@@ -392,6 +396,7 @@ def build_search_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
             f"在知识库 {scope_name} 中检索文件。"
             "协议与 query 明细查询一致，额外必须填写 query 语义检索文本；"
             "filters.field、order_by.field 只能填写当前工具列出的属性编码。"
+            "filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
         ),
         "x-dc-action-family": "search",
         "x-dc-scope-type": "object",
@@ -490,6 +495,9 @@ def _field_value_property(field: Any) -> dict[str, Any]:
     }
     if schema["type"] == "array":
         schema["items"] = {"type": "string"}
+    data_format = str(getattr(field, "data_format", "") or "").strip()
+    if data_format:
+        schema["x-data-format"] = data_format
     return schema
 
 
@@ -590,13 +598,19 @@ def build_update_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "description": f"按 filters 修改动态表{scope_name}记录。必须提供 filters。",
+        "description": (
+            f"修改动态表{scope_name}的记录。必须提供 filters 和 values。"
+            "若要修改某条指定记录，请先调用对应的 query 动作查询该记录，从返回结果中获取主键字段的值，"
+            "再以该主键作为 filters 条件精确定位后执行修改；"
+            "若用户说明并非修改指定某条记录（如批量修改某一类数据），则直接按用户给出的过滤条件构造 filters。"
+        ),
         "x-dc-action-family": "update",
         "x-dc-scope-type": "object",
         "properties": {
             "values": {
                 "type": "object",
                 "additionalProperties": False,
+                "x-dc-provided-only": True,
                 "properties": {_fc(field): _field_value_property(field) for field in writable},
                 "description": "需要修改的字段值，字段统一填写对象属性编码。",
             },
@@ -617,7 +631,12 @@ def build_delete_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     return {
         "type": "object",
         "additionalProperties": False,
-        "description": f"按 filters 物理删除动态表{scope_name}记录。必须提供 filters。",
+        "description": (
+            f"物理删除动态表{scope_name}的记录。必须提供 filters。"
+            "若要删除某条指定记录，请先调用对应的 query 动作查询该记录，从返回结果中获取主键字段的值，"
+            "再以该主键作为 filters 条件精确定位后执行删除；"
+            "若用户说明并非删除指定某条记录（如批量删除某一类数据），则直接按用户给出的过滤条件构造 filters。"
+        ),
         "x-dc-action-family": "delete",
         "x-dc-scope-type": "object",
         "properties": {
@@ -663,6 +682,7 @@ def build_query_schema(
         "description": (
             f"查询{scope_label}{scope_name}的明细记录。"
             "select、filters.field、order_by.field 只能填写当前工具列出的属性编码。"
+            "filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
             "适合查记录列表，不适合做统计汇总。"
             f"{required_hint}"
         ),
@@ -753,6 +773,9 @@ def build_query_description(
     lines.append(
         "**何时使用**：查看具体记录列表时使用；不适用于统计汇总，如需统计请用 compute 动作。"
     )
+    lines.append(
+        "**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
+    )
 
     restrictions = _required_restrictions(req_groups)
     if restrictions:
@@ -760,7 +783,9 @@ def build_query_description(
 
     lines.append("")
     lines.append("**可用字段**：")
-    lines.append("| 字段编码 | 中文名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
+    lines.append(
+        "| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |"
+    )
     lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for f in queryable:
         lines.append(_field_table_row(f))
@@ -935,6 +960,7 @@ def build_compute_schema(
         "description": (
             f"对{scope_label}{scope_name}执行分组统计。"
             "dimensions.field、metrics.field、filters.field 只能填写当前工具列出的属性编码。"
+            "filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
             "必须至少提供一个 metrics；如需看明细，请改用 query 动作。"
             f"{required_hint}"
         ),
@@ -1072,6 +1098,9 @@ def build_compute_description(
         "**何时使用**：需要分组统计、聚合指标时使用；"
         "不适用于查看明细列表，如需明细请用 query 动作。"
     )
+    lines.append(
+        "**注意**：filters.value 按字段数据类型填写对应的基本类型值；术语字段的 value 类型为字符串。"
+    )
 
     restrictions = _required_restrictions(req_groups)
     if restrictions:
@@ -1092,8 +1121,10 @@ def build_compute_description(
 
     lines.append("")
     lines.append("**字段能力**：")
-    lines.append("| 字段编码 | 中文名 | 角色 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |")
-    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    lines.append(
+        "| 字段编码 | 中文名 | 角色 | 数据类型 | 类型 | 可过滤 | 可分组 | 可聚合 | 特殊说明 |"
+    )
+    lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
     for f in fields:
         lines.append(_field_table_row(f))
 

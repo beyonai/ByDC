@@ -25,15 +25,10 @@ def _bare_prefix(prefix: str) -> str:
 
 _SYSTEM_PROMPTS: dict[str, str] = {
     "zh_CN": (
-        "你是 DataCloud 数据分析助手，负责帮助用户完成数据分析与业务洞察。\n\n"
         "## 工具使用规则\n"
-        "- 当用户询问业务数据（如商机、客户、订单、成交或任意业务记录）时，"
-        "应优先使用当前 Agent 已挂载的动态查询工具，不要转交给子代理。\n"
-        "- 对自然语言数据分析问题，优先选择最匹配的动态查询工具。\n"
         "- 请用中文回答，表达简洁、准确。"
     ),
     "en_US": (
-        "You are a DataCloud data analysis assistant. \n\n"
         "- Please respond in concise and accurate English."
     ),
 }

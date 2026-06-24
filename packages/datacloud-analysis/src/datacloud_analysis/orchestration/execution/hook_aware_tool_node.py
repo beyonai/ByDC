@@ -490,15 +490,79 @@ class HookAwareToolNode(ToolNode):
                     # 2. 去重过滤
                     _existing = set(state_dict.get("active_tools") or [])
                     _to_add = [s for s in _suggestions if s.tool not in _existing]
+                    _new_names = [s.tool for s in _to_add]
 
-                    # 3. 更新 active_tools 和 tools_by_name（当轮即可执行）
-                    if _to_add:
-                        _new_names = [s.tool for s in _to_add]
+                    # 合并 ParamLinkGraph 的工具级解锁建议
+                    try:
+                        from datacloud_analysis.tools.tool_pool import get_param_link_graph  # noqa: PLC0415
+                        _plg = get_param_link_graph()
+                        if _plg is not None:
+                            _param_nexts = _plg.get_next_tools(_tool_name)
+                            _param_new = [
+                                t for t in _param_nexts
+                                if t not in _existing
+                                and t not in set(_new_names)
+                                and t in TOOL_POOL
+                            ]
+                            _new_names = _new_names + _param_new
+                    except Exception:  # noqa: BLE001
+                        pass
+
+                    # 3. 统一写入（两路合并后只写一次，避免覆盖）
+                    if _new_names:
                         self.tools_by_name.update(get_tools(_new_names))
                         _extra_state["active_tools"] = list(_existing) + _new_names
 
                     # 4. 更新 reasoning_graph
                     _update_reasoning_graph(state_dict, _tool_name, _result, _to_add, _extra_state)
+
+                    # 5. 锚点激活时注入全量工具链路图到 state["messages"]
+                    #    注：goto_ontology / activate_anchor 返回的是人类可读字符串，
+                    #    json.loads 会失败导致 _result 为空，故这里传原始文本 _raw_content，
+                    #    由 _build_anchor_chain_hint_update 内部正则提取 object_code。
+                    try:
+                        from datacloud_analysis.tools.param_link_graph import (  # noqa: PLC0415
+                            _build_anchor_chain_hint_update,
+                        )
+                        _plg2 = get_param_link_graph()
+                        _anchor_update = _build_anchor_chain_hint_update(
+                            tool_name=_tool_name,
+                            tool_result=_result or _raw_content,
+                            current_anchor=state_dict.get("chain_hint_anchor"),
+                            plg=_plg2,
+                        )
+                        if _anchor_update:
+                            _extra_state.update(_anchor_update)
+                            logger.info(
+                                "[ChainHint] anchor injected: tool=%s anchor=%s "
+                                "hint_msgs=%d (plg=%s)",
+                                _tool_name,
+                                _anchor_update.get("chain_hint_anchor"),
+                                len(_anchor_update.get("messages") or []),
+                                "ready" if _plg2 is not None else "None",
+                            )
+                        else:
+                            logger.info(
+                                "[ChainHint] anchor skipped: tool=%s plg=%s "
+                                "current_anchor=%s (not a trigger tool, no new anchor, "
+                                "or plg unavailable)",
+                                _tool_name,
+                                "ready" if _plg2 is not None else "None",
+                                state_dict.get("chain_hint_anchor"),
+                            )
+                    except Exception:  # noqa: BLE001
+                        logger.warning("[ChainHint] anchor injection failed", exc_info=True)
+
+                    # 6. 更新 prev_active_tools 快照（供 llm_call_node 计算 delta）
+                    #    必须记录"本轮解锁前"的 active_tools，而非解锁后的值，
+                    #    否则下一轮 delta = active_tools - prev_active_tools 恒为空，
+                    #    导致串联提示永不注入。用 setdefault 只在本次 after_hook
+                    #    第一条工具消息时定基线（多条消息共享同一解锁前快照）。
+                    _extra_state.setdefault(
+                        "prev_active_tools",
+                        list(state_dict.get("active_tools") or []),
+                    )
+
         except Exception:  # noqa: BLE001
             logger.debug("[HookAwareToolNode] tool_pool unlock failed", exc_info=True)
 
