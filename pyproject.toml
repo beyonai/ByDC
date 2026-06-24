@@ -99,7 +99,6 @@ packages = ["src/by_datacloud"]
 [tool.hatch.build.targets.wheel.force-include]
 "packages/datacloud-analysis/src/datacloud_analysis" = "datacloud_analysis"
 "packages/datacloud-data/src/datacloud_data_sdk" = "datacloud_data_sdk"
-"packages/datacloud-data/src/datacloud_data_service" = "datacloud_data_service"
 "packages/datacloud-knowledge/src/datacloud_knowledge" = "datacloud_knowledge"
 "packages/datacloud-knowledge/db/ddl/knowledge" = "datacloud_knowledge/resources/sql/ddl"
 "packages/datacloud-knowledge/db/seed/knowledge" = "datacloud_knowledge/resources/sql/seed"
