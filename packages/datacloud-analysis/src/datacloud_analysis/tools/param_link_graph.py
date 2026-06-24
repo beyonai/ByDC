@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -183,15 +183,10 @@ class ParamLinkGraph:
         """
         if not self._links:
             return ""
-        # 找出所有 from_tool 属于该锚点下的链接（via_prop 以锚点编码开头）
-        relevant = [
-            lnk for lnk in self._links
-            if lnk.via_prop.startswith(f"{anchor_object_code}.")
-            or lnk.from_tool in self._from_index
-        ]
         # 取该锚点下所有工具作为出发点的 hint
         anchor_tools = [
-            tool for tool, links in self._from_index.items()
+            tool
+            for tool, links in self._from_index.items()
             if any(lnk.via_prop.startswith(f"{anchor_object_code}.") for lnk in links)
         ]
         if not anchor_tools:
@@ -291,10 +286,10 @@ def _extract_anchor_object(tool_result: Any) -> str:
 
 def _build_anchor_chain_hint_update(
     tool_name: str,
-    tool_result: "dict[str, Any] | str",
+    tool_result: dict[str, Any] | str,
     current_anchor: str | None,
-    plg: "ParamLinkGraph | None",
-) -> "dict[str, Any] | None":
+    plg: ParamLinkGraph | None,
+) -> dict[str, Any] | None:
     """计算锚点激活后需要写入 state 的 chain hint 更新。
 
     在 goto_ontology / activate_anchor / search_ontology 工具返回时触发，
@@ -334,7 +329,7 @@ def _build_anchor_chain_hint_update(
 
 
 def _build_delta_chain_hint(
-    plg: "ParamLinkGraph | None",
+    plg: ParamLinkGraph | None,
     prev_active: list[str],
     curr_active: list[str],
 ) -> str:

@@ -369,8 +369,11 @@ def make_llm_call_node(
         # 仅在冷启动首轮（round=0）注入一次全量图谱，避免每轮重复刷屏；
         # 后续新解锁的工具由 delta 增量补充。
         try:
-            from datacloud_analysis.tools.param_link_graph import _build_delta_chain_hint  # noqa: PLC0415
+            from datacloud_analysis.tools.param_link_graph import (
+                _build_delta_chain_hint,  # noqa: PLC0415
+            )
             from datacloud_analysis.tools.tool_pool import get_param_link_graph  # noqa: PLC0415
+
             _plg_delta = get_param_link_graph()
             # 本轮真正 bind 给 LLM 的工具名（build-time + active_tools 解锁 + finish_react）
             _mounted_names = [n for n in tools_map if n != "finish_react"]
@@ -441,8 +444,7 @@ def make_llm_call_node(
         if current_round == 0 and len(messages_window) > 0:
             _last_3_msgs = messages_window[-3:]
             _last_3_preview = [
-                f"{type(m).__name__}({str(m.content)[:60]}...)"
-                for m in _last_3_msgs
+                f"{type(m).__name__}({str(m.content)[:60]}...)" for m in _last_3_msgs
             ]
             logger.info(
                 "[ChainHint DIAG] round=0 messages_window_length=%d last_3_messages=%s",

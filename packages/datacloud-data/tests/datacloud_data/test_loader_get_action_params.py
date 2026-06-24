@@ -1,4 +1,5 @@
 """OntologyLoader.get_action_params() 单元测试。"""
+
 from __future__ import annotations
 
 import pytest
@@ -83,13 +84,17 @@ class TestGetActionParams:
     def test_mixed_in_out_params(self):
         params = [
             OntologyActionParam(
-                param_code="trace_id", param_name="trace_id",
-                direction="IN", param_type="STRING",
+                param_code="trace_id",
+                param_name="trace_id",
+                direction="IN",
+                param_type="STRING",
                 object_property="trace_id",
             ),
             OntologyActionParam(
-                param_code="span_id", param_name="span_id",
-                direction="OUT", param_type="STRING",
+                param_code="span_id",
+                param_name="span_id",
+                direction="OUT",
+                param_type="STRING",
                 object_property="span_id",
             ),
         ]
@@ -100,8 +105,10 @@ class TestGetActionParams:
 
     def test_empty_object_property_becomes_empty_string(self):
         param = OntologyActionParam(
-            param_code="max_chars", param_name="max_chars",
-            direction="IN", param_type="INTEGER",
+            param_code="max_chars",
+            param_name="max_chars",
+            direction="IN",
+            param_type="INTEGER",
             object_property=None,
         )
         loader = _make_loader_with_action("ops_langfuse_trace", "get_tool_detail", [param])
@@ -116,8 +123,10 @@ class TestGetActionParams:
 
     def test_cross_object_property_preserved(self):
         param = OntologyActionParam(
-            param_code="agent_id", param_name="agent_id",
-            direction="OUT", param_type="STRING",
+            param_code="agent_id",
+            param_name="agent_id",
+            direction="OUT",
+            param_type="STRING",
             object_property="{{ops_dig_employee}}.agent_id",
         )
         loader = _make_loader_with_action("ops_langfuse_trace", "get_agent_diag", [param])

@@ -523,17 +523,21 @@ class OntologyLoader:
                 response_params = []
                 for p in action.params:
                     if p.direction in ("OUT",):
-                        response_params.append({
-                            "field_code": p.param_code,
-                            "object_property": p.object_property or "",
-                            "json_path": p.json_path or "",
-                        })
+                        response_params.append(
+                            {
+                                "field_code": p.param_code,
+                                "object_property": p.object_property or "",
+                                "json_path": p.json_path or "",
+                            }
+                        )
                     else:
-                        request_params.append({
-                            "param_code": p.param_code,
-                            "object_property": p.object_property or "",
-                            "json_path": p.json_path or "",
-                        })
+                        request_params.append(
+                            {
+                                "param_code": p.param_code,
+                                "object_property": p.object_property or "",
+                                "json_path": p.json_path or "",
+                            }
+                        )
                 return {
                     "belong_entity": cls.object_code,
                     "request_params": request_params,

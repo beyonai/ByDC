@@ -494,12 +494,17 @@ class HookAwareToolNode(ToolNode):
 
                     # 合并 ParamLinkGraph 的工具级解锁建议
                     try:
-                        from datacloud_analysis.tools.tool_pool import get_param_link_graph  # noqa: PLC0415
+                        from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+                            TOOL_POOL,
+                            get_param_link_graph,
+                        )
+
                         _plg = get_param_link_graph()
                         if _plg is not None:
                             _param_nexts = _plg.get_next_tools(_tool_name)
                             _param_new = [
-                                t for t in _param_nexts
+                                t
+                                for t in _param_nexts
                                 if t not in _existing
                                 and t not in set(_new_names)
                                 and t in TOOL_POOL
@@ -524,6 +529,7 @@ class HookAwareToolNode(ToolNode):
                         from datacloud_analysis.tools.param_link_graph import (  # noqa: PLC0415
                             _build_anchor_chain_hint_update,
                         )
+
                         _plg2 = get_param_link_graph()
                         _anchor_update = _build_anchor_chain_hint_update(
                             tool_name=_tool_name,
