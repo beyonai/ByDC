@@ -209,8 +209,10 @@ class DatacloudPlatform:
         loader = backend.load_ontology(self._base_path_for(base_id))
         return backend.get_objects(loader, base_id)
 
-    def get_object_detail(self, base_id: str, object_code: str) -> ObjectSummary | None:
-        """Get a single object's detail by code."""
+    def get_object_detail(
+        self, base_id: str, object_code: str
+    ) -> dict[str, Any] | None:
+        """Get a single object's full detail (ObjectType with properties and actions)."""
         backend = self._ontology_for(base_id)
         loader = backend.load_ontology(self._base_path_for(base_id))
         return backend.get_object_detail(loader, object_code)
@@ -543,8 +545,10 @@ class DatacloudPlatform:
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
         """Get full scene details with optional filtering by view_code or object_code."""
-        return self._ontology_for(base_id).get_scene_details(
-            base_id, scene_id, view_code=view_code, object_code=object_code
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_scene_details(
+            loader, base_id, scene_id, view_code=view_code, object_code=object_code
         )
 
     def query_ontologies_by_scene(
@@ -557,8 +561,10 @@ class DatacloudPlatform:
         keyword: str | None = None,
     ) -> dict[str, Any]:
         """Query ontologies (objects) in a scene with pagination and keyword filter."""
-        return self._ontology_for(base_id).query_ontologies_by_scene(
-            base_id, scene_id, page=page, page_size=page_size, keyword=keyword
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.query_ontologies_by_scene(
+            loader, base_id, scene_id, page=page, page_size=page_size, keyword=keyword
         )
 
     # ── Scene CRUD ──
@@ -605,11 +611,15 @@ class DatacloudPlatform:
 
     def get_views(self, base_id: str) -> list[dict[str, Any]]:
         """Get all views under a base."""
-        return self._ontology_for(base_id).get_views(base_id)
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_views(loader, base_id)
 
     def get_view_detail(self, base_id: str, view_code: str) -> dict[str, Any] | None:
         """Get single view detail by code."""
-        return self._ontology_for(base_id).get_view_detail(base_id, view_code)
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_view_detail(loader, base_id, view_code)
 
     def create_view(self, base_id: str, view: Any) -> Any:
         """Create a view. Raises PermissionError on read-only backends."""
@@ -627,11 +637,15 @@ class DatacloudPlatform:
 
     def get_relations(self, base_id: str) -> list[dict[str, Any]]:
         """Get all relations under a base."""
-        return self._ontology_for(base_id).get_relations(base_id)
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_relations(loader, base_id)
 
     def get_relation_detail(self, base_id: str, rel_code: str) -> dict[str, Any] | None:
         """Get single relation detail by code."""
-        return self._ontology_for(base_id).get_relation_detail(base_id, rel_code)
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_relation_detail(loader, base_id, rel_code)
 
     def create_relation(self, base_id: str, rel: Any) -> Any:
         """Create a relation. Raises PermissionError on read-only backends."""
@@ -649,11 +663,15 @@ class DatacloudPlatform:
 
     def get_datasources(self, base_id: str) -> list[dict[str, Any]]:
         """Get all datasources under a base."""
-        return self._ontology_for(base_id).get_datasources(base_id)
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_datasources(loader, base_id)
 
     def get_datasource_detail(self, base_id: str, db_id: str) -> dict[str, Any] | None:
         """Get single datasource detail by db_id."""
-        return self._ontology_for(base_id).get_datasource_detail(base_id, db_id)
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_datasource_detail(loader, base_id, db_id)
 
     def create_datasource(self, base_id: str, ds: Any) -> Any:
         """Create a datasource. Raises PermissionError on read-only backends."""
@@ -667,7 +685,9 @@ class DatacloudPlatform:
 
     def get_actions(self, base_id: str, object_code: str) -> list[dict[str, Any]]:
         """Get all actions on an object."""
-        return self._ontology_for(base_id).get_actions(base_id, object_code)
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_actions(loader, base_id, object_code)
 
     def get_action_detail(
         self,
@@ -676,9 +696,9 @@ class DatacloudPlatform:
         action_code: str,
     ) -> dict[str, Any] | None:
         """Get single action detail by code."""
-        return self._ontology_for(base_id).get_action_detail(
-            base_id, object_code, action_code
-        )
+        backend = self._ontology_for(base_id)
+        loader = backend.load_ontology(self._base_path_for(base_id))
+        return backend.get_action_detail(loader, base_id, object_code, action_code)
 
     def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
         """Create an action. Raises PermissionError on read-only backends."""

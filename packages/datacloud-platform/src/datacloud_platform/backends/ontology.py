@@ -59,8 +59,8 @@ class OntologyBackend(Protocol):
 
     def get_object_detail(
         self, loader: OntologyQueryable, object_code: str
-    ) -> ObjectSummary | None:
-        """Get single object detail."""
+    ) -> dict[str, Any] | None:
+        """Get single object detail (full ObjectType with properties and actions)."""
         ...
 
     # -- Object CRUD --
@@ -93,6 +93,7 @@ class OntologyBackend(Protocol):
 
     def get_scene_details(
         self,
+        loader: Any,
         base_id: str,
         scene_id: str,
         *,
@@ -104,6 +105,7 @@ class OntologyBackend(Protocol):
 
     def query_ontologies_by_scene(
         self,
+        loader: Any,
         base_id: str,
         scene_id: str,
         *,
@@ -152,12 +154,14 @@ class OntologyBackend(Protocol):
 
     # -- View CRUD --
 
-    def get_views(self, base_id: str) -> list[dict[str, Any]]:
-        """Get all views under a base."""
+    def get_views(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+        """Get all views under a base from the loaded ontology."""
         ...
 
-    def get_view_detail(self, base_id: str, view_code: str) -> dict[str, Any] | None:
-        """Get single view detail by code."""
+    def get_view_detail(
+        self, loader: Any, base_id: str, view_code: str
+    ) -> dict[str, Any] | None:
+        """Get single view detail by code from the loaded ontology."""
         ...
 
     def create_view(self, base_id: str, obj: Any) -> Any:
@@ -174,12 +178,14 @@ class OntologyBackend(Protocol):
 
     # -- Relation CRUD --
 
-    def get_relations(self, base_id: str) -> list[dict[str, Any]]:
-        """Get all relations under a base."""
+    def get_relations(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+        """Get all relations under a base from the loaded ontology."""
         ...
 
-    def get_relation_detail(self, base_id: str, rel_code: str) -> dict[str, Any] | None:
-        """Get single relation detail by code."""
+    def get_relation_detail(
+        self, loader: Any, base_id: str, rel_code: str
+    ) -> dict[str, Any] | None:
+        """Get single relation detail by code from the loaded ontology."""
         ...
 
     def create_relation(self, base_id: str, obj: Any) -> Any:
@@ -196,12 +202,14 @@ class OntologyBackend(Protocol):
 
     # -- Datasource CRUD --
 
-    def get_datasources(self, base_id: str) -> list[dict[str, Any]]:
-        """Get all datasources under a base."""
+    def get_datasources(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+        """Get all datasources under a base from the loaded ontology."""
         ...
 
-    def get_datasource_detail(self, base_id: str, db_id: str) -> dict[str, Any] | None:
-        """Get single datasource detail by db_id."""
+    def get_datasource_detail(
+        self, loader: Any, base_id: str, db_id: str
+    ) -> dict[str, Any] | None:
+        """Get single datasource detail by db_id from the loaded ontology."""
         ...
 
     def create_datasource(self, base_id: str, obj: Any) -> Any:
@@ -214,17 +222,20 @@ class OntologyBackend(Protocol):
 
     # -- Action CRUD --
 
-    def get_actions(self, base_id: str, object_code: str) -> list[dict[str, Any]]:
-        """Get all actions on an object."""
+    def get_actions(
+        self, loader: Any, base_id: str, object_code: str
+    ) -> list[dict[str, Any]]:
+        """Get all actions on an object from the loaded ontology."""
         ...
 
     def get_action_detail(
         self,
+        loader: Any,
         base_id: str,
         object_code: str,
         action_code: str,
     ) -> dict[str, Any] | None:
-        """Get single action detail by code."""
+        """Get single action detail by code from the loaded ontology."""
         ...
 
     def create_action(self, base_id: str, object_code: str, obj: Any) -> Any:

@@ -43,12 +43,17 @@ class _NoopOntologyBackend:
 
     # -- View CRUD (no-op) --
 
-    def get_views(self, base_id: str) -> list[Any]:
+    def get_views(self, loader: Any, base_id: str) -> list[Any]:
         """Return empty list."""
+        _ = loader
+        _ = base_id
         return []
 
-    def get_view_detail(self, base_id: str, view_code: str) -> Any | None:
+    def get_view_detail(self, loader: Any, base_id: str, view_code: str) -> Any | None:
         """Return None."""
+        _ = loader
+        _ = base_id
+        _ = view_code
         return None
 
     def create_view(self, base_id: str, view: Any) -> Any:
@@ -65,12 +70,19 @@ class _NoopOntologyBackend:
 
     # -- Relation CRUD (no-op) --
 
-    def get_relations(self, base_id: str) -> list[Any]:
+    def get_relations(self, loader: Any, base_id: str) -> list[Any]:
         """Return empty list."""
+        _ = loader
+        _ = base_id
         return []
 
-    def get_relation_detail(self, base_id: str, rel_code: str) -> Any | None:
+    def get_relation_detail(
+        self, loader: Any, base_id: str, rel_code: str
+    ) -> Any | None:
         """Return None."""
+        _ = loader
+        _ = base_id
+        _ = rel_code
         return None
 
     def create_relation(self, base_id: str, rel: Any) -> Any:
@@ -87,14 +99,21 @@ class _NoopOntologyBackend:
 
     # -- Action CRUD (no-op) --
 
-    def get_actions(self, base_id: str, object_code: str) -> list[Any]:
+    def get_actions(self, loader: Any, base_id: str, object_code: str) -> list[Any]:
         """Return empty list."""
+        _ = loader
+        _ = base_id
+        _ = object_code
         return []
 
     def get_action_detail(
-        self, base_id: str, object_code: str, action_code: str
+        self, loader: Any, base_id: str, object_code: str, action_code: str
     ) -> Any | None:
         """Return None."""
+        _ = loader
+        _ = base_id
+        _ = object_code
+        _ = action_code
         return None
 
     def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
@@ -117,12 +136,19 @@ class _NoopOntologyBackend:
 
     # -- Datasource CRUD (no-op) --
 
-    def get_datasources(self, base_id: str) -> list[Any]:
+    def get_datasources(self, loader: Any, base_id: str) -> list[Any]:
         """Return empty list."""
+        _ = loader
+        _ = base_id
         return []
 
-    def get_datasource_detail(self, base_id: str, db_id: str) -> Any | None:
+    def get_datasource_detail(
+        self, loader: Any, base_id: str, db_id: str
+    ) -> Any | None:
         """Return None."""
+        _ = loader
+        _ = base_id
+        _ = db_id
         return None
 
     def create_datasource(self, base_id: str, ds: Any) -> Any:
@@ -162,6 +188,7 @@ class _NoopOntologyBackend:
 
     def get_scene_details(
         self,
+        loader: object,
         base_id: str,
         scene_id: str,
         *,
@@ -169,6 +196,7 @@ class _NoopOntologyBackend:
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return empty scene details."""
+        _ = loader
         return {
             "scene": None,
             "views": [],
@@ -181,6 +209,7 @@ class _NoopOntologyBackend:
 
     def query_ontologies_by_scene(
         self,
+        loader: object,
         base_id: str,
         scene_id: str,
         *,
@@ -189,6 +218,7 @@ class _NoopOntologyBackend:
         keyword: str | None = None,
     ) -> dict[str, Any]:
         """Return empty result."""
+        _ = loader
         return {"data": [], "totalCount": 0}
 
     # -- Scene CRUD (no-op) --
