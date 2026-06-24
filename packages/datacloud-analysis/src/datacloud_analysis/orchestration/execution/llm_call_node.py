@@ -65,7 +65,7 @@ def _format_todo_snapshot(active_todos: list[dict[str, Any]], user_query: str) -
 def _get_user_info(gateway_context: Any):
     from datacloud_analysis.reporter import NoOpExecutionReporter
     if isinstance(gateway_context, NoOpExecutionReporter):
-        return gateway_context.user_id, ""
+        return gateway_context.user_id, gateway_context.user_name
     _header_meta: dict[str, Any] = {}
     with contextlib.suppress(AttributeError):
         _header_meta = gateway_context.current_command.header.metadata or {}  # type: ignore[union-attr]

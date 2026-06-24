@@ -697,8 +697,12 @@ class OntologyAgent:
         # 让 tool_wrapper.py 等业务代码不需感知是否有真实 Gateway。
         # 真实 Gateway（如 byclaw-data 的 AgentContext）走另一条路径直接被注入到
         # configurable["gateway_context"]，duck-type 自然满足同一协议。
+        user_name = ""
+        if extras and extras.get("user_name"):
+            user_name = extras.get("user_name")
         ctx_container: Any = NoOpExecutionReporter(
             user_id=user_code or "",
+            user_name=user_name,
             session_id=session_id or "",
             extras=_effective_extras or None,
         )
