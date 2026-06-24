@@ -37,6 +37,30 @@ class _ObjectFieldsStore(Protocol):
 # ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
 
 
+
+def _redis_env() -> dict[str, Any]:
+    """从环境变量读取 Redis 连接参数，与 _init_discovery_redis() 保持一致。"""
+    return dict(
+        host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
+        port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
+        db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
+        password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")) or None,
+        username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
+        decode_responses=True,
+    )
+
+
+def _new_redis() -> Any:
+    """在「当前」event loop 中创建全新的 Redis async 客户端。
+
+    绕过 by_framework.common.redis_client 的模块级单例，避免
+    ``Future attached to a different loop`` 错误。
+    """
+    from redis.asyncio import Redis as AsyncRedis
+
+    return AsyncRedis(**_redis_env())
+
+
 def _init_discovery_redis() -> None:
     """全局初始化服务发现所需的 Redis 连接（幂等，重复调用无副作用）。
 
@@ -70,8 +94,8 @@ def _submit_object_async(
     async def _run() -> dict[str, Any]:
         from by_framework.core.discovery import DiscoveryClient
 
-        _init_discovery_redis()
-        discovery_client = DiscoveryClient(cache_interval=5)
+        _discovery_redis = _new_redis()
+        discovery_client = DiscoveryClient(redis_client=_discovery_redis, cache_interval=5)
         try:
             # 建表（DYNAMIC_TABLE 模式）→ 本地 SQLite personal_object.db
             if fields is not None:
@@ -122,6 +146,7 @@ def _submit_object_async(
                     )
         finally:
             await discovery_client.close()
+            await _discovery_redis.aclose()
 
         if response.status_code != 200:
             return {"ok": False, "error": f"HTTP {response.status_code}"}
@@ -143,8 +168,8 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
         import httpx
         from by_framework.core.discovery import DiscoveryClient
 
-        _init_discovery_redis()
-        discovery_client = DiscoveryClient(cache_interval=5)
+        _discovery_redis = _new_redis()
+        discovery_client = DiscoveryClient(redis_client=_discovery_redis, cache_interval=5)
         try:
             instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
             if not instance:
@@ -161,6 +186,7 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
                     )
         finally:
             await discovery_client.close()
+            await _discovery_redis.aclose()
 
         if response.status_code != 200:
             return {"ok": False, "error": f"HTTP {response.status_code}"}
@@ -183,8 +209,8 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
         import httpx
         from by_framework.core.discovery import DiscoveryClient
 
-        _init_discovery_redis()
-        discovery_client = DiscoveryClient(cache_interval=5)
+        _discovery_redis = _new_redis()
+        discovery_client = DiscoveryClient(redis_client=_discovery_redis, cache_interval=5)
         try:
             instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
             if not instance:
@@ -201,6 +227,7 @@ def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
                     )
         finally:
             await discovery_client.close()
+            await _discovery_redis.aclose()
 
         if response.status_code != 200:
             return {"ok": False, "error": f"HTTP {response.status_code}"}

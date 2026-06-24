@@ -342,10 +342,19 @@ def _delete_resource_by_code(resource_code: str) -> None:
     if token:
         headers["Beyond-Token"] = token
 
-    _init_discovery_redis()
-
     async def _call() -> None:
-        discovery_client = DiscoveryClient(cache_interval=5)
+        # 创建全新 Redis client 避免跨 event loop 问题
+        from redis.asyncio import Redis as AsyncRedis
+
+        _redis = AsyncRedis(
+            host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
+            port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
+            db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
+            password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")) or None,
+            username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
+            decode_responses=True,
+        )
+        discovery_client = DiscoveryClient(redis_client=_redis, cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
             async with DiscoveryHttpClient(
@@ -359,6 +368,7 @@ def _delete_resource_by_code(resource_code: str) -> None:
                 )
         finally:
             await discovery_client.close()
+            await _redis.aclose()
 
         body: dict = response.data if isinstance(response.data, dict) else {}
         if not response.is_success or body.get("code", 0) != 0:
