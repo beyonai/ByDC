@@ -172,7 +172,7 @@ class TestDataCloudDataBackendCompleteness:
         result = self._backend().query_ontologies_by_scene(
             loader, "any-base", "any-scene"
         )
-        assert result == {"data": [], "totalCount": 0}
+        assert result == {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # ── View CRUD ──
 

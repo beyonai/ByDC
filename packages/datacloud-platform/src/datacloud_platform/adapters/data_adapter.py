@@ -13,7 +13,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyQueryable
 
-from datacloud_platform.models import ObjectSummary, ParsedOwlContent, StoredFile
+from datacloud_platform.models import (
+    ObjectSummary,
+    ParsedOwlContent,
+    StoredFile,
+    ViewSummary,
+)
 from datacloud_platform.models.action import Action, ActionParam
 from datacloud_platform.models.datasource import Datasource, DbConnection
 from datacloud_platform.models.object_type import ObjectType
@@ -89,7 +94,7 @@ class DataCloudDataBackend:
         loader = OntologyLoader()
         if base_path.exists():
             loader.load_from_owl_resource_directory(str(base_path))
-        return loader  # type: ignore[no-any-return]
+        return loader  # type: ignore[return-value]
 
     def load_terms(
         self, _loader: OntologyQueryable, *, library_id: str = "PERSONAL_LIB"
@@ -110,7 +115,7 @@ class DataCloudDataBackend:
         from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
 
         _ = library_id  # consumed by concrete TermLoader subclass
-        return TermLoader()
+        return TermLoader()  # type: ignore[abstract]
 
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Create physical table for DYNAMIC_TABLE objects.
@@ -814,23 +819,24 @@ class DataCloudDataBackend:
         page_size: int = 20,
         keyword: str | None = None,
     ) -> dict[str, Any]:
-        """Query ontologies (objects) in a scene with pagination and keyword filter.
+        """Query ontologies (objects + views) in a scene with optional keyword filter.
 
-        Looks up the scene's member_object_codes from the local scene registry,
-        fetches matching ObjectSummary from *loader*._classes, applies optional
-        keyword filter, and paginates the result.
+        Looks up the scene's member_object_codes and member_view_codes from the
+        local scene registry, fetches matching ObjectSummary / ViewSummary from
+        *loader*, applies optional keyword filter, and returns both lists.
         """
+        _ = page, page_size  # pagination removed — objects/views returned as full lists
+
         # 1. Look up scene member codes
         scenes = self._ensure_scenes_loaded()
         scene = scenes.get(scene_id)
         if scene is None:
-            return {"data": [], "totalCount": 0}
+            return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
         member_obj_codes: list[str] = scene.get("member_object_codes", [])
-        if not member_obj_codes:
-            return {"data": [], "totalCount": 0}
+        member_view_codes: list[str] = scene.get("member_view_codes", [])
 
-        # 2. Convert member codes to ObjectSummary dicts via loader
+        # 2. Convert member codes to summaries via loader
         all_objects: list[dict[str, Any]] = []
         for code in member_obj_codes:
             cls = loader._classes.get(code)
@@ -838,7 +844,15 @@ class DataCloudDataBackend:
                 summary = self._to_summary(cls)
                 all_objects.append(dataclasses.asdict(summary))
 
-        # 3. Keyword filter (case-insensitive on object_code / object_name / description)
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        all_views: list[dict[str, Any]] = []
+        for code in member_view_codes:
+            view_data = raw_views.get(code)
+            if view_data is not None:
+                view_sum = self._to_view_summary(view_data, code)
+                all_views.append(dataclasses.asdict(view_sum))
+
+        # 3. Keyword filter (case-insensitive on name / code / description)
         if keyword:
             kw = keyword.strip().lower()
             all_objects = [
@@ -848,13 +862,21 @@ class DataCloudDataBackend:
                 or kw in (o.get("object_code", "") or "").lower()
                 or kw in (o.get("description", "") or "").lower()
             ]
+            all_views = [
+                v
+                for v in all_views
+                if kw in (v.get("view_name", "") or "").lower()
+                or kw in (v.get("view_code", "") or "").lower()
+                or kw in (v.get("description", "") or "").lower()
+            ]
 
-        # 4. Paginate
-        total = len(all_objects)
-        start = (page - 1) * page_size
-        page_data = all_objects[start : start + page_size]
+        # 4. Total count (objects + views)
+        total = len(all_objects) + len(all_views)
 
-        return {"data": page_data, "totalCount": total}
+        return {
+            "data": {"objects": all_objects, "views": all_views},
+            "totalCount": total,
+        }
 
     # ── Scene CRUD ────────────────────────────────────────────────────────
 
@@ -1143,6 +1165,17 @@ class DataCloudDataBackend:
             object_source=source_type,
             field_count=field_count,
             action_count=action_count,
+        )
+
+    @staticmethod
+    def _to_view_summary(view_data: dict[str, Any], view_code: str) -> ViewSummary:
+        """Convert a raw view dict to ViewSummary."""
+        normalized_codes = _normalize_object_codes(view_data.get("objects", []))
+        return ViewSummary(
+            view_code=view_data.get("view_id", view_code),
+            view_name=view_data.get("view_name", ""),
+            description=view_data.get("description", "") or "",
+            object_codes=normalized_codes,
         )
 
     @staticmethod

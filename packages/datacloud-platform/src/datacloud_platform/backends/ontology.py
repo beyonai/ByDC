@@ -20,7 +20,7 @@ class OntologyQueryable(Protocol):
 
     _classes: dict[str, Any]
     _relations: list[Any]
-    _views: dict[str, Any] | None
+    _views: dict[str, dict[str, Any]] | None
 
 
 class OntologyBackend(Protocol):

@@ -505,21 +505,33 @@ class FakeOntologyBackend:
         page_size: int = 20,
         keyword: str | None = None,
     ) -> dict[str, Any]:
-        """Return preset _ontologies_by_scene or empty result."""
-        _ = loader
-        result = self._ontologies_by_scene.get(scene_id, {"data": [], "totalCount": 0})
+        """Return preset _ontologies_by_scene or empty result.
+
+        Preset shape: {"data": {"objects": [...], "views": [...]}, "totalCount": N}
+        """
+        _ = loader, page, page_size
+        result = self._ontologies_by_scene.get(
+            scene_id, {"data": {"objects": [], "views": []}, "totalCount": 0}
+        )
         if keyword:
             kw = keyword.strip().lower()
-            data = [
+            data = result.get("data", {})
+            objects = [
                 o
-                for o in result.get("data", [])
-                if kw in o.get("ontologyName", "").lower()
-                or kw in o.get("ontologyCode", "").lower()
-                or kw in o.get("ontologyDesc", "").lower()
+                for o in data.get("objects", [])
+                if kw in (o.get("object_name", "") or "").lower()
+                or kw in (o.get("object_code", "") or "").lower()
+                or kw in (o.get("description", "") or "").lower()
             ]
-            total = len(data)
-            start = (page - 1) * page_size
-            return {"data": data[start : start + page_size], "totalCount": total}
+            views = [
+                v
+                for v in data.get("views", [])
+                if kw in (v.get("view_name", "") or "").lower()
+                or kw in (v.get("view_code", "") or "").lower()
+                or kw in (v.get("description", "") or "").lower()
+            ]
+            total = len(objects) + len(views)
+            return {"data": {"objects": objects, "views": views}, "totalCount": total}
         return result
 
     # -- Scene CRUD (fake) --

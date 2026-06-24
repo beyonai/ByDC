@@ -373,7 +373,7 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — pagination not supported."""
         _ = loader, base_id, scene_id, page, page_size, keyword
         logger.debug("Remote ontology: query_ontologies_by_scene not supported")
-        return {"data": [], "totalCount": 0}
+        return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # -- Scene CRUD (remote, read-only) --
 

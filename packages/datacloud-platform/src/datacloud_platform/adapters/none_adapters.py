@@ -219,7 +219,7 @@ class _NoopOntologyBackend:
     ) -> dict[str, Any]:
         """Return empty result."""
         _ = loader
-        return {"data": [], "totalCount": 0}
+        return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # -- Scene CRUD (no-op) --
 
