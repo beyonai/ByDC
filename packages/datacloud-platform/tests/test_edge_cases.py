@@ -151,7 +151,10 @@ class TestDataCloudDataBackendCompleteness:
         assert result == 0
 
     def test_get_scene_details_returns_empty(self) -> None:
-        result = self._backend().get_scene_details("any-base", "any-scene")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_scene_details(loader, "any-base", "any-scene")
         assert result == {
             "scene": None,
             "views": [],
@@ -163,17 +166,28 @@ class TestDataCloudDataBackendCompleteness:
         }
 
     def test_query_ontologies_by_scene_returns_empty(self) -> None:
-        result = self._backend().query_ontologies_by_scene("any-base", "any-scene")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().query_ontologies_by_scene(
+            loader, "any-base", "any-scene"
+        )
         assert result == {"data": [], "totalCount": 0}
 
     # ── View CRUD ──
 
     def test_get_views_returns_empty(self) -> None:
-        result = self._backend().get_views("any-base")
+        from unittest.mock import Mock
+
+        loader = Mock(_views={})
+        result = self._backend().get_views(loader, "any-base")
         assert result == []
 
     def test_get_view_detail_returns_none(self) -> None:
-        result = self._backend().get_view_detail("any-base", "vw-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_views={})
+        result = self._backend().get_view_detail(loader, "any-base", "vw-1")
         assert result is None
 
     def test_create_view_raises_permission_error(self) -> None:
@@ -191,11 +205,17 @@ class TestDataCloudDataBackendCompleteness:
     # ── Relation CRUD ──
 
     def test_get_relations_returns_empty(self) -> None:
-        result = self._backend().get_relations("any-base")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={}, _relations=[])
+        result = self._backend().get_relations(loader, "any-base")
         assert result == []
 
     def test_get_relation_detail_returns_none(self) -> None:
-        result = self._backend().get_relation_detail("any-base", "rel-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={}, _relations=[])
+        result = self._backend().get_relation_detail(loader, "any-base", "rel-1")
         assert result is None
 
     def test_create_relation_raises_permission_error(self) -> None:
@@ -213,11 +233,17 @@ class TestDataCloudDataBackendCompleteness:
     # ── Action CRUD ──
 
     def test_get_actions_returns_empty(self) -> None:
-        result = self._backend().get_actions("any-base", "obj-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_actions(loader, "any-base", "obj-1")
         assert result == []
 
     def test_get_action_detail_returns_none(self) -> None:
-        result = self._backend().get_action_detail("any-base", "obj-1", "act-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_action_detail(loader, "any-base", "obj-1", "act-1")
         assert result is None
 
     def test_create_action_raises_permission_error(self) -> None:
@@ -249,11 +275,17 @@ class TestDataCloudDataBackendCompleteness:
     # ── Datasource CRUD ──
 
     def test_get_datasources_returns_empty(self) -> None:
-        result = self._backend().get_datasources("any-base")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_datasources(loader, "any-base")
         assert result == []
 
     def test_get_datasource_detail_returns_none(self) -> None:
-        result = self._backend().get_datasource_detail("any-base", "db-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_datasource_detail(loader, "any-base", "db-1")
         assert result is None
 
     def test_create_datasource_raises_permission_error(self) -> None:
