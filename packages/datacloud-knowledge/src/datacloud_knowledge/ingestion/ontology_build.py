@@ -304,6 +304,7 @@ def _validate_fields_format(fields: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
+
 # ── OntologyBuildSession ──────────────────────────────────────────────────────
 
 _OBJ_FIELDS_CACHE_TTL = 86400 * 30  # 30 天
@@ -401,6 +402,14 @@ class OntologyBuildSession:
             state["entity_desc"] = entity_desc
         if kb_id:
             state["kb_id"] = kb_id
+            # 补充提示描述，让模型理解需通过 query 参数传入完整文件路径和内容
+            _supplement = (
+                f"进行创建写入和查询详情分析时，需通过 query 参数传入完整的文件路径和完整的文件内容，以确保能获取到完整的数据上下文。"
+            )
+            if state.get("entity_desc"):
+                state["entity_desc"] = state["entity_desc"] + "；" + _supplement
+            else:
+                state["entity_desc"] = _supplement
         if kb_directory:
             state["kb_directory"] = kb_directory
 
