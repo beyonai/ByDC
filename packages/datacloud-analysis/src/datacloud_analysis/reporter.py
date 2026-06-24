@@ -43,6 +43,9 @@ class ExecutionReporter(Protocol):
     def user_id(self) -> str: ...
 
     @property
+    def user_name(self) -> str: ...
+
+    @property
     def session_id(self) -> str: ...
 
     @property
@@ -73,10 +76,12 @@ class NoOpExecutionReporter:
         self,
         *,
         user_id: str = "",
+        user_name: str = "",
         session_id: str = "",
         extras: dict[str, Any] | None = None,
     ) -> None:
         self._user_id = user_id
+        self._user_name = user_name
         self._session_id = session_id
         self._extras = extras
         # message_id 为空串表示「无具体节点」，下游 emit 路径会跳过 parent_message_id 关联
@@ -89,6 +94,10 @@ class NoOpExecutionReporter:
     @property
     def user_id(self) -> str:
         return self._user_id
+
+    @property
+    def user_name(self) -> str:
+        return self._user_name
 
     @property
     def session_id(self) -> str:
