@@ -1,12 +1,12 @@
 ---
 name: structured-ontology-manager
-description: "你想让 Agent 查询或操作"你自己的数据"（不是系统内置数据），就用这个技能。它帮你用自然语言定义一张新的数据表，并基于这个数据表开发出本体对象，设定字段和字段含义，数据自动存入专属 SQLite；还能创建跨表的视图，让 Agent 同时查询多个对象。定义完成后挂载到当前数字员工，Agent 就能直接查询和操作你的数据了。适用场景：想让 Agent 管理自定义数据（如任务、拜访记录、自定义业务表）；不适用于系统内置的 CRM 对象（客户/商机/项目）。"
+description: "你想让 Agent 查询或操作"你自己的数据"（不是系统内置数据），就用这个技能。它帮你用自然语言定义一张新的数据表，并基于这个数据表开发出本体对象，设定字段和字段含义，数据自动存入专属 数据表；还能创建跨表的视图，让 Agent 同时查询多个对象。定义完成后挂载到当前数字员工，Agent 就能直接查询和操作你的数据了。适用场景：想让 Agent 管理自定义数据（如任务、拜访记录、自定义业务表）；不适用于系统内置的 CRM 对象（客户/商机/项目）。"
 allowed-tools: execute, read_file
 ---
 
 # 个人结构化本体管理
 
-通过自然语言对话，管理结构化本体对象和视图。支持创建、删除操作，对象数据持久化到 SQLite。
+通过自然语言对话，管理结构化本体对象和视图。支持创建、删除操作，对象数据持久化到 数据表。
 
 ## ⚠️ 执行规则（最高优先级，不得违反）
 
@@ -28,7 +28,7 @@ allowed-tools: execute, read_file
 | `REDIS_HOST` | ✅ 必需 | 无 | Redis 主机 |
 | `REDIS_PORT` | ✅ 必需 | `6379` | Redis 端口 |
 | `REDIS_PASSWORD` | ✅ 必需 | 无 | Redis 密码 |
-| `OPENCLAW_GATEWAY_TOKEN` | ❌ 可选 | 无 | SQLite 服务认证 |
+| `OPENCLAW_GATEWAY_TOKEN` | ❌ 可选 | 无 | 服务认证 |
 
 > 快速检查：`env | grep -E 'BEYOND_TOKEN|USER_CODE|BE_DOMAINNAME|REDIS_HOST'`
 

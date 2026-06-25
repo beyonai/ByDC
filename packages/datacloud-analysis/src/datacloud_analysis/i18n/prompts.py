@@ -24,13 +24,8 @@ def _bare_prefix(prefix: str) -> str:
 
 
 _SYSTEM_PROMPTS: dict[str, str] = {
-    "zh_CN": (
-        "## 工具使用规则\n"
-        "- 请用中文回答，表达简洁、准确。"
-    ),
-    "en_US": (
-        "- Please respond in concise and accurate English."
-    ),
+    "zh_CN": ("## 工具使用规则\n- 请用中文回答，表达简洁、准确。"),
+    "en_US": ("- Please respond in concise and accurate English."),
 }
 
 

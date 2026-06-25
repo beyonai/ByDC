@@ -1,6 +1,8 @@
 """Object / View / Relation / Action / Datasource CRUD routes (factory pattern).
 
-Shared prefix: ``/api/v1/ontologyBases/{owner_type}/{base_id}/scenes/{scene_id}``
+Resources are base-level — no longer scoped under a scene.
+
+Shared prefix: ``/api/v1/ontologyBases/{owner_type}/{base_id}``
 """
 
 # ruff: noqa: ARG001  # owner_type is a URL path parameter for routing, not consumed by services
@@ -17,6 +19,7 @@ from datacloud_platform.models.datasource import Datasource
 from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View
+from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -34,22 +37,31 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     router = APIRouter(prefix="/api/v1/ontologyBases", tags=["resources"])
 
     # ══════════════════════════════════════════════════
-    # Object CRUD
+    # Object CRUD (base-level)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/objects")
-    def list_objects(owner_type: str, base_id: str, scene_id: str) -> Any:
-        """List objects in a scene."""
+    @router.get("/{owner_type}/{base_id}/objects")
+    def list_objects(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """List objects in a base."""
         try:
-            return ok(data=platform.get_objects(base_id, scene_id))
+            return ok(data=platform.get_objects(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{code}")
-    def get_object(owner_type: str, base_id: str, scene_id: str, code: str) -> Any:
+    @router.get("/{owner_type}/{base_id}/objects/{code}")
+    def get_object(
+        owner_type: str,
+        base_id: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get object detail."""
         try:
-            obj = platform.get_object_detail(base_id, scene_id, code)
+            obj = platform.get_object_detail(base_id, code, cache_mode=cache_mode)
             if obj is None:
                 raise HTTPException(
                     status_code=404, detail=f"Object '{code}' not found"
@@ -58,15 +70,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/objects")
-    def create_object(
-        owner_type: str, base_id: str, scene_id: str, body: ObjectType
-    ) -> Any:
+    @router.post("/{owner_type}/{base_id}/objects")
+    def create_object(owner_type: str, base_id: str, body: ObjectType) -> Any:
         """Create an object (LOCAL only)."""
         try:
-            return ok(
-                data=platform.create_object(base_id, scene_id, body), message="created"
-            )
+            return ok(data=platform.create_object(base_id, body), message="created")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
         except ValueError as e:
@@ -74,13 +82,13 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{code}")
+    @router.put("/{owner_type}/{base_id}/objects/{code}")
     def update_object(
-        owner_type: str, base_id: str, scene_id: str, code: str, body: ObjectType
+        owner_type: str, base_id: str, code: str, body: ObjectType
     ) -> Any:
         """Update an object (LOCAL only)."""
         try:
-            platform.update_object(base_id, scene_id, code, body)
+            platform.update_object(base_id, code, body)
             return ok(data={"objectCode": code})
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -89,11 +97,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/objects/{code}")
-    def delete_object(owner_type: str, base_id: str, scene_id: str, code: str) -> Any:
+    @router.delete("/{owner_type}/{base_id}/objects/{code}")
+    def delete_object(owner_type: str, base_id: str, code: str) -> Any:
         """Delete an object (LOCAL only)."""
         try:
-            platform.delete_object(base_id, scene_id, code)
+            platform.delete_object(base_id, code)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -101,35 +109,42 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # View CRUD
+    # View CRUD (base-level)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/views")
-    def list_views(owner_type: str, base_id: str, scene_id: str) -> Any:
-        """List views in a scene."""
+    @router.get("/{owner_type}/{base_id}/views")
+    def list_views(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """List views in a base."""
         try:
-            return ok(data=platform.get_views(base_id, scene_id))
+            return ok(data=platform.get_views(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/views/{code}")
-    def get_view(owner_type: str, base_id: str, scene_id: str, code: str) -> Any:
+    @router.get("/{owner_type}/{base_id}/views/{code}")
+    def get_view(
+        owner_type: str,
+        base_id: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get view detail."""
         try:
-            view = platform.get_view_detail(base_id, scene_id, code)
+            view = platform.get_view_detail(base_id, code, cache_mode=cache_mode)
             if view is None:
                 raise HTTPException(status_code=404, detail=f"View '{code}' not found")
             return ok(data=view)
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/views")
-    def create_view(owner_type: str, base_id: str, scene_id: str, body: View) -> Any:
+    @router.post("/{owner_type}/{base_id}/views")
+    def create_view(owner_type: str, base_id: str, body: View) -> Any:
         """Create a view (LOCAL only)."""
         try:
-            return ok(
-                data=platform.create_view(base_id, scene_id, body), message="created"
-            )
+            return ok(data=platform.create_view(base_id, body), message="created")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
         except ValueError as e:
@@ -137,13 +152,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{owner_type}/{base_id}/scenes/{scene_id}/views/{code}")
-    def update_view(
-        owner_type: str, base_id: str, scene_id: str, code: str, body: View
-    ) -> Any:
+    @router.put("/{owner_type}/{base_id}/views/{code}")
+    def update_view(owner_type: str, base_id: str, code: str, body: View) -> Any:
         """Update a view (LOCAL only)."""
         try:
-            platform.update_view(base_id, scene_id, code, body)
+            platform.update_view(base_id, code, body)
             return ok(data={"viewCode": code})
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -152,11 +165,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/views/{code}")
-    def delete_view(owner_type: str, base_id: str, scene_id: str, code: str) -> Any:
+    @router.delete("/{owner_type}/{base_id}/views/{code}")
+    def delete_view(owner_type: str, base_id: str, code: str) -> Any:
         """Delete a view (LOCAL only)."""
         try:
-            platform.delete_view(base_id, scene_id, code)
+            platform.delete_view(base_id, code)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -164,22 +177,31 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # Relation CRUD
+    # Relation CRUD (base-level)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/relations")
-    def list_relations(owner_type: str, base_id: str, scene_id: str) -> Any:
-        """List relations in a scene."""
+    @router.get("/{owner_type}/{base_id}/relations")
+    def list_relations(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """List relations in a base."""
         try:
-            return ok(data=platform.get_relations(base_id, scene_id))
+            return ok(data=platform.get_relations(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/relations/{code}")
-    def get_relation(owner_type: str, base_id: str, scene_id: str, code: str) -> Any:
+    @router.get("/{owner_type}/{base_id}/relations/{code}")
+    def get_relation(
+        owner_type: str,
+        base_id: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get relation detail."""
         try:
-            rel = platform.get_relation_detail(base_id, scene_id, code)
+            rel = platform.get_relation_detail(base_id, code, cache_mode=cache_mode)
             if rel is None:
                 raise HTTPException(
                     status_code=404, detail=f"Relation '{code}' not found"
@@ -188,14 +210,12 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/relations")
-    def create_relation(
-        owner_type: str, base_id: str, scene_id: str, body: Relation
-    ) -> Any:
+    @router.post("/{owner_type}/{base_id}/relations")
+    def create_relation(owner_type: str, base_id: str, body: Relation) -> Any:
         """Create a relation (LOCAL only)."""
         try:
             return ok(
-                data=platform.create_relation(base_id, scene_id, body),
+                data=platform.create_relation(base_id, body),
                 message="created",
             )
         except PermissionError as e:
@@ -205,13 +225,13 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{owner_type}/{base_id}/scenes/{scene_id}/relations/{code}")
+    @router.put("/{owner_type}/{base_id}/relations/{code}")
     def update_relation(
-        owner_type: str, base_id: str, scene_id: str, code: str, body: Relation
+        owner_type: str, base_id: str, code: str, body: Relation
     ) -> Any:
         """Update a relation (LOCAL only)."""
         try:
-            platform.update_relation(base_id, scene_id, code, body)
+            platform.update_relation(base_id, code, body)
             return ok(data={"relationCode": code})
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -220,11 +240,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/relations/{code}")
-    def delete_relation(owner_type: str, base_id: str, scene_id: str, code: str) -> Any:
+    @router.delete("/{owner_type}/{base_id}/relations/{code}")
+    def delete_relation(owner_type: str, base_id: str, code: str) -> Any:
         """Delete a relation (LOCAL only)."""
         try:
-            platform.delete_relation(base_id, scene_id, code)
+            platform.delete_relation(base_id, code)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -232,22 +252,31 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # Datasource CRUD
+    # Datasource CRUD (base-level)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/datasources")
-    def list_datasources(owner_type: str, base_id: str, scene_id: str) -> Any:
-        """List datasources in a scene."""
+    @router.get("/{owner_type}/{base_id}/datasources")
+    def list_datasources(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """List datasources in a base."""
         try:
-            return ok(data=platform.get_datasources(base_id, scene_id))
+            return ok(data=platform.get_datasources(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/datasources/{db_id}")
-    def get_datasource(owner_type: str, base_id: str, scene_id: str, db_id: str) -> Any:
+    @router.get("/{owner_type}/{base_id}/datasources/{db_id}")
+    def get_datasource(
+        owner_type: str,
+        base_id: str,
+        db_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get datasource detail."""
         try:
-            ds = platform.get_datasource_detail(base_id, scene_id, db_id)
+            ds = platform.get_datasource_detail(base_id, db_id, cache_mode=cache_mode)
             if ds is None:
                 raise HTTPException(
                     status_code=404, detail=f"Datasource '{db_id}' not found"
@@ -256,14 +285,12 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/datasources")
-    def create_datasource(
-        owner_type: str, base_id: str, scene_id: str, body: Datasource
-    ) -> Any:
+    @router.post("/{owner_type}/{base_id}/datasources")
+    def create_datasource(owner_type: str, base_id: str, body: Datasource) -> Any:
         """Create a datasource (LOCAL only)."""
         try:
             return ok(
-                data=platform.create_datasource(base_id, scene_id, body),
+                data=platform.create_datasource(base_id, body),
                 message="created",
             )
         except PermissionError as e:
@@ -273,13 +300,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/datasources/{db_id}")
-    def delete_datasource(
-        owner_type: str, base_id: str, scene_id: str, db_id: str
-    ) -> Any:
+    @router.delete("/{owner_type}/{base_id}/datasources/{db_id}")
+    def delete_datasource(owner_type: str, base_id: str, db_id: str) -> Any:
         """Delete a datasource (LOCAL only)."""
         try:
-            platform.delete_datasource(base_id, scene_id, db_id)
+            platform.delete_datasource(base_id, db_id)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -287,30 +312,37 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # Action CRUD
+    # Action CRUD (base-level, under object)
     # ══════════════════════════════════════════════════
 
-    @router.get(
-        "/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions"
-    )
+    @router.get("/{owner_type}/{base_id}/objects/{object_code}/actions")
     def list_actions(
-        owner_type: str, base_id: str, scene_id: str, object_code: str
+        owner_type: str,
+        base_id: str,
+        object_code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List actions on an object."""
         try:
-            return ok(data=platform.get_actions(base_id, scene_id, object_code))
+            return ok(
+                data=platform.get_actions(base_id, object_code, cache_mode=cache_mode)
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get(
-        "/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions/{code}"
-    )
+    @router.get("/{owner_type}/{base_id}/objects/{object_code}/actions/{code}")
     def get_action(
-        owner_type: str, base_id: str, scene_id: str, object_code: str, code: str
+        owner_type: str,
+        base_id: str,
+        object_code: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get action detail."""
         try:
-            action = platform.get_action_detail(base_id, scene_id, object_code, code)
+            action = platform.get_action_detail(
+                base_id, object_code, code, cache_mode=cache_mode
+            )
             if action is None:
                 raise HTTPException(
                     status_code=404, detail=f"Action '{code}' not found"
@@ -319,20 +351,17 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post(
-        "/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions"
-    )
+    @router.post("/{owner_type}/{base_id}/objects/{object_code}/actions")
     def create_action(
         owner_type: str,
         base_id: str,
-        scene_id: str,
         object_code: str,
         body: Action,
     ) -> Any:
         """Create an action on an object (LOCAL only)."""
         try:
             return ok(
-                data=platform.create_action(base_id, scene_id, object_code, body),
+                data=platform.create_action(base_id, object_code, body),
                 message="created",
             )
         except PermissionError as e:
@@ -342,20 +371,17 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put(
-        "/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions/{code}"
-    )
+    @router.put("/{owner_type}/{base_id}/objects/{object_code}/actions/{code}")
     def update_action(
         owner_type: str,
         base_id: str,
-        scene_id: str,
         object_code: str,
         code: str,
         body: Action,
     ) -> Any:
         """Update an action on an object (LOCAL only)."""
         try:
-            platform.update_action(base_id, scene_id, object_code, code, body)
+            platform.update_action(base_id, object_code, code, body)
             return ok(data={"actionCode": code})
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -364,15 +390,13 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete(
-        "/{owner_type}/{base_id}/scenes/{scene_id}/objects/{object_code}/actions/{code}"
-    )
+    @router.delete("/{owner_type}/{base_id}/objects/{object_code}/actions/{code}")
     def delete_action(
-        owner_type: str, base_id: str, scene_id: str, object_code: str, code: str
+        owner_type: str, base_id: str, object_code: str, code: str
     ) -> Any:
         """Delete an action from an object (LOCAL only)."""
         try:
-            platform.delete_action(base_id, scene_id, object_code, code)
+            platform.delete_action(base_id, object_code, code)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e

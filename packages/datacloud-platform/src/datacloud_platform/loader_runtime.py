@@ -216,7 +216,7 @@ def build_action_routes(loader: OntologyLoader) -> dict[str, ActionRouteRef]:
                     ),
                 )
 
-    for view_id, scene in getattr(loader, "_scenes", {}).items():
+    for view_id, scene in getattr(loader, "_views", {}).items():
         for action in scene.get("_virtual_actions", []):
             action_code = getattr(action, "action_code", "")
             if not action_code:

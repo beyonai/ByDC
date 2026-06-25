@@ -1,14 +1,15 @@
 """_trim_messages_window 单元测试 — TDD 红阶段，先写测试，验证会失败。"""
+
 from __future__ import annotations
+
 import os
 import sys
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Mock datacloud_platform.platform.get_platform() 以避免 OntologyBase 初始化失败
-sys.modules['datacloud_platform.platform'] = MagicMock()
+sys.modules["datacloud_platform.platform"] = MagicMock()
 
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 
 class TestResolveTrimBudget:
@@ -18,24 +19,28 @@ class TestResolveTrimBudget:
     def test_fallback_when_env_empty(self):
         """Redis 无 maxContentToken → 兜底到 128000，预算 = 128000 * 0.75 = 96000。"""
         from datacloud_analysis.orchestration.execution.react_loop import _resolve_trim_budget
+
         assert _resolve_trim_budget() == 96000
 
     @patch.dict(os.environ, {"DATACLOUD_LLM_MAX_CONTENT_TOKEN": "200000"})
     def test_calculate_from_redis_200k(self):
         """Redis maxContentToken=200000 → 预算 = 200000 * 0.75 = 150000。"""
         from datacloud_analysis.orchestration.execution.react_loop import _resolve_trim_budget
+
         assert _resolve_trim_budget() == 150000
 
     @patch.dict(os.environ, {"DATACLOUD_LLM_MAX_CONTENT_TOKEN": "128000"})
     def test_calculate_from_redis_128k(self):
         """Redis maxContentToken=128000 → 预算 = 128000 * 0.75 = 96000。"""
         from datacloud_analysis.orchestration.execution.react_loop import _resolve_trim_budget
+
         assert _resolve_trim_budget() == 96000
 
     @patch.dict(os.environ, {"DATACLOUD_LLM_MAX_CONTENT_TOKEN": "invalid"})
     def test_fallback_when_env_invalid(self):
         """Redis 值非法 → 兜底到 128000 * 0.75。"""
         from datacloud_analysis.orchestration.execution.react_loop import _resolve_trim_budget
+
         assert _resolve_trim_budget() == 96000
 
 
@@ -46,6 +51,7 @@ class TestTrimMessagesWindow:
     def test_short_history_not_trimmed(self):
         """短历史（总 token < 预算）→ 原样返回（含 system）。"""
         from datacloud_analysis.orchestration.execution.react_loop import _trim_messages_window
+
         messages = [
             SystemMessage(content="System prompt here"),
             HumanMessage(content="User query"),
@@ -62,19 +68,29 @@ class TestTrimMessagesWindow:
     def test_long_history_trimmed_by_token(self):
         """长历史（总 token > 预算）→ 裁剪到预算内，保留 system + 最近若干轮。"""
         from datacloud_analysis.orchestration.execution.react_loop import _trim_messages_window
+
         messages = [
             SystemMessage(content="System prompt"),
             HumanMessage(content="Initial query"),
         ]
         # 模拟 30 轮对话（每轮 AI + Tool，内容足够长）
         for i in range(30):
-            messages.append(AIMessage(content=f"Round {i}: " + "x" * 2000, tool_calls=[{"id": f"call_{i}", "name": "tool", "args": {}}]))
-            messages.append(ToolMessage(content=f"Round {i} result: " + "y" * 2000, tool_call_id=f"call_{i}"))
+            messages.append(
+                AIMessage(
+                    content=f"Round {i}: " + "x" * 2000,
+                    tool_calls=[{"id": f"call_{i}", "name": "tool", "args": {}}],
+                )
+            )
+            messages.append(
+                ToolMessage(content=f"Round {i} result: " + "y" * 2000, tool_call_id=f"call_{i}")
+            )
 
         result = _trim_messages_window(messages)
         # 验证核心行为：1) system 保留，2) 发生裁剪（条数减少），3) 返回值合法（不抛异常）
         assert isinstance(result[0], SystemMessage), "System message should be retained"
-        assert len(result) < len(messages), f"Expected trim with 10k budget, but len(result)={len(result)} >= len(messages)={len(messages)}"
+        assert len(result) < len(messages), (
+            f"Expected trim with 10k budget, but len(result)={len(result)} >= len(messages)={len(messages)}"
+        )
         # 极小预算下可能只剩 system，这也是合法行为（说明按 token 裁剪生效）
         assert len(result) >= 1, "At least system should remain"
 
@@ -86,10 +102,15 @@ class TestTrimMessagesWindow:
         → 官方 trim_messages 的 start_on='human' 保证合法序列
         """
         from datacloud_analysis.orchestration.execution.react_loop import _trim_messages_window
+
         messages = [SystemMessage(content="Sys")]
         # 前 20 轮
         for i in range(20):
-            messages.append(AIMessage(content="AI" * 200, tool_calls=[{"id": f"call_{i}", "name": "foo", "args": {}}]))
+            messages.append(
+                AIMessage(
+                    content="AI" * 200, tool_calls=[{"id": f"call_{i}", "name": "foo", "args": {}}]
+                )
+            )
             messages.append(ToolMessage(content="tool result" * 100, tool_call_id=f"call_{i}"))
         messages.append(HumanMessage(content="Final question"))
 
@@ -111,6 +132,7 @@ class TestTrimMessagesWindow:
     def test_not_end_with_dangling_tool_call(self):
         """不以悬空 tool_call 的 AIMessage 结尾（有 tool_calls 但无对应 ToolMessage）。"""
         from datacloud_analysis.orchestration.execution.react_loop import _trim_messages_window
+
         messages = [
             SystemMessage(content="Sys"),
             HumanMessage(content="Q"),
@@ -128,6 +150,7 @@ class TestTrimMessagesWindow:
     def test_normalize_quoted_tool_call_ids(self):
         """tool_call_id 带单引号 → 规范为无引号（glm 模型兼容）。"""
         from datacloud_analysis.orchestration.execution.react_loop import _trim_messages_window
+
         messages = [
             SystemMessage(content="Sys"),
             HumanMessage(content="Q"),
@@ -149,13 +172,16 @@ class TestTrimMessagesWindow:
         所以保留手写 _drop_orphan_ai_messages 二次清洗。
         """
         from datacloud_analysis.orchestration.execution.react_loop import _trim_messages_window
+
         messages = [
             SystemMessage(content="Sys"),
             HumanMessage(content="Q1"),
             AIMessage(content="AI1"),
             ToolMessage(content="T1", tool_call_id="c1"),
             # 孤立 AIMessage：有 tool_calls 但后面紧跟另一个 AIMessage（非 ToolMessage）
-            AIMessage(content="Orphan", tool_calls=[{"id": "orphan_id", "name": "foo", "args": {}}]),
+            AIMessage(
+                content="Orphan", tool_calls=[{"id": "orphan_id", "name": "foo", "args": {}}]
+            ),
             AIMessage(content="AI2"),  # 无 tool_calls
         ]
         result = _trim_messages_window(messages)

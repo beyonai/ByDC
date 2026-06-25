@@ -1,10 +1,10 @@
 # 列出关系
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/relations
+GET /api/v1/ontologyBases/{ownerType}/{baseId}/relations
 ```
 
-列出场景下的关系列表。支持按源对象或目标对象过滤。
+列出本体库下的关系列表。支持按源对象或目标对象过滤。
 
 ---
 
@@ -14,7 +14,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/relations
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
-| `sceneId` | string | 场景 ID。获取方式见 [queryScenes](../Scene/queryScenes.md)。 |
 
 ---
 
@@ -94,7 +93,7 @@ ListRelationsResponse
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/relations"
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/relations"
 ```
 
 #### Response

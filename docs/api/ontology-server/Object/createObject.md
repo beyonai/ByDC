@@ -1,7 +1,7 @@
 # 创建对象类型
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects
+POST /api/v1/ontologyBases/{ownerType}/{baseId}/objects
 ```
 
 创建对象类型。仅 LOCAL 可用，REMOTE ontology base 返回 403。
@@ -14,7 +14,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
-| `sceneId` | string | 场景 ID。获取方式见 [queryScenes](../Scene/queryScenes.md)。 |
 
 ---
 
@@ -140,7 +139,7 @@ CreateObjectResponse
 ```bash
 curl -X POST \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/objects" \
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects" \
   -d '{
     "objectCode": "by_customer",
     "objectName": "客户信息表",

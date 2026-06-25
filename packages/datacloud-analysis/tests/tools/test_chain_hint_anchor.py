@@ -4,17 +4,14 @@
 1. hook_aware_tool_node after_hook：activate_anchor 返回后注入全量 chain hint 到 messages
 2. llm_call_node：只注入 delta（新解锁工具），不重复全量
 """
+
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from datacloud_analysis.tools.param_link_graph import ParamLinkGraph
 from langchain_core.messages import HumanMessage
 
-from datacloud_analysis.tools.param_link_graph import ParamLinkGraph
-
-
 # ── 辅助构造 ──────────────────────────────────────────────────────────────────
+
 
 def _make_plg_with_links() -> ParamLinkGraph:
     """构造有 get_spans→get_tool_detail 串联的 ParamLinkGraph。"""
@@ -59,6 +56,7 @@ def _make_plg_with_links() -> ParamLinkGraph:
 
 # ── ParamLinkGraph.get_full_anchor_hint ───────────────────────────────────────
 
+
 class TestGetFullAnchorHint:
     """5.4 新增方法：get_full_anchor_hint(anchor_object_code) 返回该锚点下所有工具的完整 hint。"""
 
@@ -81,11 +79,15 @@ class TestGetFullAnchorHint:
 
 # ── hook_aware_tool_node：锚点激活时注入全量 hint ─────────────────────────────
 
+
 class TestAnchorHintInjectionOnActivate:
     """activate_anchor 工具返回后，after_hook 应将全量 chain hint 写入 messages。"""
 
-    def _make_state(self, tool_name: str, anchor_result: dict, chain_hint_anchor: str | None = None) -> dict:
+    def _make_state(
+        self, tool_name: str, anchor_result: dict, chain_hint_anchor: str | None = None
+    ) -> dict:
         from langchain_core.messages import AIMessage, ToolMessage
+
         return {
             "messages": [
                 AIMessage(content="", tool_calls=[{"id": "tc1", "name": tool_name, "args": {}}]),
@@ -106,6 +108,7 @@ class TestAnchorHintInjectionOnActivate:
         from datacloud_analysis.tools.param_link_graph import (
             _build_anchor_chain_hint_update,
         )
+
         plg = _make_plg_with_links()
         result = _build_anchor_chain_hint_update(
             tool_name="activate_anchor",
@@ -125,6 +128,7 @@ class TestAnchorHintInjectionOnActivate:
         from datacloud_analysis.tools.param_link_graph import (
             _build_anchor_chain_hint_update,
         )
+
         plg = _make_plg_with_links()
         result = _build_anchor_chain_hint_update(
             tool_name="activate_anchor",
@@ -139,6 +143,7 @@ class TestAnchorHintInjectionOnActivate:
         from datacloud_analysis.tools.param_link_graph import (
             _build_anchor_chain_hint_update,
         )
+
         plg = _make_plg_with_links()
         result = _build_anchor_chain_hint_update(
             tool_name="get_spans",
@@ -151,6 +156,7 @@ class TestAnchorHintInjectionOnActivate:
 
 # ── llm_call_node：每轮只注入 delta ───────────────────────────────────────────
 
+
 class TestDeltaHintInjection:
     """llm_call_node 每轮只注入新解锁工具的 hint（delta），不重复全量。"""
 
@@ -159,6 +165,7 @@ class TestDeltaHintInjection:
         from datacloud_analysis.tools.param_link_graph import (
             _build_delta_chain_hint,
         )
+
         plg = _make_plg_with_links()
         hint = _build_delta_chain_hint(
             plg=plg,
@@ -174,6 +181,7 @@ class TestDeltaHintInjection:
         from datacloud_analysis.tools.param_link_graph import (
             _build_delta_chain_hint,
         )
+
         plg = _make_plg_with_links()
         hint = _build_delta_chain_hint(
             plg=plg,
@@ -187,6 +195,7 @@ class TestDeltaHintInjection:
         from datacloud_analysis.tools.param_link_graph import (
             _build_delta_chain_hint,
         )
+
         hint = _build_delta_chain_hint(
             plg=None,
             prev_active=[],

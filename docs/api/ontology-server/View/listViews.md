@@ -1,10 +1,10 @@
 # 列出视图
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/views
+GET /api/v1/ontologyBases/{ownerType}/{baseId}/views
 ```
 
-列出场景下的视图摘要列表。
+列出本体库下的视图摘要列表。
 
 ---
 
@@ -14,7 +14,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/views
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 
 ---
 
@@ -59,7 +58,7 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/views
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/views"
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/views"
 ```
 
 #### Response

@@ -21,7 +21,7 @@ class ObjectType(BaseModel):
     concept_type: str | None = Field(default=None, alias="conceptType")
     object_type: str | None = Field(default=None, alias="objectType")
     domain_type: str | None = Field(default=None, alias="domainType")
-    scene_id: str | None = Field(default=None, alias="sceneId")
+    base_id: str = Field(alias="baseId")
     source_config: dict[str, Any] | None = Field(default=None, alias="sourceConfig")
     table_name: str | None = Field(default=None, alias="tableName")
     properties: list[Property] = Field(default_factory=list, alias="properties")

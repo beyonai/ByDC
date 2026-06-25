@@ -1,7 +1,7 @@
 # 删除关系
 
 ```
-DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/relations/{relationCode}
+DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/relations/{relationCode}
 ```
 
 删除关系。仅 LOCAL 可用。如有字段引用此关系（`relation_ref`）则拒绝删除。
@@ -14,7 +14,6 @@ DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/relations/{re
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 | `relationCode` | string | 关系编码。 |
 
 ---

@@ -17,6 +17,7 @@ from datacloud_platform import (
     OntologyBaseEntry,
     OntologyBaseRegistry,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.api.server import create_app
 from datacloud_platform.backends import registry as _registry
 from datacloud_platform.backends.presets import register_preset
@@ -72,7 +73,7 @@ def fakes() -> dict[str, Any]:
 
 
 @pytest.fixture
-def client(fakes: dict[str, Any]) -> TestClient:
+def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
     """Build a TestClient backed entirely by fake backends."""
     onto_local = fakes["onto_local"]
     onto_remote = fakes["onto_remote"]
@@ -104,7 +105,7 @@ def client(fakes: dict[str, Any]) -> TestClient:
         },
     )
 
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id=LOCAL,
@@ -168,7 +169,7 @@ class TestOntologyBaseRoutes:
         assert REMOTE in base_ids
 
     def test_create_base(self, client: TestClient) -> None:
-        body = {"baseId": "new-base", "displayName": "新库"}
+        body = {"baseId": "new-base", "displayName": "新库", "description": "描述"}
         resp = client.post("/api/v1/ontologyBases", json=body)
         assert resp.status_code == 200
         data = resp.json()
@@ -181,15 +182,61 @@ class TestOntologyBaseRoutes:
         base_ids = [b["base_id"] for b in resp2.json()["data"]]
         assert "new-base" in base_ids
 
-    def test_create_base_duplicate(self, client: TestClient) -> None:
-        body = {"baseId": LOCAL, "displayName": "重复"}
+    def test_create_without_baseid_generates_snowflake(
+        self, client: TestClient
+    ) -> None:
+        """baseId not provided → snowflake auto-generated (16-char hex)."""
+        body = {"displayName": "雪花库", "description": "自动ID"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        base_id: str = data["data"]["base_id"]
+        assert len(base_id) == 16
+        assert set(base_id).issubset("0123456789abcdef")
+        assert data["data"]["display_name"] == "雪花库"
+        assert data["data"]["description"] == "自动ID"
+
+    def test_create_with_custom_baseid(self, client: TestClient) -> None:
+        """Valid custom baseId is used as-is."""
+        body = {"baseId": "my-custom_id", "displayName": "自定义", "description": "d"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 200
+        assert resp.json()["data"]["base_id"] == "my-custom_id"
+
+    def test_create_duplicate_baseid_returns_409(self, client: TestClient) -> None:
+        body = {"baseId": LOCAL, "displayName": "重复", "description": "d"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 409
+
+    def test_create_invalid_baseid_uppercase(self, client: TestClient) -> None:
+        body = {"baseId": "Invalid", "displayName": "大写", "description": "d"}
         resp = client.post("/api/v1/ontologyBases", json=body)
         assert resp.status_code == 400
+
+    def test_create_invalid_baseid_too_long(self, client: TestClient) -> None:
+        body = {
+            "baseId": "a" * 17,
+            "displayName": "太长",
+            "description": "d",
+        }
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 400
+
+    def test_create_invalid_baseid_non_alpha_first(self, client: TestClient) -> None:
+        body = {"baseId": "1badstart", "displayName": "数字开头", "description": "d"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 400
+
+    def test_create_missing_description(self, client: TestClient) -> None:
+        body = {"displayName": "缺描述"}
+        resp = client.post("/api/v1/ontologyBases", json=body)
+        assert resp.status_code == 422
 
     def test_delete_base(self, client: TestClient) -> None:
         # First create a disposable base
         client.post(
-            "/api/v1/ontologyBases", json={"baseId": "del-base", "displayName": "待删"}
+            "/api/v1/ontologyBases",
+            json={"baseId": "del-base", "displayName": "待删", "description": "d"},
         )
         resp = client.delete(f"/api/v1/ontologyBases/{OWNER_TYPE}/del-base")
         assert resp.status_code == 200
@@ -198,6 +245,43 @@ class TestOntologyBaseRoutes:
 
     def test_delete_nonexistent_base(self, client: TestClient) -> None:
         resp = client.delete(f"/api/v1/ontologyBases/{OWNER_TYPE}/no-such-base")
+        assert resp.status_code == 404
+
+    def test_update_base_display_name(self, client: TestClient) -> None:
+        body = {"displayName": "新名字"}
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "updated"
+        assert data["data"]["display_name"] == "新名字"
+        # Other fields unchanged
+        assert data["data"]["base_id"] == LOCAL
+
+    def test_update_base_multiple_fields(self, client: TestClient) -> None:
+        body = {
+            "displayName": "多字段",
+            "description": "新描述",
+            "timeoutSec": 60,
+        }
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["data"]["display_name"] == "多字段"
+        assert data["data"]["description"] == "新描述"
+        assert data["data"]["timeout_sec"] == 60
+
+    def test_update_base_readonly_field_ignored(self, client: TestClient) -> None:
+        """Passing baseId in PUT body has no effect."""
+        body = {"baseId": "hacked", "displayName": "改名"}
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}", json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["data"]["base_id"] == LOCAL  # unchanged
+        assert data["data"]["display_name"] == "改名"
+
+    def test_update_nonexistent_base(self, client: TestClient) -> None:
+        body = {"displayName": "不存在"}
+        resp = client.put(f"/api/v1/ontologyBases/{OWNER_TYPE}/no-such", json=body)
         assert resp.status_code == 404
 
 
@@ -276,10 +360,13 @@ class TestSceneRoutes:
     ) -> None:
         onto = fakes["onto_local"]
         onto._ontologies_by_scene[SCENE] = {
-            "data": [
-                {"ontologyCode": "obj1", "ontologyName": "对象1"},
-                {"ontologyCode": "obj2", "ontologyName": "对象2"},
-            ],
+            "data": {
+                "objects": [
+                    {"object_code": "obj1", "object_name": "对象1"},
+                    {"object_code": "obj2", "object_name": "对象2"},
+                ],
+                "views": [],
+            },
             "totalCount": 2,
         }
 
@@ -289,7 +376,8 @@ class TestSceneRoutes:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert len(data["data"]) == 2
+        assert len(data["data"]["objects"]) == 2
+        assert len(data["data"]["views"]) == 0
         assert data["totalCount"] == 2
 
     def test_query_ontologies_with_keyword(
@@ -297,10 +385,13 @@ class TestSceneRoutes:
     ) -> None:
         onto = fakes["onto_local"]
         onto._ontologies_by_scene[SCENE] = {
-            "data": [
-                {"ontologyCode": "obj1", "ontologyName": "客户对象"},
-                {"ontologyCode": "obj2", "ontologyName": "订单对象"},
-            ],
+            "data": {
+                "objects": [
+                    {"object_code": "obj1", "object_name": "客户对象"},
+                    {"object_code": "obj2", "object_name": "订单对象"},
+                ],
+                "views": [],
+            },
             "totalCount": 2,
         }
 
@@ -309,7 +400,8 @@ class TestSceneRoutes:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["data"]) == 1
+        assert len(data["data"]["objects"]) == 1
+        assert len(data["data"]["views"]) == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -327,14 +419,13 @@ class TestObjectRoutes:
             "objectCode": code,
             "objectName": name,
             "objectDesc": "测试描述",
+            "baseId": "local-base",
             "properties": [],
             "actions": [],
         }
 
     def test_list_objects_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -345,7 +436,7 @@ class TestObjectRoutes:
         body = self._object_body()
 
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects",
             json=body,
         )
         assert resp.status_code == 200
@@ -357,14 +448,14 @@ class TestObjectRoutes:
     def test_create_object_remote_forbidden(self, client: TestClient) -> None:
         body = self._object_body()
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/scenes/{SCENE}/objects",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/objects",
             json=body,
         )
         assert resp.status_code == 403
 
     def test_get_object_not_found(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/nonexistent"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/nonexistent"
         )
         assert resp.status_code == 404
 
@@ -374,14 +465,14 @@ class TestObjectRoutes:
 
         # Create first
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects",
             json=body,
         )
 
         # Update
         updated = self._object_body(code="obj-upd", name="新名称")
         resp = client.put(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj-upd",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-upd",
             json=updated,
         )
         assert resp.status_code == 200
@@ -390,7 +481,7 @@ class TestObjectRoutes:
     def test_update_object_remote_forbidden(self, client: TestClient) -> None:
         body = self._object_body(code="obj-remote", name="远程")
         resp = client.put(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/scenes/{SCENE}/objects/obj-remote",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/objects/obj-remote",
             json=body,
         )
         assert resp.status_code == 403
@@ -400,19 +491,19 @@ class TestObjectRoutes:
         body = self._object_body(code="obj-del", name="待删")
 
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects",
             json=body,
         )
 
         resp = client.delete(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj-del"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-del"
         )
         assert resp.status_code == 200
         assert len(onto._deleted_objects) == 1
 
     def test_delete_object_remote_forbidden(self, client: TestClient) -> None:
         resp = client.delete(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/scenes/{SCENE}/objects/obj-remote"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/objects/obj-remote"
         )
         assert resp.status_code == 403
 
@@ -437,9 +528,7 @@ class TestViewRoutes:
         }
 
     def test_list_views_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -450,7 +539,7 @@ class TestViewRoutes:
         body = self._view_body()
 
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views",
             json=body,
         )
         assert resp.status_code == 200
@@ -465,9 +554,7 @@ class TestViewRoutes:
         onto = fakes["onto_local"]
         onto._views[SCENE] = [{"viewCode": "v1", "viewName": "视图1"}]
 
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["data"]) == 1
@@ -475,7 +562,7 @@ class TestViewRoutes:
 
     def test_get_view_not_found(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views/nonexistent"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views/nonexistent"
         )
         assert resp.status_code == 404
 
@@ -483,9 +570,7 @@ class TestViewRoutes:
         onto = fakes["onto_local"]
         onto._views[SCENE] = [{"viewCode": "v1", "viewName": "视图1"}]
 
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views/v1"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views/v1")
         assert resp.status_code == 200
         data = resp.json()
         assert data["data"]["viewCode"] == "v1"
@@ -494,13 +579,13 @@ class TestViewRoutes:
         onto = fakes["onto_local"]
         body = self._view_body(code="v-upd")
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views",
             json=body,
         )
 
         updated = self._view_body(code="v-upd", name="更新后")
         resp = client.put(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views/v-upd",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views/v-upd",
             json=updated,
         )
         assert resp.status_code == 200
@@ -510,20 +595,18 @@ class TestViewRoutes:
         onto = fakes["onto_local"]
         body = self._view_body(code="v-del")
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views",
             json=body,
         )
 
-        resp = client.delete(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views/v-del"
-        )
+        resp = client.delete(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views/v-del")
         assert resp.status_code == 200
         assert len(onto._deleted_views) == 1
 
     def test_create_view_remote_forbidden(self, client: TestClient) -> None:
         body = self._view_body()
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/scenes/{SCENE}/views",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/views",
             json=body,
         )
         assert resp.status_code == 403
@@ -546,9 +629,7 @@ class TestRelationRoutes:
         }
 
     def test_list_relations_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -559,7 +640,7 @@ class TestRelationRoutes:
         body = self._rel_body()
 
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations",
             json=body,
         )
         assert resp.status_code == 200
@@ -574,9 +655,7 @@ class TestRelationRoutes:
         onto = fakes["onto_local"]
         onto._relations[SCENE] = [{"relationCode": "r1", "relationName": "关系1"}]
 
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["data"]) == 1
@@ -584,7 +663,7 @@ class TestRelationRoutes:
 
     def test_get_relation_not_found(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations/nonexistent"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations/nonexistent"
         )
         assert resp.status_code == 404
 
@@ -594,9 +673,7 @@ class TestRelationRoutes:
         onto = fakes["onto_local"]
         onto._relations[SCENE] = [{"relationCode": "r1", "relationName": "关系1"}]
 
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations/r1"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations/r1")
         assert resp.status_code == 200
         data = resp.json()
         assert data["data"]["relationCode"] == "r1"
@@ -605,13 +682,13 @@ class TestRelationRoutes:
         onto = fakes["onto_local"]
         body = self._rel_body(code="r-upd")
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations",
             json=body,
         )
 
         updated = self._rel_body(code="r-upd")
         resp = client.put(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations/r-upd",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations/r-upd",
             json=updated,
         )
         assert resp.status_code == 200
@@ -621,12 +698,12 @@ class TestRelationRoutes:
         onto = fakes["onto_local"]
         body = self._rel_body(code="r-del")
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations",
             json=body,
         )
 
         resp = client.delete(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations/r-del"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations/r-del"
         )
         assert resp.status_code == 200
         assert len(onto._deleted_relations) == 1
@@ -634,7 +711,7 @@ class TestRelationRoutes:
     def test_create_relation_remote_forbidden(self, client: TestClient) -> None:
         body = self._rel_body()
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/scenes/{SCENE}/relations",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/relations",
             json=body,
         )
         assert resp.status_code == 403
@@ -660,7 +737,7 @@ class TestActionRoutes:
 
     def test_list_actions_empty(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj1/actions"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj1/actions"
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -672,7 +749,7 @@ class TestActionRoutes:
         body = self._action_body()
 
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj-x/actions",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-x/actions",
             json=body,
         )
         assert resp.status_code == 200
@@ -688,7 +765,7 @@ class TestActionRoutes:
         onto._actions["obj1"] = [{"actionCode": "a1", "actionName": "动作1"}]
 
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj1/actions"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj1/actions"
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -697,7 +774,7 @@ class TestActionRoutes:
 
     def test_get_action_not_found(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj1/actions/nonexistent"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj1/actions/nonexistent"
         )
         assert resp.status_code == 404
 
@@ -706,7 +783,7 @@ class TestActionRoutes:
         onto._actions["obj1"] = [{"actionCode": "a1", "actionName": "动作1"}]
 
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj1/actions/a1"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj1/actions/a1"
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -716,13 +793,13 @@ class TestActionRoutes:
         onto = fakes["onto_local"]
         body = self._action_body(code="a-upd")
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj-x/actions",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-x/actions",
             json=body,
         )
 
         updated = self._action_body(code="a-upd", name="更新后动作")
         resp = client.put(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj-x/actions/a-upd",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-x/actions/a-upd",
             json=updated,
         )
         assert resp.status_code == 200
@@ -732,12 +809,12 @@ class TestActionRoutes:
         onto = fakes["onto_local"]
         body = self._action_body(code="a-del")
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj-x/actions",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-x/actions",
             json=body,
         )
 
         resp = client.delete(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects/obj-x/actions/a-del"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-x/actions/a-del"
         )
         assert resp.status_code == 200
         assert len(onto._deleted_actions) == 1
@@ -745,7 +822,7 @@ class TestActionRoutes:
     def test_create_action_remote_forbidden(self, client: TestClient) -> None:
         body = self._action_body()
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/scenes/{SCENE}/objects/obj-x/actions",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/objects/obj-x/actions",
             json=body,
         )
         assert resp.status_code == 403
@@ -767,9 +844,7 @@ class TestDatasourceRoutes:
         }
 
     def test_list_datasources_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -780,7 +855,7 @@ class TestDatasourceRoutes:
         body = self._ds_body()
 
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources",
             json=body,
         )
         assert resp.status_code == 200
@@ -795,35 +870,33 @@ class TestDatasourceRoutes:
         onto = fakes["onto_local"]
         onto._datasources[SCENE] = [self._ds_body()]
 
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["data"]) == 1
 
     def test_get_datasource_not_found(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources/no-db"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources/no-db"
         )
         assert resp.status_code == 404
 
     def test_delete_datasource(self, client: TestClient, fakes: dict[str, Any]) -> None:
         onto = fakes["onto_local"]
         client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources",
             json=self._ds_body(),
         )
 
         resp = client.delete(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources/db-1"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources/db-1"
         )
         assert resp.status_code == 200
         assert len(onto._deleted_datasources) == 1
 
     def test_create_datasource_remote_forbidden(self, client: TestClient) -> None:
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/scenes/{SCENE}/datasources",
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{REMOTE}/datasources",
             json=self._ds_body(),
         )
         assert resp.status_code == 403
@@ -1162,3 +1235,178 @@ class TestOntologyBuildRoutes:
         assert resp.status_code in (200, 500)
         data = resp.json()
         assert "ok" in data
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 21. Snowflake & base_id validation (unit tests)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestSnowflake:
+    """Unit tests for generate_snowflake and validate_base_id."""
+
+    def test_snowflake_length(self) -> None:
+        from datacloud_platform.base_entry import generate_snowflake
+
+        sid = generate_snowflake()
+        assert len(sid) == 16
+
+    def test_snowflake_hex(self) -> None:
+        from datacloud_platform.base_entry import generate_snowflake
+
+        sid = generate_snowflake()
+        assert set(sid).issubset("0123456789abcdef")
+
+    def test_snowflake_ordering(self) -> None:
+        """IDs generated later should be lexicographically greater."""
+        from datacloud_platform.base_entry import generate_snowflake
+
+        id1 = generate_snowflake()
+        import time
+
+        time.sleep(0.002)  # ensure timestamp advances
+        id2 = generate_snowflake()
+        assert id1 < id2, f"{id1=} should be < {id2=}"
+
+    def test_snowflake_uniqueness(self) -> None:
+        """1000 IDs should all be unique."""
+        from datacloud_platform.base_entry import generate_snowflake
+
+        ids = {generate_snowflake() for _ in range(1000)}
+        assert len(ids) == 1000
+
+    def test_validate_base_id_valid(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert validate_base_id("a")
+        assert validate_base_id("abc")
+        assert validate_base_id("my-base")
+        assert validate_base_id("a123_45-678")
+        assert validate_base_id("abcdefghijklmnop")  # exactly 16
+
+    def test_validate_base_id_invalid_uppercase(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("ABC")
+        assert not validate_base_id("aBc")
+
+    def test_validate_base_id_invalid_too_long(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("abcdefghijklmnopq")  # 17 chars
+
+    def test_validate_base_id_invalid_first_char(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("1abc")
+        assert not validate_base_id("-abc")
+        assert not validate_base_id("_abc")
+
+    def test_validate_base_id_invalid_special_chars(self) -> None:
+        from datacloud_platform.base_entry import validate_base_id
+
+        assert not validate_base_id("ab cd")
+        assert not validate_base_id("ab.cd")
+        assert not validate_base_id("ab/cd")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 22. Persistence tests
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestPersistence:
+    """Tests for EntityStore-backed persistence of OntologyBaseRegistry."""
+
+    def test_register_persists_to_shard(self, entity_store: JsonEntityStore) -> None:
+        """register() persists entry as individual shard file."""
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        registry = OntologyBaseRegistry(entity_store)
+        registry.register(
+            OntologyBaseEntry(base_id="p1", display_name="P1", description="desc1")
+        )
+        registry.register(
+            OntologyBaseEntry(base_id="p2", display_name="P2", description="desc2")
+        )
+
+        # Verify shard files exist
+        saved = entity_store.get("bases", "p1")
+        assert saved is not None
+        assert saved["display_name"] == "P1"
+
+        saved2 = entity_store.get("bases", "p2")
+        assert saved2 is not None
+        assert saved2["display_name"] == "P2"
+
+    def test_restore_loads_from_store(self, entity_store: JsonEntityStore) -> None:
+        """restore() loads entries from EntityStore index."""
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        # First registry: register and verify it's persisted
+        registry1 = OntologyBaseRegistry(entity_store)
+        registry1.register(
+            OntologyBaseEntry(base_id="p1", display_name="P1", description="desc1")
+        )
+
+        # Second registry: restore from same store
+        registry2 = OntologyBaseRegistry(entity_store)
+        registry2.restore()
+        assert registry2.exists("p1")
+        e = registry2.get("p1")
+        assert e is not None
+        assert e.display_name == "P1"
+        assert e.description == "desc1"
+
+    def test_restore_empty_store(self, entity_store: JsonEntityStore) -> None:
+        """restore() on a fresh store yields empty registry."""
+        from datacloud_platform.base_entry import OntologyBaseRegistry
+
+        registry = OntologyBaseRegistry(entity_store)
+        registry.restore()
+        assert registry.list() == []
+
+    def test_delete_persists_removal(self, entity_store: JsonEntityStore) -> None:
+        """unregister() removes entry file and updates index."""
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        registry = OntologyBaseRegistry(entity_store)
+        registry.register(
+            OntologyBaseEntry(base_id="temp", display_name="T", description="d")
+        )
+        assert entity_store.get("bases", "temp") is not None
+
+        registry.unregister("temp")
+        assert entity_store.get("bases", "temp") is None
+        assert not registry.exists("temp")
+
+    def test_persistence_survives_registry_reload(
+        self, entity_store: JsonEntityStore
+    ) -> None:
+        """Data survives across registry instances using shared EntityStore."""
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        registry = OntologyBaseRegistry(entity_store)
+        registry.register(
+            OntologyBaseEntry(base_id="survive", display_name="S", description="d")
+        )
+
+        # New registry instance on same store
+        restored = OntologyBaseRegistry(entity_store)
+        restored.restore()
+        assert restored.exists("survive")
+        entry = restored.get("survive")
+        assert entry is not None
+        assert entry.display_name == "S"

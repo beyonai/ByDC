@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import contextlib
 import contextvars
@@ -1174,7 +1174,7 @@ def _trim_messages_window(messages: list) -> list:
     之前必须再次清洗成合法序列。这里的处理只针对送入 LLM 的窗口副本，不会
     回写或破坏原始恢复态，目的是把非法半截消息拦在模型调用前。
     """
-    from langchain_core.messages.utils import trim_messages, count_tokens_approximately
+    from langchain_core.messages.utils import count_tokens_approximately, trim_messages
 
     before_count = len(messages)
     budget = _resolve_trim_budget()

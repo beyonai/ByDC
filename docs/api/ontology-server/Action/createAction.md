@@ -1,7 +1,7 @@
 # 创建动作
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{objectCode}/actions
+POST /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}/actions
 ```
 
 在指定对象下创建动作。仅 LOCAL 可用。
@@ -14,7 +14,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{object
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
-| `sceneId` | string | 场景 ID。 |
 | `objectCode` | string | 对象编码。获取方式见 [listObjects](../Object/listObjects.md)。 |
 
 ---
@@ -107,7 +106,7 @@ CreateActionRequest
 ```bash
 curl -X POST \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/objects/by_customer/actions" \
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects/by_customer/actions" \
   -d '{
     "actionCode": "create_by_customer",
     "actionName": "新增客户",

@@ -1,10 +1,10 @@
 # 列出对象类型
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects
+GET /api/v1/ontologyBases/{ownerType}/{baseId}/objects
 ```
 
-列出场景下的对象类型摘要列表。LOCAL 从 ByDC Loader 读取，REMOTE 从缓存或转发获取。
+列出本体库下的对象类型摘要列表。LOCAL 从本地 Backend 读取，REMOTE 从外部服务获取。
 
 ---
 
@@ -14,7 +14,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
-| `sceneId` | string | 场景 ID。获取方式见 [queryScenes](../Scene/queryScenes.md)。 |
 
 ---
 
@@ -84,7 +83,7 @@ ListObjectsResponse
 | code | HTTP Status | message Pattern | Condition |
 |---|---|---|---|
 | `404` | 404 | `本体库「{baseId}」不存在` | 指定本体库未注册。 |
-| `404` | 404 | `未查询到场景「{sceneId}」` | 指定场景不存在。 |
+| `404` | 404 | `本体库「{baseId}」不存在` | 指定本体库未注册。 |
 | `500` | 500 | `系统错误：{原因}` | 服务端异常。 |
 
 ### Error Example
@@ -102,13 +101,13 @@ ListObjectsResponse
 
 ## Example
 
-### 列出场景下全部对象
+### 列出库下全部对象
 
 #### Request
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/objects"
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects"
 ```
 
 #### Response

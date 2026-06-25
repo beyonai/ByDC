@@ -477,7 +477,7 @@ def _inject_view_actions(loader: Any, registry: Any) -> None:
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
     settings = get_settings()
-    scenes = getattr(loader, "_scenes", {})
+    scenes = getattr(loader, "_views", {})
     term_loader = getattr(getattr(loader, "_config", None), "term_loader", None)
     for view_id, scene in scenes.items():
         # 只处理 DB 视图（有对象列表的场景）

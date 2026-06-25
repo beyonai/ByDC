@@ -1,7 +1,7 @@
 # 获取对象详情
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{objectCode}
+GET /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}
 ```
 
 获取对象类型完整定义，含属性列表和动作列表。
@@ -14,7 +14,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/objects/{objectC
 |---|---|---|
 | `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
-| `sceneId` | string | 场景 ID。获取方式见 [queryScenes](../Scene/queryScenes.md)。 |
 | `objectCode` | string | 对象编码。获取方式见 [listObjects](listObjects.md)。 |
 
 ---
@@ -122,6 +121,7 @@ GetObjectResponse
 
 | code | HTTP Status | message Pattern | Condition |
 |---|---|---|---|
+| `404` | 404 | `本体库「{baseId}」不存在` | 指定本体库未注册。 |
 | `404` | 404 | `未查询到对象类型「{objectCode}」` | 指定对象不存在。 |
 | `500` | 500 | `系统错误：{原因}` | 服务端异常。 |
 
@@ -146,7 +146,7 @@ GetObjectResponse
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/scenes/default/objects/by_customer"
+  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects/by_customer"
 ```
 
 #### Response

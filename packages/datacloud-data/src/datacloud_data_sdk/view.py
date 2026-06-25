@@ -83,7 +83,7 @@ class View:
         if self._loader is None:
             return
 
-        scene = getattr(self._loader, "_scenes", {}).get(self.view_id)
+        scene = getattr(self._loader, "_views", {}).get(self.view_id)
         if not isinstance(scene, dict):
             return
 

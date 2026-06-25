@@ -234,6 +234,7 @@ def _init_ext_tool_pool(
         try:
             global _PARAM_LINK_GRAPH  # noqa: PLW0603
             from datacloud_analysis.tools.param_link_graph import ParamLinkGraph  # noqa: PLC0415
+
             _PARAM_LINK_GRAPH = ParamLinkGraph()
             _PARAM_LINK_GRAPH.build(TOOL_POOL, loader)
         except Exception:  # noqa: BLE001

@@ -16,6 +16,7 @@ from datacloud_platform import (
     OntologyBaseEntry,
     OntologyBaseRegistry,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.api.server import create_app
 from datacloud_platform.backends.presets import register_preset
 from datacloud_platform.backends.registry import (
@@ -62,7 +63,7 @@ def fakes() -> dict[str, Any]:
 
 
 @pytest.fixture
-def client(fakes: dict[str, Any]) -> TestClient:
+def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
     """Build a TestClient backed entirely by fake backends."""
     onto_local = fakes["onto_local"]
     onto_remote = fakes["onto_remote"]
@@ -94,7 +95,7 @@ def client(fakes: dict[str, Any]) -> TestClient:
         },
     )
 
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id=LOCAL,
@@ -151,120 +152,154 @@ class TestDataCloudDataBackendCompleteness:
         assert result == 0
 
     def test_get_scene_details_returns_empty(self) -> None:
-        result = self._backend().get_scene_details("any-base", "any-scene")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_scene_details(loader, "any-base", "any-scene")
         assert result == {
             "scene": None,
             "views": [],
             "objects": [],
             "actions": [],
             "relations": [],
-            "dbsources": [],
-            "version": None,
+            "dbsources": {"db": [], "doc": [], "api": []},
+            "version": "v0.1.0",
         }
 
     def test_query_ontologies_by_scene_returns_empty(self) -> None:
-        result = self._backend().query_ontologies_by_scene("any-base", "any-scene")
-        assert result == {"data": [], "totalCount": 0}
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().query_ontologies_by_scene(
+            loader, "any-base", "any-scene"
+        )
+        assert result == {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # ── View CRUD ──
 
     def test_get_views_returns_empty(self) -> None:
-        result = self._backend().get_views("any-base", "any-scene")
+        from unittest.mock import Mock
+
+        loader = Mock(_views={})
+        result = self._backend().get_views(loader, "any-base")
         assert result == []
 
     def test_get_view_detail_returns_none(self) -> None:
-        result = self._backend().get_view_detail("any-base", "any-scene", "vw-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_views={})
+        result = self._backend().get_view_detail(loader, "any-base", "vw-1")
         assert result is None
 
     def test_create_view_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().create_view("any-base", "any-scene", {})
+        with pytest.raises(ValueError, match="view_code is required"):
+            self._backend().create_view("any-base", {})
 
-    def test_update_view_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_view("any-base", "any-scene", "vw-1", {})
+    def test_update_view_no_error_on_nonexistent(self) -> None:
+        """update_view on nonexistent view writes without error (local adapter)."""
+        result = self._backend().update_view("any-base", "vw-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_view_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_view("any-base", "any-scene", "vw-1")
+    def test_delete_view_no_error_on_nonexistent(self) -> None:
+        """delete_view on nonexistent view is a no-op (local adapter)."""
+        self._backend().delete_view("any-base", "vw-1")
 
     # ── Relation CRUD ──
 
     def test_get_relations_returns_empty(self) -> None:
-        result = self._backend().get_relations("any-base", "any-scene")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={}, _relations=[])
+        result = self._backend().get_relations(loader, "any-base")
         assert result == []
 
     def test_get_relation_detail_returns_none(self) -> None:
-        result = self._backend().get_relation_detail("any-base", "any-scene", "rel-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={}, _relations=[])
+        result = self._backend().get_relation_detail(loader, "any-base", "rel-1")
         assert result is None
 
     def test_create_relation_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().create_relation("any-base", "any-scene", {})
+        with pytest.raises(ValueError, match="relation_code is required"):
+            self._backend().create_relation("any-base", {})
 
-    def test_update_relation_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_relation("any-base", "any-scene", "rel-1", {})
+    def test_update_relation_no_error_on_nonexistent(self) -> None:
+        """update_relation on nonexistent relation writes without error."""
+        result = self._backend().update_relation("any-base", "rel-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_relation_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_relation("any-base", "any-scene", "rel-1")
+    def test_delete_relation_no_error_on_nonexistent(self) -> None:
+        """delete_relation on nonexistent relation is a no-op."""
+        self._backend().delete_relation("any-base", "rel-1")
 
     # ── Action CRUD ──
 
     def test_get_actions_returns_empty(self) -> None:
-        result = self._backend().get_actions("any-base", "any-scene", "obj-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_actions(loader, "any-base", "obj-1")
         assert result == []
 
     def test_get_action_detail_returns_none(self) -> None:
-        result = self._backend().get_action_detail(
-            "any-base", "any-scene", "obj-1", "act-1"
-        )
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_action_detail(loader, "any-base", "obj-1", "act-1")
         assert result is None
 
     def test_create_action_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().create_action("any-base", "any-scene", "obj-1", {})
+        with pytest.raises(ValueError, match="action_code is required"):
+            self._backend().create_action("any-base", "obj-1", {})
 
-    def test_update_action_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_action("any-base", "any-scene", "obj-1", "act-1", {})
+    def test_update_action_no_error_on_nonexistent(self) -> None:
+        """update_action on nonexistent action writes without error."""
+        result = self._backend().update_action("any-base", "obj-1", "act-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_action_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_action("any-base", "any-scene", "obj-1", "act-1")
+    def test_delete_action_no_error_on_nonexistent(self) -> None:
+        """delete_action on nonexistent action is a no-op."""
+        self._backend().delete_action("any-base", "obj-1", "act-1")
 
     # ── Object CRUD ──
 
     def test_create_object_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().create_object("any-base", "any-scene", {})
+        with pytest.raises(ValueError, match="object_code is required"):
+            self._backend().create_object("any-base", {})
 
-    def test_update_object_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_object("any-base", "any-scene", "obj-1", {})
+    def test_update_object_no_error_on_nonexistent(self) -> None:
+        """update_object on nonexistent object writes without error."""
+        result = self._backend().update_object("any-base", "obj-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_object_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_object("any-base", "any-scene", "obj-1")
+    def test_delete_object_no_error_on_nonexistent(self) -> None:
+        """delete_object on nonexistent object is a no-op."""
+        self._backend().delete_object("any-base", "obj-1")
 
     # ── Datasource CRUD ──
 
     def test_get_datasources_returns_empty(self) -> None:
-        result = self._backend().get_datasources("any-base", "any-scene")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_datasources(loader, "any-base")
         assert result == []
 
     def test_get_datasource_detail_returns_none(self) -> None:
-        result = self._backend().get_datasource_detail("any-base", "any-scene", "db-1")
+        from unittest.mock import Mock
+
+        loader = Mock(_classes={})
+        result = self._backend().get_datasource_detail(loader, "any-base", "db-1")
         assert result is None
 
     def test_create_datasource_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().create_datasource("any-base", "any-scene", {})
+        with pytest.raises(ValueError, match="db_id is required"):
+            self._backend().create_datasource("any-base", {})
 
-    def test_delete_datasource_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_datasource("any-base", "any-scene", "db-1")
+    def test_delete_datasource_no_error_on_nonexistent(self) -> None:
+        """delete_datasource on nonexistent datasource is a no-op."""
+        self._backend().delete_datasource("any-base", "db-1")
 
     # ── Existing methods still work (no regression) ──
 
@@ -298,33 +333,26 @@ class TestEmptyDataScenarios:
         assert data["data"] == []
 
     def test_list_objects_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/objects"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_views_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/views"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_relations_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/relations"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_actions_no_data_returns_200_empty(self, client: TestClient) -> None:
         resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}"
-            f"/objects/obj-1/actions"
+            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-1/actions"
         )
         assert resp.status_code == 200
         data = resp.json()
@@ -333,9 +361,7 @@ class TestEmptyDataScenarios:
     def test_list_datasources_no_data_returns_200_empty(
         self, client: TestClient
     ) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/datasources"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True

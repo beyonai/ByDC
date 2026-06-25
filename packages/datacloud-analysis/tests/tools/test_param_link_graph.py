@@ -1,15 +1,24 @@
 """ParamLinkGraph 单元测试 — 红阶段先写测试，再实现。"""
+
 from __future__ import annotations
-import pytest
-from datacloud_analysis.tools.param_link_graph import ParamLinkGraph, ParamLink, _expand_object_property
+
+from datacloud_analysis.tools.param_link_graph import (
+    ParamLinkGraph,
+    _expand_object_property,
+)
 
 
 class TestExpandObjectProperty:
     def test_no_prefix_expands_with_belong(self):
-        assert _expand_object_property("span_id", "ops_langfuse_trace") == "ops_langfuse_trace.span_id"
+        assert (
+            _expand_object_property("span_id", "ops_langfuse_trace") == "ops_langfuse_trace.span_id"
+        )
 
     def test_double_brace_prefix_expands(self):
-        assert _expand_object_property("{{ops_dig_employee}}.agent_id", "ops_langfuse_trace") == "ops_dig_employee.agent_id"
+        assert (
+            _expand_object_property("{{ops_dig_employee}}.agent_id", "ops_langfuse_trace")
+            == "ops_dig_employee.agent_id"
+        )
 
     def test_leading_underscore_skipped(self):
         # object_property 以 _ 开头表示内部字段，不参与索引
@@ -29,11 +38,13 @@ class TestParamLinkGraphBuild:
 
     def _make_loader(self, params_map: dict):
         """构造 owl_loader mock。"""
+
         class MockLoader:
             def get_action_params(self, action_code):
                 if action_code in params_map:
                     return params_map[action_code]
                 raise KeyError(action_code)
+
         return MockLoader()
 
     def test_build_creates_link_for_matching_object_property(self):

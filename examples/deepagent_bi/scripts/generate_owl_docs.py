@@ -149,7 +149,7 @@ def main() -> None:
         out_path.write_text(md, encoding="utf-8")
         logger.info("生成 %s", out_path)
 
-    view_codes: list[str] = list(loader._scenes.keys())  # type: ignore[attr-defined]
+    view_codes: list[str] = list(loader._views.keys())  # type: ignore[attr-defined]
     for view_code in view_codes:
         try:
             md = generate_view_md(view_code, loader)

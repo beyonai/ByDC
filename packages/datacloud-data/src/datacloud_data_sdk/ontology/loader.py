@@ -6,7 +6,7 @@
 
 核心功能：
 - 从文件或内容加载本体定义
-- 管理对象、关系、函数、场景等本体元素
+- 管理对象、关系、函数、视图等本体元素
 - 提供配置管理（数据源、计划生成器等）
 - 创建核心实体实例
 
@@ -94,7 +94,7 @@ class OntologyLoader:
         _classes: 本体类字典
         _relations: 关联关系列表
         _functions: 函数配置字典
-        _scenes: 场景配置字典
+        _views: 视图配置字典
         _config: 运行时配置
 
     Example:
@@ -109,7 +109,7 @@ class OntologyLoader:
         self._classes: dict[str, OntologyClass] = {}
         self._relations: list[OntologyRelation] = []
         self._functions: dict[str, dict[str, Any]] = {}
-        self._scenes: dict[str, dict[str, Any]] = {}
+        self._views: dict[str, dict[str, Any]] = {}
         self._config = LoaderConfig()
 
     def load_from_path(self, path: str | Path) -> None:
@@ -143,7 +143,7 @@ class OntologyLoader:
         if views_dir.exists():
             for view_file in views_dir.glob("*.json"):
                 view_data = json.loads(view_file.read_text(encoding="utf-8"))
-                self.load_scene(view_data)
+                self.load_view(view_data)
 
     def load_from_json_resource_directory(self, base_dir: str | Path) -> None:
         """从 JSON 格式本体资源目录增量加载，补充进 _classes（不清空已有内容）。
@@ -308,7 +308,7 @@ class OntologyLoader:
         """
         self._classes.clear()
         self._relations.clear()
-        self._scenes.clear()
+        self._views.clear()
         self._functions.clear()
 
         for fn_code, fn_config in content.get("functions", {}).items():
@@ -357,7 +357,7 @@ class OntologyLoader:
                 self._config.datasource_configs[ds_alias] = _dict_to_config(ds_alias, ds_config)
 
         for view in content.get("views", []):
-            self._scenes[view["view_id"]] = view
+            self._views[view["view_id"]] = view
 
     def load_from_content(self, content: dict[str, Any], format: str = "json") -> None:
         """
@@ -419,7 +419,7 @@ class OntologyLoader:
             }
 
         for view in content.get("views", []):
-            self._scenes[view["view_id"]] = view
+            self._views[view["view_id"]] = view
 
     def configure(self, **kwargs: Any) -> None:
         """设置运行时配置（plan_generator、datasource_configs、csv_base_dir 等）。"""
@@ -523,17 +523,21 @@ class OntologyLoader:
                 response_params = []
                 for p in action.params:
                     if p.direction in ("OUT",):
-                        response_params.append({
-                            "field_code": p.param_code,
-                            "object_property": p.object_property or "",
-                            "json_path": p.json_path or "",
-                        })
+                        response_params.append(
+                            {
+                                "field_code": p.param_code,
+                                "object_property": p.object_property or "",
+                                "json_path": p.json_path or "",
+                            }
+                        )
                     else:
-                        request_params.append({
-                            "param_code": p.param_code,
-                            "object_property": p.object_property or "",
-                            "json_path": p.json_path or "",
-                        })
+                        request_params.append(
+                            {
+                                "param_code": p.param_code,
+                                "object_property": p.object_property or "",
+                                "json_path": p.json_path or "",
+                            }
+                        )
                 return {
                     "belong_entity": cls.object_code,
                     "request_params": request_params,
@@ -572,21 +576,29 @@ class OntologyLoader:
         ]
         return Object(cls, rels, loader=self)
 
+    def load_view(self, view: dict[str, Any]) -> None:
+        """加载视图定义。"""
+        self._views[view["view_id"]] = view
+
+    def load_view_from_path(self, path: str | Path) -> None:
+        """从文件加载视图定义。"""
+        content = json.loads(Path(path).read_text(encoding="utf-8"))
+        self.load_view(content)
+
     def load_scene(self, scene: dict[str, Any]) -> None:
-        """加载场景/视图定义。"""
-        self._scenes[scene["view_id"]] = scene
+        """[已废弃] 加载场景/视图定义，请使用 load_view。"""
+        self.load_view(scene)
 
     def load_scene_from_path(self, path: str | Path) -> None:
-        """从文件加载场景定义。"""
-        content = json.loads(Path(path).read_text(encoding="utf-8"))
-        self.load_scene(content)
+        """[已废弃] 从文件加载场景定义，请使用 load_view_from_path。"""
+        self.load_view_from_path(path)
 
     def get_view(self, view_id: str) -> View:
         """获取 View 实体。"""
         from datacloud_data_sdk.relation import Relation
         from datacloud_data_sdk.view import View
 
-        scene = self._scenes.get(view_id)
+        scene = self._views.get(view_id)
         if scene is None:
             raise ObjectNotFoundError(view_id)
 
@@ -626,7 +638,7 @@ class OntologyLoader:
 
     def get_views(self, view_ids: list[str] | None = None) -> list[View]:
         """获取全部或指定的 View 实体列表。"""
-        target_view_ids = view_ids if view_ids is not None else list(self._scenes)
+        target_view_ids = view_ids if view_ids is not None else list(self._views)
         return [self.get_view(view_id) for view_id in target_view_ids]
 
     def _populate_view_virtual_actions(self, view: Any, scene: dict) -> None:

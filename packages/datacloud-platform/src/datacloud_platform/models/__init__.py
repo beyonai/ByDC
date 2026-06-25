@@ -6,6 +6,10 @@ Port layer types (ObjectSummary, EmbeddingHit, etc.) are in shared.py.
 """
 
 from datacloud_platform.models.action import Action, ActionParam
+from datacloud_platform.models.base_entry import (
+    OntologyBaseCreate,
+    OntologyBaseUpdate,
+)
 from datacloud_platform.models.common import ApiResponse, ok
 from datacloud_platform.models.datasource import (
     ApiSource,
@@ -17,7 +21,12 @@ from datacloud_platform.models.object_type import ObjectType, ObjectTypeSummary
 from datacloud_platform.models.ontology import OntologySummary
 from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
-from datacloud_platform.models.scene import Scene
+from datacloud_platform.models.scene import (
+    Scene,
+    SceneCreate,
+    SceneMembersRequest,
+    SceneUpdate,
+)
 from datacloud_platform.models.search import (
     InstanceHit,
     MetadataHit,
@@ -58,6 +67,8 @@ __all__ = [
     "ObjectSummary",
     "ObjectType",
     "ObjectTypeSummary",
+    "OntologyBaseCreate",
+    "OntologyBaseUpdate",
     "OntologySummary",
     "ParsedOwlContent",
     "Property",
@@ -66,6 +77,9 @@ __all__ = [
     "Relation",
     "RelationSummary",
     "Scene",
+    "SceneCreate",
+    "SceneMembersRequest",
+    "SceneUpdate",
     "ScoreUpdateRecord",
     "SearchRequest",
     "SearchResult",

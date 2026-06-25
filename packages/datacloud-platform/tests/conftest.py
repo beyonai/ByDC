@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 import pytest
 from datacloud_platform import (
     DatacloudPlatform,
     OntologyBaseEntry,
     OntologyBaseRegistry,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.backends import registry as _registry
 from datacloud_platform.backends.presets import register_preset
 from datacloud_platform.backends.registry import (
@@ -33,7 +37,14 @@ def _clean_registry() -> None:
 
 
 @pytest.fixture
-def platform() -> DatacloudPlatform:
+def entity_store():
+    """Provide a temporary JsonEntityStore for tests."""
+    with tempfile.TemporaryDirectory() as d:
+        yield JsonEntityStore(Path(d))
+
+
+@pytest.fixture
+def platform(entity_store: JsonEntityStore) -> DatacloudPlatform:
     """Build a multi-base DatacloudPlatform backed entirely by Fake backends.
 
     Registers one LOCAL base and one REMOTE base.
@@ -76,7 +87,7 @@ def platform() -> DatacloudPlatform:
     )
 
     # Registry with one LOCAL and one REMOTE base
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id="local-base",
@@ -92,6 +103,6 @@ def platform() -> DatacloudPlatform:
         )
     )
 
-    p = DatacloudPlatform(_base_registry=registry)
+    p = DatacloudPlatform(_base_registry=registry, _entity_store=entity_store)
     p._fakes = (onto_local, onto_remote, know, exec_, stor)  # type: ignore[attr-defined]
     return p

@@ -7,14 +7,21 @@ and manual_backends overrides.
 
 from __future__ import annotations
 
+import io
 import logging
+import shutil
+import tempfile
+import types
+import zipfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, final
-from uuid import uuid4
 
 from datacloud_platform.backends.registry import get_backend_factory
 from datacloud_platform.backends.resolution import resolve_backend_names
+from datacloud_platform.base_entry import generate_snowflake
+from datacloud_platform.ports.entity_store import EntityStore
+from datacloud_platform.ontology_store import CacheMode, OntologyStore
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
@@ -22,12 +29,13 @@ if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
     from datacloud_platform.backends.storage import StorageBackend
     from datacloud_platform.base_entry import OntologyBaseEntry, OntologyBaseRegistry
+    from datacloud_platform.models.base_entry import OntologyBaseUpdate
     from datacloud_platform.models.shared import MatchResult, ObjectSummary
 
 try:
     from datacloud_knowledge.ingestion.ontology_terms import build_terms as _build_terms
 except ImportError:
-    _build_terms = None  # type: ignore[assignment]
+    _build_terms = None
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +56,14 @@ class DatacloudPlatform:
     # ── Base registry (injected, required) ──
     _base_registry: OntologyBaseRegistry = field(init=True)
     """OntologyBaseRegistry — library management, always local."""
+
+    # ── Entity store (injected, optional) ──
+    _entity_store: EntityStore | None = field(default=None, init=True)
+    """EntityStore for OntologyStore-backed index caching."""
+
+    # ── Ontology store (built from entity_store) ──
+    _ontology_store: OntologyStore | None = field(default=None, init=True)
+    """OntologyStore — in-memory index cache, built from _entity_store."""
 
     # ── Backend instance cache ──
     _backend_cache: dict[str, Any] = field(default_factory=dict, init=False)
@@ -127,8 +143,50 @@ class DatacloudPlatform:
         """Derive the base ontology path from the entry's backend_config, with fallback."""
         entry = self._resolve_entry(base_id)
         onto_cfg = entry.backend_config.get("ontology", {})
-        path_str: str = onto_cfg.get("base_path", f"/data/{base_id}")
-        return Path(path_str)
+        path_str: str = onto_cfg.get("base_path", "")
+        if path_str:
+            return Path(path_str)
+        from datacloud_platform.platform_file_storage import _data_dir
+
+        return _data_dir() / base_id
+
+    def __post_init__(self) -> None:
+        """Build OntologyStore from entity_store if provided.
+
+        Only primes the cache for platform-level entity types (bases, scenes).
+        Domain ontology data (objects/views/relations/etc.) lives under
+        per-base paths separate from the platform entity store.
+        """
+        if self._entity_store is not None:
+            self._ontology_store = OntologyStore(self._entity_store)
+            for et in ("bases", "scenes"):
+                self._ontology_store.get_index(et)
+
+    def _load_ontology_cached(
+        self,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> OntologyQueryable:
+        """Get an OntologyQueryable, priming the OntologyStore index cache first.
+
+        Falls back to direct ``load_ontology()`` when ``_ontology_store`` is None.
+
+        For remote backends whose ``load_ontology`` raises ``PermissionError``,
+        returns a stub queryable — the remote backend ignores the loader and
+        fetches data via HTTP directly.
+        """
+        try:
+            return self._ontology_for(base_id).load_ontology(
+                self._base_path_for(base_id)
+            )
+        except PermissionError:
+            # Remote backends don't support load_ontology — return a stub the
+            # backend will ignore (it fetches via HTTP directly).
+            return types.SimpleNamespace(
+                _classes={},
+                _relations=[],
+                _views=None,
+            )
 
     # ── Lifecycle ──
 
@@ -144,44 +202,87 @@ class DatacloudPlatform:
         """List all registered ontology bases as dicts."""
         return [asdict(e) for e in self._base_registry.list()]
 
+    def base_exists(self, base_id: str) -> bool:
+        """Return True if *base_id* is registered."""
+        return self._base_registry.exists(base_id)
+
     def create_base(self, entry: OntologyBaseEntry) -> dict[str, Any]:
         """Register a new ontology base.
+
+        If *entry.base_id* is empty, a snowflake ID is auto-generated.
+
+        Persists the registry to disk after registering.
 
         Raises:
             ValueError: If a base with the same base_id already exists.
         """
+        if not entry.base_id:
+            entry.base_id = generate_snowflake()
         self._base_registry.register(entry)
         return asdict(entry)
 
     def delete_base(self, base_id: str) -> None:
         """Remove a registered ontology base.
 
+        Persists the registry to disk after removing.
+
         Raises:
             KeyError: If base_id is not registered.
         """
         self._base_registry.unregister(base_id)
 
+    def update_base(self, base_id: str, updates: OntologyBaseUpdate) -> dict[str, Any]:
+        """Update fields of an existing ontology base.
+
+        *updates* is an ``OntologyBaseUpdate``; only non-None fields are applied.
+        ``baseId`` is read-only and ignored.
+
+        Returns the full updated entry as a dict.
+
+        Raises:
+            KeyError: If base_id is not registered.
+        """
+        fields: dict[str, Any] = updates.model_dump(exclude_none=True)
+        entry = self._base_registry.update(base_id, **fields)
+        return asdict(entry)
+
     # ── Ontology: query / CRUD ──
 
-    def load_ontology(self, base_id: str, base_path: str | Path) -> OntologyQueryable:
-        """Load ontology from a base_path, returning a queryable handle."""
-        return self._ontology_for(base_id).load_ontology(Path(base_path))
+    def load_ontology(
+        self,
+        base_id: str,
+        base_path: str | Path,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> OntologyQueryable:
+        """Load ontology from a base_path, returning a queryable handle.
 
-    def get_objects(self, base_id: str, scene_id: str) -> list[ObjectSummary]:
-        """Get all ontology object summaries under a scene."""
+        Respects *cache_mode* for OntologyStore index priming before loading.
+        """
+        _ = base_path  # passed for backward API compatibility; internally derived
+        return self._load_ontology_cached(base_id, cache_mode=cache_mode)
+
+    def get_objects(
+        self, base_id: str, *, cache_mode: CacheMode = CacheMode.REALTIME
+    ) -> list[ObjectSummary]:
+        """Get all ontology object summaries under a base."""
         backend = self._ontology_for(base_id)
-        loader = backend.load_ontology(self._base_path_for(base_id))
-        return backend.get_objects(loader, base_id, scene_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_objects(loader, base_id)
 
     def get_object_detail(
-        self, base_id: str, scene_id: str, object_code: str
-    ) -> ObjectSummary | None:
-        """Get a single object's detail by code."""
+        self,
+        base_id: str,
+        object_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> dict[str, Any] | None:
+        """Get a single object's full detail (ObjectType with properties and actions)."""
         backend = self._ontology_for(base_id)
-        loader = backend.load_ontology(self._base_path_for(base_id))
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return backend.get_object_detail(loader, object_code)
 
-    def create_object(self, base_id: str, scene_id: str, obj: Any) -> Any:
+    def create_object(self, base_id: str, obj: Any) -> Any:
         """Create an ontology object.
 
         REMOTE backends raise PermissionError internally — Platform does not
@@ -190,7 +291,7 @@ class DatacloudPlatform:
         Side effect: if datacloud-knowledge is installed, writes term data
         so the new object can be hit by vector search.
         """
-        result = self._ontology_for(base_id).create_object(base_id, scene_id, obj)
+        result = self._ontology_for(base_id).create_object(base_id, obj)
         if _build_terms is not None:
             try:
                 fields = [
@@ -226,23 +327,19 @@ class DatacloudPlatform:
                 )
         return result
 
-    def update_object(
-        self, base_id: str, scene_id: str, object_code: str, obj: Any
-    ) -> Any:
+    def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
         """Update an ontology object.
 
         REMOTE backends raise PermissionError internally.
         """
-        return self._ontology_for(base_id).update_object(
-            base_id, scene_id, object_code, obj
-        )
+        return self._ontology_for(base_id).update_object(base_id, object_code, obj)
 
-    def delete_object(self, base_id: str, scene_id: str, object_code: str) -> None:
+    def delete_object(self, base_id: str, object_code: str) -> None:
         """Delete an ontology object.
 
         REMOTE backends raise PermissionError internally.
         """
-        self._ontology_for(base_id).delete_object(base_id, scene_id, object_code)
+        self._ontology_for(base_id).delete_object(base_id, object_code)
 
     # ── Knowledge: search / disambiguation ──
 
@@ -443,32 +540,34 @@ class DatacloudPlatform:
 
         Returns a summary dict: ``{"objects": N, "views": N, "relations": N}``.
         """
-        import io
-        import zipfile
-
         onto = self._ontology_for(base_id)
         know = self._knowledge_for(base_id)
+        base_path = self._base_path_for(base_id)
 
+        # 1. Unzip
+        extract_dir = Path(tempfile.mkdtemp(prefix="owl_import_"))
         with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
-            extract_dir = Path(f"/tmp/owl_import_{uuid4().hex}")
             zf.extractall(extract_dir)
 
-        try:
-            parsed = onto.parse_owl(extract_dir)
-        finally:
-            import shutil
+        # 2. Parse
+        parsed = onto.parse_owl(extract_dir)
 
-            shutil.rmtree(extract_dir, ignore_errors=True)
+        # 3. Write to storage (save_parsed_content or individual create_object fallback)
+        if hasattr(onto, "save_parsed_content"):
+            counts: dict[str, int] = onto.save_parsed_content(base_path, parsed)
+        else:
+            # Fallback for remote / legacy adapters without save_parsed_content
+            counts = {"objects": 0, "views": 0, "relations": 0}
+            for obj_dict in parsed.objects:
+                try:
+                    onto.create_object(base_id, obj_dict)
+                    counts["objects"] += 1
+                except Exception as exc:
+                    logger.warning("Failed to create object from OWL import: %s", exc)
+            counts["views"] = len(parsed.views)
+            counts["relations"] = len(parsed.relations)
 
-        obj_count = 0
-        for obj_dict in parsed.objects:
-            try:
-                onto.create_object(base_id, scene_id, obj_dict)
-                obj_count += 1
-            except Exception as exc:
-                logger.warning("Failed to create object from OWL import: %s", exc)
-
-        # Sync terms for each object
+        # 4. Sync terms for each object
         for obj_dict in parsed.objects:
             try:
                 code: str = obj_dict.get("object_code", "")
@@ -485,22 +584,36 @@ class DatacloudPlatform:
             except Exception as exc:
                 logger.warning("Failed to sync terms for object: %s", exc)
 
-        view_count = len(parsed.views)
-        rel_count = len(parsed.relations)
+        # 5. Cleanup
+        shutil.rmtree(extract_dir, ignore_errors=True)
 
-        return {"objects": obj_count, "views": view_count, "relations": rel_count}
+        return counts
 
     # ── Scene: query + detail ──
 
-    def list_scenes(self, base_id: str) -> list[dict[str, Any]]:
+    def list_scenes(
+        self, base_id: str, *, cache_mode: CacheMode = CacheMode.REALTIME
+    ) -> list[dict[str, Any]]:
         """List scene directories under a base."""
         return self._ontology_for(base_id).list_scenes(base_id)
 
-    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict[str, Any]]:
+    def query_scenes(
+        self,
+        base_id: str,
+        keyword: str | None,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> list[dict[str, Any]]:
         """Query scenes with optional keyword filter."""
         return self._ontology_for(base_id).query_scenes(base_id, keyword)
 
-    def count_scenes(self, base_id: str, keyword: str | None) -> int:
+    def count_scenes(
+        self,
+        base_id: str,
+        keyword: str | None,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> int:
         """Count scenes matching optional keyword filter."""
         return self._ontology_for(base_id).count_scenes(base_id, keyword)
 
@@ -509,12 +622,15 @@ class DatacloudPlatform:
         base_id: str,
         scene_id: str,
         *,
-        view_code: str | None = None,
-        object_code: str | None = None,
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
+        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any]:
         """Get full scene details with optional filtering by view_code or object_code."""
-        return self._ontology_for(base_id).get_scene_details(
-            base_id, scene_id, view_code=view_code, object_code=object_code
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_scene_details(
+            loader, base_id, scene_id, view_code=view_code, object_code=object_code
         )
 
     def query_ontologies_by_scene(
@@ -525,140 +641,205 @@ class DatacloudPlatform:
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
+        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any]:
         """Query ontologies (objects) in a scene with pagination and keyword filter."""
-        return self._ontology_for(base_id).query_ontologies_by_scene(
-            base_id, scene_id, page=page, page_size=page_size, keyword=keyword
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.query_ontologies_by_scene(
+            loader, base_id, scene_id, page=page, page_size=page_size, keyword=keyword
         )
+
+    # ── Scene CRUD ──
+
+    def create_scene(self, base_id: str, scene: Any) -> Any:
+        """Create a scene (grouping container)."""
+        result = self._ontology_for(base_id).create_scene(base_id, scene)
+        if self._ontology_store:
+            self._ontology_store.invalidate("scenes")
+        return result
+
+    def update_scene(self, base_id: str, scene_id: str, updates: Any) -> Any:
+        """Update scene metadata."""
+        result = self._ontology_for(base_id).update_scene(base_id, scene_id, updates)
+        if self._ontology_store:
+            self._ontology_store.invalidate("scenes")
+        return result
+
+    def delete_scene(self, base_id: str, scene_id: str) -> None:
+        """Delete a scene — does NOT delete member resources."""
+        self._ontology_for(base_id).delete_scene(base_id, scene_id)
+        if self._ontology_store:
+            self._ontology_store.invalidate("scenes")
+
+    # ── Scene member management ──
+
+    def add_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
+    ) -> Any:
+        """Add objects/views to a scene (idempotent)."""
+        result = self._ontology_for(base_id).add_scene_members(
+            base_id, scene_id, object_codes, view_codes
+        )
+        if self._ontology_store:
+            self._ontology_store.invalidate("scenes")
+        return result
+
+    def remove_scene_members(
+        self,
+        base_id: str,
+        scene_id: str,
+        object_codes: list[str],
+        view_codes: list[str],
+    ) -> Any:
+        """Remove objects/views from a scene — does NOT delete resources."""
+        result = self._ontology_for(base_id).remove_scene_members(
+            base_id, scene_id, object_codes, view_codes
+        )
+        if self._ontology_store:
+            self._ontology_store.invalidate("scenes")
+        return result
 
     # ── View CRUD ──
 
-    def get_views(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
-        """Get all views under a scene."""
-        return self._ontology_for(base_id).get_views(base_id, scene_id)
+    def get_views(
+        self, base_id: str, *, cache_mode: CacheMode = CacheMode.REALTIME
+    ) -> list[dict[str, Any]]:
+        """Get all views under a base."""
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_views(loader, base_id)
 
     def get_view_detail(
-        self, base_id: str, scene_id: str, view_code: str
+        self,
+        base_id: str,
+        view_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any] | None:
         """Get single view detail by code."""
-        return self._ontology_for(base_id).get_view_detail(base_id, scene_id, view_code)
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_view_detail(loader, base_id, view_code)
 
-    def create_view(self, base_id: str, scene_id: str, view: Any) -> Any:
+    def create_view(self, base_id: str, view: Any) -> Any:
         """Create a view. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_view(base_id, scene_id, view)
+        return self._ontology_for(base_id).create_view(base_id, view)
 
-    def update_view(
-        self, base_id: str, scene_id: str, view_code: str, view: Any
-    ) -> Any:
+    def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
         """Update a view. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).update_view(
-            base_id, scene_id, view_code, view
-        )
+        return self._ontology_for(base_id).update_view(base_id, view_code, view)
 
-    def delete_view(self, base_id: str, scene_id: str, view_code: str) -> None:
+    def delete_view(self, base_id: str, view_code: str) -> None:
         """Delete a view. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_view(base_id, scene_id, view_code)
+        self._ontology_for(base_id).delete_view(base_id, view_code)
 
     # ── Relation CRUD ──
 
-    def get_relations(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
-        """Get all relations under a scene."""
-        return self._ontology_for(base_id).get_relations(base_id, scene_id)
+    def get_relations(
+        self, base_id: str, *, cache_mode: CacheMode = CacheMode.REALTIME
+    ) -> list[dict[str, Any]]:
+        """Get all relations under a base."""
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_relations(loader, base_id)
 
     def get_relation_detail(
-        self, base_id: str, scene_id: str, rel_code: str
+        self, base_id: str, rel_code: str, *, cache_mode: CacheMode = CacheMode.REALTIME
     ) -> dict[str, Any] | None:
         """Get single relation detail by code."""
-        return self._ontology_for(base_id).get_relation_detail(
-            base_id, scene_id, rel_code
-        )
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_relation_detail(loader, base_id, rel_code)
 
-    def create_relation(self, base_id: str, scene_id: str, rel: Any) -> Any:
+    def create_relation(self, base_id: str, rel: Any) -> Any:
         """Create a relation. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_relation(base_id, scene_id, rel)
+        return self._ontology_for(base_id).create_relation(base_id, rel)
 
-    def update_relation(
-        self, base_id: str, scene_id: str, rel_code: str, rel: Any
-    ) -> Any:
+    def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
         """Update a relation. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).update_relation(
-            base_id, scene_id, rel_code, rel
-        )
+        return self._ontology_for(base_id).update_relation(base_id, rel_code, rel)
 
-    def delete_relation(self, base_id: str, scene_id: str, rel_code: str) -> None:
+    def delete_relation(self, base_id: str, rel_code: str) -> None:
         """Delete a relation. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_relation(base_id, scene_id, rel_code)
+        self._ontology_for(base_id).delete_relation(base_id, rel_code)
 
     # ── Datasource CRUD ──
 
-    def get_datasources(self, base_id: str, scene_id: str) -> list[dict[str, Any]]:
-        """Get all datasources under a scene."""
-        return self._ontology_for(base_id).get_datasources(base_id, scene_id)
+    def get_datasources(
+        self, base_id: str, *, cache_mode: CacheMode = CacheMode.REALTIME
+    ) -> list[dict[str, Any]]:
+        """Get all datasources under a base."""
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_datasources(loader, base_id)
 
     def get_datasource_detail(
-        self, base_id: str, scene_id: str, db_id: str
+        self, base_id: str, db_id: str, *, cache_mode: CacheMode = CacheMode.REALTIME
     ) -> dict[str, Any] | None:
         """Get single datasource detail by db_id."""
-        return self._ontology_for(base_id).get_datasource_detail(
-            base_id, scene_id, db_id
-        )
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_datasource_detail(loader, base_id, db_id)
 
-    def create_datasource(self, base_id: str, scene_id: str, ds: Any) -> Any:
+    def create_datasource(self, base_id: str, ds: Any) -> Any:
         """Create a datasource. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_datasource(base_id, scene_id, ds)
+        return self._ontology_for(base_id).create_datasource(base_id, ds)
 
-    def delete_datasource(self, base_id: str, scene_id: str, db_id: str) -> None:
+    def delete_datasource(self, base_id: str, db_id: str) -> None:
         """Delete a datasource. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_datasource(base_id, scene_id, db_id)
+        self._ontology_for(base_id).delete_datasource(base_id, db_id)
 
     # ── Action CRUD ──
 
     def get_actions(
-        self, base_id: str, scene_id: str, object_code: str
+        self,
+        base_id: str,
+        object_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
         """Get all actions on an object."""
-        return self._ontology_for(base_id).get_actions(base_id, scene_id, object_code)
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_actions(loader, base_id, object_code)
 
     def get_action_detail(
         self,
         base_id: str,
-        scene_id: str,
         object_code: str,
         action_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any] | None:
         """Get single action detail by code."""
-        return self._ontology_for(base_id).get_action_detail(
-            base_id, scene_id, object_code, action_code
-        )
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_action_detail(loader, base_id, object_code, action_code)
 
-    def create_action(
-        self, base_id: str, scene_id: str, object_code: str, action: Any
-    ) -> Any:
+    def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
         """Create an action. Raises PermissionError on read-only backends."""
-        return self._ontology_for(base_id).create_action(
-            base_id, scene_id, object_code, action
-        )
+        return self._ontology_for(base_id).create_action(base_id, object_code, action)
 
     def update_action(
         self,
         base_id: str,
-        scene_id: str,
         object_code: str,
         action_code: str,
         action: Any,
     ) -> Any:
         """Update an action. Raises PermissionError on read-only backends."""
         return self._ontology_for(base_id).update_action(
-            base_id, scene_id, object_code, action_code, action
+            base_id, object_code, action_code, action
         )
 
-    def delete_action(
-        self, base_id: str, scene_id: str, object_code: str, action_code: str
-    ) -> None:
+    def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
         """Delete an action. Raises PermissionError on read-only backends."""
-        self._ontology_for(base_id).delete_action(
-            base_id, scene_id, object_code, action_code
-        )
+        self._ontology_for(base_id).delete_action(base_id, object_code, action_code)
 
     # ── Search & Graph (knowledge-backend routed) ──
 

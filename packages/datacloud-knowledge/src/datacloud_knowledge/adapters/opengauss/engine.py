@@ -648,7 +648,8 @@ class PostgresSearchEngine(TermSearchEngine):
         if term_type_codes:
             params["type_codes"] = sorted(term_type_codes)
 
-        rows = self._session.execute(sql, params).fetchall()
+        with self._with_session() as session:
+            rows = session.execute(sql, params).fetchall()
         return [
             BM25Result(
                 term_id=str(row[0]),
@@ -721,7 +722,8 @@ class PostgresSearchEngine(TermSearchEngine):
             "type_codes": sorted(term_type_codes),
             "per_type_limit": per_type_limit,
         }
-        rows = self._session.execute(sql, params).fetchall()
+        with self._with_session() as session:
+            rows = session.execute(sql, params).fetchall()
         return [
             BM25Result(
                 term_id=str(row[0]),
@@ -860,7 +862,8 @@ class PostgresSearchEngine(TermSearchEngine):
             )
             params = {"query_text": query_text, "limit": top_k}
 
-        rows = self._session.execute(sql, params).fetchall()
+        with self._with_session() as session:
+            rows = session.execute(sql, params).fetchall()
         return [
             SubstringResult(
                 term_id=str(row[0]),
@@ -925,7 +928,8 @@ class PostgresSearchEngine(TermSearchEngine):
             "type_codes": sorted(term_type_codes),
             "per_type_limit": per_type_limit,
         }
-        rows = self._session.execute(sql, params).fetchall()
+        with self._with_session() as session:
+            rows = session.execute(sql, params).fetchall()
         return [
             SubstringResult(
                 term_id=str(row[0]),
@@ -986,7 +990,8 @@ class PostgresSearchEngine(TermSearchEngine):
         )
 
         try:
-            rows = self._session.execute(sql, {"vector": vector_str, "limit": top_k}).fetchall()
+            with self._with_session() as session:
+                rows = session.execute(sql, {"vector": vector_str, "limit": top_k}).fetchall()
 
             results: list[VectorResult] = []
             for row in rows:
@@ -1063,7 +1068,8 @@ class PostgresSearchEngine(TermSearchEngine):
                 for i, tt in enumerate(term_types):
                     params[f"type_{i}"] = tt
 
-            rows = self._session.execute(sql, params).fetchall()
+            with self._with_session() as session:
+                rows = session.execute(sql, params).fetchall()
 
             results: list[dict[str, Any]] = []
             for row in rows:
