@@ -1,0 +1,77 @@
+# Understand-Anything ignore patterns
+# Similar to .gitignore but for knowledge graph analysis
+
+# Dependencies
+node_modules/
+venv/
+env/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Build outputs
+dist/
+build/
+*.min.js
+*.bundle.js
+*.map
+
+# Test coverage
+coverage/
+.nyc_output/
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Lock files (large and low signal)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+poetry.lock
+Pipfile.lock
+
+# Generated documentation
+docs/_build/
+site/
+
+# Large data files
+*.csv
+*.xlsx
+*.db
+*.sqlite
+*.sqlite3
+
+# Media files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.mp4
+*.mp3
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.rar
