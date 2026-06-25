@@ -19,19 +19,20 @@ from datacloud_platform.models import (
     StoredFile,
     ViewSummary,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
+from datacloud_platform.ports.entity_store import EntityStore
 from datacloud_platform.models.action import Action, ActionParam
 from datacloud_platform.models.datasource import Datasource, DbConnection
 from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.property import Property
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
+from datacloud_platform.platform_file_storage import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
 _STORAGE_DIR_ENV = "DATACLOUD_STORAGE_DIR"
 _DEFAULT_STORAGE_DIR = ".datacloud_results"
-_SCENES_FILE_ENV = "DATACLOUD_SCENE_REGISTRY_PATH"
-_DEFAULT_SCENES_FILE = ".datacloud/scenes.json"
 
 
 def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
@@ -57,8 +58,16 @@ class DataCloudDataBackend:
     does not hard-depend on datacloud-data at import time.
     """
 
-    def __init__(self) -> None:
-        self._scenes: dict[str, dict[str, Any]] | None = None  # lazy loaded
+    def __init__(self, entity_store: EntityStore | None = None) -> None:
+        if entity_store is None:
+            from datacloud_platform.adapters.json_entity_store import JsonEntityStore
+            from datacloud_platform.platform_file_storage import _data_dir
+
+            entity_store = JsonEntityStore(_data_dir())
+        self._entity_store = entity_store
+        self._scenes: dict[str, dict[str, Any]] | None = (
+            None  # lazy loaded (entity_store path)
+        )
 
     # ── OntologyBackend ────────────────────────────────────────────────────
 
@@ -80,8 +89,77 @@ class DataCloudDataBackend:
             relations=list(raw.get("relations", [])),
         )
 
+    def save_parsed_content(
+        self, base_path: Path, parsed: ParsedOwlContent
+    ) -> dict[str, int]:
+        """Persist parsed OWL content as ``objects_registry.json`` + shard files.
+
+        Writes a unified JSON registry for fast :meth:`load_ontology` loads and
+        individual shard files for detail queries.  Rebuilds indexes for all
+        three entity types on completion.
+
+        Args:
+            base_path: Root directory for the ontology base.
+            parsed: Structured parse result from :meth:`parse_owl`.
+
+        Returns:
+            Counts dict with ``objects``, ``views``, ``relations`` keys.
+        """
+        entity_store = JsonEntityStore(base_path)
+
+        counts: dict[str, int] = {"objects": 0, "views": 0, "relations": 0}
+
+        # Write unified JSON registry (fast-load path)
+        registry: dict[str, list[dict[str, Any]]] = {
+            "objects": parsed.objects,
+            "views": parsed.views,
+            "relations": parsed.relations,
+        }
+        base_path.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(base_path / "objects_registry.json", registry)
+
+        # Write per-object shard files
+        for obj in parsed.objects:
+            obj_code: str = obj.get("object_code", "") or ""
+            if obj_code:
+                entity_store.save("objects", obj_code, obj)
+                counts["objects"] += 1
+
+        # Write per-view shard files
+        for view in parsed.views:
+            v_code: str = (
+                view.get("view_code", view.get("viewCode", view.get("view_id", "")))
+                or ""
+            )
+            if v_code:
+                entity_store.save("views", v_code, view)
+                counts["views"] += 1
+
+        # Write per-relation shard files
+        for rel in parsed.relations:
+            r_code: str = rel.get("relation_code", rel.get("relationCode", "")) or ""
+            if r_code:
+                entity_store.save("relations", r_code, rel)
+                counts["relations"] += 1
+
+        # Rebuild all indexes
+        for et in ("objects", "views", "relations"):
+            entity_store.save_index(et, entity_store.rebuild_index(et))
+
+        logger.info(
+            "save_parsed_content: %s objects=%d views=%d relations=%d",
+            base_path,
+            counts["objects"],
+            counts["views"],
+            counts["relations"],
+        )
+        return counts
+
     def load_ontology(self, base_path: Path) -> OntologyQueryable:
         """Load parsed ontology directory into a queryable runtime object.
+
+        Prefers ``objects_registry.json`` (single file, < 1s) when available.
+        Falls back to full OWL directory traversal for backwards compatibility.
 
         Args:
             base_path: Path to the OWL resource directory root.
@@ -92,9 +170,18 @@ class DataCloudDataBackend:
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
 
         loader = OntologyLoader()
+
+        # Fast path: unified JSON registry (Phase 2 output)
+        registry = base_path / "objects_registry.json"
+        if registry.exists():
+            content = _json.loads(registry.read_text(encoding="utf-8"))
+            loader.load_from_content(content)
+            return loader  # type: ignore[no-any-return]
+
+        # Fallback: old-format OWL directory traversal (~10s)
         if base_path.exists():
             loader.load_from_owl_resource_directory(str(base_path))
-        return loader  # type: ignore[return-value]
+        return loader  # type: ignore[no-any-return]
 
     def load_terms(
         self, _loader: OntologyQueryable, *, library_id: str = "PERSONAL_LIB"
@@ -115,7 +202,7 @@ class DataCloudDataBackend:
         from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
 
         _ = library_id  # consumed by concrete TermLoader subclass
-        return TermLoader()  # type: ignore[abstract]
+        return TermLoader()
 
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Create physical table for DYNAMIC_TABLE objects.
@@ -217,16 +304,64 @@ class DataCloudDataBackend:
     # ── Object CRUD (stub — datacloud-data SDK does not yet support) ────────
 
     def create_object(self, base_id: str, obj: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Object creation not supported via datacloud-data SDK")
+        """Persist a new ontology object via JsonEntityStore.
+
+        Args:
+            base_id: Base / project identifier.
+            obj: ObjectType dict or pydantic model.
+
+        Returns:
+            The saved object dict.
+
+        Raises:
+            ValueError: If object_code is missing or empty.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        obj_dict: dict[str, Any] = (
+            obj if isinstance(obj, dict) else obj.model_dump(by_alias=True)
+        )
+        code: str = obj_dict.get("object_code") or obj_dict.get("objectCode", "")
+        if not code:
+            raise ValueError("object_code is required for object creation")
+        entity_store.save("objects", code, obj_dict)
+        self._incremental_save(entity_store, "objects", code, obj_dict)
+        logger.info("Created object: base_id=%s object_code=%s", base_id, code)
+        return obj_dict
 
     def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Object update not supported via datacloud-data SDK")
+        """Update an existing ontology object.
+
+        Args:
+            base_id: Base / project identifier.
+            object_code: Target object code.
+            obj: Updated ObjectType dict or pydantic model.
+
+        Returns:
+            The updated object dict.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        obj_dict: dict[str, Any] = (
+            obj if isinstance(obj, dict) else obj.model_dump(by_alias=True)
+        )
+        entity_store.save("objects", object_code, obj_dict)
+        self._incremental_save(entity_store, "objects", object_code, obj_dict)
+        logger.info("Updated object: base_id=%s object_code=%s", base_id, object_code)
+        return obj_dict
 
     def delete_object(self, base_id: str, object_code: str) -> None:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Object deletion not supported via datacloud-data SDK")
+        """Delete an ontology object.
+
+        Args:
+            base_id: Base / project identifier.
+            object_code: Target object code.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        entity_store.delete("objects", object_code)
+        self._incremental_delete(entity_store, "objects", object_code)
+        logger.info("Deleted object: base_id=%s object_code=%s", base_id, object_code)
 
     # ── View CRUD ──────────────────────────────────────────────────────────
 
@@ -300,16 +435,68 @@ class DataCloudDataBackend:
         return view.model_dump(by_alias=True)
 
     def create_view(self, base_id: str, view: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("View creation not supported via datacloud-data SDK")
+        """Persist a new view via JsonEntityStore.
+
+        Args:
+            base_id: Base / project identifier.
+            view: View dict or pydantic model.
+
+        Returns:
+            The saved view dict.
+
+        Raises:
+            ValueError: If view_code is missing or empty.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        view_dict: dict[str, Any] = (
+            view if isinstance(view, dict) else view.model_dump(by_alias=True)
+        )
+        code: str = (
+            view_dict.get("view_code")
+            or view_dict.get("viewCode")
+            or view_dict.get("view_id", "")
+        )
+        if not code:
+            raise ValueError("view_code is required for view creation")
+        entity_store.save("views", code, view_dict)
+        self._incremental_save(entity_store, "views", code, view_dict)
+        logger.info("Created view: base_id=%s view_code=%s", base_id, code)
+        return view_dict
 
     def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("View update not supported via datacloud-data SDK")
+        """Update an existing view.
+
+        Args:
+            base_id: Base / project identifier.
+            view_code: Target view code.
+            view: Updated View dict or pydantic model.
+
+        Returns:
+            The updated view dict.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        view_dict: dict[str, Any] = (
+            view if isinstance(view, dict) else view.model_dump(by_alias=True)
+        )
+        entity_store.save("views", view_code, view_dict)
+        self._incremental_save(entity_store, "views", view_code, view_dict)
+        logger.info("Updated view: base_id=%s view_code=%s", base_id, view_code)
+        return view_dict
 
     def delete_view(self, base_id: str, view_code: str) -> None:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("View deletion not supported via datacloud-data SDK")
+        """Delete a view.
+
+        Args:
+            base_id: Base / project identifier.
+            view_code: Target view code.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        entity_store.delete("views", view_code)
+        self._incremental_delete(entity_store, "views", view_code)
+        logger.info("Deleted view: base_id=%s view_code=%s", base_id, view_code)
 
     # ── Relation CRUD (stub — datacloud-data SDK does not yet support) ──────
 
@@ -379,16 +566,64 @@ class DataCloudDataBackend:
         return None
 
     def create_relation(self, base_id: str, rel: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Relation creation not supported via datacloud-data SDK")
+        """Persist a new relation via JsonEntityStore.
+
+        Args:
+            base_id: Base / project identifier.
+            rel: Relation dict or pydantic model.
+
+        Returns:
+            The saved relation dict.
+
+        Raises:
+            ValueError: If relation_code is missing or empty.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        rel_dict: dict[str, Any] = (
+            rel if isinstance(rel, dict) else rel.model_dump(by_alias=True)
+        )
+        code: str = rel_dict.get("relation_code") or rel_dict.get("relationCode", "")
+        if not code:
+            raise ValueError("relation_code is required for relation creation")
+        entity_store.save("relations", code, rel_dict)
+        self._incremental_save(entity_store, "relations", code, rel_dict)
+        logger.info("Created relation: base_id=%s relation_code=%s", base_id, code)
+        return rel_dict
 
     def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Relation update not supported via datacloud-data SDK")
+        """Update an existing relation.
+
+        Args:
+            base_id: Base / project identifier.
+            rel_code: Target relation code.
+            rel: Updated Relation dict or pydantic model.
+
+        Returns:
+            The updated relation dict.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        rel_dict: dict[str, Any] = (
+            rel if isinstance(rel, dict) else rel.model_dump(by_alias=True)
+        )
+        entity_store.save("relations", rel_code, rel_dict)
+        self._incremental_save(entity_store, "relations", rel_code, rel_dict)
+        logger.info("Updated relation: base_id=%s rel_code=%s", base_id, rel_code)
+        return rel_dict
 
     def delete_relation(self, base_id: str, rel_code: str) -> None:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Relation deletion not supported via datacloud-data SDK")
+        """Delete a relation.
+
+        Args:
+            base_id: Base / project identifier.
+            rel_code: Target relation code.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        entity_store.delete("relations", rel_code)
+        self._incremental_delete(entity_store, "relations", rel_code)
+        logger.info("Deleted relation: base_id=%s rel_code=%s", base_id, rel_code)
 
     # ── Action CRUD (stub — datacloud-data SDK does not yet support) ────────
 
@@ -433,8 +668,38 @@ class DataCloudDataBackend:
         return None
 
     def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Action creation not supported via datacloud-data SDK")
+        """Persist a new action under an object via JsonEntityStore.
+
+        Args:
+            base_id: Base / project identifier.
+            object_code: Parent object code.
+            action: Action dict or pydantic model.
+
+        Returns:
+            The saved action dict.
+
+        Raises:
+            ValueError: If action_code is missing or empty.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        action_dict: dict[str, Any] = (
+            action if isinstance(action, dict) else action.model_dump(by_alias=True)
+        )
+        code: str = action_dict.get("action_code") or action_dict.get("actionCode", "")
+        if not code:
+            raise ValueError("action_code is required for action creation")
+        # Ensure parent object_code is recorded
+        action_dict["belongObjectCode"] = object_code
+        entity_store.save("actions", code, action_dict)
+        self._incremental_save(entity_store, "actions", code, action_dict)
+        logger.info(
+            "Created action: base_id=%s object_code=%s action_code=%s",
+            base_id,
+            object_code,
+            code,
+        )
+        return action_dict
 
     def update_action(
         self,
@@ -443,12 +708,52 @@ class DataCloudDataBackend:
         action_code: str,
         action: Any,
     ) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Action update not supported via datacloud-data SDK")
+        """Update an existing action.
+
+        Args:
+            base_id: Base / project identifier.
+            object_code: Parent object code.
+            action_code: Target action code.
+            action: Updated Action dict or pydantic model.
+
+        Returns:
+            The updated action dict.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        action_dict: dict[str, Any] = (
+            action if isinstance(action, dict) else action.model_dump(by_alias=True)
+        )
+        action_dict["belongObjectCode"] = object_code
+        entity_store.save("actions", action_code, action_dict)
+        self._incremental_save(entity_store, "actions", action_code, action_dict)
+        logger.info(
+            "Updated action: base_id=%s object_code=%s action_code=%s",
+            base_id,
+            object_code,
+            action_code,
+        )
+        return action_dict
 
     def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError("Action deletion not supported via datacloud-data SDK")
+        """Delete an action.
+
+        Args:
+            base_id: Base / project identifier.
+            object_code: Parent object code.
+            action_code: Target action code.
+        """
+        _ = object_code  # stored entity keyed by action_code; object_code is context only
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        entity_store.delete("actions", action_code)
+        self._incremental_delete(entity_store, "actions", action_code)
+        logger.info(
+            "Deleted action: base_id=%s object_code=%s action_code=%s",
+            base_id,
+            object_code,
+            action_code,
+        )
 
     # ── Datasource CRUD ────────────────────────────────────────────────────
 
@@ -519,58 +824,85 @@ class DataCloudDataBackend:
         return Datasource(db=[db_conn]).model_dump(by_alias=True)
 
     def create_datasource(self, base_id: str, ds: Any) -> Any:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError(
-            "Datasource creation not supported via datacloud-data SDK"
+        """Persist a new datasource via JsonEntityStore.
+
+        Args:
+            base_id: Base / project identifier.
+            ds: Datasource dict or pydantic model.
+
+        Returns:
+            The saved datasource dict.
+
+        Raises:
+            ValueError: If db_id is missing or empty.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        ds_dict: dict[str, Any] = (
+            ds if isinstance(ds, dict) else ds.model_dump(by_alias=True)
         )
+        # Datasource wraps a list of DbConnection; extract first db_id
+        db_list: list[dict[str, Any]] = ds_dict.get("db", [])
+        db_id = ""
+        if db_list:
+            db_id = db_list[0].get("dbId", db_list[0].get("db_id", ""))
+        if not db_id:
+            raise ValueError("db_id is required for datasource creation")
+        entity_store.save("datasources", db_id, ds_dict)
+        self._incremental_save(entity_store, "datasources", db_id, ds_dict)
+        logger.info("Created datasource: base_id=%s db_id=%s", base_id, db_id)
+        return ds_dict
 
     def delete_datasource(self, base_id: str, db_id: str) -> None:
-        """Raise PermissionError — write operations not supported via SDK."""
-        raise PermissionError(
-            "Datasource deletion not supported via datacloud-data SDK"
-        )
+        """Delete a datasource.
+
+        Args:
+            base_id: Base / project identifier.
+            db_id: Target database identifier.
+        """
+        base_path = self._resolve_base_path(base_id)
+        entity_store = JsonEntityStore(base_path)
+        entity_store.delete("datasources", db_id)
+        self._incremental_delete(entity_store, "datasources", db_id)
+        logger.info("Deleted datasource: base_id=%s db_id=%s", base_id, db_id)
 
     # ── Scene management ──────────────────────────────────────────────────
 
-    def _scenes_file(self) -> Path:
-        """Resolve scenes JSON file path from env or default."""
-        env_path = os.getenv(_SCENES_FILE_ENV)
-        if env_path:
-            return Path(env_path)
-        return Path(_DEFAULT_SCENES_FILE)
-
     def _ensure_scenes_loaded(self) -> dict[str, dict[str, Any]]:
-        """Lazy-load scenes from JSON file into in-memory dict."""
+        """Lazy-load scenes from EntityStore into in-memory dict.
+
+        Falls back to an empty dict when no EntityStore is configured.
+        """
         if self._scenes is not None:
             return self._scenes
-        file_path = self._scenes_file()
-        if file_path.exists():
+        if self._entity_store is not None:
             try:
-                raw = _json.loads(file_path.read_text(encoding="utf-8"))
-                if isinstance(raw, list):
-                    self._scenes = {s["scene_id"]: s for s in raw}
-                else:
-                    self._scenes = {}
+                self._scenes = dict(self._entity_store.load_index("scenes"))
             except Exception:
-                logger.warning(
-                    "Failed to load scenes from %s", file_path, exc_info=True
-                )
+                logger.warning("Failed to load scenes index", exc_info=True)
                 self._scenes = {}
         else:
             self._scenes = {}
         return self._scenes
 
     def _save_scenes(self) -> None:
-        """Persist in-memory scenes to JSON file."""
-        if self._scenes is None:
+        """Persist in-memory scenes to EntityStore index atomically."""
+        if self._scenes is None or self._entity_store is None:
             return
-        file_path = self._scenes_file()
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        data = list(self._scenes.values())
-        file_path.write_text(
-            _json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        logger.info("Saved %d scenes to %s", len(data), file_path)
+        self._entity_store.save_index("scenes", self._scenes)
+        logger.info("Saved %d scenes to EntityStore", len(self._scenes))
+
+    def _save_scene(self, scene_id: str, scene: dict[str, Any]) -> None:
+        """Persist a single scene file and the index atomically."""
+        if self._entity_store is not None:
+            self._entity_store.save("scenes", scene_id, scene)
+        self._save_scenes()
+
+    def _delete_scene(self, scene_id: str) -> None:
+        """Delete a single scene file and update the index."""
+        if self._entity_store is not None:
+            self._entity_store.delete("scenes", scene_id)
+        self._save_scenes()
 
     def list_scenes(self, base_id: str) -> list[dict[str, Any]]:
         """Return all scenes under a base."""
@@ -885,7 +1217,7 @@ class DataCloudDataBackend:
         return f"scene_{uuid.uuid4().hex[:12]}"
 
     def create_scene(self, base_id: str, scene: Any) -> dict[str, Any]:
-        """Create a scene (grouping container) with local JSON persistence.
+        """Create a scene (grouping container) with EntityStore persistence.
 
         Args:
             base_id: Base / project identifier.
@@ -918,7 +1250,7 @@ class DataCloudDataBackend:
             "member_view_codes": [],
         }
         scenes[scene_id] = new_scene
-        self._save_scenes()
+        self._save_scene(scene_id, new_scene)
         logger.info("Created scene: base_id=%s scene_id=%s", base_id, scene_id)
         return new_scene
 
@@ -952,7 +1284,7 @@ class DataCloudDataBackend:
             if hasattr(updates, "scene_desc") and updates.scene_desc is not None:
                 scene["scene_desc"] = updates.scene_desc
 
-        self._save_scenes()
+        self._save_scene(scene_id, scene)
         logger.info("Updated scene: base_id=%s scene_id=%s", base_id, scene_id)
         return scene
 
@@ -968,7 +1300,7 @@ class DataCloudDataBackend:
         if scene.get("base_id") != base_id:
             return
         del scenes[scene_id]
-        self._save_scenes()
+        self._delete_scene(scene_id)
         logger.info("Deleted scene: base_id=%s scene_id=%s", base_id, scene_id)
 
     # ── Scene member management ────────────────────────────────────────────
@@ -1003,7 +1335,7 @@ class DataCloudDataBackend:
 
         scene["member_object_codes"] = list(existing_objs | set(object_codes))
         scene["member_view_codes"] = list(existing_views | set(view_codes))
-        self._save_scenes()
+        self._save_scene(scene_id, scene)
         logger.info(
             "Added scene members: scene_id=%s objects=%d views=%d",
             scene_id,
@@ -1042,7 +1374,7 @@ class DataCloudDataBackend:
 
         scene["member_object_codes"] = list(obj_set)
         scene["member_view_codes"] = list(view_set)
-        self._save_scenes()
+        self._save_scene(scene_id, scene)
         logger.info(
             "Removed scene members: scene_id=%s objects=%d views=%d",
             scene_id,
@@ -1145,6 +1477,54 @@ class DataCloudDataBackend:
         return files
 
     # ── internal helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _resolve_base_path(base_id: str) -> Path:
+        """Resolve a base_id to a filesystem path under the platform data dir.
+
+        Uses ``DATACLOUD_DATA_DIR`` env var when set, otherwise ``~/.datacloud``.
+        """
+        from datacloud_platform.platform_file_storage import _data_dir
+
+        return _data_dir() / base_id
+
+    @staticmethod
+    def _rebuild_index(
+        entity_store: JsonEntityStore, entity_type: str
+    ) -> dict[str, dict[str, Any]]:
+        """Rebuild and persist the index for *entity_type* (full-scan, for batch use only).
+
+        Prefer :meth:`_incremental_save` / :meth:`_incremental_delete` for
+        single-entity CRUD operations to avoid O(n) scans.
+        """
+        idx = entity_store.rebuild_index(entity_type)
+        entity_store.save_index(entity_type, idx)
+        return idx
+
+    @staticmethod
+    def _incremental_save(
+        entity_store: JsonEntityStore,
+        entity_type: str,
+        code: str,
+        data: dict[str, Any],
+    ) -> None:
+        """Incrementally update a single entity in the index (O(1) read + O(1) write)."""
+        from datacloud_platform.adapters.json_entity_store import _to_index_entry
+
+        idx = entity_store.load_index(entity_type)
+        idx[code] = _to_index_entry(data, entity_type)
+        entity_store.save_index(entity_type, idx)
+
+    @staticmethod
+    def _incremental_delete(
+        entity_store: JsonEntityStore,
+        entity_type: str,
+        code: str,
+    ) -> None:
+        """Incrementally remove a single entity from the index (O(1) read + O(1) write)."""
+        idx = entity_store.load_index(entity_type)
+        idx.pop(code, None)
+        entity_store.save_index(entity_type, idx)
 
     @staticmethod
     def _to_summary(ont_class: object) -> ObjectSummary:
