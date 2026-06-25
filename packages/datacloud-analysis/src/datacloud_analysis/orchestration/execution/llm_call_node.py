@@ -162,21 +162,32 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
 
     # ── 附06-V3 锚点模式：注入本体对象列表 + 已排除路径 + 收敛引导 ─────────────
     try:
-        from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
-            TOOL_POOL,
-            TOOL_TO_OBJECT,
-            is_anchor_mode,
-        )
+        _tool_ctx = (config.get("configurable") or {}).get("tool_context") if config else None
 
-        if is_anchor_mode():
+        from datacloud_analysis.tools.tool_pool import is_anchor_mode  # noqa: PLC0415
+
+        _anchor = _tool_ctx.anchor_mode if _tool_ctx else is_anchor_mode()
+
+        if _anchor:
             rg: dict[str, Any] = state.get("reasoning_graph") or {}
             dead_end_codes = {d["object_code"] for d in (rg.get("dead_ends") or [])}
             active_tools_set = set(state.get("active_tools") or [])
 
-            obj_tools: dict[str, list[str]] = {}
-            for tname, ocode in TOOL_TO_OBJECT.items():
-                if tname in TOOL_POOL:
-                    obj_tools.setdefault(ocode, []).append(tname)
+            if _tool_ctx is not None:
+                # 从 allowed_scope 取授权范围内的对象列表，不再枚举全局 TOOL_POOL
+                obj_tools: dict[str, list[str]] = {}
+                for ocode in [e.code for e in _tool_ctx.allowed_scope
+                               if e.scope_type in ("OBJECT", "VIEW")]:
+                    obj_tools[ocode] = _tool_ctx.object_to_tools.get(ocode, [])
+            else:
+                from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+                    TOOL_POOL,
+                    TOOL_TO_OBJECT,
+                )
+                obj_tools = {}
+                for tname, ocode in TOOL_TO_OBJECT.items():
+                    if tname in TOOL_POOL:
+                        obj_tools.setdefault(ocode, []).append(tname)
 
             # 尝试从 loader 读取对象/视图的中文名称，供 LLM 理解选择
             _obj_names: dict[str, str] = {}
@@ -303,16 +314,24 @@ def make_llm_call_node(
         )
 
         tools_map = {t.name: t for t in tools_list}
-        # ★ 附05 3.2.3：从 TOOL_POOL 按名合并已解锁工具（active_tools 只存名字，TOOL_POOL 存对象）
-        try:
-            from datacloud_analysis.tools.tool_pool import (
-                get_tools as _get_unlocked,  # noqa: PLC0415
-            )
-
-            _active_names: list[str] = state.get("active_tools") or []
-            tools_map.update(_get_unlocked(_active_names))
-        except Exception:  # noqa: BLE001
-            pass  # TOOL_POOL 未初始化（非运维诊断 Agent）时静默跳过
+        # ★ 附05 3.2.3：从 tool_context.tools_map 按名合并已解锁工具
+        # （active_tools 只存名字，tools_map 存对象；无 tool_context 时降级到 TOOL_POOL）
+        _active_names: list[str] = state.get("active_tools") or []
+        _tool_ctx = (config.get("configurable") or {}).get("tool_context")
+        if _tool_ctx is not None:
+            tools_map.update({
+                name: tool
+                for name, tool in _tool_ctx.tools_map.items()
+                if name in _active_names
+            })
+        else:
+            try:
+                from datacloud_analysis.tools.tool_pool import (
+                    get_tools as _get_unlocked_legacy,  # noqa: PLC0415
+                )
+                tools_map.update(_get_unlocked_legacy(_active_names))
+            except Exception:  # noqa: BLE001
+                pass  # TOOL_POOL 未初始化（非运维诊断 Agent）时静默跳过
         tools_map["finish_react"] = finish_react
         _llm_config: dict[str, Any] | None = (config.get("configurable") or {}).get("llm_config")
         llm = _build_llm(state, llm_config=_llm_config)

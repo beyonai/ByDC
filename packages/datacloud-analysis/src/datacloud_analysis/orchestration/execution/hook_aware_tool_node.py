@@ -27,6 +27,67 @@ from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError,
 logger = logging.getLogger(__name__)
 
 
+def _get_db_engine() -> Any:
+    """获取数据库连接（供测试 mock）。"""
+    try:
+        from datacloud_analysis.infrastructure.db import get_engine  # noqa: PLC0415
+        return get_engine()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _get_next_objects_from_term(
+    source_obj_code: str,
+    allowed_scope: list,
+) -> list[str]:
+    """查询 term_relation 表，取 source_obj_code 一跳可达且在授权范围内的对象列表。
+
+    Returns:
+        list[str]: object_code 列表（可能为空）
+    """
+    if not allowed_scope:
+        return []
+
+    object_codes = [e.code for e in allowed_scope if e.scope_type == "OBJECT"]
+    scene_codes = [e.code for e in allowed_scope if e.scope_type == "SCENE"]
+    library_ids = [e.code for e in allowed_scope if e.scope_type == "ONTOLOGY_BASE"]
+
+    try:
+        engine = _get_db_engine()
+        if engine is None:
+            return []
+
+        placeholders_obj = ",".join(f":oc{i}" for i in range(len(object_codes))) if object_codes else "NULL"
+        placeholders_sc = ",".join(f":sc{i}" for i in range(len(scene_codes))) if scene_codes else "NULL"
+        placeholders_lib = ",".join(f":lib{i}" for i in range(len(library_ids))) if library_ids else "NULL"
+
+        sql = f"""
+            SELECT target.term_code AS object_code
+            FROM byai.term_relation tr
+            JOIN byai.term source ON tr.source_term_id = source.term_id
+            JOIN byai.term target ON tr.target_term_id = target.term_id
+            WHERE source.term_code = :source_obj_code
+              AND target.term_type_code IN ('object', 'view')
+              AND (
+                  target.term_code IN ({placeholders_obj})
+               OR target.domain_id IN ({placeholders_sc})
+               OR target.library_id IN ({placeholders_lib})
+              )
+        """
+        params: dict[str, Any] = {"source_obj_code": source_obj_code}
+        for i, c in enumerate(object_codes):
+            params[f"oc{i}"] = c
+        for i, c in enumerate(scene_codes):
+            params[f"sc{i}"] = c
+        for i, c in enumerate(library_ids):
+            params[f"lib{i}"] = c
+
+        result = engine.execute(sql, params)
+        return [row["object_code"] for row in result.fetchall()]
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def _get_tool_display_label(tool_name: str, tools_map: dict[str, Any]) -> str:
     """返回工具的友好显示名称，优先使用 metadata.title，回退到 tool_name。"""
     tool = tools_map.get(tool_name)
@@ -461,113 +522,126 @@ class HookAwareToolNode(ToolNode):
             import contextlib as _ctx  # noqa: PLC0415
             import json as _json  # noqa: PLC0415
 
+            _tool_ctx = (config.get("configurable") or {}).get("tool_context") if config else None
+
             from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
                 _get_object_code_by_tool,
-                get_relation_graph,
-                get_tools,
             )
 
-            _relation_graph = get_relation_graph()
-            if _relation_graph is not None:
-                for _msg in result_dict.get("messages") or []:
-                    if not isinstance(_msg, ToolMessage):
-                        continue
-                    if (_msg.name or "") == "finish_react":
-                        continue
+            for _msg in result_dict.get("messages") or []:
+                if not isinstance(_msg, ToolMessage):
+                    continue
+                if (_msg.name or "") == "finish_react":
+                    continue
 
-                    _tool_name = _msg.name or ""
-                    _raw_content = str(_msg.content or "")
-                    _result: dict[str, Any] = {}
-                    with _ctx.suppress(Exception):
-                        _result = _json.loads(_raw_content) if _raw_content else {}
+                _tool_name = _msg.name or ""
+                _raw_content = str(_msg.content or "")
+                _result: dict[str, Any] = {}
+                with _ctx.suppress(Exception):
+                    _result = _json.loads(_raw_content) if _raw_content else {}
 
-                    # 1. 查关系图，获取下一步建议（无条件解锁）
-                    _source_obj = _get_object_code_by_tool(_tool_name)
-                    _suggestions = []
-                    if _source_obj:
-                        _suggestions = _relation_graph.get_next_objects(_source_obj)
-
-                    # 2. 去重过滤
-                    _existing = set(state_dict.get("active_tools") or [])
-                    _to_add = [s for s in _suggestions if s.tool not in _existing]
-                    _new_names = [s.tool for s in _to_add]
-
-                    # 合并 ParamLinkGraph 的工具级解锁建议
-                    try:
-                        from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
-                            TOOL_POOL,
-                            get_param_link_graph,
-                        )
-
-                        _plg = get_param_link_graph()
-                        if _plg is not None:
-                            _param_nexts = _plg.get_next_tools(_tool_name)
-                            _param_new = [
-                                t
-                                for t in _param_nexts
-                                if t not in _existing
-                                and t not in set(_new_names)
-                                and t in TOOL_POOL
-                            ]
-                            _new_names = _new_names + _param_new
-                    except Exception:  # noqa: BLE001
-                        pass
-
-                    # 3. 统一写入（两路合并后只写一次，避免覆盖）
-                    if _new_names:
-                        self.tools_by_name.update(get_tools(_new_names))
-                        _extra_state["active_tools"] = list(_existing) + _new_names
-
-                    # 4. 更新 reasoning_graph
-                    _update_reasoning_graph(state_dict, _tool_name, _result, _to_add, _extra_state)
-
-                    # 5. 锚点激活时注入全量工具链路图到 state["messages"]
-                    #    注：goto_ontology / activate_anchor 返回的是人类可读字符串，
-                    #    json.loads 会失败导致 _result 为空，故这里传原始文本 _raw_content，
-                    #    由 _build_anchor_chain_hint_update 内部正则提取 object_code。
-                    try:
-                        from datacloud_analysis.tools.param_link_graph import (  # noqa: PLC0415
-                            _build_anchor_chain_hint_update,
-                        )
-
-                        _plg2 = get_param_link_graph()
-                        _anchor_update = _build_anchor_chain_hint_update(
-                            tool_name=_tool_name,
-                            tool_result=_result or _raw_content,
-                            current_anchor=state_dict.get("chain_hint_anchor"),
-                            plg=_plg2,
-                        )
-                        if _anchor_update:
-                            _extra_state.update(_anchor_update)
-                            logger.info(
-                                "[ChainHint] anchor injected: tool=%s anchor=%s "
-                                "hint_msgs=%d (plg=%s)",
-                                _tool_name,
-                                _anchor_update.get("chain_hint_anchor"),
-                                len(_anchor_update.get("messages") or []),
-                                "ready" if _plg2 is not None else "None",
-                            )
-                        else:
-                            logger.info(
-                                "[ChainHint] anchor skipped: tool=%s plg=%s "
-                                "current_anchor=%s (not a trigger tool, no new anchor, "
-                                "or plg unavailable)",
-                                _tool_name,
-                                "ready" if _plg2 is not None else "None",
-                                state_dict.get("chain_hint_anchor"),
-                            )
-                    except Exception:  # noqa: BLE001
-                        logger.warning("[ChainHint] anchor injection failed", exc_info=True)
-
-                    # 6. 更新 prev_active_tools 快照（供 llm_call_node 计算 delta）
-                    #    必须记录"本轮解锁前"的 active_tools，而非解锁后的值，
-                    #    否则下一轮 delta = active_tools - prev_active_tools 恒为空，
-                    #    导致串联提示永不注入。用 setdefault 只在本次 after_hook
-                    #    第一条工具消息时定基线（多条消息共享同一解锁前快照）。
-                    _extra_state.setdefault(
-                        "prev_active_tools",
-                        list(state_dict.get("active_tools") or []),
+                # 1. 查 term_relation 表取下一跳建议（替代 OntologyRelationGraph）
+                _source_obj = (
+                    next(
+                        (obj for obj, tools in _tool_ctx.object_to_tools.items()
+                         if _tool_name in tools),
+                        None,
                     )
+                    if _tool_ctx is not None
+                    else _get_object_code_by_tool(_tool_name)
+                )
+                _suggestions = []
+                if _source_obj:
+                    _suggestions = _get_next_objects_from_term(
+                        _source_obj,
+                        allowed_scope=_tool_ctx.allowed_scope if _tool_ctx else [],
+                    )
+
+                # 2. 去重过滤（_suggestions 现在是 object_code 字符串列表）
+                _existing = set(state_dict.get("active_tools") or [])
+                _to_add_objs = [s for s in _suggestions]
+                _new_names: list[str] = []
+                for _obj_code in _to_add_objs:
+                    _obj_tools = (
+                        _tool_ctx.object_to_tools.get(_obj_code, [])
+                        if _tool_ctx else []
+                    )
+                    _new_names.extend([t for t in _obj_tools if t not in _existing])
+                _to_add = _new_names  # for _update_reasoning_graph compatibility
+
+                # 合并 ParamLinkGraph 的工具级解锁建议（请求级实例）
+                try:
+                    _plg = _tool_ctx.param_link_graph if _tool_ctx else None
+                    if _plg is not None:
+                        _param_nexts = _plg.get_next_tools(_tool_name)
+                        _param_new = [
+                            t
+                            for t in _param_nexts
+                            if t not in _existing
+                            and t not in set(_new_names)
+                            and t in (_tool_ctx.tools_map if _tool_ctx else {})
+                        ]
+                        _new_names = _new_names + _param_new
+                except Exception:  # noqa: BLE001
+                    pass
+
+                # 3. 统一写入（两路合并后只写一次，避免覆盖）
+                if _new_names:
+                    if _tool_ctx is not None:
+                        self.tools_by_name.update({
+                            name: _tool_ctx.tools_map[name]
+                            for name in _new_names
+                            if name in _tool_ctx.tools_map
+                        })
+                    _extra_state["active_tools"] = list(_existing) + _new_names
+
+                # 4. 更新 reasoning_graph
+                _update_reasoning_graph(state_dict, _tool_name, _result, _to_add, _extra_state)
+
+                # 5. 锚点激活时注入全量工具链路图到 state["messages"]
+                try:
+                    from datacloud_analysis.tools.param_link_graph import (  # noqa: PLC0415
+                        _build_anchor_chain_hint_update,
+                    )
+
+                    _plg2 = _tool_ctx.param_link_graph if _tool_ctx else None
+                    _anchor_update = _build_anchor_chain_hint_update(
+                        tool_name=_tool_name,
+                        tool_result=_result or _raw_content,
+                        current_anchor=state_dict.get("chain_hint_anchor"),
+                        plg=_plg2,
+                    )
+                    if _anchor_update:
+                        _extra_state.update(_anchor_update)
+                        logger.info(
+                            "[ChainHint] anchor injected: tool=%s anchor=%s "
+                            "hint_msgs=%d (plg=%s)",
+                            _tool_name,
+                            _anchor_update.get("chain_hint_anchor"),
+                            len(_anchor_update.get("messages") or []),
+                            "ready" if _plg2 is not None else "None",
+                        )
+                    else:
+                        logger.info(
+                            "[ChainHint] anchor skipped: tool=%s plg=%s "
+                            "current_anchor=%s (not a trigger tool, no new anchor, "
+                            "or plg unavailable)",
+                            _tool_name,
+                            "ready" if _plg2 is not None else "None",
+                            state_dict.get("chain_hint_anchor"),
+                        )
+                except Exception:  # noqa: BLE001
+                    logger.warning("[ChainHint] anchor injection failed", exc_info=True)
+
+                # 6. 更新 prev_active_tools 快照（供 llm_call_node 计算 delta）
+                #    必须记录"本轮解锁前"的 active_tools，而非解锁后的值，
+                #    否则下一轮 delta = active_tools - prev_active_tools 恒为空，
+                #    导致串联提示永不注入。用 setdefault 只在本次 after_hook
+                #    第一条工具消息时定基线（多条消息共享同一解锁前快照）。
+                _extra_state.setdefault(
+                    "prev_active_tools",
+                    list(state_dict.get("active_tools") or []),
+                )
 
         except Exception:  # noqa: BLE001
             logger.debug("[HookAwareToolNode] tool_pool unlock failed", exc_info=True)
