@@ -10,11 +10,7 @@
 """
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
+from unittest.mock import MagicMock, patch
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T4.1  llm_call_node：bind_tools 来源
@@ -29,7 +25,7 @@ def test_llm_call_node_uses_tool_context_tools_map() -> None:
     fake_tool = MagicMock()
     fake_tool.name = "by_customer__query"
 
-    tool_context = RequestToolContext(
+    RequestToolContext(
         allowed_scope=[ScopeEntry(code="by_customer", scope_type="OBJECT")],
         loader=MagicMock(),
         tools_map={"by_customer__query": fake_tool},
@@ -38,9 +34,6 @@ def test_llm_call_node_uses_tool_context_tools_map() -> None:
 
     # 构造一个最小化的 make_llm_call_node 可接受的环境
     from datacloud_analysis.orchestration.execution.llm_call_node import make_llm_call_node
-
-    import inspect
-    sig = inspect.signature(make_llm_call_node)
     # 不需要真正调用，只要能拿到函数引用即可（红阶段先验证接口存在）
     assert callable(make_llm_call_node)
 
@@ -51,6 +44,7 @@ def test_llm_call_node_reads_tool_context_from_configurable() -> None:
     用 grep 验证代码中出现了对 tool_context 的读取。
     """
     import inspect
+
     from datacloud_analysis.orchestration.execution import llm_call_node as mod
 
     source = inspect.getsource(mod)
@@ -64,6 +58,7 @@ def test_llm_call_node_active_tools_from_tool_context_not_tool_pool() -> None:
     """llm_call_node 中激活工具合并逻辑应从 tool_context.tools_map 取，
     不应再调用 _get_unlocked（TOOL_POOL）。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import llm_call_node as mod
 
     source = inspect.getsource(mod)
@@ -82,6 +77,7 @@ def test_llm_call_node_anchor_prompt_uses_allowed_scope() -> None:
     """anchor_mode 时，dynamic_prompt 应从 tool_context.allowed_scope 枚举对象，
     不应再遍历全局 TOOL_TO_OBJECT。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import llm_call_node as mod
 
     source = inspect.getsource(mod)
@@ -112,6 +108,7 @@ def test_get_next_objects_from_term_importable() -> None:
 def test_hook_aware_tool_node_no_get_relation_graph() -> None:
     """after_hook 不应再调用 get_relation_graph()（已替换为 term_relation 查询）。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import hook_aware_tool_node as mod
 
     source = inspect.getsource(mod)
@@ -152,6 +149,7 @@ def test_get_next_objects_from_term_returns_list() -> None:
 def test_hook_aware_tool_node_no_get_param_link_graph_call() -> None:
     """after_hook 不应再调用 get_param_link_graph()（改从 tool_context 取）。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import hook_aware_tool_node as mod
 
     source = inspect.getsource(mod)
@@ -163,6 +161,7 @@ def test_hook_aware_tool_node_no_get_param_link_graph_call() -> None:
 def test_hook_aware_tool_node_reads_tool_context_from_configurable() -> None:
     """after_hook 应从 config['configurable']['tool_context'] 读取 RequestToolContext。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import hook_aware_tool_node as mod
 
     source = inspect.getsource(mod)
@@ -179,6 +178,7 @@ def test_hook_aware_tool_node_reads_tool_context_from_configurable() -> None:
 def test_hook_aware_tool_node_no_get_tools_for_update() -> None:
     """tools_by_name.update 不应再调用 get_tools(_new_names)，改从 tool_context.tools_map 取。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import hook_aware_tool_node as mod
 
     source = inspect.getsource(mod)
@@ -191,6 +191,7 @@ def test_hook_aware_tool_node_no_get_tools_for_update() -> None:
 def test_hook_aware_tool_node_updates_tools_by_name_from_tool_ctx() -> None:
     """tools_by_name 更新时应从 tool_context.tools_map 取对象。"""
     import inspect
+
     from datacloud_analysis.orchestration.execution import hook_aware_tool_node as mod
 
     source = inspect.getsource(mod)

@@ -162,7 +162,7 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
 
     # ── 附06-V3 锚点模式：注入本体对象列表 + 已排除路径 + 收敛引导 ─────────────
     try:
-        _tool_ctx = (config.get("configurable") or {}).get("tool_context") if config else None
+        _tool_ctx = None
 
         from datacloud_analysis.tools.tool_pool import is_anchor_mode  # noqa: PLC0415
 

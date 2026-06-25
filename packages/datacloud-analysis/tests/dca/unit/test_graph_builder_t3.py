@@ -10,11 +10,7 @@
 """
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 # ── T3.1 build_analysis_graph 接受 tool_context 参数 ─────────────────────────
 
@@ -24,7 +20,7 @@ def test_build_analysis_graph_accepts_tool_context() -> None:
     from datacloud_analysis.orchestration.graph_builder import build_analysis_graph
     from datacloud_analysis.tools.request_tool_context import RequestToolContext, ScopeEntry
 
-    tool_context = RequestToolContext(
+    RequestToolContext(
         allowed_scope=[ScopeEntry(code="lib_crm", scope_type="ONTOLOGY_BASE")],
         loader=MagicMock(),
         anchor_mode=True,
@@ -38,8 +34,9 @@ def test_build_analysis_graph_accepts_tool_context() -> None:
 
 def test_build_prebuilt_graph_accepts_tool_context() -> None:
     """_build_prebuilt_graph() 应接受 tool_context 关键字参数。"""
-    from datacloud_analysis.orchestration.graph_builder import _build_prebuilt_graph
     import inspect
+
+    from datacloud_analysis.orchestration.graph_builder import _build_prebuilt_graph
     sig = inspect.signature(_build_prebuilt_graph)
     assert "tool_context" in sig.parameters
 

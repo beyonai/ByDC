@@ -33,7 +33,7 @@ class RequestToolContext:
         loader: Any,
         tool_loader_cls: Any,
         threshold: int = 30,
-    ) -> "RequestToolContext":
+    ) -> RequestToolContext:
         """构建 RequestToolContext，确定 anchor_mode 并在 False 时预填充 tools_map。"""
         has_coarse = any(e.scope_type in ("ONTOLOGY_BASE", "SCENE") for e in allowed_scope)
         if has_coarse:

@@ -7,11 +7,6 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # T6.1  ask() 签名包含 tool_context 参数

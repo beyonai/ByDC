@@ -11,9 +11,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-
 # ── T2.1 _activate_object_with_context 可从模块级导入 ──────────────────────────
 
 

@@ -559,7 +559,7 @@ class HookAwareToolNode(ToolNode):
 
                 # 2. 去重过滤（_suggestions 现在是 object_code 字符串列表）
                 _existing = set(state_dict.get("active_tools") or [])
-                _to_add_objs = [s for s in _suggestions]
+                _to_add_objs = list(_suggestions)
                 _new_names: list[str] = []
                 for _obj_code in _to_add_objs:
                     _obj_tools = (

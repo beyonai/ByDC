@@ -7,12 +7,6 @@
 """
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # 辅助：构建最小化 worker 测试环境
 # ─────────────────────────────────────────────────────────────────────────────
@@ -142,6 +136,7 @@ def test_build_scope_entries_rel_takes_priority_over_mounted_objects() -> None:
 def test_worker_passes_tool_context_to_ontology_agent() -> None:
     """worker 情形一路径应构建 RequestToolContext 并传给 _ontology_agent.ask() 的 tool_context 参数。"""
     import inspect
+
     from byclaw_data import worker as mod
 
     source = inspect.getsource(mod)
@@ -154,6 +149,7 @@ def test_worker_passes_tool_context_to_ontology_agent() -> None:
 def test_worker_reads_rel_resource_list_from_config_extra() -> None:
     """worker.py 情形一应从 config_extra['rel_resource_list'] 读取资源列表。"""
     import inspect
+
     from byclaw_data import worker as mod
 
     source = inspect.getsource(mod)

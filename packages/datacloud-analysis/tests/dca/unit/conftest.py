@@ -9,10 +9,10 @@ Also stubs out by_framework (production dep not installed in test venv).
 """
 from __future__ import annotations
 
+import sys
 import types
 from pathlib import Path
 from unittest.mock import MagicMock
-import sys
 
 
 def _stub_by_framework() -> None:
