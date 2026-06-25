@@ -19,6 +19,7 @@ from datacloud_platform.models.datasource import Datasource
 from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View
+from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -40,18 +41,27 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     # ══════════════════════════════════════════════════
 
     @router.get("/{owner_type}/{base_id}/objects")
-    def list_objects(owner_type: str, base_id: str) -> Any:
+    def list_objects(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """List objects in a base."""
         try:
-            return ok(data=platform.get_objects(base_id))
+            return ok(data=platform.get_objects(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.get("/{owner_type}/{base_id}/objects/{code}")
-    def get_object(owner_type: str, base_id: str, code: str) -> Any:
+    def get_object(
+        owner_type: str,
+        base_id: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get object detail."""
         try:
-            obj = platform.get_object_detail(base_id, code)
+            obj = platform.get_object_detail(base_id, code, cache_mode=cache_mode)
             if obj is None:
                 raise HTTPException(
                     status_code=404, detail=f"Object '{code}' not found"
@@ -103,18 +113,27 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     # ══════════════════════════════════════════════════
 
     @router.get("/{owner_type}/{base_id}/views")
-    def list_views(owner_type: str, base_id: str) -> Any:
+    def list_views(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """List views in a base."""
         try:
-            return ok(data=platform.get_views(base_id))
+            return ok(data=platform.get_views(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.get("/{owner_type}/{base_id}/views/{code}")
-    def get_view(owner_type: str, base_id: str, code: str) -> Any:
+    def get_view(
+        owner_type: str,
+        base_id: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get view detail."""
         try:
-            view = platform.get_view_detail(base_id, code)
+            view = platform.get_view_detail(base_id, code, cache_mode=cache_mode)
             if view is None:
                 raise HTTPException(status_code=404, detail=f"View '{code}' not found")
             return ok(data=view)
@@ -162,18 +181,27 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     # ══════════════════════════════════════════════════
 
     @router.get("/{owner_type}/{base_id}/relations")
-    def list_relations(owner_type: str, base_id: str) -> Any:
+    def list_relations(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """List relations in a base."""
         try:
-            return ok(data=platform.get_relations(base_id))
+            return ok(data=platform.get_relations(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.get("/{owner_type}/{base_id}/relations/{code}")
-    def get_relation(owner_type: str, base_id: str, code: str) -> Any:
+    def get_relation(
+        owner_type: str,
+        base_id: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get relation detail."""
         try:
-            rel = platform.get_relation_detail(base_id, code)
+            rel = platform.get_relation_detail(base_id, code, cache_mode=cache_mode)
             if rel is None:
                 raise HTTPException(
                     status_code=404, detail=f"Relation '{code}' not found"
@@ -228,18 +256,27 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     # ══════════════════════════════════════════════════
 
     @router.get("/{owner_type}/{base_id}/datasources")
-    def list_datasources(owner_type: str, base_id: str) -> Any:
+    def list_datasources(
+        owner_type: str,
+        base_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """List datasources in a base."""
         try:
-            return ok(data=platform.get_datasources(base_id))
+            return ok(data=platform.get_datasources(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.get("/{owner_type}/{base_id}/datasources/{db_id}")
-    def get_datasource(owner_type: str, base_id: str, db_id: str) -> Any:
+    def get_datasource(
+        owner_type: str,
+        base_id: str,
+        db_id: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get datasource detail."""
         try:
-            ds = platform.get_datasource_detail(base_id, db_id)
+            ds = platform.get_datasource_detail(base_id, db_id, cache_mode=cache_mode)
             if ds is None:
                 raise HTTPException(
                     status_code=404, detail=f"Datasource '{db_id}' not found"
@@ -279,18 +316,33 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     # ══════════════════════════════════════════════════
 
     @router.get("/{owner_type}/{base_id}/objects/{object_code}/actions")
-    def list_actions(owner_type: str, base_id: str, object_code: str) -> Any:
+    def list_actions(
+        owner_type: str,
+        base_id: str,
+        object_code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """List actions on an object."""
         try:
-            return ok(data=platform.get_actions(base_id, object_code))
+            return ok(
+                data=platform.get_actions(base_id, object_code, cache_mode=cache_mode)
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.get("/{owner_type}/{base_id}/objects/{object_code}/actions/{code}")
-    def get_action(owner_type: str, base_id: str, object_code: str, code: str) -> Any:
+    def get_action(
+        owner_type: str,
+        base_id: str,
+        object_code: str,
+        code: str,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
         """Get action detail."""
         try:
-            action = platform.get_action_detail(base_id, object_code, code)
+            action = platform.get_action_detail(
+                base_id, object_code, code, cache_mode=cache_mode
+            )
             if action is None:
                 raise HTTPException(
                     status_code=404, detail=f"Action '{code}' not found"
