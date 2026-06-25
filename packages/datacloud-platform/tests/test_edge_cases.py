@@ -16,6 +16,7 @@ from datacloud_platform import (
     OntologyBaseEntry,
     OntologyBaseRegistry,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.api.server import create_app
 from datacloud_platform.backends.presets import register_preset
 from datacloud_platform.backends.registry import (
@@ -62,7 +63,7 @@ def fakes() -> dict[str, Any]:
 
 
 @pytest.fixture
-def client(fakes: dict[str, Any]) -> TestClient:
+def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
     """Build a TestClient backed entirely by fake backends."""
     onto_local = fakes["onto_local"]
     onto_remote = fakes["onto_remote"]
@@ -94,7 +95,7 @@ def client(fakes: dict[str, Any]) -> TestClient:
         },
     )
 
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id=LOCAL,
@@ -191,16 +192,17 @@ class TestDataCloudDataBackendCompleteness:
         assert result is None
 
     def test_create_view_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
+        with pytest.raises(ValueError, match="view_code is required"):
             self._backend().create_view("any-base", {})
 
-    def test_update_view_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_view("any-base", "vw-1", {})
+    def test_update_view_no_error_on_nonexistent(self) -> None:
+        """update_view on nonexistent view writes without error (local adapter)."""
+        result = self._backend().update_view("any-base", "vw-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_view_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_view("any-base", "vw-1")
+    def test_delete_view_no_error_on_nonexistent(self) -> None:
+        """delete_view on nonexistent view is a no-op (local adapter)."""
+        self._backend().delete_view("any-base", "vw-1")
 
     # ── Relation CRUD ──
 
@@ -219,16 +221,17 @@ class TestDataCloudDataBackendCompleteness:
         assert result is None
 
     def test_create_relation_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
+        with pytest.raises(ValueError, match="relation_code is required"):
             self._backend().create_relation("any-base", {})
 
-    def test_update_relation_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_relation("any-base", "rel-1", {})
+    def test_update_relation_no_error_on_nonexistent(self) -> None:
+        """update_relation on nonexistent relation writes without error."""
+        result = self._backend().update_relation("any-base", "rel-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_relation_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_relation("any-base", "rel-1")
+    def test_delete_relation_no_error_on_nonexistent(self) -> None:
+        """delete_relation on nonexistent relation is a no-op."""
+        self._backend().delete_relation("any-base", "rel-1")
 
     # ── Action CRUD ──
 
@@ -247,30 +250,32 @@ class TestDataCloudDataBackendCompleteness:
         assert result is None
 
     def test_create_action_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
+        with pytest.raises(ValueError, match="action_code is required"):
             self._backend().create_action("any-base", "obj-1", {})
 
-    def test_update_action_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_action("any-base", "obj-1", "act-1", {})
+    def test_update_action_no_error_on_nonexistent(self) -> None:
+        """update_action on nonexistent action writes without error."""
+        result = self._backend().update_action("any-base", "obj-1", "act-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_action_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_action("any-base", "obj-1", "act-1")
+    def test_delete_action_no_error_on_nonexistent(self) -> None:
+        """delete_action on nonexistent action is a no-op."""
+        self._backend().delete_action("any-base", "obj-1", "act-1")
 
     # ── Object CRUD ──
 
     def test_create_object_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
+        with pytest.raises(ValueError, match="object_code is required"):
             self._backend().create_object("any-base", {})
 
-    def test_update_object_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().update_object("any-base", "obj-1", {})
+    def test_update_object_no_error_on_nonexistent(self) -> None:
+        """update_object on nonexistent object writes without error."""
+        result = self._backend().update_object("any-base", "obj-1", {})
+        assert isinstance(result, dict)
 
-    def test_delete_object_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_object("any-base", "obj-1")
+    def test_delete_object_no_error_on_nonexistent(self) -> None:
+        """delete_object on nonexistent object is a no-op."""
+        self._backend().delete_object("any-base", "obj-1")
 
     # ── Datasource CRUD ──
 
@@ -289,12 +294,12 @@ class TestDataCloudDataBackendCompleteness:
         assert result is None
 
     def test_create_datasource_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
+        with pytest.raises(ValueError, match="db_id is required"):
             self._backend().create_datasource("any-base", {})
 
-    def test_delete_datasource_raises_permission_error(self) -> None:
-        with pytest.raises(PermissionError):
-            self._backend().delete_datasource("any-base", "db-1")
+    def test_delete_datasource_no_error_on_nonexistent(self) -> None:
+        """delete_datasource on nonexistent datasource is a no-op."""
+        self._backend().delete_datasource("any-base", "db-1")
 
     # ── Existing methods still work (no regression) ──
 

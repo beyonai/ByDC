@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import io
 import zipfile
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -18,6 +17,7 @@ from datacloud_platform import (
     OntologyBaseEntry,
     OntologyBaseRegistry,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.api.server import create_app
 from datacloud_platform.backends import registry as _registry
 from datacloud_platform.backends.presets import register_preset
@@ -73,7 +73,7 @@ def fakes() -> dict[str, Any]:
 
 
 @pytest.fixture
-def client(fakes: dict[str, Any]) -> TestClient:
+def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
     """Build a TestClient backed entirely by fake backends."""
     onto_local = fakes["onto_local"]
     onto_remote = fakes["onto_remote"]
@@ -105,7 +105,7 @@ def client(fakes: dict[str, Any]) -> TestClient:
         },
     )
 
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id=LOCAL,
@@ -1316,16 +1316,16 @@ class TestSnowflake:
 
 
 class TestPersistence:
-    """Tests for JSON file persistence of OntologyBaseRegistry."""
+    """Tests for EntityStore-backed persistence of OntologyBaseRegistry."""
 
-    def test_persist_and_restore(self, tmp_path: Path) -> None:
-
+    def test_register_persists_to_shard(self, entity_store: JsonEntityStore) -> None:
+        """register() persists entry as individual shard file."""
         from datacloud_platform.base_entry import (
             OntologyBaseEntry,
             OntologyBaseRegistry,
         )
 
-        registry = OntologyBaseRegistry()
+        registry = OntologyBaseRegistry(entity_store)
         registry.register(
             OntologyBaseEntry(base_id="p1", display_name="P1", description="desc1")
         )
@@ -1333,67 +1333,79 @@ class TestPersistence:
             OntologyBaseEntry(base_id="p2", display_name="P2", description="desc2")
         )
 
-        path = tmp_path / "bases.json"
-        registry.persist(path)
+        # Verify shard files exist
+        saved = entity_store.get("bases", "p1")
+        assert saved is not None
+        assert saved["display_name"] == "P1"
 
-        restored = OntologyBaseRegistry.restore(path)
-        assert restored.exists("p1")
-        assert restored.exists("p2")
-        e = restored.get("p1")
+        saved2 = entity_store.get("bases", "p2")
+        assert saved2 is not None
+        assert saved2["display_name"] == "P2"
+
+    def test_restore_loads_from_store(self, entity_store: JsonEntityStore) -> None:
+        """restore() loads entries from EntityStore index."""
+        from datacloud_platform.base_entry import (
+            OntologyBaseEntry,
+            OntologyBaseRegistry,
+        )
+
+        # First registry: register and verify it's persisted
+        registry1 = OntologyBaseRegistry(entity_store)
+        registry1.register(
+            OntologyBaseEntry(base_id="p1", display_name="P1", description="desc1")
+        )
+
+        # Second registry: restore from same store
+        registry2 = OntologyBaseRegistry(entity_store)
+        registry2.restore()
+        assert registry2.exists("p1")
+        e = registry2.get("p1")
         assert e is not None
         assert e.display_name == "P1"
         assert e.description == "desc1"
 
-    def test_restore_nonexistent_file(self, tmp_path: Path) -> None:
-
+    def test_restore_empty_store(self, entity_store: JsonEntityStore) -> None:
+        """restore() on a fresh store yields empty registry."""
         from datacloud_platform.base_entry import OntologyBaseRegistry
 
-        registry = OntologyBaseRegistry.restore(tmp_path / "nonexistent.json")
+        registry = OntologyBaseRegistry(entity_store)
+        registry.restore()
         assert registry.list() == []
 
-    def test_restore_corrupted_file(self, tmp_path: Path) -> None:
-
-        from datacloud_platform.base_entry import OntologyBaseRegistry
-
-        path = tmp_path / "corrupt.json"
-        path.write_text("not json")
-        registry = OntologyBaseRegistry.restore(path)
-        assert registry.list() == []
-
-    def test_delete_then_restore(self, tmp_path: Path) -> None:
-
+    def test_delete_persists_removal(self, entity_store: JsonEntityStore) -> None:
+        """unregister() removes entry file and updates index."""
         from datacloud_platform.base_entry import (
             OntologyBaseEntry,
             OntologyBaseRegistry,
         )
 
-        registry = OntologyBaseRegistry()
+        registry = OntologyBaseRegistry(entity_store)
         registry.register(
             OntologyBaseEntry(base_id="temp", display_name="T", description="d")
         )
-        path = tmp_path / "bases.json"
-        registry.persist(path)
+        assert entity_store.get("bases", "temp") is not None
+
         registry.unregister("temp")
-        registry.persist(path)
+        assert entity_store.get("bases", "temp") is None
+        assert not registry.exists("temp")
 
-        restored = OntologyBaseRegistry.restore(path)
-        assert not restored.exists("temp")
-
-    def test_persistence_survives_registry_reload(self, tmp_path: Path) -> None:
-
+    def test_persistence_survives_registry_reload(
+        self, entity_store: JsonEntityStore
+    ) -> None:
+        """Data survives across registry instances using shared EntityStore."""
         from datacloud_platform.base_entry import (
             OntologyBaseEntry,
             OntologyBaseRegistry,
         )
 
-        registry = OntologyBaseRegistry()
+        registry = OntologyBaseRegistry(entity_store)
         registry.register(
             OntologyBaseEntry(base_id="survive", display_name="S", description="d")
         )
-        path = tmp_path / "bases.json"
-        registry.persist(path)
 
-        restored = OntologyBaseRegistry.restore(path)
+        # New registry instance on same store
+        restored = OntologyBaseRegistry(entity_store)
+        restored.restore()
         assert restored.exists("survive")
         entry = restored.get("survive")
         assert entry is not None
