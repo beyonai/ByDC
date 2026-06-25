@@ -8,26 +8,10 @@ RemoteKnowledgeBackend (KnowledgeBackend Protocol).
 from __future__ import annotations
 
 import logging
-import time
 from contextlib import suppress
 from typing import Any, cast
 
 logger = logging.getLogger(__name__)
-
-
-class _CacheEntry:
-    """TTL cache entry for read operations."""
-
-    __slots__ = ("data", "expires_at")
-
-    def __init__(self, data: Any, ttl: int = 300) -> None:
-        self.data = data
-        self.expires_at = time.monotonic() + ttl
-
-    @property
-    def is_expired(self) -> bool:
-        """Whether this cache entry has expired."""
-        return time.monotonic() > self.expires_at
 
 
 class RemoteOntologyBackend:
@@ -44,7 +28,6 @@ class RemoteOntologyBackend:
         self._source_url = source_url.rstrip("/")
         self._auth_config = auth_config
         self._client: Any = None
-        self._cache: dict[str, _CacheEntry] = {}
 
     def _get_client(self) -> Any:
         """Lazy httpx client creation."""
@@ -98,24 +81,15 @@ class RemoteOntologyBackend:
         raise PermissionError("Remote ontology base is read-only")
 
     def get_objects(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch objects from remote scene details endpoint.
-
-        5-minute TTL cache on the response.
-        """
-        cache_key = f"objects:{base_id}"
-        entry = self._cache.get(cache_key)
-        if entry is not None and not entry.is_expired:
-            return cast("list[Any]", entry.data)
-
+        """Fetch objects from remote endpoint (no local cache — Platform handles caching)."""
+        _ = loader
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/listObjects"
         response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
-        data = cast("list[Any]", result.get("data", {}).get("objects", []))
-        self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return cast("list[Any]", result.get("data", {}).get("objects", []))
 
     def get_object_detail(self, loader: Any, object_code: str) -> Any | None:
         """Remote ontology does not support per-object detail."""
@@ -124,21 +98,15 @@ class RemoteOntologyBackend:
     # -- View CRUD (remote, read-only) --
 
     def get_views(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch views from remote endpoint."""
+        """Fetch views from remote endpoint (no local cache — Platform handles caching)."""
         _ = loader
-        cache_key = f"views:{base_id}"
-        entry = self._cache.get(cache_key)
-        if entry is not None and not entry.is_expired:
-            return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/listViews"
         response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
-        data = cast("list[Any]", result.get("data", {}).get("views", []))
-        self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return cast("list[Any]", result.get("data", {}).get("views", []))
 
     def get_view_detail(self, loader: Any, base_id: str, view_code: str) -> Any | None:
         """Look up view detail from cached views."""
@@ -163,21 +131,15 @@ class RemoteOntologyBackend:
     # -- Relation CRUD (remote, read-only) --
 
     def get_relations(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch relations from remote endpoint."""
+        """Fetch relations from remote endpoint (no local cache — Platform handles caching)."""
         _ = loader
-        cache_key = f"relations:{base_id}"
-        entry = self._cache.get(cache_key)
-        if entry is not None and not entry.is_expired:
-            return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/listRelations"
         response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
-        data = cast("list[Any]", result.get("data", {}).get("relations", []))
-        self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return cast("list[Any]", result.get("data", {}).get("relations", []))
 
     def get_relation_detail(
         self, loader: Any, base_id: str, rel_code: str
@@ -204,21 +166,15 @@ class RemoteOntologyBackend:
     # -- Datasource CRUD (remote, read-only) --
 
     def get_datasources(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch datasources from remote endpoint."""
+        """Fetch datasources from remote endpoint (no local cache — Platform handles caching)."""
         _ = loader
-        cache_key = f"datasources:{base_id}"
-        entry = self._cache.get(cache_key)
-        if entry is not None and not entry.is_expired:
-            return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/listDatasources"
         response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
         result: dict[str, Any] = response.json()
-        data = cast("list[Any]", result.get("data", {}).get("dbsources", []))
-        self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return cast("list[Any]", result.get("data", {}).get("dbsources", []))
 
     def get_datasource_detail(
         self, loader: Any, base_id: str, db_id: str
@@ -245,12 +201,8 @@ class RemoteOntologyBackend:
     # -- Action CRUD (remote, read-only) --
 
     def get_actions(self, loader: Any, base_id: str, object_code: str) -> list[Any]:
-        """Fetch actions from remote endpoint."""
+        """Fetch actions from remote endpoint (no local cache — Platform handles caching)."""
         _ = loader
-        cache_key = f"actions:{base_id}:{object_code}"
-        entry = self._cache.get(cache_key)
-        if entry is not None and not entry.is_expired:
-            return cast("list[Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/listActions"
@@ -261,9 +213,7 @@ class RemoteOntologyBackend:
         )
         response.raise_for_status()
         result: dict[str, Any] = response.json()
-        data = cast("list[Any]", result.get("data", {}).get("actions", []))
-        self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return cast("list[Any]", result.get("data", {}).get("actions", []))
 
     def get_action_detail(
         self,
@@ -300,19 +250,13 @@ class RemoteOntologyBackend:
     # -- Scene management (remote, read-only) --
 
     def list_scenes(self, base_id: str) -> list[Any]:
-        """Fetch scenes from remote endpoint."""
-        cache_key = f"scenes:{base_id}"
-        entry = self._cache.get(cache_key)
-        if entry is not None and not entry.is_expired:
-            return cast("list[Any]", entry.data)
+        """Fetch scenes from remote endpoint (no local cache — Platform handles caching)."""
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/listScenes"
         response = client.post(url, json={"baseId": base_id}, headers=headers)
         response.raise_for_status()
-        data: list[Any] = response.json()
-        self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return cast("list[Any]", response.json())
 
     def query_scenes(self, base_id: str, keyword: str | None) -> list[Any]:
         """Query scenes with keyword filter (client-side filter on cached)."""
@@ -340,12 +284,8 @@ class RemoteOntologyBackend:
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Fetch scene details from remote endpoint."""
+        """Fetch scene details from remote endpoint (no local cache — Platform handles caching)."""
         _ = loader
-        cache_key = f"scene_details:{base_id}:{scene_id}:{view_code}:{object_code}"
-        entry = self._cache.get(cache_key)
-        if entry is not None and not entry.is_expired:
-            return cast("dict[str, Any]", entry.data)
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/sceneDetails"
@@ -356,9 +296,7 @@ class RemoteOntologyBackend:
             body["objectCode"] = ",".join(object_code)
         response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
-        data: dict[str, Any] = response.json()
-        self._cache[cache_key] = _CacheEntry(data, ttl=300)
-        return data
+        return cast("dict[str, Any]", response.json())
 
     def query_ontologies_by_scene(
         self,
