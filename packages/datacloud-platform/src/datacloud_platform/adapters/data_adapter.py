@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json as _json
 import logging
 import os
@@ -12,7 +13,18 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyQueryable
 
-from datacloud_platform.models import ObjectSummary, ParsedOwlContent, StoredFile
+from datacloud_platform.models import (
+    ObjectSummary,
+    ParsedOwlContent,
+    StoredFile,
+    ViewSummary,
+)
+from datacloud_platform.models.action import Action, ActionParam
+from datacloud_platform.models.datasource import Datasource, DbConnection
+from datacloud_platform.models.object_type import ObjectType
+from datacloud_platform.models.property import Property
+from datacloud_platform.models.relation import Relation
+from datacloud_platform.models.view import View, ViewProperty
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +32,22 @@ _STORAGE_DIR_ENV = "DATACLOUD_STORAGE_DIR"
 _DEFAULT_STORAGE_DIR = ".datacloud_results"
 _SCENES_FILE_ENV = "DATACLOUD_SCENE_REGISTRY_PATH"
 _DEFAULT_SCENES_FILE = ".datacloud/scenes.json"
+
+
+def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
+    """Normalize view ``objects`` entries into a flat list of object codes.
+
+    Each entry may be a plain ``str`` or a ``dict`` with an ``object_code`` key.
+    """
+    codes: list[str] = []
+    for item in raw_objects:
+        if isinstance(item, str):
+            codes.append(item)
+        elif isinstance(item, dict):
+            code = item.get("object_code", "")
+            if code:
+                codes.append(code)
+    return codes
 
 
 class DataCloudDataBackend:
@@ -129,20 +157,62 @@ class DataCloudDataBackend:
 
     def get_object_detail(
         self, loader: OntologyQueryable, object_code: str
-    ) -> ObjectSummary | None:
-        """Get single object detail by code.
+    ) -> dict[str, Any] | None:
+        """Get full object detail with properties and actions.
 
         Args:
             loader: An OntologyQueryable with _classes populated.
             object_code: The object code to look up.
 
         Returns:
-            ObjectSummary if found, otherwise None.
+            Full ObjectType dict (alias-mapped) if found, otherwise None.
         """
         cls = loader._classes.get(object_code)
         if cls is None:
             return None
-        return self._to_summary(cls)
+        obj = ObjectType(
+            objectCode=cls.object_code,
+            objectName=cls.object_name,
+            objectDesc=getattr(cls, "description", None),
+            objectSource=getattr(cls, "source_type", None),
+            conceptType=getattr(cls, "concept_type", None),
+            baseId="",
+            properties=[
+                Property(
+                    propertyName=f.field_name,
+                    propertyCode=f.field_code,
+                    dataType=f.field_type,
+                    businessKey=1 if f.is_primary_key else 0,
+                    sourceColumn=getattr(f, "source_column", None),
+                    dbId=getattr(cls, "datasource_alias", None),
+                )
+                for f in cls.fields
+            ],
+            actions=[
+                Action(
+                    actionCode=a.action_code,
+                    actionName=a.action_name,
+                    actionType=a.action_type,
+                    belongObjectCode=a.belong_class,
+                    actionDesc=getattr(a, "description", None),
+                    requestUrl=getattr(a, "request_url", None),
+                    requestMethod=getattr(a, "request_method", None),
+                    params=[
+                        ActionParam(
+                            paramCode=p.param_code,
+                            paramName=p.param_name,
+                            paramType=getattr(p, "param_type", None),
+                            isRequired=1 if p.required else 0,
+                            direction=getattr(p, "direction", None),
+                            mappingPath=getattr(p, "mapping_path", None),
+                        )
+                        for p in getattr(a, "params", [])
+                    ],
+                )
+                for a in getattr(cls, "actions", [])
+            ],
+        )
+        return obj.model_dump(by_alias=True)
 
     # ── Object CRUD (stub — datacloud-data SDK does not yet support) ────────
 
@@ -158,15 +228,76 @@ class DataCloudDataBackend:
         """Raise PermissionError — write operations not supported via SDK."""
         raise PermissionError("Object deletion not supported via datacloud-data SDK")
 
-    # ── View CRUD (stub — datacloud-data SDK does not yet support) ──────────
+    # ── View CRUD ──────────────────────────────────────────────────────────
 
-    def get_views(self, base_id: str) -> list[dict[str, Any]]:
-        """Return empty list — views not yet available via SDK."""
-        return []
+    def get_views(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+        """Get all views from the loaded ontology.
 
-    def get_view_detail(self, base_id: str, view_code: str) -> dict[str, Any] | None:
-        """Return None — view details not yet available via SDK."""
-        return None
+        Args:
+            loader: An OntologyQueryable with _views populated.
+            base_id: Base / project identifier.
+
+        Returns:
+            List of View dicts (alias-mapped).
+        """
+        _ = base_id
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        result: list[dict[str, Any]] = []
+        for vc, view_data in raw_views.items():
+            normalized_codes = _normalize_object_codes(view_data.get("objects", []))
+            view = View(
+                viewCode=view_data.get("view_id", vc),
+                viewName=view_data.get("view_name", ""),
+                description=view_data.get("description"),
+                objectCodes=normalized_codes,
+                properties=[
+                    ViewProperty(
+                        propertyName=m.get("property_name", ""),
+                        propertyCode=m.get("property_code", ""),
+                        sourceObject=m.get("source_object_code", ""),
+                        sourceObjectProperty=m.get("source_object_column_code", ""),
+                    )
+                    for m in view_data.get("mappings", [])
+                ],
+            )
+            result.append(view.model_dump(by_alias=True))
+        return result
+
+    def get_view_detail(
+        self, loader: Any, base_id: str, view_code: str
+    ) -> dict[str, Any] | None:
+        """Get single view detail by code from the loaded ontology.
+
+        Args:
+            loader: An OntologyQueryable with _views populated.
+            base_id: Base / project identifier.
+            view_code: View identifier to look up.
+
+        Returns:
+            View dict if found, otherwise None.
+        """
+        _ = base_id
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        view_data = raw_views.get(view_code)
+        if view_data is None:
+            return None
+        normalized_codes = _normalize_object_codes(view_data.get("objects", []))
+        view = View(
+            viewCode=view_data.get("view_id", view_code),
+            viewName=view_data.get("view_name", ""),
+            description=view_data.get("description"),
+            objectCodes=normalized_codes,
+            properties=[
+                ViewProperty(
+                    propertyName=m.get("property_name", ""),
+                    propertyCode=m.get("property_code", ""),
+                    sourceObject=m.get("source_object_code", ""),
+                    sourceObjectProperty=m.get("source_object_column_code", ""),
+                )
+                for m in view_data.get("mappings", [])
+            ],
+        )
+        return view.model_dump(by_alias=True)
 
     def create_view(self, base_id: str, view: Any) -> Any:
         """Raise PermissionError — write operations not supported via SDK."""
@@ -182,12 +313,69 @@ class DataCloudDataBackend:
 
     # ── Relation CRUD (stub — datacloud-data SDK does not yet support) ──────
 
-    def get_relations(self, base_id: str) -> list[dict[str, Any]]:
-        """Return empty list — relations not yet available via SDK."""
-        return []
+    def get_relations(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+        """Get all relations from the loaded ontology.
 
-    def get_relation_detail(self, base_id: str, rel_code: str) -> dict[str, Any] | None:
-        """Return None — relation details not yet available via SDK."""
+        Supports both OntologyRelation objects and raw dicts.
+        Resolves sourceObjectName / targetObjectName from loader._classes.
+        """
+        raw_relations: list[Any] = getattr(loader, "_relations", None) or []
+        result: list[dict[str, Any]] = []
+        for r in raw_relations:
+            if hasattr(r, "source_class"):
+                src = r.source_class
+                tgt = r.target_class
+            elif isinstance(r, dict):
+                src = r.get("source_class", "")
+                tgt = r.get("target_class", "")
+            else:
+                continue
+            src_name = ""
+            tgt_name = ""
+            src_cls = loader._classes.get(src)
+            if src_cls is not None:
+                src_name = src_cls.object_name
+            tgt_cls = loader._classes.get(tgt)
+            if tgt_cls is not None:
+                tgt_name = tgt_cls.object_name
+
+            if hasattr(r, "relation_code"):
+                rel = Relation(
+                    relationCode=r.relation_code,
+                    relationName=getattr(r, "relation_name", None),
+                    sourceObjectCode=src,
+                    targetObjectCode=tgt,
+                    relationCardinality=getattr(r, "relation_type", None),
+                    sourceObjectName=src_name,
+                    targetObjectName=tgt_name,
+                    relationDesc=getattr(r, "relation_desc", None)
+                    or getattr(r, "description", None),
+                    relationSceneType=getattr(r, "relation_scene_type", None),
+                )
+            elif isinstance(r, dict):
+                rel = Relation(
+                    relationCode=r.get("relation_code", ""),
+                    relationName=r.get("relation_name"),
+                    sourceObjectCode=src,
+                    targetObjectCode=tgt,
+                    relationCardinality=r.get("relation_type"),
+                    sourceObjectName=src_name,
+                    targetObjectName=tgt_name,
+                    relationDesc=r.get("relation_desc") or r.get("description"),
+                    relationSceneType=r.get("relation_scene_type"),
+                )
+            else:
+                continue
+            result.append(rel.model_dump(by_alias=True))
+        return result
+
+    def get_relation_detail(
+        self, loader: Any, base_id: str, rel_code: str
+    ) -> dict[str, Any] | None:
+        """Get single relation detail by code from the loaded ontology."""
+        for r in self.get_relations(loader, base_id):
+            if r.get("relationCode") == rel_code:
+                return r
         return None
 
     def create_relation(self, base_id: str, rel: Any) -> Any:
@@ -204,14 +392,44 @@ class DataCloudDataBackend:
 
     # ── Action CRUD (stub — datacloud-data SDK does not yet support) ────────
 
-    def get_actions(self, base_id: str, object_code: str) -> list[dict[str, Any]]:
-        """Return empty list — actions not yet available via SDK."""
-        return []
+    def get_actions(
+        self, loader: Any, base_id: str, object_code: str
+    ) -> list[dict[str, Any]]:
+        """Get all actions for an object from the loaded ontology."""
+        cls = loader._classes.get(object_code)
+        if cls is None:
+            return []
+        return [
+            Action(
+                actionCode=a.action_code,
+                actionName=a.action_name,
+                actionType=a.action_type,
+                belongObjectCode=a.belong_class,
+                actionDesc=getattr(a, "description", None),
+                requestUrl=getattr(a, "request_url", None),
+                requestMethod=getattr(a, "request_method", None),
+                params=[
+                    ActionParam(
+                        paramCode=p.param_code,
+                        paramName=p.param_name,
+                        paramType=getattr(p, "param_type", None),
+                        isRequired=1 if p.required else 0,
+                        direction=getattr(p, "direction", None),
+                        mappingPath=getattr(p, "mapping_path", None),
+                    )
+                    for p in getattr(a, "params", [])
+                ],
+            ).model_dump(by_alias=True)
+            for a in getattr(cls, "actions", [])
+        ]
 
     def get_action_detail(
-        self, base_id: str, object_code: str, action_code: str
+        self, loader: Any, base_id: str, object_code: str, action_code: str
     ) -> dict[str, Any] | None:
-        """Return None — action details not yet available via SDK."""
+        """Get single action detail by code from the loaded ontology."""
+        for a in self.get_actions(loader, base_id, object_code):
+            if a.get("actionCode") == action_code:
+                return a
         return None
 
     def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
@@ -232,15 +450,73 @@ class DataCloudDataBackend:
         """Raise PermissionError — write operations not supported via SDK."""
         raise PermissionError("Action deletion not supported via datacloud-data SDK")
 
-    # ── Datasource CRUD (stub — datacloud-data SDK does not yet support) ────
+    # ── Datasource CRUD ────────────────────────────────────────────────────
 
-    def get_datasources(self, base_id: str) -> list[dict[str, Any]]:
-        """Return empty list — datasources not yet available via SDK."""
-        return []
+    def get_datasources(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+        """Get all datasources from the loaded ontology.
 
-    def get_datasource_detail(self, base_id: str, db_id: str) -> dict[str, Any] | None:
-        """Return None — datasource details not yet available via SDK."""
-        return None
+        Scans all classes in the loader, collects unique dbId values from
+        field definitions, and wraps them as Datasource dicts.
+
+        Args:
+            loader: An OntologyQueryable with _classes populated.
+            base_id: Base / project identifier.
+
+        Returns:
+            List of Datasource dicts (alias-mapped).
+        """
+        _ = base_id
+        used_db_ids: set[str] = set()
+        for cls in loader._classes.values():
+            db_id: str = getattr(cls, "datasource_alias", "") or ""
+            if db_id:
+                used_db_ids.add(db_id)
+
+        dbs: list[DbConnection] = []
+        for db_id in sorted(used_db_ids):
+            dbs.append(
+                DbConnection(
+                    dbId=db_id,
+                    dbCode=db_id,
+                    dbType="",
+                    dbParams={},
+                )
+            )
+        if not dbs:
+            return []
+        return [Datasource(db=dbs).model_dump(by_alias=True)]
+
+    def get_datasource_detail(
+        self, loader: Any, base_id: str, db_id: str
+    ) -> dict[str, Any] | None:
+        """Get single datasource detail by db_id from the loaded ontology.
+
+        Args:
+            loader: An OntologyQueryable with _classes populated.
+            base_id: Base / project identifier.
+            db_id: Database identifier to look up.
+
+        Returns:
+            Datasource dict if found, otherwise None.
+        """
+        _ = base_id
+        used_db_ids: set[str] = set()
+        for cls in loader._classes.values():
+            for f in cls.fields:
+                field_db_id: str = getattr(f, "db", "") or ""
+                if field_db_id:
+                    used_db_ids.add(field_db_id)
+
+        if db_id not in used_db_ids:
+            return None
+
+        db_conn = DbConnection(
+            dbId=db_id,
+            dbCode=db_id,
+            dbType="",
+            dbParams={},
+        )
+        return Datasource(db=[db_conn]).model_dump(by_alias=True)
 
     def create_datasource(self, base_id: str, ds: Any) -> Any:
         """Raise PermissionError — write operations not supported via SDK."""
@@ -320,6 +596,7 @@ class DataCloudDataBackend:
 
     def get_scene_details(
         self,
+        loader: Any,
         base_id: str,
         scene_id: str,
         *,
@@ -343,7 +620,9 @@ class DataCloudDataBackend:
                 "objects": [],
                 "actions": [],
                 "relations": [],
-                "dbsources": {"db": [], "doc": [], "api": []},
+                "dbsources": Datasource(db=[], doc=[], api=[]).model_dump(
+                    by_alias=True
+                ),
                 "version": "v0.1.0",
             }
 
@@ -352,37 +631,187 @@ class DataCloudDataBackend:
 
         # Determine which objects/views to include based on filter params
         if view_code and not object_code:
-            # Only view_code: return those views + objects they reference
             target_views = [vc for vc in member_view_codes if vc in view_code]
             target_objects = member_obj_codes
-            # NOTE: objects referenced by views require full view data —
-            # the adapter stores only member codes. Return all member objects.
         elif object_code and not view_code:
-            # Only object_code: views = []
             target_views = []
             target_objects = [oc for oc in member_obj_codes if oc in object_code]
         elif view_code and object_code:
-            # Both: union
             target_views = [vc for vc in member_view_codes if vc in view_code]
-            target_objects_set = set(object_code) | set(member_obj_codes)
+            target_objects_set: set[str] = set(object_code) | set(member_obj_codes)
             target_objects = list(target_objects_set)
         else:
-            # No filter: all members
             target_views = list(member_view_codes)
             target_objects = list(member_obj_codes)
 
+        target_obj_set: set[str] = set(target_objects)
+
+        # ── Extract objects from loader._classes ──
+        objects: list[dict[str, Any]] = []
+        for code in sorted(target_obj_set):
+            cls = loader._classes.get(code)
+            if cls is None:
+                continue
+            obj = ObjectType(
+                objectCode=cls.object_code,
+                objectName=cls.object_name,
+                objectDesc=getattr(cls, "description", None),
+                objectSource=getattr(cls, "source_type", None),
+                conceptType=getattr(cls, "concept_type", None),
+                baseId=scene.get("base_id", base_id),
+                tableName=getattr(cls, "table_name", None),
+                properties=[
+                    Property(
+                        propertyName=f.field_name,
+                        propertyCode=f.field_code,
+                        dataType=f.field_type,
+                        businessKey=1 if f.is_primary_key else 0,
+                        sourceColumn=getattr(f, "source_column", None),
+                        dbId=getattr(cls, "datasource_alias", None),
+                    )
+                    for f in cls.fields
+                ],
+            )
+            objects.append(obj.model_dump(by_alias=True))
+
+        # ── Extract actions from all matching objects ──
+        actions: list[dict[str, Any]] = []
+        for code in sorted(target_obj_set):
+            cls = loader._classes.get(code)
+            if cls is None:
+                continue
+            for a in cls.actions:
+                act = Action(
+                    actionCode=a.action_code,
+                    actionName=a.action_name,
+                    actionType=a.action_type,
+                    belongObjectCode=a.belong_class,
+                    actionDesc=getattr(a, "description", None),
+                    requestUrl=getattr(a, "request_url", None),
+                    requestMethod=getattr(a, "request_method", None),
+                    params=[
+                        ActionParam(
+                            paramCode=p.param_code,
+                            paramName=p.param_name,
+                            paramType=getattr(p, "param_type", None),
+                            isRequired=1 if p.required else 0,
+                            direction=getattr(p, "direction", None),
+                            mappingPath=getattr(p, "mapping_path", None),
+                        )
+                        for p in getattr(a, "params", [])
+                    ],
+                )
+                actions.append(act.model_dump(by_alias=True))
+
+        # ── Extract views from loader._views ──
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        views: list[dict[str, Any]] = []
+        for vc in target_views:
+            view_data = raw_views.get(vc)
+            if view_data is None:
+                continue
+            raw_objects = view_data.get("objects", [])
+            normalized_codes = _normalize_object_codes(raw_objects)
+            view = View(
+                viewCode=view_data.get("view_id", vc),
+                viewName=view_data.get("view_name", ""),
+                description=view_data.get("description"),
+                objectCodes=normalized_codes,
+                properties=[
+                    ViewProperty(
+                        propertyName=m.get("property_name", ""),
+                        propertyCode=m.get("property_code", ""),
+                        sourceObject=m.get("source_object_code", ""),
+                        sourceObjectProperty=m.get("source_object_column_code", ""),
+                    )
+                    for m in view_data.get("mappings", [])
+                ],
+            )
+            views.append(view.model_dump(by_alias=True))
+
+        # ── Extract relations filtered by target objects ──
+        raw_relations: list[Any] = getattr(loader, "_relations", None) or []
+        relations: list[dict[str, Any]] = []
+        for r in raw_relations:
+            # r may be OntologyRelation or dict
+            if hasattr(r, "source_class"):
+                src = r.source_class
+                tgt = r.target_class
+            elif isinstance(r, dict):
+                src = r.get("source_class", "")
+                tgt = r.get("target_class", "")
+            else:
+                continue
+            if src in target_obj_set and tgt in target_obj_set:
+                src_name = ""
+                tgt_name = ""
+                src_cls = loader._classes.get(src)
+                if src_cls is not None:
+                    src_name = src_cls.object_name
+                tgt_cls = loader._classes.get(tgt)
+                if tgt_cls is not None:
+                    tgt_name = tgt_cls.object_name
+
+                if hasattr(r, "relation_code"):
+                    rel = Relation(
+                        relationCode=r.relation_code,
+                        relationName=getattr(r, "relation_name", None),
+                        sourceObjectCode=src,
+                        targetObjectCode=tgt,
+                        relationCardinality=getattr(r, "relation_type", None),
+                        sourceObjectName=src_name,
+                        targetObjectName=tgt_name,
+                        relationDesc=getattr(r, "relation_desc", None)
+                        or getattr(r, "description", None),
+                        relationSceneType=getattr(r, "relation_scene_type", None),
+                    )
+                elif isinstance(r, dict):
+                    rel = Relation(
+                        relationCode=r.get("relation_code", ""),
+                        relationName=r.get("relation_name"),
+                        sourceObjectCode=src,
+                        targetObjectCode=tgt,
+                        relationCardinality=r.get("relation_type"),
+                        sourceObjectName=src_name,
+                        targetObjectName=tgt_name,
+                        relationDesc=r.get("relation_desc") or r.get("description"),
+                        relationSceneType=r.get("relation_scene_type"),
+                    )
+                else:
+                    continue
+                relations.append(rel.model_dump(by_alias=True))
+
+        # ── Build dbsources from object properties' dbId ──
+        used_db_ids: set[str] = set()
+        for obj_dict in objects:
+            for prop in obj_dict.get("properties", []):
+                db_id = prop.get("dbId")
+                if db_id:
+                    used_db_ids.add(db_id)
+        dbs: list[DbConnection] = []
+        for db_id in sorted(used_db_ids):
+            dbs.append(
+                DbConnection(
+                    dbId=db_id,
+                    dbCode=db_id,
+                    dbType="",
+                    dbParams={},
+                )
+            )
+
         return {
             "scene": scene,
-            "views": target_views,
-            "objects": target_objects,
-            "actions": [],
-            "relations": [],
-            "dbsources": {"db": [], "doc": [], "api": []},
+            "views": views,
+            "objects": objects,
+            "actions": actions,
+            "relations": relations,
+            "dbsources": Datasource(db=dbs).model_dump(by_alias=True),
             "version": "v0.1.0",
         }
 
     def query_ontologies_by_scene(
         self,
+        loader: Any,
         base_id: str,
         scene_id: str,
         *,
@@ -390,9 +819,64 @@ class DataCloudDataBackend:
         page_size: int = 20,
         keyword: str | None = None,
     ) -> dict[str, Any]:
-        """Return empty result — ontology-by-scene query not yet available via SDK."""
-        _ = base_id, scene_id, page, page_size, keyword
-        return {"data": [], "totalCount": 0}
+        """Query ontologies (objects + views) in a scene with optional keyword filter.
+
+        Looks up the scene's member_object_codes and member_view_codes from the
+        local scene registry, fetches matching ObjectSummary / ViewSummary from
+        *loader*, applies optional keyword filter, and returns both lists.
+        """
+        _ = page, page_size  # pagination removed — objects/views returned as full lists
+
+        # 1. Look up scene member codes
+        scenes = self._ensure_scenes_loaded()
+        scene = scenes.get(scene_id)
+        if scene is None:
+            return {"data": {"objects": [], "views": []}, "totalCount": 0}
+
+        member_obj_codes: list[str] = scene.get("member_object_codes", [])
+        member_view_codes: list[str] = scene.get("member_view_codes", [])
+
+        # 2. Convert member codes to summaries via loader
+        all_objects: list[dict[str, Any]] = []
+        for code in member_obj_codes:
+            cls = loader._classes.get(code)
+            if cls is not None:
+                summary = self._to_summary(cls)
+                all_objects.append(dataclasses.asdict(summary))
+
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        all_views: list[dict[str, Any]] = []
+        for code in member_view_codes:
+            view_data = raw_views.get(code)
+            if view_data is not None:
+                view_sum = self._to_view_summary(view_data, code)
+                all_views.append(dataclasses.asdict(view_sum))
+
+        # 3. Keyword filter (case-insensitive on name / code / description)
+        if keyword:
+            kw = keyword.strip().lower()
+            all_objects = [
+                o
+                for o in all_objects
+                if kw in (o.get("object_name", "") or "").lower()
+                or kw in (o.get("object_code", "") or "").lower()
+                or kw in (o.get("description", "") or "").lower()
+            ]
+            all_views = [
+                v
+                for v in all_views
+                if kw in (v.get("view_name", "") or "").lower()
+                or kw in (v.get("view_code", "") or "").lower()
+                or kw in (v.get("description", "") or "").lower()
+            ]
+
+        # 4. Total count (objects + views)
+        total = len(all_objects) + len(all_views)
+
+        return {
+            "data": {"objects": all_objects, "views": all_views},
+            "totalCount": total,
+        }
 
     # ── Scene CRUD ────────────────────────────────────────────────────────
 
@@ -681,6 +1165,17 @@ class DataCloudDataBackend:
             object_source=source_type,
             field_count=field_count,
             action_count=action_count,
+        )
+
+    @staticmethod
+    def _to_view_summary(view_data: dict[str, Any], view_code: str) -> ViewSummary:
+        """Convert a raw view dict to ViewSummary."""
+        normalized_codes = _normalize_object_codes(view_data.get("objects", []))
+        return ViewSummary(
+            view_code=view_data.get("view_id", view_code),
+            view_name=view_data.get("view_name", ""),
+            description=view_data.get("description", "") or "",
+            object_codes=normalized_codes,
         )
 
     @staticmethod

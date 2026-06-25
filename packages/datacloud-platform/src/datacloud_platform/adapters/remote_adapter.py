@@ -123,8 +123,9 @@ class RemoteOntologyBackend:
 
     # -- View CRUD (remote, read-only) --
 
-    def get_views(self, base_id: str) -> list[Any]:
+    def get_views(self, loader: Any, base_id: str) -> list[Any]:
         """Fetch views from remote endpoint."""
+        _ = loader
         cache_key = f"views:{base_id}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
@@ -139,9 +140,10 @@ class RemoteOntologyBackend:
         self._cache[cache_key] = _CacheEntry(data, ttl=300)
         return data
 
-    def get_view_detail(self, base_id: str, view_code: str) -> Any | None:
+    def get_view_detail(self, loader: Any, base_id: str, view_code: str) -> Any | None:
         """Look up view detail from cached views."""
-        for v in self.get_views(base_id):
+        _ = loader
+        for v in self.get_views(loader, base_id):
             if v.get("viewCode") == view_code:
                 return v
         return None
@@ -160,8 +162,9 @@ class RemoteOntologyBackend:
 
     # -- Relation CRUD (remote, read-only) --
 
-    def get_relations(self, base_id: str) -> list[Any]:
+    def get_relations(self, loader: Any, base_id: str) -> list[Any]:
         """Fetch relations from remote endpoint."""
+        _ = loader
         cache_key = f"relations:{base_id}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
@@ -176,9 +179,12 @@ class RemoteOntologyBackend:
         self._cache[cache_key] = _CacheEntry(data, ttl=300)
         return data
 
-    def get_relation_detail(self, base_id: str, rel_code: str) -> Any | None:
+    def get_relation_detail(
+        self, loader: Any, base_id: str, rel_code: str
+    ) -> Any | None:
         """Look up relation detail from cached relations."""
-        for r in self.get_relations(base_id):
+        _ = loader
+        for r in self.get_relations(loader, base_id):
             if r.get("relationCode") == rel_code:
                 return r
         return None
@@ -197,8 +203,9 @@ class RemoteOntologyBackend:
 
     # -- Datasource CRUD (remote, read-only) --
 
-    def get_datasources(self, base_id: str) -> list[Any]:
+    def get_datasources(self, loader: Any, base_id: str) -> list[Any]:
         """Fetch datasources from remote endpoint."""
+        _ = loader
         cache_key = f"datasources:{base_id}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
@@ -213,9 +220,12 @@ class RemoteOntologyBackend:
         self._cache[cache_key] = _CacheEntry(data, ttl=300)
         return data
 
-    def get_datasource_detail(self, base_id: str, db_id: str) -> Any | None:
+    def get_datasource_detail(
+        self, loader: Any, base_id: str, db_id: str
+    ) -> Any | None:
         """Look up datasource from cached datasources."""
-        for ds in self.get_datasources(base_id):
+        _ = loader
+        for ds in self.get_datasources(loader, base_id):
             db_list = ds.get("db", [])
             if db_list and isinstance(db_list, list) and db_list:
                 if str(db_list[0].get("dbId", "")) == db_id:
@@ -234,8 +244,9 @@ class RemoteOntologyBackend:
 
     # -- Action CRUD (remote, read-only) --
 
-    def get_actions(self, base_id: str, object_code: str) -> list[Any]:
+    def get_actions(self, loader: Any, base_id: str, object_code: str) -> list[Any]:
         """Fetch actions from remote endpoint."""
+        _ = loader
         cache_key = f"actions:{base_id}:{object_code}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
@@ -256,12 +267,14 @@ class RemoteOntologyBackend:
 
     def get_action_detail(
         self,
+        loader: Any,
         base_id: str,
         object_code: str,
         action_code: str,
     ) -> Any | None:
         """Look up action from cached actions."""
-        for a in self.get_actions(base_id, object_code):
+        _ = loader
+        for a in self.get_actions(loader, base_id, object_code):
             if a.get("actionCode") == action_code:
                 return a
         return None
@@ -320,6 +333,7 @@ class RemoteOntologyBackend:
 
     def get_scene_details(
         self,
+        loader: Any,
         base_id: str,
         scene_id: str,
         *,
@@ -327,6 +341,7 @@ class RemoteOntologyBackend:
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
         """Fetch scene details from remote endpoint."""
+        _ = loader
         cache_key = f"scene_details:{base_id}:{scene_id}:{view_code}:{object_code}"
         entry = self._cache.get(cache_key)
         if entry is not None and not entry.is_expired:
@@ -347,6 +362,7 @@ class RemoteOntologyBackend:
 
     def query_ontologies_by_scene(
         self,
+        loader: object,
         base_id: str,
         scene_id: str,
         *,
@@ -355,9 +371,9 @@ class RemoteOntologyBackend:
         keyword: str | None = None,
     ) -> dict[str, Any]:
         """Remote ontology is read-only — pagination not supported."""
-        _ = base_id, scene_id, page, page_size, keyword
+        _ = loader, base_id, scene_id, page, page_size, keyword
         logger.debug("Remote ontology: query_ontologies_by_scene not supported")
-        return {"data": [], "totalCount": 0}
+        return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # -- Scene CRUD (remote, read-only) --
 

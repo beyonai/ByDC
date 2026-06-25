@@ -360,10 +360,13 @@ class TestSceneRoutes:
     ) -> None:
         onto = fakes["onto_local"]
         onto._ontologies_by_scene[SCENE] = {
-            "data": [
-                {"ontologyCode": "obj1", "ontologyName": "对象1"},
-                {"ontologyCode": "obj2", "ontologyName": "对象2"},
-            ],
+            "data": {
+                "objects": [
+                    {"object_code": "obj1", "object_name": "对象1"},
+                    {"object_code": "obj2", "object_name": "对象2"},
+                ],
+                "views": [],
+            },
             "totalCount": 2,
         }
 
@@ -373,7 +376,8 @@ class TestSceneRoutes:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert len(data["data"]) == 2
+        assert len(data["data"]["objects"]) == 2
+        assert len(data["data"]["views"]) == 0
         assert data["totalCount"] == 2
 
     def test_query_ontologies_with_keyword(
@@ -381,10 +385,13 @@ class TestSceneRoutes:
     ) -> None:
         onto = fakes["onto_local"]
         onto._ontologies_by_scene[SCENE] = {
-            "data": [
-                {"ontologyCode": "obj1", "ontologyName": "客户对象"},
-                {"ontologyCode": "obj2", "ontologyName": "订单对象"},
-            ],
+            "data": {
+                "objects": [
+                    {"object_code": "obj1", "object_name": "客户对象"},
+                    {"object_code": "obj2", "object_name": "订单对象"},
+                ],
+                "views": [],
+            },
             "totalCount": 2,
         }
 
@@ -393,7 +400,8 @@ class TestSceneRoutes:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert len(data["data"]) == 1
+        assert len(data["data"]["objects"]) == 1
+        assert len(data["data"]["views"]) == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

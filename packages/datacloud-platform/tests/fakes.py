@@ -185,8 +185,9 @@ class FakeOntologyBackend:
 
     # -- View CRUD (fake) --
 
-    def get_views(self, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
+    def get_views(self, loader: Any, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
         """Return preset _views for the scene."""
+        _ = loader
         result = []
         for vlist in self._views.values():
             result.extend(vlist)
@@ -194,10 +195,12 @@ class FakeOntologyBackend:
 
     def get_view_detail(
         self,
+        loader: Any,
         base_id: str,
         view_code: str,  # noqa: ARG002
     ) -> dict[str, Any] | None:
         """Look up view by code."""
+        _ = loader
         for vlist in self._views.values():
             for v in vlist:
                 if v.get("viewCode") == view_code:
@@ -229,17 +232,19 @@ class FakeOntologyBackend:
 
     # -- Relation CRUD (fake) --
 
-    def get_relations(self, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
+    def get_relations(self, loader: Any, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
         """Return preset _relations for the scene."""
+        _ = loader
         result = []
         for rlist in self._relations.values():
             result.extend(rlist)
         return result
 
     def get_relation_detail(  # noqa: ARG002
-        self, base_id: str, rel_code: str
+        self, loader: Any, base_id: str, rel_code: str
     ) -> dict[str, Any] | None:
         """Look up relation by code."""
+        _ = loader
         for rlist in self._relations.values():
             for r in rlist:
                 if r.get("relationCode") == rel_code:
@@ -272,15 +277,17 @@ class FakeOntologyBackend:
     # -- Action CRUD (fake) --
 
     def get_actions(  # noqa: ARG002
-        self, base_id: str, object_code: str
+        self, loader: Any, base_id: str, object_code: str
     ) -> list[dict[str, Any]]:
         """Return preset _actions for the object."""
+        _ = loader
         return list(self._actions.get(object_code, []))
 
     def get_action_detail(  # noqa: ARG002
-        self, base_id: str, object_code: str, action_code: str
+        self, loader: Any, base_id: str, object_code: str, action_code: str
     ) -> dict[str, Any] | None:
         """Look up action by code."""
+        _ = loader
         for a in self._actions.get(object_code, []):
             if a.get("actionCode") == action_code:
                 return a
@@ -315,17 +322,22 @@ class FakeOntologyBackend:
 
     # -- Datasource CRUD (fake) --
 
-    def get_datasources(self, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
+    def get_datasources(self, loader: Any, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
         """Return preset _datasources for the scene."""
+        _ = loader
         result = []
         for dslist in self._datasources.values():
             result.extend(dslist)
         return result
 
     def get_datasource_detail(  # noqa: ARG002
-        self, base_id: str, db_id: str
+        self,
+        loader: Any,
+        base_id: str,
+        db_id: str,
     ) -> dict[str, Any] | None:
         """Look up datasource by db_id."""
+        _ = loader
         for dslist in self._datasources.values():
             for ds in dslist:
                 db_list = ds.get("db", [])
@@ -376,6 +388,7 @@ class FakeOntologyBackend:
 
     def get_scene_details(  # noqa: ARG002
         self,
+        loader: object,
         base_id: str,
         scene_id: str,
         *,
@@ -392,6 +405,7 @@ class FakeOntologyBackend:
 
         Falls back to preset _scene_details for backward compatibility.
         """
+        _ = loader
         # Try full filtering path first
         scene = self._scenes_dict.get(scene_id)
         if scene is not None:
@@ -483,6 +497,7 @@ class FakeOntologyBackend:
 
     def query_ontologies_by_scene(  # noqa: ARG002
         self,
+        loader: object,
         base_id: str,
         scene_id: str,
         *,
@@ -490,20 +505,33 @@ class FakeOntologyBackend:
         page_size: int = 20,
         keyword: str | None = None,
     ) -> dict[str, Any]:
-        """Return preset _ontologies_by_scene or empty result."""
-        result = self._ontologies_by_scene.get(scene_id, {"data": [], "totalCount": 0})
+        """Return preset _ontologies_by_scene or empty result.
+
+        Preset shape: {"data": {"objects": [...], "views": [...]}, "totalCount": N}
+        """
+        _ = loader, page, page_size
+        result = self._ontologies_by_scene.get(
+            scene_id, {"data": {"objects": [], "views": []}, "totalCount": 0}
+        )
         if keyword:
             kw = keyword.strip().lower()
-            data = [
+            data = result.get("data", {})
+            objects = [
                 o
-                for o in result.get("data", [])
-                if kw in o.get("ontologyName", "").lower()
-                or kw in o.get("ontologyCode", "").lower()
-                or kw in o.get("ontologyDesc", "").lower()
+                for o in data.get("objects", [])
+                if kw in (o.get("object_name", "") or "").lower()
+                or kw in (o.get("object_code", "") or "").lower()
+                or kw in (o.get("description", "") or "").lower()
             ]
-            total = len(data)
-            start = (page - 1) * page_size
-            return {"data": data[start : start + page_size], "totalCount": total}
+            views = [
+                v
+                for v in data.get("views", [])
+                if kw in (v.get("view_name", "") or "").lower()
+                or kw in (v.get("view_code", "") or "").lower()
+                or kw in (v.get("description", "") or "").lower()
+            ]
+            total = len(objects) + len(views)
+            return {"data": {"objects": objects, "views": views}, "totalCount": total}
         return result
 
     # -- Scene CRUD (fake) --
