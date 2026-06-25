@@ -16,6 +16,7 @@ from datacloud_platform import (
     OntologyBaseEntry,
     OntologyBaseRegistry,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.api.server import create_app
 from datacloud_platform.backends.presets import register_preset
 from datacloud_platform.backends.registry import (
@@ -71,7 +72,7 @@ def fakes() -> dict[str, Any]:
 
 
 @pytest.fixture
-def client(fakes: dict[str, Any]) -> TestClient:
+def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
     """Build a TestClient backed entirely by fake backends."""
     onto_local = fakes["onto_local"]
     onto_remote = fakes["onto_remote"]
@@ -103,7 +104,7 @@ def client(fakes: dict[str, Any]) -> TestClient:
         },
     )
 
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id=LOCAL,
@@ -171,13 +172,13 @@ class TestSceneCRUD:
         assert resp.status_code == 400
 
     def test_create_scene_remote_readonly(
-        self, client: TestClient, fakes: dict[str, Any]
+        self, client: TestClient, fakes: dict[str, Any], entity_store: JsonEntityStore
     ) -> None:
         """Remote backend should reject writes."""
         onto = fakes["onto_remote"]
         onto._readonly = True
         # Register a remote base
-        registry = OntologyBaseRegistry()
+        registry = OntologyBaseRegistry(entity_store)
         registry.register(
             OntologyBaseEntry(
                 base_id="remote", display_name="远程", source_type="REMOTE"
@@ -341,12 +342,12 @@ class TestSceneMembers:
         assert resp.status_code == 404
 
     def test_add_members_remote_readonly(
-        self, client: TestClient, fakes: dict[str, Any]
+        self, client: TestClient, fakes: dict[str, Any], entity_store: JsonEntityStore
     ) -> None:
         """Remote backend rejects member writes."""
         onto = fakes["onto_remote"]
         onto._readonly = True
-        registry = OntologyBaseRegistry()
+        registry = OntologyBaseRegistry(entity_store)
         registry.register(
             OntologyBaseEntry(
                 base_id="remote2", display_name="远程2", source_type="REMOTE"

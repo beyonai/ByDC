@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datacloud_platform import DatacloudPlatform
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.backends.registry import (
     register_backend_type,
     register_implementation,
@@ -70,7 +71,7 @@ def test_store_and_retrieve(platform: DatacloudPlatform) -> None:
     assert platform.get_result(LOCAL, fid) == b"hello world"
 
 
-def test_backend_switching() -> None:
+def test_backend_switching(entity_store: JsonEntityStore) -> None:
     """Registering alternate backend names and constructing a new multi-base platform works."""
     onto = FakeOntologyBackend()
     know = FakeKnowledgeBackend()
@@ -93,7 +94,7 @@ def test_backend_switching() -> None:
     from datacloud_platform.backends.presets import register_preset
 
     register_preset("LOCAL", {})
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id="alt-base",

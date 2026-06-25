@@ -10,6 +10,7 @@ from datacloud_platform import (
     OntologyBaseEntry,
     OntologyBaseRegistry,
 )
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.backends.presets import register_preset
 from datacloud_platform.backends.registry import (
     register_backend_type,
@@ -57,7 +58,7 @@ class FailingExecutionBackend:
 
 
 @pytest.mark.asyncio
-async def test_execute_action_permission_denied() -> None:
+async def test_execute_action_permission_denied(entity_store: JsonEntityStore) -> None:
     """platform.execute_action propagates PermissionDeniedError from backend."""
     onto = FakeOntologyBackend()
     know = FakeKnowledgeBackend()
@@ -78,7 +79,7 @@ async def test_execute_action_permission_denied() -> None:
 
     register_preset("LOCAL", {})
 
-    registry = OntologyBaseRegistry()
+    registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(
             base_id="local-base",
