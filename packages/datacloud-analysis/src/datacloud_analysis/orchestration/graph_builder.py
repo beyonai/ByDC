@@ -244,6 +244,9 @@ def _build_legacy_graph(
     if custom_task:
         system_parts.append(custom_task)
     # available_skills XML 注入已废弃：Skill 通过 search_ontology + TOOL_POOL 动态发现
+    _available_skills_xml = str(overwrite.get("available_skills") or "").strip()
+    if _available_skills_xml:
+        system_parts.append(_available_skills_xml)
     stable_system_prompt = "\n\n".join(p for p in system_parts if p)
 
     # ── 构建 tools_list ──────────────────────────────────────────────────────────

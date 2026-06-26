@@ -699,6 +699,22 @@ class OntologyAgent:
 
         _effective_extras: dict[str, Any] = dict(extras or {})
         # skill_dirs 参数已废弃：Skill 通过 TOOL_POOL + search_ontology 进程级发现
+        if skill_dirs:
+            from datacloud_analysis.skills.catalog import (  # noqa: PLC0415
+                build_available_skills_xml,
+                scan_skill_catalog,
+            )
+
+            _catalog = scan_skill_catalog(
+                [str(d) for d in skill_dirs],
+                rel_skills=rel_skills or set(),
+            )
+            _xml = build_available_skills_xml(_catalog)
+            if _xml:
+                _effective_extras["available_skills"] = _xml
+                _effective_extras["skill_catalog"] = _catalog
+                _effective_extras["tools_dict"] = tools_dict
+
         # tools_dict 仍写入 extras 供 sub_agent 克隆分身时使用
         if tools_dict:
             _effective_extras["tools_dict"] = tools_dict
@@ -767,7 +783,10 @@ class OntologyAgent:
             _skill_ws = str(_effective_extras.get("skill_workspace_dir") or "").strip()
             if _skill_ws:
                 graph_input["prompts_overwrite"]["skill_workspace_dir"] = _skill_ws
-            # available_skills XML 注入已废弃：Skill 通过 search_ontology + TOOL_POOL 动态发现
+            # 注入 available_skills XML（路径B via worker.py extras，或方案A via skill_dirs）
+            _available_skills = str(_effective_extras.get("available_skills") or "").strip()
+            if _available_skills:
+                graph_input["prompts_overwrite"]["available_skills"] = _available_skills
             if target_tool:
                 graph_input["target_tool"] = target_tool
         elif isinstance(resume_input, str | dict):
