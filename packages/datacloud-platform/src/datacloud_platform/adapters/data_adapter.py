@@ -176,12 +176,12 @@ class DataCloudDataBackend:
         if registry.exists():
             content = _json.loads(registry.read_text(encoding="utf-8"))
             loader.load_from_content(content)
-            return loader  # type: ignore[no-any-return]
+            return loader  # type: ignore[return-value]
 
         # Fallback: old-format OWL directory traversal (~10s)
         if base_path.exists():
             loader.load_from_owl_resource_directory(str(base_path))
-        return loader  # type: ignore[no-any-return]
+        return loader  # type: ignore[return-value]
 
     def load_terms(
         self, _loader: OntologyQueryable, *, library_id: str = "PERSONAL_LIB"
@@ -202,7 +202,7 @@ class DataCloudDataBackend:
         from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
 
         _ = library_id  # consumed by concrete TermLoader subclass
-        return TermLoader()
+        return TermLoader()  # type: ignore[abstract]
 
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Create physical table for DYNAMIC_TABLE objects.

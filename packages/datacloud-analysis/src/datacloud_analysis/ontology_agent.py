@@ -489,6 +489,7 @@ class OntologyAgent:
         target_tool: str | None = None,
         skill_dirs: list[str] | None = None,
         rel_skills: set[str] | None = None,
+        tool_context: Any | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """发起一次问答，流式返回事件。
 
@@ -504,6 +505,9 @@ class OntologyAgent:
 
         target_tool: 强制指定初始工具名（如 "data_query_crm_customer"），跳过 LLM 工具选择，
         直接从该工具开始执行。用于对比实验（Text2SQL vs DSL 路径）。
+
+        tool_context: 请求级授权上下文（RequestToolContext）。非 None 时注入
+        configurable["tool_context"]，供 llm_call_node / hook_aware_tool_node 使用。
         """
         effective_tid = thread_id or str(uuid.uuid4())
         return self._iter_events(
@@ -519,6 +523,7 @@ class OntologyAgent:
             target_tool=target_tool,
             skill_dirs=skill_dirs,
             rel_skills=rel_skills,
+            tool_context=tool_context,
         )
 
     def resume(
@@ -680,6 +685,7 @@ class OntologyAgent:
         target_tool: str | None = None,
         skill_dirs: list[str] | None = None,
         rel_skills: set[str] | None = None,
+        tool_context: Any | None = None,
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
         try:
@@ -723,6 +729,7 @@ class OntologyAgent:
                 "thread_id": thread_id,
                 "user_code": user_code,
                 "gateway_context": ctx_container,
+                "tool_context": tool_context,
                 "llm_config": {
                     "model": self._config.model,
                     "api_key": self._config.api_key,

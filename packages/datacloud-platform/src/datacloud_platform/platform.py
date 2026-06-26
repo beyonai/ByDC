@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 try:
     from datacloud_knowledge.ingestion.ontology_terms import build_terms as _build_terms
 except ImportError:
-    _build_terms = None
+    _build_terms = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

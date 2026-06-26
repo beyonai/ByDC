@@ -95,18 +95,18 @@ def _init_platform() -> DatacloudPlatform:
     register_implementation(
         "ontology",
         "native-data",
-        lambda es=entity_store: DataCloudDataBackend(entity_store=es),
+        lambda: DataCloudDataBackend(entity_store=entity_store),
     )
     register_implementation(
         "knowledge",
         "native-data",
-        lambda es=entity_store: DataCloudDataBackend(entity_store=es),
+        lambda: DataCloudDataBackend(entity_store=entity_store),
     )
     register_implementation("execution", "local-exec", lambda: LocalExecutionBackend())
     register_implementation(
         "storage",
         "native-data",
-        lambda es=entity_store: DataCloudDataBackend(entity_store=es),
+        lambda: DataCloudDataBackend(entity_store=entity_store),
     )
     register_implementation("knowledge", "none", lambda: _NoopKnowledgeBackend())
     register_implementation("storage", "none", lambda: _NoopStorageBackend())

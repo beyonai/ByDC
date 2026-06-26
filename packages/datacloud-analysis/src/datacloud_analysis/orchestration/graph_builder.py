@@ -37,6 +37,13 @@ from datacloud_analysis.orchestration.intend.node import intend_node
 from datacloud_analysis.orchestration.respond.node import respond_node
 from datacloud_analysis.orchestration.state import AgentState
 
+try:
+    from datacloud_analysis.tools.anchor_tools import make_anchor_tools
+    from datacloud_analysis.tools.tool_pool import is_anchor_mode
+except Exception:  # pragma: no cover
+    make_anchor_tools = None  # type: ignore[assignment]
+    is_anchor_mode = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_ROUNDS = int(os.getenv("DATACLOUD_REACT_MAX_ROUNDS", "10"))
@@ -181,6 +188,7 @@ def build_analysis_graph(
     loader: Any = None,
     redirect_tools: dict[str, Any] | None = None,
     is_sub_agent: bool = False,
+    tool_context: Any = None,
 ) -> StateGraph[AgentState]:
     """Return an uncompiled StateGraph.
 
@@ -190,6 +198,7 @@ def build_analysis_graph(
 
     Args:
         is_sub_agent: True 时为分身模式，不追加 sub_agent 工具（防递归）。
+        tool_context: 请求级 RequestToolContext，用于替代全局 TOOL_POOL。
     """
     use_prebuilt = os.getenv("DATACLOUD_USE_PREBUILT_REACT", "true").strip().lower() == "true"
     if use_prebuilt:
@@ -200,6 +209,7 @@ def build_analysis_graph(
             loader=loader,
             redirect_tools=redirect_tools,
             is_sub_agent=is_sub_agent,
+            tool_context=tool_context,
         )
     return _build_legacy_graph(
         prompts_overwrite=prompts_overwrite,
@@ -434,6 +444,7 @@ def _build_prebuilt_graph(
     loader: Any = None,
     redirect_tools: dict[str, Any] | None = None,
     is_sub_agent: bool = False,
+    tool_context: Any = None,
 ) -> StateGraph[AgentState]:
     """V0.4 新图拓扑：intend → agent → HookAwareToolNode(tools) → respond。
 
@@ -479,15 +490,20 @@ def _build_prebuilt_graph(
 
     # 附06-V3：锚点模式下，把 activate_anchor / mark_dead_end 加入工具列表
     try:
-        from datacloud_analysis.tools.anchor_tools import make_anchor_tools  # noqa: PLC0415
-        from datacloud_analysis.tools.tool_pool import is_anchor_mode  # noqa: PLC0415
+        if make_anchor_tools is None or is_anchor_mode is None:
+            raise ImportError("anchor_tools or tool_pool not available")
 
-        if is_anchor_mode():
-            # 用当前 state getter（这里用空 state，工厂函数在闭包内读 state）
-            # get_state_fn 在运行时通过 graph_builder 注入实际 state
-            # 注意：anchor_tools 是 per-request 状态感知工具，需要 state 闭包
-            # 这里先使用空 state 占位，实际 state 在 llm_call 节点运行时传入
-            _anchor_tools = make_anchor_tools(get_state_fn=lambda: {})
+        _use_anchor = tool_context.anchor_mode if tool_context is not None else is_anchor_mode()
+        if _use_anchor:
+            _tc = tool_context  # 闭包捕获
+
+            def _get_tool_ctx() -> Any:
+                return _tc
+
+            _anchor_tools = make_anchor_tools(
+                get_state_fn=lambda: {},
+                get_tool_context_fn=_get_tool_ctx,
+            )
             tools_list = [*tools_list, *_anchor_tools]
             logger.info(
                 "_build_prebuilt_graph: anchor mode active, added %d anchor tools",

@@ -37,17 +37,18 @@ class _ObjectFieldsStore(Protocol):
 # ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
 
 
-
 def _redis_env() -> dict[str, Any]:
     """从环境变量读取 Redis 连接参数，与 _init_discovery_redis() 保持一致。"""
-    return dict(
-        host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
-        port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
-        db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
-        password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")) or None,
-        username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
-        decode_responses=True,
-    )
+    return {
+        "host": os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
+        "port": int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
+        "db": int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
+        "password": os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD"))
+        or None,
+        "username": os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME"))
+        or None,
+        "decode_responses": True,
+    }
 
 
 def _new_redis() -> Any:
@@ -304,7 +305,6 @@ def _validate_fields_format(fields: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
-
 # ── OntologyBuildSession ──────────────────────────────────────────────────────
 
 _OBJ_FIELDS_CACHE_TTL = 86400 * 30  # 30 天
@@ -403,9 +403,7 @@ class OntologyBuildSession:
         if kb_id:
             state["kb_id"] = kb_id
             # 补充提示描述，让模型理解需通过 query 参数传入完整文件路径和内容
-            _supplement = (
-                f"进行创建写入和查询详情分析时，需通过 query 参数传入完整的文件路径和完整的文件内容，以确保能获取到完整的数据上下文。"
-            )
+            _supplement = "进行创建写入和查询详情分析时，需通过 query 参数传入完整的文件路径和完整的文件内容，以确保能获取到完整的数据上下文。"
             if state.get("entity_desc"):
                 state["entity_desc"] = state["entity_desc"] + "；" + _supplement
             else:

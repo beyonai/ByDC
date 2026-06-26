@@ -21,6 +21,75 @@ from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
 
+# 懒加载：测试环境可能不安装，patch 必须在模块级有此名称
+try:
+    from datacloud_platform import get_platform
+except ImportError:  # pragma: no cover
+    get_platform = None  # type: ignore[assignment]
+
+try:
+    from datacloud_data_sdk.ontology.tool_loader import OntologyToolLoader
+except ImportError:  # pragma: no cover
+    OntologyToolLoader = None  # type: ignore[assignment]
+
+
+def _build_scope_filter(allowed_scope: list) -> dict:
+    """把 ScopeEntry 列表转成 platform.search_ontology() 可接受的过滤参数。"""
+    base_ids, scene_ids, object_codes, view_codes = [], [], [], []
+    for e in allowed_scope:
+        if e.scope_type == "ONTOLOGY_BASE":
+            base_ids.append(e.code)
+        elif e.scope_type == "SCENE":
+            scene_ids.append(e.code)
+        elif e.scope_type == "OBJECT":
+            object_codes.append(e.code)
+        elif e.scope_type == "VIEW":
+            view_codes.append(e.code)
+    return {
+        "base_ids": base_ids,
+        "scene_ids": scene_ids,
+        "object_codes": object_codes,
+        "view_codes": view_codes,
+    }
+
+
+def _activate_object_with_context(
+    state: dict[str, Any],
+    object_code: str,
+    tool_context: Any,
+) -> tuple[list[str], str]:
+    """权限校验 + 按需构建工具；tool_context 是 RequestToolContext 实例。"""
+    platform = get_platform()
+    term_info = platform.get_term_scope_info(object_code)
+    library_id = term_info.get("library_id")
+    scene_id = term_info.get("scene_id")
+
+    if not tool_context.is_object_allowed(object_code, scene_id, library_id):
+        return [], f"对象 {object_code!r} 不在当前授权范围，拒绝激活"
+
+    existing = set(state.get("active_tools") or [])
+
+    # 缓存路径
+    if object_code in tool_context.object_to_tools:
+        already = tool_context.object_to_tools[object_code]
+        new_tools = [t for t in already if t not in existing]
+        state["active_tools"] = list(existing) + new_tools
+        return new_tools, ""
+
+    # 按需构建
+    detail = platform.get_scene_details(library_id, scene_id, object_code=[object_code])
+    tool_context.loader.load_from_content(detail)
+
+    tool_loader = OntologyToolLoader(mounted_objects=[object_code], loader=tool_context.loader)
+    new_obj_tools: dict[str, Any] = tool_loader.load()
+
+    tool_context.tools_map.update(new_obj_tools)
+    tool_context.object_to_tools[object_code] = list(new_obj_tools.keys())
+
+    new_tools = [t for t in new_obj_tools if t not in existing]
+    state["active_tools"] = list(existing) + new_tools
+    return new_tools, ""
+
 
 def _do_search_ontology(
     query: str,
@@ -111,11 +180,13 @@ def _do_search_ontology(
 
 def make_anchor_tools(
     get_state_fn: Callable[[], dict[str, Any]],
+    get_tool_context_fn: Callable[[], Any] | None = None,
 ) -> list[Any]:
     """创建锚点推理工具列表。
 
     Args:
         get_state_fn: 返回当前 AgentState dict 的函数（闭包，per-request）。
+        get_tool_context_fn: 返回 RequestToolContext 的函数；None 时退回旧路径。
 
     Returns:
         [goto_ontology, activate_anchor, mark_dead_end,
@@ -131,6 +202,10 @@ def make_anchor_tools(
 
     def _activate_object(state: dict[str, Any], object_code: str) -> tuple[list[str], str]:
         """将 object_code 对应的工具加入 active_tools，返回 (new_tools, message)。"""
+        tool_context = get_tool_context_fn() if get_tool_context_fn else None
+        if tool_context is not None:
+            return _activate_object_with_context(state, object_code, tool_context)
+        # 旧路径（无 tool_context）
         try:
             from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
                 TOOL_POOL,
