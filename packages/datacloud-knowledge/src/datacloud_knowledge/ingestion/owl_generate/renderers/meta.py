@@ -24,12 +24,13 @@ def render_domains(config: OwlGenConfig, builder: GraphBuilder) -> None:
     通过 GraphBuilder 的 RDFLib Graph API 注册为 OWL NamedIndividual。
     领域不作为独立 .owl 文件产出，信息由各术语的 domain_code 字段承载。
     """
-    domain = DomainDef(
-        domain_code=config.domain_code,
-        domain_name=config.domain_name,
-        domain_desc=config.domain_desc,
-    )
-    builder.add_domain(domain)
+    for dc in config.domain_codes:
+        domain = DomainDef(
+            domain_code=dc,
+            domain_name=config.domain_name,
+            domain_desc=config.domain_desc,
+        )
+        builder.add_domain(domain)
 
 
 def render_library(config: OwlGenConfig, builder: GraphBuilder) -> None:

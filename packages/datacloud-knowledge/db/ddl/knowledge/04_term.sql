@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS term (
     desc_summary   TEXT,
     parent_term_id VARCHAR(1000),
     owl_doc_id     VARCHAR(128),
-    domain_id      VARCHAR(64)  NOT NULL,
+    domain_ids     VARCHAR(64)[] NOT NULL DEFAULT '{}',
     term_type_code VARCHAR(32)  NOT NULL,
     library_id     VARCHAR(64),
     term_tags      JSONB        NOT NULL DEFAULT '{}'::jsonb,
@@ -21,7 +21,7 @@ COMMENT ON COLUMN term.term_name      IS '术语标准名称，全局唯一规�
 COMMENT ON COLUMN term.desc_summary   IS '术语描述摘要，约100字，用于快速展示；完整知识在 term_knowledge 表';
 COMMENT ON COLUMN term.parent_term_id IS '父术语ID：NULL=概念术语，有值=实例术语（指向所属概念的 term_id）';
 COMMENT ON COLUMN term.owl_doc_id     IS 'OWL本体定义文件ID，仅本体术语（type_category=3）填写，其余为 NULL';
-COMMENT ON COLUMN term.domain_id      IS '所属领域ID，外键关联 domain 表';
+COMMENT ON COLUMN term.domain_ids     IS '所属领域ID数组，支持术语多领域归属';
 COMMENT ON COLUMN term.term_type_code IS '术语类型编码，外键关联 term_type(type_code)';
 COMMENT ON COLUMN term.library_id     IS '所属术语库ID，外键关联 term_library 表，允许为空';
 COMMENT ON COLUMN term.term_tags      IS '术语标签属性，JSONB 格式；key=标签维度术语ID，value={type, value}';

@@ -598,7 +598,7 @@ class TermWriter(Protocol):
         term_name: str,
         term_type_code: str,
         library_id: str | None = None,
-        domain_id: str,
+        domain_ids: list[str],
         parent_term_id: str | None = None,
         term_tags: dict[str, object] | None = None,
         user_id: str | None = None,
@@ -609,7 +609,7 @@ class TermWriter(Protocol):
             term_name: 术语标准名称。
             term_type_code: 术语类型编码。
             library_id: 术语库 ID（可选）。
-            domain_id: 所属领域 ID。
+            domain_ids: 所属领域 ID 列表。
             parent_term_id: 父术语 ID（可选）。
             term_tags: 术语标签属性（JSONB，可选）。
             user_id: 创建用户 ID（可选）。
@@ -676,7 +676,7 @@ class TermWriter(Protocol):
         term_name: str,
         term_type_code: str,
         library_id: str,
-        domain_id: str,
+        domain_ids: list[str],
         knowledge_desc: str | None = None,
         parent_term_id: str | None = None,
         term_tags: dict[str, object] | None = None,
@@ -693,7 +693,7 @@ class TermWriter(Protocol):
             term_name: 术语标准名称。
             term_type_code: 术语类型编码。
             library_id: 术语库 ID。
-            domain_id: 所属领域 ID。
+            domain_ids: 所属领域 ID 列表。
             knowledge_desc: 关联知识描述文本。
             parent_term_id: 父术语 ID（可选，用于实例-概念关系）。
             term_tags: 术语标签属性（JSONB）。

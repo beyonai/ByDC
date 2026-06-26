@@ -292,7 +292,7 @@ def validate_layer1_structure(pkg: KnowledgePackage) -> list[str]:
 
     检查 knowledge 包的核心结构完整性：
     - terms 和 relations 不能为空元组
-    - 每个 term 的必填字段（term_code, term_name, term_type_code, library_code, domain_code）
+    - 每个 term 的必填字段（term_code, term_name, term_type_code, library_code, domain_codes）
       不能为空字符串
     - 每个 relation 的必填字段不能为空
     """
@@ -312,8 +312,8 @@ def validate_layer1_structure(pkg: KnowledgePackage) -> list[str]:
             errors.append(f"Layer 1: 术语 '{term.term_name}' 的 term_type_code 为空")
         if not term.library_code or not term.library_code.strip():
             errors.append(f"Layer 1: 术语 '{term.term_name}' 的 library_code 为空")
-        if not term.domain_code or not term.domain_code.strip():
-            errors.append(f"Layer 1: 术语 '{term.term_name}' 的 domain_code 为空")
+        if not term.domain_codes:
+            errors.append(f"Layer 1: 术语 '{term.term_name}' 的 domain_codes 为空")
 
     # 关系必填字段检查
     for rel in pkg.relations:

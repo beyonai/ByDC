@@ -274,7 +274,10 @@ class GraphBuilder:
         self._add_literal(uri, self._ns.term_name, term.term_name)
         self._add_literal(uri, self._ns.term_type_code, term.term_type_code)
         self._add_literal(uri, self._ns.library_code, term.library_code)
-        self._add_literal(uri, self._ns.domain_code, term.domain_code)
+        # 领域编码（多个值各自独立序列化）
+        if term.domain_codes:
+            for dc in term.domain_codes:
+                self._add_literal(uri, self._ns.domain_code, dc)
 
         # 层级关系
         if term.parent_term_code:

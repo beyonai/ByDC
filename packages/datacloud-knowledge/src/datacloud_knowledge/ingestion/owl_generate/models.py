@@ -122,7 +122,7 @@ class OwlGenConfig:
     """
 
     # ── 领域 & 本体库 ──
-    domain_code: str
+    domain_codes: tuple[str, ...]
     domain_name: str
     domain_desc: str
     library_code: str

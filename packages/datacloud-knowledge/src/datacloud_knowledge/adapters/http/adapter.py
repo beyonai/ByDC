@@ -860,13 +860,13 @@ class HttpTermAdapter:
         term_name: str,
         term_type_code: str,
         library_id: str | None = None,
-        domain_id: str = "",
+        domain_ids: list[str],
         parent_term_id: str | None = None,
         term_tags: dict[str, object] | None = None,
         user_id: str | None = None,
     ) -> str:
         """原子插入术语记录。通过 importMultipleTerm 实现。"""
-        _ = (domain_id, user_id)
+        _ = (domain_ids, user_id)
         ds_id = library_id or self._default_dataset_id
         # 将 term_tags 转换为 labels
         labels: dict[str, str] = {}
@@ -951,14 +951,14 @@ class HttpTermAdapter:
         term_name: str,
         term_type_code: str,
         library_id: str | None = None,
-        domain_id: str = "",
+        domain_ids: list[str],
         knowledge_desc: str | None = None,
         parent_term_id: str | None = None,
         term_tags: dict[str, object] | None = None,
         user_id: str | None = None,
     ) -> str:
         """创建新术语及其关联知识。通过 importMultipleTerm 实现。"""
-        _ = (domain_id, user_id)
+        _ = (domain_ids, user_id)
         ds_id = library_id or self._default_dataset_id
         labels: dict[str, str] = {}
         if term_tags:

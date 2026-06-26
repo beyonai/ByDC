@@ -199,7 +199,7 @@ def convert_term_to_kps(owl_entity: dict[str, Any]) -> tuple[TermDef, dict[str, 
     term_name = _pick_str(owl_entity, "term_name") or ""
     term_type_code = _pick_str(owl_entity, "term_type_code") or ""
     library_code = _pick_str(owl_entity, "library_code") or ""
-    domain_code = _pick_str(owl_entity, "domain_code") or ""
+    domain_codes = tuple(_pick_all_str(owl_entity, "domain_code"))
     parent_term_code = _pick_str(owl_entity, "parent_term_code") or ""
 
     # 解析同义词列表
@@ -232,7 +232,7 @@ def convert_term_to_kps(owl_entity: dict[str, Any]) -> tuple[TermDef, dict[str, 
         term_name=term_name,
         term_type_code=term_type_code,
         library_code=library_code,
-        domain_code=domain_code,
+        domain_codes=domain_codes,
         parent_term_code=parent_term_code or None,
         synonyms=normalized_synonyms,
         term_desc=_pick_str(owl_entity, "term_desc") or "",
@@ -385,7 +385,7 @@ def term_kps_to_dict(
         "term_code": term_def.term_code,
         "term_name": term_def.term_name,
         "term_desc": term_def.term_desc,
-        "domain_code": term_def.domain_code,
+        "domain_codes": list(term_def.domain_codes),
         "library_code": term_def.library_code,
         "term_type_code": term_def.term_type_code,
         "parent_term_code": term_def.parent_term_code,
@@ -459,7 +459,7 @@ def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
     term_name = _pick_str(owl_entity, "term_name")
     term_type_code = _pick_str(owl_entity, "term_type_code")
     library_code = _pick_str(owl_entity, "library_code")
-    domain_code = _pick_str(owl_entity, "domain_code")
+    domain_codes = _pick_all_str(owl_entity, "domain_code")
     parent_term_code = _pick_str(owl_entity, "parent_term_code") or ""
     parent_term_type_code = _pick_str(owl_entity, "parent_term_type_code") or ""
     parent_term_id = None
@@ -494,7 +494,7 @@ def convert_term(owl_entity: dict[str, Any]) -> dict[str, Any]:
         "term_code": term_code,
         "term_name": term_name,
         "term_desc": _pick_str(owl_entity, "term_desc"),
-        "domain_code": domain_code,
+        "domain_codes": domain_codes,
         "library_code": library_code,
         "term_type_code": term_type_code,
         "parent_term_code": parent_term_code or None,
@@ -597,6 +597,14 @@ def _extract_domain_code(term_type_code_path: str | None) -> str | None:
 
     domain_code, _, _ = term_type_code_path.partition("#")
     return domain_code or None
+
+
+def _pick_all_str(owl_entity: dict[str, Any], key: str) -> list[str]:
+    """从 OWL 实体中收集所有同名属性的值（支持多值 OWL 元素）。"""
+    values = owl_entity.get(key, [])
+    if isinstance(values, str):
+        values = [values]
+    return [v for v in values if isinstance(v, str) and v.strip()]
 
 
 def _pick_str(data: dict[str, Any], *keys: str) -> str | None:

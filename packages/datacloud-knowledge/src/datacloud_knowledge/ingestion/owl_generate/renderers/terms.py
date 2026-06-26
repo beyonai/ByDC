@@ -39,7 +39,7 @@ def _build_term_def(
         term_name=term_name,
         term_type_code=term_type_code,
         library_code=config.library_code,
-        domain_code=config.domain_code,
+        domain_codes=config.domain_codes,
         parent_term_code=parent_term_code if parent_term_code else None,
         synonyms=tuple(synonyms or []),
         term_desc=term_desc,

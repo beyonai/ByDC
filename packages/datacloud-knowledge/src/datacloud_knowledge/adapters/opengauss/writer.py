@@ -128,7 +128,7 @@ class PostgresTermWriter:
         term_name: str,
         term_type_code: str,
         library_id: str | None = None,
-        domain_id: str,
+        domain_ids: list[str],
         parent_term_id: str | None = None,
         term_tags: dict[str, object] | None = None,
         user_id: str | None = None,
@@ -139,7 +139,7 @@ class PostgresTermWriter:
             term_name: 术语标准名称。
             term_type_code: 术语类型编码。
             library_id: 术语库 ID（可选，默认为 NULL）。
-            domain_id: 所属领域 ID。
+            domain_ids: 所属领域 ID 列表。
             parent_term_id: 父术语 ID（可选）。
             term_tags: 术语标签属性（JSONB，可选）。
             user_id: 创建用户 ID（可选，当前仅用于日志）。
@@ -155,10 +155,10 @@ class PostgresTermWriter:
             text(
                 "INSERT INTO term "
                 "(term_id, term_code, term_name, term_type_code, library_id, "
-                "domain_id, parent_term_id, term_tags, created_time, updated_time) "
+                "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
                 "VALUES ("
                 ":term_id, :term_code, :term_name, :term_type_code, :library_id, "
-                ":domain_id, :parent_term_id, CAST(:term_tags AS jsonb), :now, :now"
+                ":domain_ids, :parent_term_id, CAST(:term_tags AS jsonb), :now, :now"
                 ")"
             ),
             {
@@ -167,7 +167,7 @@ class PostgresTermWriter:
                 "term_name": term_name,
                 "term_type_code": term_type_code,
                 "library_id": library_id,
-                "domain_id": domain_id,
+                "domain_ids": domain_ids,
                 "parent_term_id": parent_term_id,
                 "term_tags": json.dumps(term_tags) if term_tags else None,
                 "now": now,
@@ -324,7 +324,7 @@ class PostgresTermWriter:
         term_name: str,
         term_type_code: str,
         library_id: str | None = None,
-        domain_id: str,
+        domain_ids: list[str],
         knowledge_desc: str | None = None,
         parent_term_id: str | None = None,
         term_tags: dict[str, object] | None = None,
@@ -344,7 +344,7 @@ class PostgresTermWriter:
             term_name=term_name,
             term_type_code=term_type_code,
             library_id=library_id,
-            domain_id=domain_id,
+            domain_ids=domain_ids,
             parent_term_id=parent_term_id,
             term_tags=term_tags,
             user_id=user_id,
@@ -516,7 +516,7 @@ class PostgresTermWriter:
                     term_name=term.term_name,
                     term_type_code=term.term_type,
                     library_id=dataset_id,
-                    domain_id="",
+                    domain_ids=[],
                     parent_term_id=term.parent_term_code or None,
                     term_tags=dict(term.labels),
                 )

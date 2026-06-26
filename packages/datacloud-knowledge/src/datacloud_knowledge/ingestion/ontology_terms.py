@@ -35,7 +35,7 @@ def build_terms(
     fields: list[dict[str, Any]],
     *,
     library_code: str = "PERSONAL_LIB",
-    domain_code: str = "PERSONAL_DOMAIN",
+    domain_codes: tuple[str, ...] = ("PERSONAL_DOMAIN",),
     entity_type: str = "object",
     entity_desc: str = "",
     schema: str | None = None,
@@ -49,7 +49,7 @@ def build_terms(
         entity_name: 实体中文名称。
         fields: 字段列表，每个字段含 property_code/term_type_code/term_values 等。
         library_code: 术语库编码，默认 PERSONAL_LIB。
-        domain_code: 领域编码，默认 PERSONAL_DOMAIN。
+        domain_codes: 领域编码元组，默认 ("PERSONAL_DOMAIN",)。
         entity_type: "object" 或 "view"。
         entity_desc: 实体描述。
         schema: 知识库 schema 名称。
@@ -64,7 +64,7 @@ def build_terms(
         term_name=entity_name,
         term_type_code=entity_type,
         library_code=library_code,
-        domain_code=domain_code,
+        domain_codes=domain_codes,
         term_desc=entity_desc,
     )
     entity_term_id = entity_term.compute_term_id()
@@ -93,7 +93,7 @@ def build_terms(
             term_name=property_name,
             term_type_code="prop",
             library_code=library_code,
-            domain_code=domain_code,
+            domain_codes=domain_codes,
             parent_term_code=entity_code,
         )
         terms.append(prop_term)
@@ -132,7 +132,7 @@ def build_terms(
                     term_name=value_name,
                     term_type_code=value_type_code,
                     library_code=library_code,
-                    domain_code=domain_code,
+                    domain_codes=domain_codes,
                     parent_term_code=property_code,
                 )
                 terms.append(value_term)

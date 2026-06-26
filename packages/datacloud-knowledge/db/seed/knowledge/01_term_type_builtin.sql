@@ -50,12 +50,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#view', 'view', '视图', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#view', 'view', '视图', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -66,12 +66,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#object', 'object', '对象', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#object', 'object', '对象', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -82,12 +82,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#action', 'action', '动作', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#action', 'action', '动作', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -98,12 +98,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#func', 'func', '函数', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#func', 'func', '函数', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -114,12 +114,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#param', 'param', '参数', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#param', 'param', '参数', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -130,12 +130,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#prop', 'prop', '属性', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#prop', 'prop', '属性', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -146,12 +146,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#employee', 'employee', '员工', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#employee', 'employee', '员工', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -162,12 +162,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#general', 'general', '通用', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#general', 'general', '通用', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term
@@ -178,12 +178,12 @@ INSERT INTO term (
     term_id,
     term_code,
     term_name,
-    domain_id,
+    domain_ids,
     term_type_code,
     library_id,
     term_tags
 )
-SELECT '_system#term_type#term_type', 'term_type', '术语类型', '_system', 'term_type', '_system', '{}'::jsonb
+SELECT '_system#term_type#term_type', 'term_type', '术语类型', ARRAY['_system'], 'term_type', '_system', '{}'::jsonb
 WHERE NOT EXISTS (
     SELECT 1
     FROM term

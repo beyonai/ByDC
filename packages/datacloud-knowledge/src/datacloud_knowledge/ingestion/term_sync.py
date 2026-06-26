@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 _ENTITY_TYPE = "object"
 _LIBRARY_CODE = "PERSONAL_LIB"
-_DOMAIN_CODE = "PERSONAL_DOMAIN"
+_DOMAIN_CODES = ("PERSONAL_DOMAIN",)
 
 
 class _ScopeDeletingReader:
@@ -60,7 +60,7 @@ def sync_object_terms(
         term_name=entity_name,
         term_type_code=_ENTITY_TYPE,
         library_code=_LIBRARY_CODE,
-        domain_code=_DOMAIN_CODE,
+        domain_codes=_DOMAIN_CODES,
         term_desc=entity_desc,
     )
     entity_term_id = entity_term.compute_term_id()
@@ -86,7 +86,7 @@ def sync_object_terms(
             term_name=property_name,
             term_type_code="prop",
             library_code=_LIBRARY_CODE,
-            domain_code=_DOMAIN_CODE,
+            domain_codes=_DOMAIN_CODES,
             parent_term_code=entity_code,
         )
         terms.append(prop_term)

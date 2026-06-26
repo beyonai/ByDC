@@ -592,7 +592,7 @@ class OntologyBuildSession:
             return {"ok": False, "missing": missing}
 
         state.setdefault("library_code", "PERSONAL_LIB")
-        state.setdefault("domain_code", "PERSONAL_DOMAIN")
+        state.setdefault("domain_codes", ("PERSONAL_DOMAIN",))
         state.setdefault("db_code", "personal_sqlite")
         state.setdefault("db_type", "PERSONAL_SQLITE")
         state["entity_source"] = "KNOWLEDGE_BASE" if state.get("kb_id") else "DYNAMIC_TABLE"
@@ -634,7 +634,7 @@ class OntologyBuildSession:
             entity_name=state.get("entity_name", ""),
             fields=state.get("fields", []),
             library_code=state.get("library_code", "PERSONAL_LIB"),
-            domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+            domain_codes=state.get("domain_codes", ("PERSONAL_DOMAIN",)),
             entity_type="object",
             entity_desc=state.get("entity_desc", ""),
         )
@@ -694,7 +694,7 @@ class OntologyBuildSession:
             rel.setdefault("target_type", "EntityDefinition")
 
         state.setdefault("library_code", "PERSONAL_LIB")
-        state.setdefault("domain_code", "PERSONAL_DOMAIN")
+        state.setdefault("domain_codes", ("PERSONAL_DOMAIN",))
 
         token = os.environ.get("BEYOND_TOKEN", "")
         actual_view_code = state["view_code"]
@@ -716,7 +716,7 @@ class OntologyBuildSession:
             entity_name=state.get("view_name", ""),
             fields=state.get("fields", []),
             library_code=state.get("library_code", "PERSONAL_LIB"),
-            domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+            domain_codes=state.get("domain_codes", ("PERSONAL_DOMAIN",)),
             entity_type="view",
             entity_desc=state.get("view_desc", ""),
         )

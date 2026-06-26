@@ -164,7 +164,7 @@ def _build_term_def(
         term_name=term_name,
         term_type_code=term_type_code,
         library_code=config.library_code,
-        domain_code=config.domain_code,
+        domain_codes=config.domain_codes,
         parent_term_code=parent_term_code if parent_term_code else None,
         synonyms=tuple(synonyms or []),
         term_desc=term_desc,
@@ -572,7 +572,7 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
             )
 
     config = OwlGenConfig(
-        domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+        domain_codes=(state.get("domain_code", "PERSONAL_DOMAIN"),),
         domain_name=state.get("domain_name", "个人领域"),
         domain_desc=state.get("domain_desc", ""),
         library_code=state.get("library_code", "PERSONAL_LIB"),
@@ -710,7 +710,7 @@ def _generate_view(state: dict[str, Any], output_dir: Path) -> None:
     )
 
     config = OwlGenConfig(
-        domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
+        domain_codes=(state.get("domain_code", "PERSONAL_DOMAIN"),),
         domain_name=state.get("domain_name", "个人领域"),
         domain_desc=state.get("domain_desc", ""),
         library_code=state.get("library_code", "PERSONAL_LIB"),

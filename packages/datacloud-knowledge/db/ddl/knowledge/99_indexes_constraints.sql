@@ -33,8 +33,8 @@ CREATE INDEX IF NOT EXISTS idx_term_owl
     ON term(owl_doc_id)
     WHERE owl_doc_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_term_domain
-    ON term(domain_id);
+-- 术语领域ID数组 GIN 索引（支持 && 交集查询 和 @> 包含查询）
+CREATE INDEX IF NOT EXISTS idx_term_domain_ids ON term USING GIN (domain_ids);
 
 CREATE INDEX IF NOT EXISTS idx_term_type
     ON term(term_type_code);

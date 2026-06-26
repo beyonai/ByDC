@@ -190,7 +190,7 @@ def store_clarification_results(
                     term_name=mention_text,
                     term_type_code="USER_DEFINED",
                     library_id=None,  # type: ignore[arg-type]
-                    domain_id="DOMAIN_002",
+                    domain_ids=["DOMAIN_002"],
                     knowledge_desc=result,
                     user_id=user_id,
                 )

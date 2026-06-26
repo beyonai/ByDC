@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Boolean, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -21,7 +21,7 @@ class Term(Base):
     desc_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     parent_term_id: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     owl_doc_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    domain_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    domain_ids: Mapped[list[str]] = mapped_column(ARRAY(String(64)), nullable=False, default=list)
     term_type_code: Mapped[str] = mapped_column(String(32), nullable=False)
     library_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     term_tags: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)

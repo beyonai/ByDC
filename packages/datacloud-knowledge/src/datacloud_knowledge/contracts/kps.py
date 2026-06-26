@@ -76,7 +76,7 @@ class TermDef:
         term_name: 术语标准中文名称（如 "客户"、"客户名称"）。
         term_type_code: 术语类型编码（如 "object"、"prop"、"LIST_TERM"）。
         library_code: 所属术语库编码。
-        domain_code: 所属领域编码。
+        domain_codes: 所属领域编码列表（如 ("DOMAIN_A", "DOMAIN_B")）。
         parent_term_code: 父术语编码，None 表示顶层术语。
         synonyms: 同义词列表（如 ["顾客", "Client"]）。
         term_desc: 术语描述。
@@ -86,7 +86,7 @@ class TermDef:
     term_name: str
     term_type_code: str
     library_code: str
-    domain_code: str
+    domain_codes: tuple[str, ...]
     parent_term_code: str | None = None
     synonyms: tuple[str, ...] = ()
     term_desc: str = ""
