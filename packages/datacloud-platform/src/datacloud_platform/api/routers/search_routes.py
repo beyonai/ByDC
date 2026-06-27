@@ -37,10 +37,11 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
             return ok(
                 data=platform.search_ontology(
                     base_id,
-                    body.get("sceneId", "-1"),
+                    body.get("sceneIds", ["-1"]),
                     keyword=body.get("keyword", ""),
                     query_type=body.get("queryType", "vector"),
                     search_scope=body.get("searchScope", "all"),
+                    ontology_type=body.get("ontologyType"),
                     object_code=body.get("objectCode"),
                     view_code=body.get("viewCode"),
                     property_code=body.get("propertyCode"),
@@ -61,10 +62,11 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
             return ok(
                 data=platform.search_ontology(
                     base_id,
-                    scene_id,
+                    [scene_id],
                     keyword=body.get("keyword", ""),
                     query_type=body.get("queryType", "vector"),
                     search_scope=body.get("searchScope", "all"),
+                    ontology_type=body.get("ontologyType"),
                     object_code=body.get("objectCode"),
                     view_code=body.get("viewCode"),
                     property_code=body.get("propertyCode"),

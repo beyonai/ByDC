@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datacloud_platform.backends._contracts import (
+    _HasBasePath,
     _HasExecutionBackend,
     _HasKnowledgeBackend,
     _HasOntologyBackend,
@@ -19,6 +20,7 @@ __all__ = [
     "OntologyBackend",
     "OntologyQueryable",
     "StorageBackend",
+    "_HasBasePath",
     "_HasExecutionBackend",
     "_HasKnowledgeBackend",
     "_HasOntologyBackend",

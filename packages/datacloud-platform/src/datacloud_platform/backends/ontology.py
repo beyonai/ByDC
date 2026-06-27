@@ -103,6 +103,36 @@ class OntologyBackend(Protocol):
         """Get full scene details with optional filtering by view_code or object_code."""
         ...
 
+    # -- Atomic ontology methods (refactored from get_scene_details) --
+
+    def get_scene_members(
+        self, base_id: str, scene_id: str
+    ) -> tuple[list[str], list[str]]:
+        """Return (object_codes, view_codes) for a scene — pure metadata query."""
+        ...
+
+    def extract_objects_detail(
+        self, base_id: str, loader: Any, object_codes: list[str]
+    ) -> list[dict[str, Any]]:
+        """Extract ObjectType JSON for each code from loader._classes."""
+        ...
+
+    def extract_views_detail(
+        self, base_id: str, loader: Any, view_codes: list[str]
+    ) -> list[dict[str, Any]]:
+        """Extract View JSON for each code from loader._views."""
+        ...
+
+    def extract_relations(
+        self, base_id: str, loader: Any, object_codes_set: set[str]
+    ) -> list[dict[str, Any]]:
+        """Extract bidirectional Relation JSON where both ends are in object_codes_set."""
+        ...
+
+    def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
+        """Return {library_id, scene_id} identifying which scene contains object_code."""
+        ...
+
     def query_ontologies_by_scene(
         self,
         loader: Any,

@@ -17,6 +17,15 @@ from datacloud_platform.models.shared import (
 logger = logging.getLogger(__name__)
 
 
+_ONTOLOGY_TYPE_TO_TERM: dict[str, str] = {
+    "object": "object",
+    "action": "ontology_action",
+    "view": "view",
+    "property": "property",
+    "dimension": "dimension",
+}
+
+
 class DataCloudKnowledgeBackend:
     """KnowledgeBackend via datacloud-knowledge SDK.
 
@@ -618,31 +627,49 @@ class DataCloudKnowledgeBackend:
     def search_ontology(
         self,
         base_id: str,
-        scene_id: str,
+        scene_ids: list[str],
         *,
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
+        ontology_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
+        limit: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Unified vector search across metadata and instance terms.
 
         Uses the knowledge SDK embedding service and search engine to
         perform cosine-similarity vector search across both metadata
-        term types and instance term types within a scene.
+        term types and instance term types.
+
+        ``ontology_type`` is pushed to the engine layer for type filtering;
+        ``object_code`` / ``view_code`` / ``property_code`` are applied as
+        post-filters on metadata results.
 
         Args:
             base_id: Ontology base identifier.
-            scene_id: Scene identifier (``-1`` for all scenes).
+            scene_ids: Scene identifiers (``["-1"]`` for all scenes).
             keyword: Search keyword string.
             query_type: Search mode (``vector``, reserved).
             search_scope: ``metadata`` / ``instance`` / ``all``.
+            ontology_type: Limit to specific ontology types
+                (``["object"]``, ``["action"]``, etc.).  ``None`` or ``[]``
+                means no restriction.
+            object_code: Post-filter metadata results to these object codes.
+            view_code: Post-filter metadata results to these view codes.
+            property_code: Post-filter metadata results to these property codes.
+            limit: Maximum results per branch (default 20).
             **kwargs: Additional search parameters (passed through).
 
         Returns:
             ``{"metadata": [...], "instances": [...], "totalCount": {...}}``
+            Metadata items for action terms additionally include
+            ``belongObjectCode`` resolved from the parent term.
         """
-        _ = base_id, scene_id, query_type, kwargs
+        _ = base_id, scene_ids, query_type, kwargs
 
         if not keyword:
             return {
@@ -662,29 +689,65 @@ class DataCloudKnowledgeBackend:
 
         engine = self._get_search_engine()
 
+        # Resolve ontology_type → engine term_types
+        _ALL_METADATA_TYPES = list(_ONTOLOGY_TYPE_TO_TERM.values())
+        if ontology_type:
+            metadata_types = [
+                _ONTOLOGY_TYPE_TO_TERM[t]
+                for t in ontology_type
+                if t in _ONTOLOGY_TYPE_TO_TERM
+            ]
+            if not metadata_types:
+                metadata_types = _ALL_METADATA_TYPES
+        else:
+            metadata_types = _ALL_METADATA_TYPES
+
+        # Build post-filter code sets
+        object_code_set: set[str] | None = set(object_code) if object_code else None
+        view_code_set: set[str] | None = set(view_code) if view_code else None
+        property_code_set: set[str] | None = (
+            set(property_code) if property_code else None
+        )
+
         # Metadata branch
         if search_scope in ("metadata", "all"):
-            _METADATA_TERM_TYPES = {
-                "object",
-                "view",
-                "dimension",
-                "property",
-                "ontology_action",
-            }
             metadata_hits = engine.search_terms_by_embedding(
                 vector=vec,
-                term_types=list(_METADATA_TERM_TYPES),
-                limit=20,
+                term_types=metadata_types,
+                limit=limit,
             )
-            result["metadata"] = [
-                {
-                    "termCode": hit["term_code"],
-                    "termType": hit["term_type_code"],
-                    "nameText": hit.get("name_text", hit.get("term_name", "")),
+
+            # Resolve belongObjectCode for action terms
+            action_codes = [
+                str(h["term_code"])
+                for h in metadata_hits
+                if str(h.get("term_type_code", "")) == "ontology_action"
+            ]
+            belong_map: dict[str, str] = {}
+            if action_codes:
+                belong_map = self._resolve_belong_object_codes(action_codes)
+
+            for hit in metadata_hits:
+                term_code = str(hit.get("term_code", ""))
+                term_type = str(hit.get("term_type_code", ""))
+
+                # Post-filter by object_code / view_code / property_code
+                if object_code_set is not None and term_code not in object_code_set:
+                    continue
+                if view_code_set is not None and term_code not in view_code_set:
+                    continue
+                if property_code_set is not None and term_code not in property_code_set:
+                    continue
+
+                entry: dict[str, Any] = {
+                    "termCode": term_code,
+                    "termType": term_type,
+                    "nameText": str(hit.get("name_text", hit.get("term_name", ""))),
                     "score": round(float(hit["score"]), 4),
                 }
-                for hit in metadata_hits
-            ]
+                if term_type == "ontology_action":
+                    entry["belongObjectCode"] = belong_map.get(term_code, "")
+                result["metadata"].append(entry)
             result["totalCount"]["metadata"] = len(result["metadata"])
 
         # Instance branch
@@ -706,7 +769,7 @@ class DataCloudKnowledgeBackend:
                 instance_hits = engine.search_terms_by_embedding(
                     vector=vec,
                     term_types=instance_type_codes,
-                    limit=20,
+                    limit=limit,
                 )
                 result["instances"] = [
                     {
@@ -720,6 +783,42 @@ class DataCloudKnowledgeBackend:
                 result["totalCount"]["instances"] = len(result["instances"])
 
         return result
+
+    def _resolve_belong_object_codes(self, action_codes: list[str]) -> dict[str, str]:
+        """Resolve parent object codes for a list of action term codes.
+
+        Uses the reader's ``get_terms_batch_raw`` (OpenGauss-specific) to
+        look up each action term's parent and map it back to a term code.
+        """
+        if not action_codes:
+            return {}
+
+        belong_map: dict[str, str] = {}
+        reader = self._get_reader()
+        try:
+            raw = reader.get_terms_batch_raw(term_codes=action_codes)
+            parent_ids: dict[str, str] = {}
+            all_parent_ids: set[str] = set()
+            for row in raw:
+                ac = str(row.get("term_code", ""))
+                ptid = row.get("parent_term_id")
+                if ac and ptid:
+                    parent_ids[ac] = str(ptid)
+                    all_parent_ids.add(str(ptid))
+            if all_parent_ids:
+                parent_rows = reader.get_terms_batch_raw(term_ids=list(all_parent_ids))
+                pid_to_code: dict[str, str] = {}
+                for r in parent_rows:
+                    tid = r.get("term_id")
+                    tcode = r.get("term_code")
+                    if tid and tcode:
+                        pid_to_code[str(tid)] = str(tcode)
+                for ac, ptid in parent_ids.items():
+                    if ptid in pid_to_code:
+                        belong_map[ac] = pid_to_code[ptid]
+        except Exception:
+            logger.exception("Failed to resolve belongObjectCode for actions")
+        return belong_map
 
     def graph_query(
         self,

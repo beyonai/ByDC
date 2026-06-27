@@ -130,11 +130,15 @@ class KnowledgeBackend(Protocol):
     def search_ontology(
         self,
         base_id: str,
-        scene_id: str,
+        scene_ids: list[str],
         *,
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
+        ontology_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Search ontology metadata and instances via vector / keyword.

@@ -515,11 +515,15 @@ class RemoteKnowledgeBackend:
     def search_ontology(
         self,
         base_id: str,
-        scene_id: str,
+        scene_ids: list[str],
         *,
         keyword: str,
         query_type: str = "vector",
         search_scope: str = "all",
+        ontology_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Forward ontology search to remote service (no caching — real-time)."""
@@ -528,18 +532,20 @@ class RemoteKnowledgeBackend:
         url = f"{self._source_url}/search/ontology"
         body: dict[str, Any] = {
             "keyword": keyword,
-            "sceneId": scene_id,
+            "sceneIds": scene_ids,
             "queryType": query_type,
             "searchScope": search_scope,
             "pageSize": kwargs.get("page_size", 20),
             "resultPerType": kwargs.get("result_per_type", 5),
         }
-        if "object_code" in kwargs:
-            body["objectCode"] = kwargs["object_code"]
-        if "view_code" in kwargs:
-            body["viewCode"] = kwargs["view_code"]
-        if "property_code" in kwargs:
-            body["propertyCode"] = kwargs["property_code"]
+        if ontology_type:
+            body["ontologyType"] = ontology_type
+        if object_code:
+            body["objectCode"] = object_code
+        if view_code:
+            body["viewCode"] = view_code
+        if property_code:
+            body["propertyCode"] = property_code
         if "page_token" in kwargs:
             body["pageToken"] = kwargs["page_token"]
         response = client.post(url, json=body, headers=headers)
