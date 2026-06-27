@@ -170,19 +170,15 @@ def _init_ext_tool_pool(
         logger.warning("TOOL_POOL init: no objects to load")
         return
 
-    # 如果没有传入 loader，用独立 OntologyLoader 加载（避免影响 Agent 的 loader）
+    # 如果没有传入 loader，通过平台 API 加载本体（避免直调 SDK OntologyLoader）
     if loader is None:
         try:
-            from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
-            from datacloud_platform.execution.virtual_action_injector import (
-                inject_virtual_actions,  # noqa: PLC0415
-            )
-
-            loader = OntologyLoader()
-            loader.load_from_owl_resource_directory(resource_path, object_codes=ops_codes)
-            inject_virtual_actions(loader)
+            loader = get_platform().load_ontology("default", resource_path)
+            get_platform().inject_virtual_actions("default", loader)
         except Exception:  # noqa: BLE001
-            logger.warning("TOOL_POOL init: failed to create OntologyLoader", exc_info=True)
+            logger.warning(
+                "TOOL_POOL init: failed to create OntologyLoader via platform", exc_info=True
+            )
             return
 
     # 逐对象注册到 TOOL_POOL

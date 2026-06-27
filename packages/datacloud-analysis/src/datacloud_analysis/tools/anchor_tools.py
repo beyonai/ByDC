@@ -96,60 +96,101 @@ def _do_search_ontology(
     scope: str = "all",
     type_filter: str = "all",
     top_k: int = 3,
+    allowed_scope: list | None = None,
 ) -> list[dict[str, Any]]:
     """内部搜索实现，供测试 mock 和工具调用。
 
-    优先使用 SearchEngine（datacloud-server），不可用时回退到 TOOL_POOL 名称匹配。
+    优先使用 platform.search_ontology 检索，不可用时回退到 TOOL_POOL 名称匹配。
+
+    Args:
+        query: 搜索关键词。
+        scope: 搜索范围（保留，未使用）。
+        type_filter: ``"object"`` / ``"action"`` / ``"skill"`` / ``"all"``。
+        top_k: 返回候选数量。
+        allowed_scope: 初始范围限制列表（ScopeEntry），None 表示无限制。
+            从 SCENE/ONTOLOGY_BASE 条目提取 scene_ids 传给 search_ontology，
+            从 OBJECT/VIEW 条目提取 codes 做服务端过滤。
     """
+    # Map type_filter to ontology_type
+    _ontology_types: dict[str, list[str]] = {
+        "all": ["object", "action"],
+        "object": ["object"],
+        "action": ["action"],
+    }
+    ontology_type = _ontology_types.get(type_filter)
+    search_scope_str = "metadata"
+
+    # Extract base_id, scene_ids, and object/view codes from allowed_scope
+    base_id = "default"
+    scene_ids: list[str] = ["-1"]
+    object_codes: list[str] | None = None
+    view_codes: list[str] | None = None
+    if allowed_scope:
+        scope_filter = _build_scope_filter(allowed_scope)
+        if scope_filter["base_ids"]:
+            base_id = scope_filter["base_ids"][0]
+        if scope_filter["scene_ids"]:
+            scene_ids = scope_filter["scene_ids"]
+        if scope_filter["object_codes"]:
+            object_codes = scope_filter["object_codes"]
+        if scope_filter["view_codes"]:
+            view_codes = scope_filter["view_codes"]
+
     try:
-        import os  # noqa: PLC0415
-
-        from datacloud_server.adapters.local_adapter import LocalOntologyAdapter  # noqa: PLC0415
-        from datacloud_server.registry.registry import (  # noqa: PLC0415
-            OntologyBaseEntry,
-            OntologyBaseRegistry,
-        )
-        from datacloud_server.services.adapter_router import AdapterRouter  # noqa: PLC0415
-        from datacloud_server.services.search_engine import (  # noqa: PLC0415
-            RRFStrategy,
-            SearchEngine,
-        )
-        from datacloud_server.storage.json_writer import JSONWriter  # noqa: PLC0415
-
-        data_dir = os.environ.get("DATACLOUD_ONTOLOGY_PATH", "")
-        if not data_dir:
-            raise ValueError("DATACLOUD_ONTOLOGY_PATH 未配置")
-
-        base_id = "default"
-        registry = OntologyBaseRegistry()
-        registry.register(
-            OntologyBaseEntry(
-                base_id=base_id,
-                display_name="本体库",
-                description="",
-                owner_type="enterprise",
-                source_type="LOCAL",
-                ontology_path=data_dir,
-            )
-        )
-        adapter = LocalOntologyAdapter(data_dir, JSONWriter())
-        router = AdapterRouter(registry=registry, adapters={"LOCAL": adapter})  # type: ignore[arg-type]
-        engine = SearchEngine(
-            router=router,
-            scopes=[(base_id, "object"), (base_id, "skill")],
-            strategy=RRFStrategy(),
-        )
-        hits = engine.search(
+        platform = get_platform()
+        result = platform.search_ontology(
+            base_id,
+            scene_ids=scene_ids,
             keyword=query,
-            search_scope="metadata",
-            result_per_type=top_k,
+            search_scope=search_scope_str,
+            ontology_type=ontology_type,
+            object_code=object_codes,
+            view_code=view_codes,
+            limit=top_k,
         )
-        # 按 type_filter 过滤
-        if type_filter != "all":
-            hits = [h for h in hits if h.get("resultType") == type_filter]
-        return hits[:top_k]
+
+        hits_by_type: list[dict[str, Any]] = []
+        for item in result.get("metadata", []):
+            term_code = str(item.get("termCode", ""))
+            name_text = str(item.get("nameText", ""))
+            score = float(item.get("score", 1.0))
+            term_type = str(item.get("termType", ""))
+            belong_obj = str(item.get("belongObjectCode", ""))
+
+            if term_type == "ontology_action":
+                hits_by_type.append(
+                    {
+                        "objectCode": belong_obj or "",
+                        "objectName": name_text,
+                        "resultType": "action",
+                        "score": score,
+                    }
+                )
+            elif term_type == "object":
+                hits_by_type.append(
+                    {
+                        "objectCode": term_code,
+                        "objectName": name_text,
+                        "resultType": "object",
+                        "score": score,
+                    }
+                )
+            else:
+                hits_by_type.append(
+                    {
+                        "objectCode": term_code,
+                        "objectName": name_text,
+                        "resultType": term_type,
+                        "score": score,
+                    }
+                )
+
+        # Skill type is not indexed yet, returns empty. Keep skill resultType
+        # for forward compatibility — caller may filter.
+
+        return hits_by_type[:top_k]
     except Exception as exc:  # noqa: BLE001
-        logger.debug("search_ontology SearchEngine 不可用，回退到 TOOL_POOL: %s", exc)
+        logger.debug("search_ontology platform 检索不可用，回退到 TOOL_POOL: %s", exc)
 
     # 回退：在 TOOL_POOL 中做名称匹配
     try:
@@ -347,7 +388,9 @@ def make_anchor_tools(
             top_k: 返回候选数量，默认 3
         """
         state = get_state_fn() or {}
-        hits = _do_search_ontology(query, scope, type, top_k)
+        tool_context = get_tool_context_fn() if get_tool_context_fn else None
+        allowed_scope = tool_context.allowed_scope if tool_context else None
+        hits = _do_search_ontology(query, scope, type, top_k, allowed_scope=allowed_scope)
 
         if not hits:
             return f"未找到与 '{query}' 相关的本体对象，请尝试调整关键词或 scope 参数。"

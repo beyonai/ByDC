@@ -214,7 +214,7 @@ class OntologyAgentConfig:
     temperature: float = 0.7
     model_kwargs: dict[str, Any] | None = None
     # 结果文件存储后端（如 byclaw 的 ByclawResultFileStorage）。由调用方注入，
-    # OntologyAgent 内不感知具体类型，仅透传给 configure_loader。
+    # OntologyAgent 内不感知具体类型。已通过 LoaderRuntimeManager 统一管理。
     result_file_storage: Any = None
     # HTTP_SQL 后端服务地址。非空时强制走 HttpSqlConnector 并注入此地址，
     # 取代历史的 DATACLOUD_SQL_SERVICE_URL 环境变量。
@@ -566,34 +566,13 @@ class OntologyAgent:
         view_codes: list[str] | None,
         object_codes: list[str] | None,
     ) -> tuple[Any, list[str]]:
-        """解析 OWL 文件，返回 (OntologyLoader, mounted_objects)。"""
-        from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
+        """通过 LoaderRuntimeManager 获取已配置的 OntologyLoader 快照。"""
+        from datacloud_platform.config import get_settings  # noqa: PLC0415
+        from datacloud_platform.loader_runtime import LoaderRuntimeManager  # noqa: PLC0415
 
-        from datacloud_analysis.tools.ontology_tool_loader import configure_loader  # noqa: PLC0415
-
-        resource_path = Path(self._config.resource_path)
-        loader = OntologyLoader()
-        loader.load_from_owl_resource_directory(
-            resource_path, object_codes=object_codes, view_codes=view_codes
-        )
-
-        # for view_code in view_codes or []:
-        #     loader.load_view_with_deps(resource_path, view_code)
-        # for obj_code in object_codes or []:
-        #     loader.load_object_with_deps(resource_path, obj_code)
-
-        # fixme: pass base_id explicitly — _base_id is module-level
-        get_platform().inject_virtual_actions(_base_id, loader)
-        configure_loader(
-            loader,
-            model=self._config.model,
-            api_key=self._config.api_key,
-            base_url=self._config.base_url,
-            temperature=self._config.temperature,
-            result_file_storage=self._config.result_file_storage,
-            sql_execute_url=self._config.sql_execute_url,
-            use_kb_term_loader=self._config.use_kb_term_loader,
-        )
+        runtime = LoaderRuntimeManager(platform=get_platform(), settings=get_settings())
+        snapshot = runtime.get_loader(_base_id)
+        loader = snapshot.loader
 
         mounted = list(view_codes or []) + list(object_codes or [])
         return loader, mounted

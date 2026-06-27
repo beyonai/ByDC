@@ -1,8 +1,7 @@
-"""TC-01 ~ TC-12：OntologyToolLoader agent_friendly / ontology_path 验收。
+"""TC-01 ~ TC-12：OntologyToolLoader agent_friendly 验收。
 
 覆盖：
-  TC-03  ontology_path 路径自动完成 load+inject
-  TC-04  loader / ontology_path 均不传时抛 ValueError
+  TC-04  loader 不传时抛 ValueError
   TC-05  agent_friendly=True：filters 为 relaxed（含 catch-all + 原词透传指令）
   TC-05b agent_friendly=True：select description 允许中文名和原词透传
   TC-05c agent_friendly=True：order_by.field description 允许中文名和原词透传
@@ -16,7 +15,7 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
@@ -81,43 +80,16 @@ def _make_view_mock_loader(fields: list[_FakeField], view_code: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
-# TC-04：未传 loader 也未传 ontology_path → ValueError
+# TC-04：未传 loader → ValueError
 # ---------------------------------------------------------------------------
 
 
 def test_TC04_neither_loader_nor_path_raises_value_error() -> None:
-    """TC-04：同时不传 loader 和 ontology_path 时，__init__ 抛 ValueError。"""
+    """TC-04：不传 loader 时，__init__ 抛 ValueError。"""
     from datacloud_analysis.tools.ontology_tool_loader import OntologyToolLoader
 
-    with pytest.raises(ValueError, match="必须提供 loader 或 ontology_path 之一"):
+    with pytest.raises(ValueError, match="必须提供 loader"):
         OntologyToolLoader(mounted_objects=["enterprise"])
-
-
-# ---------------------------------------------------------------------------
-# TC-03：ontology_path 触发 _build_loader（自动 load + inject）
-# ---------------------------------------------------------------------------
-
-
-def test_TC03_ontology_path_triggers_build_loader() -> None:
-    """TC-03：传入 ontology_path 时，自动调用 OntologyLoader.load_from_owl_directory 和 inject_virtual_actions。"""
-    from datacloud_analysis.tools.ontology_tool_loader import OntologyToolLoader
-
-    mock_loader_instance = MagicMock()
-
-    with (
-        patch(
-            "datacloud_analysis.tools.ontology_tool_loader.OntologyToolLoader._build_loader",
-            return_value=mock_loader_instance,
-        ) as mock_build,
-    ):
-        sut = OntologyToolLoader(
-            mounted_objects=["enterprise"],
-            ontology_path="/fake/owl/path",
-        )
-
-    mock_build.assert_called_once()
-    # loader 被赋值为 _build_loader 的返回值
-    assert sut._loader is mock_loader_instance  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------

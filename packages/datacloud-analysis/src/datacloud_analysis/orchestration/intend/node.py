@@ -50,6 +50,7 @@ async def intend_node(
     config: RunnableConfig,
 ) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
+    tool_context = (config.get("configurable") or {}).get("tool_context")
     messages = state.get("messages") or []
     user_query = last_human_text(messages)
 
@@ -109,7 +110,13 @@ async def intend_node(
                 "[intend_node] cold_start: anchor mode, active_tools empty → search_ontology(%r)",
                 user_query,
             )
-            hits = _do_search_ontology(user_query, scope="all", type_filter="all", top_k=3)
+            hits = _do_search_ontology(
+                user_query,
+                scope="all",
+                type_filter="all",
+                top_k=3,
+                allowed_scope=tool_context.allowed_scope if tool_context else None,
+            )
             existing: set[str] = set()
             for hit in hits:
                 obj_code = hit.get("objectCode") or hit.get("object_code", "")

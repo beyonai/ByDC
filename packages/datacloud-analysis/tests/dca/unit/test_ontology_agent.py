@@ -563,31 +563,6 @@ def test_config_accepts_result_file_storage_field() -> None:
     assert cfg2.result_file_storage is sentinel
 
 
-def test_build_loader_passes_result_file_storage_to_configure_loader() -> None:
-    """_build_loader 应把 config.result_file_storage 透传给 configure_loader。"""
-    sentinel = object()
-    cfg = OntologyAgentConfig(
-        api_key="k",
-        model="m",
-        resource_path="/x",
-        result_file_storage=sentinel,
-    )
-    agent = OntologyAgent(cfg)
-    with (
-        patch("datacloud_data_sdk.ontology.loader.OntologyLoader") as m_loader_cls,
-        patch(
-            "datacloud_platform.execution.virtual_action_injector.inject_virtual_actions"
-        ) as _m_inject,
-        patch("datacloud_analysis.tools.ontology_tool_loader.configure_loader") as m_configure,
-    ):
-        m_loader_cls.return_value = MagicMock()
-        agent._build_loader(view_codes=["v"], object_codes=["o"])
-
-    assert m_configure.called, "configure_loader 应被调用"
-    kwargs = m_configure.call_args.kwargs
-    assert kwargs.get("result_file_storage") is sentinel
-
-
 # ── 方案 A 红测试：user_code / session_id 透传(对外不暴露 gateway_context)──
 
 

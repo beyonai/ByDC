@@ -26,17 +26,6 @@ from datacloud_platform.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# 可选 SDK 依赖（模块级导入，供 configure_loader 和 patch 使用）
-# ---------------------------------------------------------------------------
-
-try:
-    from datacloud_data_sdk.ontology.term_loader import TermLoader
-    from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
-except ImportError:
-    TermLoader = None  # type: ignore[assignment]
-    LangGraphPlanGenerator = None  # type: ignore[assignment]
-
 # ── 平台路由 ──────────────────────────────────────────────────────────────────
 from datacloud_platform import get_platform  # noqa: E402
 
@@ -336,7 +325,7 @@ class OntologyToolLoader:
             ontology_path="/path/to/owl",
         ).load()
 
-    调用示例（旧接口，外部传入 loader）::
+    调用示例::
 
         tools = OntologyToolLoader(
             mounted_objects=["enterprise"],
@@ -344,8 +333,7 @@ class OntologyToolLoader:
         ).load()
 
     注意：
-    - ``loader`` 与 ``ontology_path`` 必须提供其一（显式传 loader=None 保留旧的 skip 行为）。
-    - 两者均未传时抛 ValueError。
+    - ``loader`` 必须提供（显式传 loader=None 保留旧的 skip 行为）。
     - 若平台后端不可用，记录 warning 并返回空字典。
     - 同名工具只生成一次；caller 传入的 ``tools`` 参数可在 ``create_agent`` 层覆盖。
     """
@@ -354,7 +342,6 @@ class OntologyToolLoader:
         self,
         mounted_objects: list[str] | None = None,
         loader: Any = _LOADER_NOT_PROVIDED,
-        ontology_path: str | Path | None = None,
         skip_action_families: frozenset[str] = frozenset(),
         agent_friendly: bool = True,
         resource_path: str | Path | None = None,
@@ -362,19 +349,13 @@ class OntologyToolLoader:
         if loader is not _LOADER_NOT_PROVIDED:
             # 显式传入 loader（可为 None，保持旧的 skip-on-None 行为）
             self._loader: Any = loader
-        elif ontology_path is not None:
-            self._loader = self._build_loader(Path(str(ontology_path)), mounted_objects)
         else:
-            raise ValueError("必须提供 loader 或 ontology_path 之一")
+            raise ValueError("必须提供 loader")
 
         self._mounted_objects: list[str] = list(mounted_objects or [])
         self._skip_action_families = skip_action_families
         self._agent_friendly = agent_friendly
-        self._resource_path: Path | None = (
-            Path(str(resource_path))
-            if resource_path
-            else (Path(str(ontology_path)) if ontology_path else None)
-        )
+        self._resource_path: Path | None = Path(str(resource_path)) if resource_path else None
 
     # ------------------------------------------------------------------
     # 公开方法
@@ -430,32 +411,6 @@ class OntologyToolLoader:
             sorted(tools.keys()),
         )
         return tools
-
-    # ------------------------------------------------------------------
-    # 静态方法：自建 loader
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _build_loader(ontology_path: Path, mounted_objects: list[str] | None = None) -> Any:
-        """自建 OntologyLoader：加载 OWL 文件并注入虚拟动作。
-
-        仅在 agent 侧通过 ontology_path 构建时调用；
-        外部传入 loader 时不经过此方法。
-        """
-        from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
-        from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
-        from datacloud_platform.execution.virtual_action_injector import (
-            inject_virtual_actions,  # noqa: PLC0415
-        )
-
-        loader = OntologyLoader()
-        term_loader = TermLoader.from_config({})
-        loader.configure(term_loader=term_loader)
-        loader.load_from_owl_resource_directory(
-            str(ontology_path), object_codes=mounted_objects, view_codes=mounted_objects
-        )
-        inject_virtual_actions(loader)
-        return loader
 
     # ------------------------------------------------------------------
     # Schema 个性化：_apply_agent_schema_patches
@@ -939,70 +894,3 @@ class OntologyToolLoader:
             description=desc,
             args_schema=schema_cls,
         )
-
-
-# ---------------------------------------------------------------------------
-# 便捷函数：configure_loader（阶段二 V-1 迁移）
-# ---------------------------------------------------------------------------
-
-
-def configure_loader(
-    loader: Any,
-    *,
-    model: str,
-    base_url: str | None = None,
-    api_key: str | None = None,
-    temperature: float = 0.0,
-    model_kwargs: dict[str, Any] | None = None,
-    csv_base_dir: str = "",
-    sql_execution_mode: str = "internal",
-    result_file_storage: Any = None,
-    sql_execute_url: str | None = None,
-    use_kb_term_loader: bool = True,
-) -> None:
-    """为 OntologyLoader 配置查询规划器和词条加载器。
-
-    将 System 3 (byclaw-data) 对 datacloud_data_sdk 的直接调用封装为门面，
-    使 agent 侧无需感知 SDK 内部实现。
-
-    Args:
-        loader: OntologyLoader 实例（已加载 OWL）。
-        model: LLM 模型名称。
-        base_url: API 基础 URL。
-        api_key: API 密钥。
-        temperature: 采样温度，默认 0.0。
-        model_kwargs: 额外模型参数（透传给 LangGraphPlanGenerator）。
-        csv_base_dir: CSV 文件基础目录。
-        sql_execution_mode: SQL 执行模式，默认 "internal"。
-        result_file_storage: 结果文件存储实现；为 None 且 csv_base_dir 非空时
-            自动创建 LocalResultFileStorage(csv_base_dir)。
-        sql_execute_url: HTTP_SQL 后端服务地址；非空时 DataSourceManager 强制
-            走 HttpSqlConnector，并把该 URL 注入 connector 配置副本。
-        use_kb_term_loader: True（默认）时创建 KbTermLoader（需要 OpenGauss 连接）；
-            False 时跳过术语加载器，适用于 OpenGauss 不可用的环境（如评测 mock 环境）。
-    """
-    pg_kwargs: dict[str, Any] = {
-        "model": model,
-        "base_url": base_url,
-        "api_key": api_key,
-        "temperature": temperature,
-    }
-    if model_kwargs is not None:
-        pg_kwargs["model_kwargs"] = model_kwargs
-
-    plan_generator = LangGraphPlanGenerator(**pg_kwargs)  # type: ignore[operator]
-    term_loader = TermLoader.from_config({}) if use_kb_term_loader else None  # type: ignore[union-attr]
-
-    if result_file_storage is None and csv_base_dir:
-        from datacloud_data_sdk.file_storage import LocalResultFileStorage  # noqa: PLC0415
-
-        result_file_storage = LocalResultFileStorage(csv_base_dir)
-
-    loader.configure(
-        plan_generator=plan_generator,
-        term_loader=term_loader,
-        csv_base_dir=csv_base_dir,
-        sql_execution_mode=sql_execution_mode,
-        result_file_storage=result_file_storage,
-        sql_execute_url=sql_execute_url,
-    )
