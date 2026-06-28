@@ -1236,6 +1236,7 @@ async def run_react_loop(
     gateway_context: Any = None,
     loader: Any = None,
     redirect_tools_map: dict[str, BaseTool] | None = None,
+    tool_context: Any = None,
 ) -> dict[str, Any]:
     """执行 ReAct 主循环，返回 react_final 字典。
 
@@ -1286,7 +1287,42 @@ async def run_react_loop(
 
     # tools_map 包含 finish_react（LLM 可见工具集）
     tools_map: dict[str, BaseTool] = {t.name: t for t in tools_list}
+    # 从 TOOL_POOL 合并运行时注册的业务工具（不在初始 tools_list 中）
+    try:
+        from datacloud_analysis.tools.tool_pool import TOOL_POOL  # noqa: PLC0415
+
+        _pool_added = 0
+        for _pname, _ptool in TOOL_POOL.items():
+            if _pname not in tools_map:
+                tools_map[_pname] = _ptool
+                _pool_added += 1
+        if _pool_added:
+            logger.info(
+                "[react_loop] merged %d business tools from TOOL_POOL (tools_map: %d→%d)",
+                _pool_added,
+                len(tools_list),
+                len(tools_map),
+            )
+    except Exception:
+        pass
     tools_map["finish_react"] = finish_react
+
+    # ★ T12：从 tool_context.tools_map 按名合并已解锁工具
+    # （active_tools 只存名字，tools_map 存对象；无 tool_context 时降级到 TOOL_POOL）
+    _active_names: list[str] = state.get("active_tools") or []
+    if tool_context is not None:
+        tools_map.update(
+            {name: tool for name, tool in tool_context.tools_map.items() if name in _active_names}
+        )
+    else:
+        try:
+            from datacloud_analysis.tools.tool_pool import (
+                get_tools as _get_unlocked_legacy,
+            )
+
+            tools_map.update(_get_unlocked_legacy(_active_names))
+        except Exception:
+            pass  # TOOL_POOL 未初始化（非运维诊断 Agent）时静默跳过
 
     llm = _build_llm(state)
     # bind_tools 仅绑定 LLM 可见工具（不含 redirect_tools，避免 LLM 直接调用内部路由工具）
@@ -1432,6 +1468,19 @@ async def run_react_loop(
             # 设置 resume replay 信号，让 tool 内部知道当前是 resume 重放
             _resume_token = is_resume_replay.set(True)
             try:
+                # 同步动态工具（resume 路径同样需要）
+                _active_resume = state.get("active_tools") or []
+                if _active_resume:
+                    try:
+                        from datacloud_analysis.tools.tool_pool import TOOL_POOL  # noqa: PLC0415
+
+                        _missing_r = [
+                            n for n in _active_resume if n not in tools_map and n in TOOL_POOL
+                        ]
+                        if _missing_r:
+                            tools_map.update({n: TOOL_POOL[n] for n in _missing_r})
+                    except Exception:
+                        pass
                 for tc in pending_tool_calls:
                     _t0 = time.monotonic()
                     tool_id, result = await dispatch_tool(
@@ -1580,6 +1629,29 @@ async def run_react_loop(
                 "react_rounds": round_idx + 1,
                 "react_checkpoint": None,
             }
+        # 同步动态工具：从 TOOL_POOL 中拉取 state.active_tools 里已解锁但在 tools_map 中缺失的工具
+        _active_sync = state.get("active_tools") or []
+        if _active_sync:
+            try:
+                from datacloud_analysis.tools.tool_pool import TOOL_POOL  # noqa: PLC0415
+
+                _missing = [n for n in _active_sync if n not in tools_map and n in TOOL_POOL]
+                if _missing:
+                    tools_map.update({n: TOOL_POOL[n] for n in _missing})
+                    logger.info(  # ← 提升到 INFO 可见
+                        "[react_loop] synced %d dynamic tools from TOOL_POOL: %s",
+                        len(_missing),
+                        ", ".join(_missing[:10]),
+                    )
+                else:
+                    logger.info(
+                        "[react_loop] no missing tools: active_tools=%d tools_map=%d TOOL_POOL=%d",
+                        len(_active_sync),
+                        len(tools_map),
+                        len(TOOL_POOL),
+                    )
+            except Exception as e:
+                logger.warning("[react_loop] tool sync failed: %s", e)
         for tc_idx, tc in enumerate(ai_msg.tool_calls):
             # 检查是否是delegate工具（可能interrupt）
             tool_name = tc.get("name", "")
