@@ -412,6 +412,7 @@ async def execution_node(
     )
 
     gateway_context = (config.get("configurable") or {}).get("gateway_context")
+    tool_ctx = (config.get("configurable") or {}).get("tool_context")
     if gateway_context is not None:
         is_delegate_resume_replay = is_delegate_wait_resume_command(
             getattr(gateway_context, "current_command", None)
@@ -428,6 +429,7 @@ async def execution_node(
                 gateway_context=gateway_context,
                 loader=loader,
                 redirect_tools_map=redirect_tools_map,
+                tool_context=tool_ctx,
             )
         else:
             result = await run_react_loop(
@@ -440,6 +442,7 @@ async def execution_node(
                 gateway_context=gateway_context,
                 loader=loader,
                 redirect_tools_map=redirect_tools_map,
+                tool_context=tool_ctx,
             )
     else:
         result = await run_react_loop(
@@ -452,6 +455,7 @@ async def execution_node(
             gateway_context=gateway_context,
             loader=loader,
             redirect_tools_map=redirect_tools_map,
+            tool_context=tool_ctx,
         )
 
     return result

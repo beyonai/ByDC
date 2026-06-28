@@ -127,7 +127,9 @@ def _get_user_info(gateway_context: Any):
     return _user_code, _user_name
 
 
-def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> str | None:
+def _build_runtime_dynamic_prompt(
+    state: AgentState, gateway_context: Any, tool_context: Any = None
+) -> str | None:
     """从 state 的 knowledge_snippets 和 gateway_context 构建每次请求的动态 prompt 部分。"""
     parts: list[str] = []
 
@@ -165,7 +167,7 @@ def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> st
 
     # ── 附06-V3 锚点模式：注入本体对象列表 + 已排除路径 + 收敛引导 ─────────────
     try:
-        _tool_ctx = None
+        _tool_ctx = tool_context
 
         from datacloud_analysis.tools.tool_pool import is_anchor_mode  # noqa: PLC0415
 
@@ -346,7 +348,9 @@ def make_llm_call_node(
         )
 
         # 每轮从 state["messages"] 重建消息列表（系统提示 + 对话历史）
-        _dynamic = dynamic_prompt or _build_runtime_dynamic_prompt(state, _gateway_context)
+        _dynamic = dynamic_prompt or _build_runtime_dynamic_prompt(
+            state, _gateway_context, _tool_ctx
+        )
         logger.info(
             "[llm_call] round=%d gateway_context=%s dynamic_preview=%r",
             current_round,
