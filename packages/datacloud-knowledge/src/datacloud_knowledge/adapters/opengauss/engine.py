@@ -1020,6 +1020,7 @@ class PostgresSearchEngine(TermSearchEngine):
         vector: list[float],
         *,
         term_types: Sequence[str] | None = None,
+        term_codes: Sequence[str] | None = None,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         """用向量做 pgvector 余弦相似度搜索，返回 term 信息。
@@ -1036,11 +1037,16 @@ class PostgresSearchEngine(TermSearchEngine):
         """
         vector_str = "[" + ",".join(map(str, vector)) + "]"
 
+        conditions: list[str] = []
         if term_types:
             placeholders = ", ".join(f":type_{i}" for i in range(len(term_types)))
-            type_filter = f"AND t.term_type_code IN ({placeholders})"
-        else:
-            type_filter = ""
+            conditions.append(f"t.term_type_code IN ({placeholders})")
+        if term_codes:
+            placeholders = ", ".join(f":code_{i}" for i in range(len(term_codes)))
+            conditions.append(f"t.term_code IN ({placeholders})")
+        type_filter = ""
+        if conditions:
+            type_filter = "AND " + " AND ".join(conditions)
 
         sql = text(
             f"""
@@ -1067,6 +1073,9 @@ class PostgresSearchEngine(TermSearchEngine):
             if term_types:
                 for i, tt in enumerate(term_types):
                     params[f"type_{i}"] = tt
+            if term_codes:
+                for i, tc in enumerate(term_codes):
+                    params[f"code_{i}"] = tc
 
             with self._with_session() as session:
                 rows = session.execute(sql, params).fetchall()

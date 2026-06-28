@@ -702,8 +702,7 @@ class DataCloudKnowledgeBackend:
         else:
             metadata_types = _ALL_METADATA_TYPES
 
-        # Build post-filter code sets
-        object_code_set: set[str] | None = set(object_code) if object_code else None
+        # Build post-filter code sets (for view/property only; object_code pushed to engine)
         view_code_set: set[str] | None = set(view_code) if view_code else None
         property_code_set: set[str] | None = (
             set(property_code) if property_code else None
@@ -714,6 +713,7 @@ class DataCloudKnowledgeBackend:
             metadata_hits = engine.search_terms_by_embedding(
                 vector=vec,
                 term_types=metadata_types,
+                term_codes=object_code,  # 推到引擎层过滤，不后过滤
                 limit=limit,
             )
 
@@ -731,9 +731,7 @@ class DataCloudKnowledgeBackend:
                 term_code = str(hit.get("term_code", ""))
                 term_type = str(hit.get("term_type_code", ""))
 
-                # Post-filter by object_code / view_code / property_code
-                if object_code_set is not None and term_code not in object_code_set:
-                    continue
+                # Post-filter by view_code / property_code (object_code already filtered at engine level)
                 if view_code_set is not None and term_code not in view_code_set:
                     continue
                 if property_code_set is not None and term_code not in property_code_set:
