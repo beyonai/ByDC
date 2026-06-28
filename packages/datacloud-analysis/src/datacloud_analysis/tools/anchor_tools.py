@@ -32,6 +32,16 @@ try:
 except ImportError:  # pragma: no cover
     OntologyToolLoader = None  # type: ignore[assignment]
 
+# T15：模块级变量，intend_node 写入，search_ontology 工具函数读取
+# （graph_builder 的 get_state_fn 硬编码为 lambda: {}，工具无法访问真正的 state）
+_pending_allowed_scope: list | None = None
+
+
+def set_allowed_scope(scope: list | None) -> None:
+    """由 intend_node 调用，写入当前请求的 allowed_scope。"""
+    global _pending_allowed_scope
+    _pending_allowed_scope = scope
+
 
 def _build_scope_filter(allowed_scope: list) -> dict:
     """把 ScopeEntry 列表转成 platform.search_ontology() 可接受的过滤参数。"""
@@ -85,6 +95,23 @@ def _activate_object_with_context(
 
     tool_context.tools_map.update(new_obj_tools)
     tool_context.object_to_tools[object_code] = list(new_obj_tools.keys())
+
+    # 同步到全局 TOOL_POOL，使 react_loop 的 tools_map 可通过 TOOL_POOL 感知动态工具
+    try:
+        from datacloud_analysis.tools.tool_pool import TOOL_POOL, TOOL_TO_OBJECT  # noqa: PLC0415
+
+        TOOL_POOL.update(new_obj_tools)
+        for _tname in new_obj_tools:
+            if _tname not in TOOL_TO_OBJECT:
+                TOOL_TO_OBJECT[_tname] = object_code
+        logger.info(
+            "[activate_anchor] registered %d tools to TOOL_POOL (total=%d): %s",
+            len(new_obj_tools),
+            len(TOOL_POOL),
+            ", ".join(list(new_obj_tools.keys())[:5]),
+        )
+    except Exception as e:
+        logger.warning("register_runtime_tool_pool failed: %s", e)
 
     new_tools = [t for t in new_obj_tools if t not in existing]
     state["active_tools"] = list(existing) + new_tools
@@ -388,8 +415,12 @@ def make_anchor_tools(
             top_k: 返回候选数量，默认 3
         """
         state = get_state_fn() or {}
+        # 优先从模块级 _pending_allowed_scope 读取（intend_node 写入），
+        # 其次从 tool_context 闭包读取，最后 fallback 到 None
         tool_context = get_tool_context_fn() if get_tool_context_fn else None
-        allowed_scope = tool_context.allowed_scope if tool_context else None
+        allowed_scope = _pending_allowed_scope or (
+            tool_context.allowed_scope if tool_context else None
+        )
         hits = _do_search_ontology(query, scope, type, top_k, allowed_scope=allowed_scope)
 
         if not hits:

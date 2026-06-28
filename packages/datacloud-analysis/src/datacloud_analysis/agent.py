@@ -289,6 +289,7 @@ def create_agent(
         tools=merged_tools,
         loader=loader,
         redirect_tools=redirect_tools or None,
+        mounted_objects=mounted_objects,
     )
 
     compiled = compile_graph_with_policy(graph, caller_name="create_agent")

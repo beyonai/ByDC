@@ -189,6 +189,7 @@ def build_analysis_graph(
     redirect_tools: dict[str, Any] | None = None,
     is_sub_agent: bool = False,
     tool_context: Any = None,
+    mounted_objects: list[str] | None = None,
 ) -> StateGraph[AgentState]:
     """Return an uncompiled StateGraph.
 
@@ -210,6 +211,7 @@ def build_analysis_graph(
             redirect_tools=redirect_tools,
             is_sub_agent=is_sub_agent,
             tool_context=tool_context,
+            mounted_objects=mounted_objects,
         )
     return _build_legacy_graph(
         prompts_overwrite=prompts_overwrite,
@@ -445,6 +447,7 @@ def _build_prebuilt_graph(
     redirect_tools: dict[str, Any] | None = None,
     is_sub_agent: bool = False,
     tool_context: Any = None,
+    mounted_objects: list[str] | None = None,
 ) -> StateGraph[AgentState]:
     """V0.4 新图拓扑：intend → agent → HookAwareToolNode(tools) → respond。
 
@@ -487,6 +490,37 @@ def _build_prebuilt_graph(
 
     # ── tools_list（含 finish_react sentinel 工具）────────────────────────────────
     tools_list = _build_tools_list(tools)
+    # 从 TOOL_POOL 合并 Agent 自身 mounted_objects 范围内的工具
+    # （init_agent_conf 的 OBJECT/VIEW 工具走 generic query_objects 路径，
+    # 不生成 per-object 工具，而是由 _init_ext_tool_pool 全量加载到 TOOL_POOL。
+    # ToolNode 固化 tools_list 后无法感知后续 activate_anchor 解锁的工具，
+    # 因此需在构建时合并 TOOL_POOL 中属于当前 Agent scope 的工具。）
+    try:
+        from langchain_core.tools import BaseTool  # noqa: PLC0415
+
+        from datacloud_analysis.tools.tool_pool import TOOL_POOL, TOOL_TO_OBJECT  # noqa: PLC0415
+
+        _agent_codes: set[str] = {o for o in (mounted_objects or []) if o}
+        _existing = {t.name for t in tools_list}
+        _added = 0
+        for _pn, _pt in TOOL_POOL.items():
+            if _pn in _existing or not isinstance(_pt, BaseTool):
+                continue
+            # 用 TOOL_TO_OBJECT 反查工具归属，只合并属于当前 Agent mounted_objects 范围的工具
+            _obj = TOOL_TO_OBJECT.get(_pn, "")
+            if _agent_codes and _obj and _obj not in _agent_codes:
+                continue
+            tools_list.append(_pt)
+            _added += 1
+        if _added:
+            logger.info(
+                "[graph_builder] merged %d in-scope tools from TOOL_POOL (tools_list: %d→%d)",
+                _added,
+                len(tools_list) - _added,
+                len(tools_list),
+            )
+    except Exception:
+        pass
 
     # 附06-V3：锚点模式下，把 activate_anchor / mark_dead_end 加入工具列表
     try:

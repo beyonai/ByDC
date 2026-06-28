@@ -51,6 +51,13 @@ async def intend_node(
 ) -> dict[str, Any]:
     gw_ctx = (config.get("configurable") or {}).get("gateway_context")
     tool_context = (config.get("configurable") or {}).get("tool_context")
+    # 将 allowed_scope 写入模块级变量，供 search_ontology 工具函数读取
+    try:
+        from datacloud_analysis.tools.anchor_tools import set_allowed_scope  # noqa: PLC0415
+
+        set_allowed_scope(tool_context.allowed_scope if tool_context else None)
+    except Exception:
+        pass
     messages = state.get("messages") or []
     user_query = last_human_text(messages)
 
