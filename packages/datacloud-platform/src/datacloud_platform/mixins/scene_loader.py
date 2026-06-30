@@ -449,11 +449,21 @@ def _generate_remote_function_configs(
     resolve ``servers[0].url`` and ``paths`` without needing a local OWL file.
     """
     functions: dict[str, dict[str, Any]] = {}
+    action_count = 0
+    generated_count = 0
+    skipped_no_url = 0
+    skipped_has_script = 0
+    skipped_no_path = 0
     for obj in objects:
         for a in obj.get("actions", []) or []:
+            action_count += 1
             script = a.get("script")
             request_url = a.get("request_url")
-            if script or not request_url:
+            if script:
+                skipped_has_script += 1
+                continue
+            if not request_url:
+                skipped_no_url += 1
                 continue
 
             function_refs: list[str] = list(a.get("function_refs", []) or [])
@@ -461,9 +471,18 @@ def _generate_remote_function_configs(
                 function_code = _build_generated_function_code(a.get("action_code", ""))
                 function_refs = [function_code]
                 a["function_refs"] = function_refs
+                generated_count += 1
+                logger.debug(
+                    "_generate_remote_function_configs: generated function_refs=%s "
+                    "for action_code=%r request_url=%r",
+                    function_refs,
+                    a.get("action_code"),
+                    request_url,
+                )
 
             server_url, path = _split_request_url(request_url)
             if not path:
+                skipped_no_path += 1
                 continue
 
             method = (a.get("request_method") or "POST").lower()
@@ -479,6 +498,18 @@ def _generate_remote_function_configs(
 
             for fn_code in function_refs:
                 functions.setdefault(fn_code, config)
+
+    logger.debug(
+        "_generate_remote_function_configs: total_actions=%d generated_refs=%d "
+        "skipped(no_url=%d has_script=%d no_path=%d) "
+        "total_functions=%d",
+        action_count,
+        generated_count,
+        skipped_no_url,
+        skipped_has_script,
+        skipped_no_path,
+        len(functions),
+    )
 
     return functions
 
