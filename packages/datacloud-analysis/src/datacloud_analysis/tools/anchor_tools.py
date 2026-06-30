@@ -234,6 +234,46 @@ def _activate_object_with_context(
     return new_tools, ""
 
 
+def _search_skills_in_pool(query: str, top_k: int) -> list[dict[str, Any]]:
+    """在 TOOL_POOL 中按名称描述搜索已注册的 skill wrapper。
+
+    遍历 activate_skill_* 前缀的工具，用 query 匹配 skill 名称和描述。
+
+    Args:
+        query: 搜索关键词。
+        top_k: 返回候选上限。
+
+    Returns:
+        list of {"resultType": "skill", "skillName": ..., "skillPath": ...,
+                 "description": ..., "score": ...}
+    """
+    try:
+        from datacloud_analysis.tools.tool_pool import TOOL_POOL, TOOL_TO_OBJECT  # noqa: PLC0415
+    except ImportError:
+        return []
+
+    q = query.lower()
+    results: list[dict[str, Any]] = []
+    for name, tool_obj in TOOL_POOL.items():
+        if not name.startswith("activate_skill_"):
+            continue
+        skill_name = name[len("activate_skill_") :].replace("_", "-")
+        desc = str(getattr(tool_obj, "description", ""))
+        if q in skill_name.lower() or q in desc.lower():
+            results.append(
+                {
+                    "skillName": skill_name,
+                    "resultType": "skill",
+                    "skillPath": TOOL_TO_OBJECT.get(name, ""),
+                    "description": desc,
+                    "score": 0.9,
+                }
+            )
+            if len(results) >= top_k:
+                break
+    return results
+
+
 def _do_search_ontology(
     query: str,
     scope: str = "all",
@@ -259,6 +299,7 @@ def _do_search_ontology(
         "all": ["object", "action"],
         "object": ["object"],
         "action": ["action"],
+        "skill": ["object", "action"],
     }
     ontology_type = _ontology_types.get(type_filter)
     search_scope_str = "metadata"
@@ -328,10 +369,16 @@ def _do_search_ontology(
                     }
                 )
 
-        # Skill type is not indexed yet, returns empty. Keep skill resultType
-        # for forward compatibility — caller may filter.
+        # ── Skill 搜索：type_filter 为 "all" 或 "skill" 时，搜索 TOOL_POOL 中
+        # 已注册的 activate_skill_* wrapper
+        if type_filter in ("all", "skill"):
+            _skill_hits = _search_skills_in_pool(query, top_k)
+            hits_by_type.extend(_skill_hits)
+            # 按 score 降序重排，取 top_k
+            hits_by_type.sort(key=lambda h: h.get("score", 0.0), reverse=True)
+            hits_by_type = hits_by_type[:top_k]
 
-        return hits_by_type[:top_k]
+        return hits_by_type
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             "search_ontology platform search failed for base_id=%r scene_ids=%r: %s",
