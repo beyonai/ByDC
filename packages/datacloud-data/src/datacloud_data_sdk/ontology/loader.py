@@ -369,8 +369,14 @@ class OntologyLoader:
             content: 本体内容字典
             format: 格式类型（json/yaml）
         """
-        for fn in content.get("functions", []):
-            self._functions[fn["function_code"]] = fn.get("api_schema", {})
+        raw_functions = content.get("functions", {})
+        if isinstance(raw_functions, dict):
+            for fn_code, fn_config in raw_functions.items():
+                if isinstance(fn_config, dict):
+                    self._functions[fn_code] = fn_config
+        else:
+            for fn in raw_functions:
+                self._functions[fn["function_code"]] = fn.get("api_schema", {})
 
         for obj in content.get("objects", []):
             fields = self._parse_fields(obj.get("fields", []))
@@ -752,6 +758,8 @@ class OntologyLoader:
                     function_refs=a.get("function_refs", []),
                     action_type=action_type,
                     script=a.get("script"),
+                    request_url=a.get("request_url"),
+                    request_method=a.get("request_method"),
                 )
             )
         return result

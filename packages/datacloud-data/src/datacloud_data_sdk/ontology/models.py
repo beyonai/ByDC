@@ -180,6 +180,8 @@ class OntologyAction:
     function_refs: list[str]
     action_type: str
     script: str | None = None
+    request_url: str | None = None  # 直接 HTTP/HTTPS 端点 URL
+    request_method: str | None = None  # HTTP method (GET/POST/PUT/DELETE)
     is_virtual: bool = False
     input_schema: dict | None = None
     output_schema: dict | None = None

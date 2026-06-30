@@ -990,6 +990,8 @@ class OwlParser:
                             "function_refs": list(action.function_refs),
                             "params": params,
                             "script": action.script,
+                            "request_url": action.request_url,
+                            "request_method": action.request_method,
                         }
                     )
 
