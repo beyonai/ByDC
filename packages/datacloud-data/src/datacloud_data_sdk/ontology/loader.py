@@ -20,10 +20,12 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from datacloud_data_sdk.exceptions import ActionNotFoundError, ObjectNotFoundError
 from datacloud_data_sdk.ontology.models import (
@@ -369,12 +371,12 @@ class OntologyLoader:
             content: 本体内容字典
             format: 格式类型（json/yaml）
         """
-        raw_functions = content.get("functions", {})
+        raw_functions = content.get("functions", {}) or {}
         if isinstance(raw_functions, dict):
             for fn_code, fn_config in raw_functions.items():
                 if isinstance(fn_config, dict):
                     self._functions[fn_code] = fn_config
-        else:
+        elif raw_functions:
             for fn in raw_functions:
                 self._functions[fn["function_code"]] = fn.get("api_schema", {})
 
@@ -748,6 +750,26 @@ class OntologyLoader:
             action_type = a.get("action_type")
             if not action_type:
                 continue  # 未配置 action_type 时跳过该动作
+            function_refs: list[str] = list(a.get("function_refs", []) or [])
+            script = a.get("script")
+            request_url = a.get("request_url")
+            request_method = a.get("request_method")
+            # Auto-generate function config when action has request_url but no script.
+            # Handles both: (a) empty function_refs → generate fn_code + config;
+            # (b) existing function_refs but missing config → fill in config.
+            # This ensures all loading paths (OWL / remote / scene) produce
+            # usable function configs for _execute_api.
+            if request_url and not script:
+                if not function_refs:
+                    fn_code = self._build_generated_function_code(a["action_code"])
+                    function_refs = [fn_code]
+                for fn_code in function_refs:
+                    if fn_code not in self._functions:
+                        fn_config = self._build_function_config_from_url(
+                            request_url, request_method, a
+                        )
+                        if fn_config:
+                            self._functions[fn_code] = fn_config
             result.append(
                 OntologyAction(
                     action_code=a["action_code"],
@@ -755,14 +777,51 @@ class OntologyLoader:
                     description=a.get("description", ""),
                     belong_class=belong_class,
                     params=[self._parse_action_param(p) for p in a.get("params", [])],
-                    function_refs=a.get("function_refs", []),
+                    function_refs=function_refs,
                     action_type=action_type,
-                    script=a.get("script"),
-                    request_url=a.get("request_url"),
-                    request_method=a.get("request_method"),
+                    script=script,
+                    request_url=request_url,
+                    request_method=request_method,
                 )
             )
         return result
+
+    @staticmethod
+    def _build_generated_function_code(action_code: str) -> str:
+        """Generate a stable function code from an action code."""
+        fragment = re.sub(r"[^0-9A-Za-z_]+", "_", action_code).strip("_")
+        if not fragment:
+            fragment = "action"
+        if fragment[0].isdigit():
+            fragment = f"n_{fragment}"
+        return f"fn_{fragment}"
+
+    @staticmethod
+    def _build_function_config_from_url(
+        request_url: str,
+        request_method: str | None,
+        action_dict: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Build a minimal OpenAPI function config from a request URL.
+
+        Returns None if the URL cannot be split into server + path.
+        """
+        if not request_url:
+            return None
+        parsed = urlsplit(request_url)
+        if not (parsed.scheme and parsed.netloc):
+            return None
+        server_url = f"{parsed.scheme}://{parsed.netloc}"
+        path = parsed.path or "/"
+        method = (request_method or "POST").lower()
+        action_name = action_dict.get("action_name") or action_dict.get("action_code", "")
+        config: dict[str, Any] = {
+            "openapi": "3.0.3",
+            "info": {"title": action_name, "version": "1.0.0"},
+            "servers": [{"url": server_url}],
+            "paths": {path: {method: {"summary": action_dict.get("description", "")}}},
+        }
+        return config
 
 
 def _normalize_object_json(data: dict[str, Any]) -> dict[str, Any]:
