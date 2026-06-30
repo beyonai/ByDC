@@ -345,10 +345,19 @@ class OntologyToolLoader:
         skip_action_families: frozenset[str] = frozenset(),
         agent_friendly: bool = True,
         resource_path: str | Path | None = None,
+        scene_ids: list[str] | None = None,
+        base_id: str | None = None,
     ) -> None:
-        if loader is not _LOADER_NOT_PROVIDED:
+        self._scene_ids: list[str] | None = None
+        self._base_id: str | None = None
+        if scene_ids is not None:
+            # scene_ids 模式：延迟 loader 构建，由 load() 中 _resolve_scene_loader 解析
+            self._scene_ids = list(scene_ids)
+            self._base_id = base_id
+            self._loader: Any = loader if loader is not _LOADER_NOT_PROVIDED else None
+        elif loader is not _LOADER_NOT_PROVIDED:
             # 显式传入 loader（可为 None，保持旧的 skip-on-None 行为）
-            self._loader: Any = loader
+            self._loader = loader
         else:
             raise ValueError("必须提供 loader")
 
@@ -368,6 +377,11 @@ class OntologyToolLoader:
         Returns:
             dict[str, StructuredTool]: key 为工具名，value 为 StructuredTool 实例。
         """
+        if self._scene_ids:
+            resolved_loader, resolved_objects = self._resolve_scene_loader()
+            self._loader = resolved_loader
+            self._mounted_objects = resolved_objects
+
         if not self._mounted_objects:
             return {}
 
@@ -411,6 +425,29 @@ class OntologyToolLoader:
             sorted(tools.keys()),
         )
         return tools
+
+    # ------------------------------------------------------------------
+    # Scene 解析
+    # ------------------------------------------------------------------
+
+    def _resolve_scene_loader(self) -> tuple[Any, list[str]]:
+        """根据 scene_ids 解析出 loader 和挂载对象列表。
+
+        接口层和 AgentConfig 都使用 scene_id 通信，无需 scene_code→scene_id 转换。
+        直接调用 platform.load_ontology_from_scenes 构建 loader，
+        并提取 loader 中的 _classes / _views 作为 mounted_objects。
+        """
+        from datacloud_platform import get_platform  # noqa: PLC0415
+
+        platform = get_platform()
+        scene_ids = list(self._scene_ids or [])
+        loader = platform.load_ontology_from_scenes(self._base_id, scene_ids)
+        mounted_objects: list[str] = []
+        if hasattr(loader, "_classes"):
+            mounted_objects.extend(list(loader._classes.keys()))
+        if hasattr(loader, "_views"):
+            mounted_objects.extend(list(loader._views.keys()))
+        return loader, mounted_objects
 
     # ------------------------------------------------------------------
     # Schema 个性化：_apply_agent_schema_patches

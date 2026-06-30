@@ -28,7 +28,7 @@ except ImportError:  # pragma: no cover
     get_platform = None  # type: ignore[assignment]
 
 try:
-    from datacloud_data_sdk.ontology.tool_loader import OntologyToolLoader
+    from datacloud_analysis.tools.ontology_tool_loader import OntologyToolLoader
 except ImportError:  # pragma: no cover
     OntologyToolLoader = None  # type: ignore[assignment]
 
@@ -36,11 +36,21 @@ except ImportError:  # pragma: no cover
 # （graph_builder 的 get_state_fn 硬编码为 lambda: {}，工具无法访问真正的 state）
 _pending_allowed_scope: list | None = None
 
+# T16：模块级 tool_context 引用，intend_node 写入，_activate_object 读取
+# （graph_builder 构建期 tool_context 为 None，运行时由 intend_node 注入）
+_pending_tool_context: Any = None
+
 
 def set_allowed_scope(scope: list | None) -> None:
     """由 intend_node 调用，写入当前请求的 allowed_scope。"""
     global _pending_allowed_scope
     _pending_allowed_scope = scope
+
+
+def set_tool_context(ctx: Any) -> None:
+    """由 intend_node 调用，写入当前请求的 RequestToolContext。"""
+    global _pending_tool_context
+    _pending_tool_context = ctx
 
 
 def _build_scope_filter(allowed_scope: list) -> dict:
@@ -51,6 +61,9 @@ def _build_scope_filter(allowed_scope: list) -> dict:
             base_ids.append(e.code)
         elif e.scope_type == "SCENE":
             scene_ids.append(e.code)
+            # SCENE 条目自带 base_id，用于路由到正确的 ontology base
+            if getattr(e, "base_id", ""):
+                base_ids.append(e.base_id)
         elif e.scope_type == "OBJECT":
             object_codes.append(e.code)
         elif e.scope_type == "VIEW":
@@ -63,18 +76,83 @@ def _build_scope_filter(allowed_scope: list) -> dict:
     }
 
 
+def _discover_scene_for_object(
+    base_id: str,
+    object_code: str,
+    platform: Any,
+) -> str:
+    """通过搜索 API 发现对象所属的 scene_id（远程 list_scenes 不可用时的回退）。
+
+    远程 DtStudio 的 /search/ontology 接受 sceneId="-1" 作为全局搜索，
+    返回结果中包含 sceneId 字段。从匹配的结果中提取 scene_id。
+    """
+    try:
+        result = platform.search_ontology(
+            base_id,
+            scene_ids=["-1"],
+            keyword=object_code,
+            search_scope="metadata",
+            ontology_type=["object"],
+            limit=5,
+        )
+        for item in result.get("metadata", []):
+            sid = str(item.get("sceneId", ""))
+            if sid and sid != "-1":
+                return sid
+    except Exception:
+        logger.debug(
+            "_discover_scene_for_object failed base_id=%r object_code=%r",
+            base_id,
+            object_code,
+            exc_info=True,
+        )
+    return ""
+
+
 def _activate_object_with_context(
     state: dict[str, Any],
     object_code: str,
     tool_context: Any,
 ) -> tuple[list[str], str]:
     """权限校验 + 按需构建工具；tool_context 是 RequestToolContext 实例。"""
-    platform = get_platform()
-    term_info = platform.get_term_scope_info(object_code)
-    library_id = term_info.get("library_id")
-    scene_id = term_info.get("scene_id")
+    # 03C: 从 tool_context.allowed_scope 提取 base_id 和 scene_id
+    base_id = "default"
+    scope_scene_id = ""
+    if tool_context is not None and tool_context.allowed_scope:
+        scope_filter = _build_scope_filter(tool_context.allowed_scope)
+        if scope_filter["base_ids"]:
+            base_id = scope_filter["base_ids"][0]
+        if scope_filter["scene_ids"]:
+            scope_scene_id = scope_filter["scene_ids"][0]
 
-    if not tool_context.is_object_allowed(object_code, scene_id, library_id):
+    platform = get_platform()
+    logger.info(
+        "[activate_object] entry: base_id=%r object_code=%r scope_scene_id=%r",
+        base_id,
+        object_code,
+        scope_scene_id,
+    )
+    term_info = platform.get_term_scope_info(base_id, object_code)
+    library_id = term_info.get("library_id")
+    # 远程 base 的 get_term_scope_info 可能返回空的 scene_id（list_scenes 不可用），
+    # 此时用 scope 中的 SCENE 条目的 code 作为 scene_id 用于权限校验。
+    scene_id = term_info.get("scene_id", "") or scope_scene_id
+    logger.info(
+        "[activate_object] term_info: library_id=%r scene_id=%r (raw=%r)",
+        library_id,
+        scene_id,
+        term_info.get("scene_id"),
+    )
+
+    allowed = tool_context.is_object_allowed(object_code, scene_id, library_id)
+    logger.info(
+        "[activate_object] is_object_allowed=%s object_code=%r scene_id=%r library_id=%r",
+        allowed,
+        object_code,
+        scene_id,
+        library_id,
+    )
+    if not allowed:
         return [], f"对象 {object_code!r} 不在当前授权范围，拒绝激活"
 
     existing = set(state.get("active_tools") or [])
@@ -86,12 +164,50 @@ def _activate_object_with_context(
         state["active_tools"] = list(existing) + new_tools
         return new_tools, ""
 
-    # 按需构建
-    detail = platform.get_scene_details(library_id, scene_id, object_code=[object_code])
-    tool_context.loader.load_from_content(detail)
+    # 按需构建 — remote fallback chain: term_scope_info → allowed_scope → search API
+    lookup_scene = scene_id or scope_scene_id or ""
+    if not lookup_scene:
+        # Last resort: try to discover scene via search (remote list_scenes not available)
+        lookup_scene = _discover_scene_for_object(base_id, object_code, platform)
+        logger.info(
+            "[activate_object] _discover_scene_for_object base_id=%r object_code=%r → scene=%r",
+            base_id,
+            object_code,
+            lookup_scene,
+        )
+    if not lookup_scene:
+        lookup_scene = "-1"
+    logger.info(
+        "[activate_object] calling get_scene_details base_id=%r scene=%r object_code=%r",
+        base_id,
+        lookup_scene,
+        object_code,
+    )
+    detail = platform.get_scene_details(base_id, lookup_scene, object_code=[object_code])
+    logger.info(
+        "[activate_object] get_scene_details returned: objects=%d views=%d actions=%d",
+        len(detail.get("objects", []) or []),
+        len(detail.get("views", []) or []),
+        len(detail.get("actions", []) or []),
+    )
+    try:
+        tool_context.loader.load_from_content(detail)
 
-    tool_loader = OntologyToolLoader(mounted_objects=[object_code], loader=tool_context.loader)
-    new_obj_tools: dict[str, Any] = tool_loader.load()
+        tool_loader = OntologyToolLoader(mounted_objects=[object_code], loader=tool_context.loader)
+        new_obj_tools: dict[str, Any] = tool_loader.load()
+    except Exception as _e:
+        logger.error(
+            "[activate_object] tool loading FAILED: %s object_code=%r",
+            _e,
+            object_code,
+            exc_info=True,
+        )
+        return [], f"加载对象 {object_code!r} 工具失败: {_e}"
+    logger.info(
+        "[activate_object] tool_loader built %d tools: %s",
+        len(new_obj_tools),
+        ", ".join(list(new_obj_tools.keys())[:10]),
+    )
 
     tool_context.tools_map.update(new_obj_tools)
     tool_context.object_to_tools[object_code] = list(new_obj_tools.keys())
@@ -217,7 +333,12 @@ def _do_search_ontology(
 
         return hits_by_type[:top_k]
     except Exception as exc:  # noqa: BLE001
-        logger.debug("search_ontology platform 检索不可用，回退到 TOOL_POOL: %s", exc)
+        logger.warning(
+            "search_ontology platform search failed for base_id=%r scene_ids=%r: %s",
+            base_id,
+            scene_ids,
+            exc,
+        )
 
     # 回退：在 TOOL_POOL 中做名称匹配
     try:
