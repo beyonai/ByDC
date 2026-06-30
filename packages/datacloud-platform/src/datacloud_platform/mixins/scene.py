@@ -45,6 +45,21 @@ class SceneMixin:
         """Count scenes matching optional keyword filter."""
         return self._ontology_for(base_id).count_scenes(base_id, keyword)
 
+    def get_term_scope_info(
+        self: _HasOntologyBackend,
+        base_id: str,
+        object_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> dict[str, Any]:
+        """Return {library_id, scene_id} identifying which scene contains object_code.
+
+        Routes to backend.get_term_scope_info() — for remote backends this queries
+        list_scenes + get_scene_members to find the matching scene.
+        """
+        backend = self._ontology_for(base_id)
+        return backend.get_term_scope_info(base_id, object_code)
+
     def get_scene_details(
         self: _HasOntologyBackend,
         base_id: str,

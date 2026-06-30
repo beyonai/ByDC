@@ -186,6 +186,10 @@ class _NoopOntologyBackend:
         """Return 0."""
         return 0
 
+    def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
+        """Return default scope info — no ontology available."""
+        return {"library_id": "PERSONAL_LIB", "scene_id": ""}
+
     def get_scene_details(
         self,
         loader: object,

@@ -7,8 +7,10 @@ or keyword-based semantic search.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 
@@ -80,12 +82,17 @@ class SceneLoaderMixin:
                 base_id, {"objects": [], "views": []}
             )
 
-        # 3. Load the full ontology
-        base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
-        loader: OntologyQueryable = backend.load_ontology(base_path)
-
-        # 4. Build content dict from the loaded ontology filtered to matching codes
-        content = _build_content(loader, list(all_obj_codes), list(all_vw_codes))
+        # 3. Load the full ontology (fall back to remote scene details if read-only)
+        try:
+            base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
+            loader: OntologyQueryable = backend.load_ontology(base_path)
+            # 4. Build content dict from the loaded ontology filtered to matching codes
+            content = _build_content(loader, list(all_obj_codes), list(all_vw_codes))
+        except PermissionError:
+            # Remote backend: load_ontology is not supported, build from scene details
+            content = _build_content_from_remote_scenes(
+                backend, base_id, scene_ids, list(all_obj_codes), list(all_vw_codes)
+            )
         logger.info(
             "load_ontology_from_scenes: base_id=%s scenes=%d objects=%d views=%d",
             base_id,
@@ -118,10 +125,17 @@ class SceneLoaderMixin:
         """
         backend: OntologyBackend = self._ontology_for(base_id)  # type: ignore[attr-defined]
         base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
-        loader: OntologyQueryable = backend.load_ontology(base_path)
 
         vw_codes = view_codes if view_codes is not None else []
-        content = _build_content(loader, object_codes, vw_codes)
+
+        # Try local load first; fall back to remote scene details for read-only backends
+        try:
+            loader: OntologyQueryable = backend.load_ontology(base_path)
+            content = _build_content(loader, object_codes, vw_codes)
+        except PermissionError:
+            content = _build_content_from_remote_scenes(
+                backend, base_id, ["-1"], object_codes, vw_codes
+            )
         logger.info(
             "load_ontology_from_codes: base_id=%s objects=%d views=%d",
             base_id,
@@ -228,7 +242,15 @@ class SceneLoaderMixin:
         """
         loader = OntologyLoader()
         loader.load_from_content(content)
-        self.inject_virtual_actions(base_id, loader)  # type: ignore[attr-defined]
+        try:
+            self.inject_virtual_actions(base_id, loader)  # type: ignore[attr-defined]
+        except PermissionError:
+            # Remote backends may not support execution (execution="none")
+            logger.debug(
+                "_build_loader_from_content: inject_virtual_actions skipped "
+                "for base_id=%r (execution unavailable)",
+                base_id,
+            )
         return loader
 
 
@@ -248,7 +270,7 @@ def _build_content(
         view_codes: View codes to include.
 
     Returns:
-        A dict ``{"objects": [...], "views": [...]}`` suitable for
+        A dict ``{"objects": [...], "views": [...], "functions": {...}}`` suitable for
         :meth:`OntologyLoader.load_from_content`.
     """
     objects: list[dict[str, Any]] = []
@@ -264,4 +286,224 @@ def _build_content(
         if view_data is not None:
             views.append(view_data)
 
-    return {"objects": objects, "views": views}
+    functions: dict[str, dict[str, Any]] = getattr(loader, "_functions", None) or {}
+    return {"objects": objects, "views": views, "functions": functions}
+
+
+def _build_content_from_remote_scenes(
+    backend: Any,
+    base_id: str,
+    scene_ids: list[str],
+    object_codes: list[str],
+    view_codes: list[str],
+) -> dict[str, Any]:
+    """Build a content dict from remote scene details, filtered by codes.
+
+    Used as fallback when ``backend.load_ontology()`` is not available
+    (e.g. :class:`RemoteOntologyBackend`).
+
+    Normalizes remote API camelCase fields to the snake_case format expected
+    by :meth:`OntologyLoader.load_from_content`.
+    """
+    all_objects: list[dict[str, Any]] = []
+    all_views: list[dict[str, Any]] = []
+
+    obj_code_set = set(object_codes)
+    vw_code_set = set(view_codes)
+
+    # Resolve "-1" scene_id: remote sceneDetails doesn't support "-1",
+    # use query_ontologies_by_scene (supports "-1") to discover actual scene IDs.
+    resolved_scene_ids: list[str] = []
+    for sid in scene_ids:
+        if sid == "-1":
+            try:
+                onto_result = backend.query_ontologies_by_scene(
+                    None, base_id, sid, page=1, page_size=20
+                )
+                onto_data = onto_result.get("data", {})
+                onto_list: list[dict[str, Any]] = onto_data.get("objects", []) or []
+                discovered: set[str] = set()
+                for o in onto_list:
+                    s = str(o.get("sceneId") or "")
+                    if s and s != "-1":
+                        discovered.add(s)
+                resolved_scene_ids.extend(discovered)
+                logger.debug(
+                    "_build_content_from_remote_scenes: resolved '-1' to %d scene IDs",
+                    len(discovered),
+                )
+            except Exception:
+                logger.debug(
+                    "_build_content_from_remote_scenes: query_ontologies fallback failed for '-1'",
+                    exc_info=True,
+                )
+        else:
+            resolved_scene_ids.append(sid)
+    # Deduplicate
+    scene_ids_for_loop = list(dict.fromkeys(resolved_scene_ids))
+    if not scene_ids_for_loop:
+        scene_ids_for_loop = [sid for sid in scene_ids if sid != "-1"] or ["-1"]
+
+    for sid in scene_ids_for_loop:
+        try:
+            detail = backend.get_scene_details(None, base_id, sid)
+        except Exception:
+            logger.debug(
+                "get_scene_details failed for base_id=%r scene_id=%r",
+                base_id,
+                sid,
+                exc_info=True,
+            )
+            continue
+        if not isinstance(detail, dict):
+            continue
+
+        # Adapter layer already normalizes camelCase → snake_case and merges
+        # top-level actions into per-object actions. Mixin just filters.
+        for obj in detail.get("objects", []) or []:
+            obj_code = str(obj.get("object_code") or "")
+            if obj_code_set and obj_code not in obj_code_set:
+                continue
+
+            all_objects.append(obj)
+
+        for vw in detail.get("views", []) or []:
+            vid = str(vw.get("view_id") or vw.get("view_code") or "")
+            if vw_code_set and vid not in vw_code_set:
+                continue
+            all_views.append(vw)
+
+    functions = _generate_remote_function_configs(all_objects)
+    return {"objects": all_objects, "views": all_views, "functions": functions}
+
+
+def _normalize_remote_properties(props: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert remote ``properties`` (camelCase) to ``fields`` (snake_case)."""
+    fields: list[dict[str, Any]] = []
+    for p in props:
+        fields.append(
+            {
+                "field_code": p.get("propertyCode", ""),
+                "field_name": p.get("propertyName", ""),
+                "field_type": p.get("propertyType", "STRING"),
+                "description": p.get("propertyDesc") or p.get("description", ""),
+                "is_primary_key": bool(p.get("isPrimaryKey", False)),
+                "db_id": p.get("dbId", ""),
+                "is_nullable": bool(p.get("isNullable", True)),
+            }
+        )
+    return fields
+
+
+def _normalize_remote_actions(
+    actions: list[dict[str, Any]], object_code: str
+) -> list[dict[str, Any]]:
+    """Convert remote ``actions`` (camelCase) to the format expected by
+    :meth:`OntologyLoader.load_from_content`."""
+    result: list[dict[str, Any]] = []
+    for a in actions:
+        result.append(
+            {
+                "action_code": a.get("actionCode", ""),
+                "action_name": a.get("actionName", ""),
+                "description": a.get("actionDesc") or a.get("description", ""),
+                "action_type": a.get("actionType", "query"),
+                "object_code": object_code,
+                "params": _normalize_remote_params(
+                    a.get("params") or a.get("parameters") or []
+                ),
+                "output_fields": a.get("outputFields") or [],
+                "script": a.get("script"),
+                "function_refs": a.get("functionRefs") or [],
+                "request_url": a.get("requestUrl"),
+                "request_method": a.get("requestMethod"),
+            }
+        )
+    return result
+
+
+def _normalize_remote_params(params: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert remote action params (camelCase) to snake_case."""
+    result: list[dict[str, Any]] = []
+    for p in params:
+        result.append(
+            {
+                "param_code": p.get("paramCode", ""),
+                "param_name": p.get("paramName", ""),
+                "param_type": p.get("paramType", "STRING"),
+                "description": p.get("paramDesc") or p.get("description", ""),
+                "is_required": bool(p.get("isRequired", False)),
+                "default_value": p.get("defaultValue"),
+            }
+        )
+    return result
+
+
+def _generate_remote_function_configs(
+    objects: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Generate minimal OpenAPI function configs from remote action definitions.
+
+    For remote actions that have ``request_url`` (but no ``script``), builds
+    an OpenAPI 3.0-style function config so that ``Action._execute_api()`` can
+    resolve ``servers[0].url`` and ``paths`` without needing a local OWL file.
+    """
+    functions: dict[str, dict[str, Any]] = {}
+    for obj in objects:
+        for a in obj.get("actions", []) or []:
+            script = a.get("script")
+            request_url = a.get("request_url")
+            if script or not request_url:
+                continue
+
+            function_refs: list[str] = list(a.get("function_refs", []) or [])
+            if not function_refs:
+                function_code = _build_generated_function_code(a.get("action_code", ""))
+                function_refs = [function_code]
+                a["function_refs"] = function_refs
+
+            server_url, path = _split_request_url(request_url)
+            if not path:
+                continue
+
+            method = (a.get("request_method") or "POST").lower()
+            action_name = a.get("action_name") or a.get("action_code", "")
+
+            config: dict[str, Any] = {
+                "openapi": "3.0.3",
+                "info": {"title": action_name, "version": "1.0.0"},
+                "paths": {path: {method: {"summary": a.get("description", "")}}},
+            }
+            if server_url:
+                config["servers"] = [{"url": server_url}]
+
+            for fn_code in function_refs:
+                functions.setdefault(fn_code, config)
+
+    return functions
+
+
+def _split_request_url(request_url: str) -> tuple[str, str]:
+    """Split a request URL into server base URL and path.
+
+    Returns:
+        tuple[str, str]: (server_url, path)
+    """
+    if not request_url:
+        return "", ""
+    parsed = urlsplit(request_url)
+    if parsed.scheme and parsed.netloc:
+        base = f"{parsed.scheme}://{parsed.netloc}"
+        path = parsed.path or "/"
+        return base, path
+    return "", request_url
+
+
+def _build_generated_function_code(action_code: str) -> str:
+    """Generate a stable function code from an action code."""
+    fragment = re.sub(r"[^0-9A-Za-z_]+", "_", action_code).strip("_")
+    if not fragment:
+        fragment = "action"
+    if fragment[0].isdigit():
+        fragment = f"n_{fragment}"
+    return f"fn_{fragment}"
