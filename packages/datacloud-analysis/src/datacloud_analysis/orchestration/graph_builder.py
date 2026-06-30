@@ -526,6 +526,54 @@ def _build_prebuilt_graph(
     except Exception:
         pass
 
+    # ── Skill 注册与阈值注入 ─────────────────────────────────────────────────
+    # skill_catalog 由 worker.py 通过 prompts_overwrite["skill_catalog"] 传入。
+    # ① 全部注册到 TOOL_POOL（供 search_ontology + preconditions 按需解锁）
+    # ② 非锚点模式：activate_skill_* wrapper 直接加入 tools_list（LLM 可见）
+    #    锚点模式：wrapper 已在 TOOL_POOL，LLM 通过 search_ontology 按需发现
+    _skill_catalog: list[dict[str, Any]] = overwrite.get("skill_catalog") or []
+    if _skill_catalog:
+        try:
+            from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+                TOOL_POOL as _TOOL_POOL,
+            )
+            from datacloud_analysis.tools.tool_pool import (
+                is_anchor_mode as _is_anchor_mode,
+            )
+            from datacloud_analysis.tools.tool_pool import (
+                register_skill_wrappers,
+            )
+
+            # ① 全部注册到 TOOL_POOL
+            register_skill_wrappers(_skill_catalog)
+            _skill_registered = sum(1 for k in _TOOL_POOL if k.startswith("activate_skill_"))
+            logger.info(
+                "[graph_builder] registered %d skill wrappers to TOOL_POOL",
+                _skill_registered,
+            )
+
+            # ② 阈值判断：非锚点模式下直接注入 tools_list
+            if not _is_anchor_mode():
+                _skill_added = 0
+                _existing_names = {t.name for t in tools_list}
+                for _pn, _pt in _TOOL_POOL.items():
+                    if _pn.startswith("activate_skill_") and _pn not in _existing_names:
+                        tools_list.append(_pt)
+                        _skill_added += 1
+                if _skill_added:
+                    logger.info(
+                        "[graph_builder] injected %d skill wrappers into tools_list "
+                        "(non-anchor mode)",
+                        _skill_added,
+                    )
+            else:
+                logger.info(
+                    "[graph_builder] anchor mode: skill wrappers in TOOL_POOL, "
+                    "LLM discovers via search_ontology"
+                )
+        except Exception:
+            logger.debug("[graph_builder] skill registration skipped", exc_info=True)
+
     # 附06-V3：锚点模式下，把 activate_anchor / mark_dead_end 加入工具列表
     try:
         if make_anchor_tools is None or is_anchor_mode is None:
