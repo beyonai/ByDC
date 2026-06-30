@@ -503,15 +503,19 @@ def _build_prebuilt_graph(
         _agent_codes: set[str] = {o for o in (mounted_objects or []) if o}
         _existing = {t.name for t in tools_list}
         _added = 0
-        for _pn, _pt in TOOL_POOL.items():
-            if _pn in _existing or not isinstance(_pt, BaseTool):
-                continue
-            # 用 TOOL_TO_OBJECT 反查工具归属，只合并属于当前 Agent mounted_objects 范围的工具
-            _obj = TOOL_TO_OBJECT.get(_pn, "")
-            if _agent_codes and _obj and _obj not in _agent_codes:
-                continue
-            tools_list.append(_pt)
-            _added += 1
+        # 当 mounted_objects 为空时（纯远程 agent），不合并任何 TOOL_POOL 工具。
+        # 远程对象的工具由激活时动态解锁（activate_anchor → _activate_object_with_context），
+        # 不通过 TOOL_POOL 静态合并。
+        if _agent_codes:
+            for _pn, _pt in TOOL_POOL.items():
+                if _pn in _existing or not isinstance(_pt, BaseTool):
+                    continue
+                # 用 TOOL_TO_OBJECT 反查工具归属，只合并属于当前 Agent mounted_objects 范围的工具
+                _obj = TOOL_TO_OBJECT.get(_pn, "")
+                if _obj and _obj not in _agent_codes:
+                    continue
+                tools_list.append(_pt)
+                _added += 1
         if _added:
             logger.info(
                 "[graph_builder] merged %d in-scope tools from TOOL_POOL (tools_list: %d→%d)",
@@ -529,9 +533,16 @@ def _build_prebuilt_graph(
 
         _use_anchor = tool_context.anchor_mode if tool_context is not None else is_anchor_mode()
         if _use_anchor:
-            _tc = tool_context  # 闭包捕获
+            _tc = tool_context  # 闭包捕获（构建期可能为 None）
 
             def _get_tool_ctx() -> Any:
+                # 优先使用模块级注入的运行时 tool_context（由 intend_node 设置）
+                from datacloud_analysis.tools.anchor_tools import (
+                    _pending_tool_context,  # noqa: PLC0415
+                )
+
+                if _pending_tool_context is not None:
+                    return _pending_tool_context
                 return _tc
 
             _anchor_tools = make_anchor_tools(

@@ -53,9 +53,13 @@ async def intend_node(
     tool_context = (config.get("configurable") or {}).get("tool_context")
     # 将 allowed_scope 写入模块级变量，供 search_ontology 工具函数读取
     try:
-        from datacloud_analysis.tools.anchor_tools import set_allowed_scope  # noqa: PLC0415
+        from datacloud_analysis.tools.anchor_tools import (
+            set_allowed_scope,  # noqa: PLC0415
+            set_tool_context,  # noqa: PLC0415
+        )
 
         set_allowed_scope(tool_context.allowed_scope if tool_context else None)
+        set_tool_context(tool_context)
     except Exception:
         pass
     messages = state.get("messages") or []
@@ -136,20 +140,85 @@ async def intend_node(
                 ]
                 existing.update(new)
 
+            # ── 远程对象动态激活：搜索结果中不在 TOOL_POOL 的对象 → 动态生成工具 ──
+            # 远程对象的 action 元数据在 TOOL_POOL 的 TOOL_TO_OBJECT 中不存在，
+            # 需要调用 _activate_object_with_context 动态注册到 TOOL_POOL 并解锁。
+            _remote_activated: list[str] = []
+            for hit in hits:
+                obj_code = hit.get("objectCode") or hit.get("object_code", "")
+                if not obj_code or obj_code in _remote_activated:
+                    continue
+                # 已在 TOOL_POOL 中的跳过（上面已处理）
+                if any(c == obj_code for c in TOOL_TO_OBJECT.values()):
+                    continue
+                try:
+                    from datacloud_analysis.tools.anchor_tools import (  # noqa: PLC0415
+                        _activate_object_with_context,
+                    )
+
+                    new_tools, _ = _activate_object_with_context({}, obj_code, tool_context)
+                    if new_tools:
+                        existing.update(new_tools)
+                        _remote_activated.append(obj_code)
+                        logger.info(
+                            "[intend_node] cold_start: remote object %r activated, tools=%s",
+                            obj_code,
+                            new_tools,
+                        )
+                except Exception:
+                    logger.debug(
+                        "[intend_node] remote activation failed for %r",
+                        obj_code,
+                        exc_info=True,
+                    )
+
             # ── 阈值填充：解锁后若业务工具数仍低于 THRESHOLD，继续从 TOOL_POOL 补充 ──
             # activate_skill_* 不计入配额（skill wrapper 是按需激活的，不占工具槽）
-            _business_count = sum(1 for t in existing if not t.startswith("activate_skill_"))
-            _budget = TOOL_POOL_THRESHOLD - _business_count
-            if _budget > 0:
-                for _name in TOOL_POOL:
-                    if _name in existing or _name.startswith("activate_skill_"):
-                        continue
-                    existing.add(_name)
-                    _budget -= 1
-                    if _budget <= 0:
-                        break
+            #
+            # 纯远程 agent（allowed_scope 全为 SCENE 类型）跳过阈值填充：
+            # TOOL_POOL 是跨 Agent 共享的全局单例，填充会把其他 Agent 的本地工具
+            # 注入到远程 agent 的 active_tools，误导 agent 选择本地对象而非远程对象。
+            _tc_scope_dump = (
+                [
+                    (
+                        getattr(e, "code", "?"),
+                        getattr(e, "scope_type", "?"),
+                        getattr(e, "base_id", "?"),
+                    )
+                    for e in (tool_context.allowed_scope if tool_context else [])
+                ]
+                if tool_context
+                else "tool_context=None"
+            )
+            logger.info(
+                "[intend_node] cold_start: tool_context=%s allowed_scope=%s",
+                type(tool_context).__name__ if tool_context else "None",
+                _tc_scope_dump,
+            )
+            _is_remote_only = bool(
+                tool_context
+                and tool_context.allowed_scope
+                and all(getattr(e, "scope_type", "") == "SCENE" for e in tool_context.allowed_scope)
+            )
+            if not _is_remote_only:
+                _business_count = sum(1 for t in existing if not t.startswith("activate_skill_"))
+                _budget = TOOL_POOL_THRESHOLD - _business_count
+                if _budget > 0:
+                    for _name in TOOL_POOL:
+                        if _name in existing or _name.startswith("activate_skill_"):
+                            continue
+                        existing.add(_name)
+                        _budget -= 1
+                        if _budget <= 0:
+                            break
+                    logger.info(
+                        "[intend_node] cold_start: filled to threshold, total=%d", len(existing)
+                    )
+            else:
                 logger.info(
-                    "[intend_node] cold_start: filled to threshold, total=%d", len(existing)
+                    "[intend_node] cold_start: remote-only agent, "
+                    "skipping TOOL_POOL threshold fill, tools=%d",
+                    len(existing),
                 )
 
             _cold_start_active_tools = list(existing)

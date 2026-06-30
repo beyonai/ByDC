@@ -15,6 +15,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import BaseTool
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
 
@@ -532,6 +533,7 @@ class HookAwareToolNode(ToolNode):
             _tool_ctx = (config.get("configurable") or {}).get("tool_context") if config else None
 
             from datacloud_analysis.tools.tool_pool import (  # noqa: PLC0415
+                TOOL_POOL,
                 _get_object_code_by_tool,
             )
 
@@ -602,7 +604,34 @@ class HookAwareToolNode(ToolNode):
                                 if name in _tool_ctx.tools_map
                             }
                         )
+                    # Step7: 同步 TOOL_POOL 中的动态工具到 self.tools_by_name
+                    # 远程 agent 的工具可能先注册到 TOOL_POOL（不在 tools_map 中），
+                    # 需要在此同步到 ToolNode 才能被 execute 层找到。
+                    for _name in _new_names:
+                        if _name not in self.tools_by_name and _name in TOOL_POOL:
+                            _pool_tool = TOOL_POOL[_name]
+                            if isinstance(_pool_tool, BaseTool):
+                                self.tools_by_name[_name] = _pool_tool
                     _extra_state["active_tools"] = list(_existing) + _new_names
+
+                # Step8: goto_ontology 等锚点工具动态注册的工具同步到 self.tools_by_name
+                # 锚点工具（goto_ontology / activate_anchor）不会出现在 _suggestions 中，
+                # 但其内部 _activate_object_with_context 已将工具写入 tool_context.tools_map
+                # 和 TOOL_POOL。需要在此将新增工具同步到 ToolNode，使 LLM 下一轮可调用。
+                if _tool_ctx is not None and _tool_ctx.tools_map:
+                    for _tname, _tobj in _tool_ctx.tools_map.items():
+                        if _tname not in self.tools_by_name:
+                            self.tools_by_name[_tname] = _tobj
+                            if _tname not in _extra_state.get("active_tools", []):
+                                _extra_state.setdefault("active_tools", []).append(_tname)
+                # 同时从 TOOL_POOL 补充（远程 agent 可能只注册到 TOOL_POOL）
+                for _tname in list(TOOL_POOL.keys()):
+                    if _tname not in self.tools_by_name:
+                        _pool_tool = TOOL_POOL[_tname]
+                        if isinstance(_pool_tool, BaseTool):
+                            self.tools_by_name[_tname] = _pool_tool
+                            if _tname not in _extra_state.get("active_tools", []):
+                                _extra_state.setdefault("active_tools", []).append(_tname)
 
                 # 4. 更新 reasoning_graph
                 _update_reasoning_graph(state_dict, _tool_name, _result, _to_add, _extra_state)
