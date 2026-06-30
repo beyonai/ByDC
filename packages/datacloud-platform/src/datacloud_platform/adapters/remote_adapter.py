@@ -14,6 +14,165 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 
+def _normalize_remote_detail(detail: dict[str, Any]) -> None:
+    """Normalize DtStudio camelCase scene detail → loader snake_case in-place.
+
+    DtStudio /OntologyEntityController/sceneDetails returns:
+      objects[].objectCode / objectName / objectDesc / properties / actions
+      actions at top-level detail.actions with belongObjectCode
+
+    load_from_content expects:
+      objects[].object_code / object_name / description / fields / actions
+      actions[].action_code / action_name / description / params / ...
+
+    Also merges top-level actions into per-object actions by belongObjectCode.
+    """
+    # # Merge top-level actions into objects
+    # top_acts = detail.get("actions")
+    # if isinstance(top_acts, list) and top_acts:
+    #     by_obj: dict[str, list[dict[str, Any]]] = {}
+    #     for a in top_acts:
+    #         boc = str(a.get("belongObjectCode") or "")
+    #         if boc:
+    #             by_obj.setdefault(boc, []).append(a)
+    #     for obj in detail.get("objects") or []:
+    #         obj_code = str(obj.get("objectCode") or "")
+    #         if obj_code in by_obj:
+    #             obj_actions = list(obj.get("actions") or [])
+    #             obj["actions"] = obj_actions + by_obj[obj_code]
+
+    # Normalize each object
+    for obj in detail.get("objects") or []:
+        _normalize_remote_object(obj)
+
+    # Normalize each view — DtStudio returns views in camelCase (viewId/viewName/objectCodes),
+    # but load_from_content expects snake_case (view_id/view_name).  Without this, accessing
+    # view["view_id"] raises KeyError and the entire load_from_content call fails.
+    for v in detail.get("views") or []:
+        _normalize_remote_view(v)
+
+
+def _normalize_remote_object(obj: dict[str, Any]) -> None:
+    """Normalize a single remote object entry (camelCase → snake_case) in-place."""
+    # Top-level object fields
+    obj.setdefault("object_code", obj.pop("objectCode", ""))
+    obj.setdefault("object_name", obj.pop("objectName", ""))
+    obj.setdefault("source_type", obj.pop("sourceType", "DB"))
+    obj.setdefault("ext_property", obj.pop("extProperty", {}))
+    desc = obj.pop("objectDesc", None)
+    if desc:
+        obj.setdefault("description", desc)
+    # Properties → fields
+    props = obj.pop("properties", None)
+    if isinstance(props, list):
+        fields = []
+        for p in props:
+            fields.append(
+                {
+                    "field_code": p.get("propertyCode", ""),
+                    "field_name": p.get("propertyName", ""),
+                    "field_type": p.get("propertyType", "STRING"),
+                    "description": p.get("propertyDesc") or p.get("description", ""),
+                    "is_primary_key": bool(p.get("isPrimaryKey", False)),
+                }
+            )
+        obj["fields"] = fields
+    # Actions
+    for a in obj.get("actions") or []:
+        a.setdefault("action_code", a.pop("actionCode", ""))
+        a.setdefault("action_name", a.pop("actionName", ""))
+        adesc = a.pop("actionDesc", None)
+        if adesc:
+            a.setdefault("description", adesc)
+        a.setdefault("action_type", a.get("actionType", "query"))
+        # Params
+        raw_params = a.pop("params", None) or a.pop("parameters", None) or []
+        if isinstance(raw_params, list):
+            params = []
+            for p in raw_params:
+                params.append(
+                    {
+                        "param_code": p.get("paramCode", ""),
+                        "param_name": p.get("paramName", ""),
+                        "param_type": p.get("paramType", "STRING"),
+                        "description": p.get("paramDesc") or p.get("description", ""),
+                        "is_required": bool(p.get("isRequired", False)),
+                    }
+                )
+            a["params"] = params
+        # Other fields
+        a.setdefault("script", a.get("script"))
+        a.setdefault("function_refs", a.get("functionRefs") or [])
+        a.setdefault("request_url", a.get("requestUrl"))
+        a.setdefault("request_method", a.get("requestMethod"))
+
+
+def _normalize_remote_view(v: dict[str, Any]) -> None:
+    """Normalize a single remote view entry (camelCase → snake_case) in-place.
+
+    DtStudio returns views with: viewId/viewCode / viewName / viewDesc / objectCodes / actions.
+    load_from_content expects: view_id / view_name / description.
+    """
+    # DtStudio may use viewId (UUID) or viewCode (code string) as the identifier.
+    # Prefer viewId as view_id; if absent, fall back to viewCode.
+    vid = v.pop("viewId", "") or v.pop("viewCode", "")
+    if vid:
+        v.setdefault("view_id", vid)
+    v.setdefault("view_code", v.pop("viewCode", ""))
+    v.setdefault("view_name", v.pop("viewName", ""))
+    vdesc = v.pop("viewDesc", None)
+    if vdesc:
+        v.setdefault("description", vdesc)
+    # Normalize objects list inside view (may contain objectCode refs)
+    raw_objects = v.get("objects")
+    if isinstance(raw_objects, list):
+        for item in raw_objects:
+            if isinstance(item, dict):
+                item.setdefault("object_code", item.pop("objectCode", ""))
+                item.setdefault("object_name", item.pop("objectName", ""))
+    # Normalize actions inside view
+    for a in v.get("actions") or []:
+        a.setdefault("action_code", a.pop("actionCode", ""))
+        a.setdefault("action_name", a.pop("actionName", ""))
+        adesc = a.pop("actionDesc", None)
+        if adesc:
+            a.setdefault("description", adesc)
+        a.setdefault("action_type", a.get("actionType", "query"))
+
+
+def _normalize_remote_search_result(result: dict[str, Any]) -> None:
+    """Normalize remote /search/ontology response fields to local expectations.
+
+    Remote API returns: resultType, objectCode/actionCode, objectName/actionName.
+    Local consumers expect: termType, termCode, nameText, belongObjectCode.
+
+    For action items (resultType="action"), DtStudio returns:
+      - objectCode = parent object code (the belongObjectCode)
+      - actionCode = the action's own code (the termCode)
+      - actionName = human-readable action name (the nameText)
+    """
+    for item in result.get("metadata", []) or []:
+        if not isinstance(item, dict):
+            continue
+        rt = str(item.get("resultType", ""))
+        if rt == "action":
+            # Action mapping: consumer reads termType="ontology_action"
+            item["termType"] = "ontology_action"
+            item["termCode"] = item.get("actionCode", "")
+            item["nameText"] = item.get("actionName", "")
+            parent_obj = item.get("objectCode", "")
+            if parent_obj:
+                item["belongObjectCode"] = parent_obj
+        elif rt in ("object", "view", "skill"):
+            item["termType"] = rt
+            tc = item.get("objectCode", "")
+            if tc:
+                item["termCode"] = tc
+            nt = item.get("objectName", "")
+            if nt:
+                item["nameText"] = nt
+
+
 class RemoteOntologyBackend:
     """OntologyBackend that forwards read operations to a remote HTTP service.
 
@@ -41,6 +200,10 @@ class RemoteOntologyBackend:
         """Build authentication headers from auth_config."""
         if not self._auth_config:
             return {}
+        # Direct headers passthrough (for custom auth like ssoType/accountCode)
+        headers_dict = self._auth_config.get("headers")
+        if isinstance(headers_dict, dict):
+            return {str(k): str(v) for k, v in headers_dict.items()}
         auth_type = self._auth_config.get("type", "").lower()
         if auth_type == "bearer":
             return {"Authorization": f"Bearer {self._auth_config.get('token', '')}"}
@@ -48,6 +211,20 @@ class RemoteOntologyBackend:
             header_name = self._auth_config.get("headerName", "X-API-Key")
             return {header_name: self._auth_config.get("apiKey", "")}
         return {}
+
+    def configure(
+        self, source_url: str, auth_config: dict[str, Any] | None = None
+    ) -> None:
+        """Dynamically set source_url and auth_config after construction.
+
+        Used by Platform to inject per-base configuration into backends created
+        by zero-arg factories (which don't know about the base at factory time).
+        """
+        if source_url:
+            self._source_url = source_url.rstrip("/")
+        if auth_config is not None:
+            self._auth_config = auth_config
+        self._client = None  # Reset client to pick up new config
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -258,6 +435,31 @@ class RemoteOntologyBackend:
         response.raise_for_status()
         return cast("list[Any]", response.json())
 
+    def get_scene_members(
+        self, base_id: str, scene_id: str
+    ) -> tuple[list[str], list[str]]:
+        """Return (object_codes, view_codes) for a remote scene.
+
+        Calls get_scene_details and extracts codes from the response.
+        """
+        try:
+            detail = self.get_scene_details(None, base_id, scene_id)
+        except Exception:
+            logger.debug(
+                "get_scene_members: get_scene_details failed base_id=%r scene_id=%r",
+                base_id,
+                scene_id,
+                exc_info=True,
+            )
+            return [], []
+        # obj_codes = [o.get("objectCode", "") for o in detail.get("objects", []) or []]
+        obj_codes = [o.get("object_code", "") for o in detail.get("objects", []) or []]
+        vw_codes = [
+            v.get("view_code", "") or v.get("view_id", "")
+            for v in (detail.get("views") or [])
+        ]
+        return [c for c in obj_codes if c], [c for c in vw_codes if c]
+
     def query_scenes(self, base_id: str, keyword: str | None) -> list[Any]:
         """Query scenes with keyword filter (client-side filter on cached)."""
         scenes = self.list_scenes(base_id)
@@ -296,7 +498,31 @@ class RemoteOntologyBackend:
             body["objectCode"] = ",".join(object_code)
         response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
-        return cast("dict[str, Any]", response.json())
+        raw = response.json()
+        # Unwrap remote API envelope: {code: 200, data: {...}} -> {...}
+        if isinstance(raw, dict) and "data" in raw and raw.get("code") == 200:
+            detail = cast("dict[str, Any]", raw["data"])
+        else:
+            detail = cast("dict[str, Any]", raw)
+
+        # DtStudio returns actions at top-level detail.actions (not nested under objects).
+        # Merge them into objects by belongObjectCode so consumers see object.actions.
+        top_acts = detail.get("actions")
+        if isinstance(top_acts, list) and top_acts:
+            act_by_obj: dict[str, list[dict[str, Any]]] = {}
+            for a in top_acts:
+                boc = str(a.get("belongObjectCode") or "")
+                if boc:
+                    act_by_obj.setdefault(boc, []).append(a)
+            for obj in detail.get("objects") or []:
+                obj_code = str(obj.get("objectCode") or "")
+                if obj_code in act_by_obj:
+                    obj_actions = list(obj.get("actions") or [])
+                    obj["actions"] = obj_actions + act_by_obj[obj_code]
+
+        _normalize_remote_detail(detail)
+
+        return detail
 
     def query_ontologies_by_scene(
         self,
@@ -308,9 +534,36 @@ class RemoteOntologyBackend:
         page_size: int = 20,
         keyword: str | None = None,
     ) -> dict[str, Any]:
-        """Remote ontology is read-only — pagination not supported."""
-        _ = loader, base_id, scene_id, page, page_size, keyword
-        logger.debug("Remote ontology: query_ontologies_by_scene not supported")
+        """Query ontologies by scene with pagination via remote OntologySceneController.
+
+        Supports scene_id="-1" for all scenes (global search).
+        """
+        _ = loader
+        client = self._get_client()
+        headers = self._build_auth_headers()
+        url = f"{self._source_url}/OntologySceneController/queryOntologies"
+        body: dict[str, Any] = {
+            "sceneId": scene_id,
+            "page": page,
+            "pageSize": page_size,
+        }
+        if keyword:
+            body["keyword"] = keyword
+        response = client.post(url, json=body, headers=headers)
+        response.raise_for_status()
+        raw = response.json()
+        # Unwrap remote API envelope
+        if isinstance(raw, dict) and raw.get("code") == 200:
+            data = raw.get("data", [])
+            if isinstance(data, list):
+                return {
+                    "data": {"objects": data, "views": []},
+                    "totalCount": raw.get("totalCount", len(data)),
+                }
+            return {
+                "data": {"objects": [], "views": []},
+                "totalCount": raw.get("totalCount", 0),
+            }
         return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # -- Scene CRUD (remote, read-only) --
@@ -361,6 +614,39 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
+    def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
+        """Return {library_id, scene_id} identifying which scene contains object_code.
+
+        Queries remote list_scenes and checks scene members for the given object_code.
+        Returns default (library_id="PERSONAL_LIB", scene_id="") when not found.
+        """
+        try:
+            scenes = self.list_scenes(base_id)
+        except Exception:
+            logger.debug(
+                "get_term_scope_info: list_scenes failed for base_id=%r",
+                base_id,
+                exc_info=True,
+            )
+            return {"library_id": "PERSONAL_LIB", "scene_id": ""}
+        scene_list: list[Any] = scenes
+        if isinstance(scenes, dict):
+            scene_list = scenes.get("data", scenes.get("scenes", []))
+        for s in scene_list:
+            if not isinstance(s, dict):
+                continue
+            scene_id = str(s.get("sceneId") or s.get("scene_id") or "")
+            try:
+                obj_codes, _ = self.get_scene_members(base_id, scene_id)
+            except Exception:
+                continue
+            if object_code in obj_codes:
+                return {
+                    "library_id": "PERSONAL_LIB",
+                    "scene_id": scene_id,
+                }
+        return {"library_id": "PERSONAL_LIB", "scene_id": ""}
+
 
 class RemoteKnowledgeBackend:
     """KnowledgeBackend that forwards search operations to a remote HTTP service.
@@ -389,6 +675,10 @@ class RemoteKnowledgeBackend:
         """Build authentication headers from auth_config."""
         if not self._auth_config:
             return {}
+        # Direct headers passthrough (for custom auth like ssoType/accountCode)
+        headers_dict = self._auth_config.get("headers")
+        if isinstance(headers_dict, dict):
+            return {str(k): str(v) for k, v in headers_dict.items()}
         auth_type = self._auth_config.get("type", "").lower()
         if auth_type == "bearer":
             return {"Authorization": f"Bearer {self._auth_config.get('token', '')}"}
@@ -396,6 +686,20 @@ class RemoteKnowledgeBackend:
             header_name = self._auth_config.get("headerName", "X-API-Key")
             return {header_name: self._auth_config.get("apiKey", "")}
         return {}
+
+    def configure(
+        self, source_url: str, auth_config: dict[str, Any] | None = None
+    ) -> None:
+        """Dynamically set source_url and auth_config after construction.
+
+        Used by Platform to inject per-base configuration into backends created
+        by zero-arg factories (which don't know about the base at factory time).
+        """
+        if source_url:
+            self._source_url = source_url.rstrip("/")
+        if auth_config is not None:
+            self._auth_config = auth_config
+        self._client = None  # Reset client to pick up new config
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -526,13 +830,18 @@ class RemoteKnowledgeBackend:
         property_code: list[str] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Forward ontology search to remote service (no caching — real-time)."""
+        """Forward ontology search to remote service (no caching — real-time).
+
+        接口层传入的 scene_ids 已经是 scene_id，直接使用。
+        """
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/search/ontology"
+        # TODO(remote-api): 远程 /search/ontology 接受 sceneId（单字符串）而非 sceneIds（数组），
+        # 暂传首个 scene_id。待远程团队支持 sceneIds 列表后改回。
         body: dict[str, Any] = {
             "keyword": keyword,
-            "sceneIds": scene_ids,
+            "sceneId": scene_ids[0] if scene_ids else "",
             "queryType": query_type,
             "searchScope": search_scope,
             "pageSize": kwargs.get("page_size", 20),
@@ -550,7 +859,15 @@ class RemoteKnowledgeBackend:
             body["pageToken"] = kwargs["page_token"]
         response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
-        return cast("dict[str, Any]", response.json())
+        raw = response.json()
+        # Unwrap remote API envelope: {code: 200, data: {...}} -> {...}
+        if isinstance(raw, dict) and "data" in raw and raw.get("code") == 200:
+            result = cast("dict[str, Any]", raw["data"])
+        else:
+            result = cast("dict[str, Any]", raw)
+        # Normalize remote field names to local expectations
+        _normalize_remote_search_result(result)
+        return result
 
     def graph_query(
         self,
