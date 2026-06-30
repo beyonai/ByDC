@@ -140,13 +140,19 @@ class DatacloudPlatform(
 
     def _ontology_for(self, base_id: str) -> OntologyBackend:
         """Resolve and cache the OntologyBackend for a given base_id."""
-        names = self._resolve_names(self._resolve_entry(base_id))
-        return self._get_backend("ontology", names["ontology"])  # type: ignore[no-any-return]
+        entry = self._resolve_entry(base_id)
+        names = self._resolve_names(entry)
+        backend = self._get_backend("ontology", names["ontology"])
+        _configure_if_supported(backend, entry)
+        return backend  # type: ignore[no-any-return]
 
     def _knowledge_for(self, base_id: str) -> KnowledgeBackend:
         """Resolve and cache the KnowledgeBackend for a given base_id."""
-        names = self._resolve_names(self._resolve_entry(base_id))
-        return self._get_backend("knowledge", names["knowledge"])  # type: ignore[no-any-return]
+        entry = self._resolve_entry(base_id)
+        names = self._resolve_names(entry)
+        backend = self._get_backend("knowledge", names["knowledge"])
+        _configure_if_supported(backend, entry)
+        return backend  # type: ignore[no-any-return]
 
     def _execution_for(self, base_id: str) -> ExecutionBackend | None:
         """Resolve ExecutionBackend for a given base_id.
@@ -243,3 +249,19 @@ class DatacloudPlatform(
             )
         e: OntologyBaseEntry = entries[0]
         return e.base_id
+
+
+def _configure_if_supported(backend: Any, entry: OntologyBaseEntry) -> None:
+    """Call backend.configure() if supported, passing per-base source_url and auth_config.
+
+    Backends created by zero-arg factories don't know about the base entry.
+    If a backend exposes a ``configure(source_url, auth_config)`` method,
+    this function calls it to inject the per-base configuration from the entry.
+
+    Idempotent: configure() implementations should be callable multiple times.
+    """
+    if not hasattr(backend, "configure"):
+        return
+    source_url = getattr(entry, "source_url", "") or ""
+    auth_config = getattr(entry, "auth_config", None)
+    backend.configure(source_url, auth_config)
