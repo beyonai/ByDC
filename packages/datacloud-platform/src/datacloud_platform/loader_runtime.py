@@ -67,7 +67,8 @@ class LoaderRuntimeManager:
             return self._cache[base_id]
         loader = self._build_loader(base_id)
         self._configure_term_loader(loader)
-        self._platform.inject_virtual_actions(base_id, loader)
+        # 虚拟动作注入有性能问题，先注释
+        # self._platform.inject_virtual_actions(base_id, loader)
         self._configure_runtime_services(loader)
         snapshot = LoaderSnapshot(
             loader=loader,
