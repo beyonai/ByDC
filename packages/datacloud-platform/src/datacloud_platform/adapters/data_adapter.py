@@ -31,6 +31,7 @@ from datacloud_platform.platform_file_storage import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
+
 _STORAGE_DIR_ENV = "DATACLOUD_STORAGE_DIR"
 _DEFAULT_STORAGE_DIR = ".datacloud_results"
 
@@ -1310,8 +1311,10 @@ class DataCloudDataBackend:
     # ── Scene CRUD ────────────────────────────────────────────────────────
 
     def _generate_scene_id(self) -> str:
-        """Generate a unique scene ID."""
-        return f"scene_{uuid.uuid4().hex[:12]}"
+        """Generate a unique scene ID (snowflake)."""
+        from datacloud_platform.base_entry import generate_snowflake
+
+        return generate_snowflake()
 
     def create_scene(self, base_id: str, scene: Any) -> dict[str, Any]:
         """Create a scene (grouping container) with EntityStore persistence.
@@ -1319,6 +1322,7 @@ class DataCloudDataBackend:
         Args:
             base_id: Base / project identifier.
             scene: Scene-like object or dict with scene_name, scene_code, scene_desc.
+                   scene_id is always auto-generated; scene_code defaults to scene_name.
         """
         scenes = self._ensure_scenes_loaded()
 
@@ -1332,7 +1336,18 @@ class DataCloudDataBackend:
             scene_code = getattr(scene, "scene_code", None)
             scene_desc = getattr(scene, "scene_desc", None)
 
-        scene_id = scene_code or self._generate_scene_id()
+        scene_id = self._generate_scene_id()
+        scene_code = scene_code or scene_name
+
+        # 幂等：scene_code 已存在时返回已有场景（不重复创建）
+        for _sid, _s in scenes.items():
+            if _s.get("scene_code") == scene_code:
+                logger.info(
+                    "Scene with scene_code=%r already exists (scene_id=%s), skipping create",
+                    scene_code,
+                    _sid,
+                )
+                return _s
 
         if scene_id in scenes:
             raise ValueError(f"Scene already exists: {scene_id}")
@@ -1340,7 +1355,7 @@ class DataCloudDataBackend:
         new_scene: dict[str, Any] = {
             "scene_id": scene_id,
             "scene_name": scene_name,
-            "scene_code": scene_id,
+            "scene_code": scene_code,
             "scene_desc": scene_desc,
             "base_id": base_id,
             "member_object_codes": [],
@@ -1348,7 +1363,12 @@ class DataCloudDataBackend:
         }
         scenes[scene_id] = new_scene
         self._save_scene(scene_id, new_scene)
-        logger.info("Created scene: base_id=%s scene_id=%s", base_id, scene_id)
+        logger.info(
+            "Created scene: base_id=%s scene_id=%s scene_code=%s",
+            base_id,
+            scene_id,
+            scene_code,
+        )
         return new_scene
 
     def update_scene(self, base_id: str, scene_id: str, updates: Any) -> dict[str, Any]:
