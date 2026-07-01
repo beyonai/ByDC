@@ -172,6 +172,34 @@ class _NoopOntologyBackend:
     def delete_object(self, base_id: str, object_code: str) -> None:
         """No-op — delete is safe to be idempotent."""
 
+    # -- Scene reverse-lookup queries (no-op) --
+
+    def get_object_scene_count(self, base_id: str, object_code: str) -> int:
+        """Return 0."""
+        _ = base_id
+        _ = object_code
+        return 0
+
+    def get_view_scene_count(self, base_id: str, view_code: str) -> int:
+        """Return 0."""
+        _ = base_id
+        _ = view_code
+        return 0
+
+    def remove_object_from_all_scenes(self, base_id: str, object_code: str) -> int:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def remove_view_from_all_scenes(self, base_id: str, view_code: str) -> int:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def get_scenes_containing_object(self, base_id: str, object_code: str) -> list[str]:
+        """Return empty list."""
+        _ = base_id
+        _ = object_code
+        return []
+
     # -- Scene management (no-op) --
 
     def list_scenes(self, base_id: str) -> list[Any]:

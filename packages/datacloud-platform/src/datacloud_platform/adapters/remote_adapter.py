@@ -600,6 +600,28 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
+    # -- Scene reverse-lookup queries (remote, read-only) --
+
+    def get_object_scene_count(self, base_id: str, object_code: str) -> int:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def get_view_scene_count(self, base_id: str, view_code: str) -> int:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def remove_object_from_all_scenes(self, base_id: str, object_code: str) -> int:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def remove_view_from_all_scenes(self, base_id: str, view_code: str) -> int:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def get_scenes_containing_object(self, base_id: str, object_code: str) -> list[str]:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
     # -- Object CRUD (remote, read-only) --
 
     def create_object(self, base_id: str, obj: Any) -> Any:

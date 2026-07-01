@@ -182,6 +182,28 @@ class OntologyBackend(Protocol):
         """Remove objects/views from a scene — does NOT delete resources."""
         ...
 
+    # -- Scene reverse-lookup queries --
+
+    def get_object_scene_count(self, base_id: str, object_code: str) -> int:
+        """Return how many scenes this object belongs to."""
+        ...
+
+    def get_view_scene_count(self, base_id: str, view_code: str) -> int:
+        """Return how many scenes this view belongs to."""
+        ...
+
+    def remove_object_from_all_scenes(self, base_id: str, object_code: str) -> int:
+        """Remove object from all scenes. Returns count of scenes removed from."""
+        ...
+
+    def remove_view_from_all_scenes(self, base_id: str, view_code: str) -> int:
+        """Remove view from all scenes. Returns count of scenes removed from."""
+        ...
+
+    def get_scenes_containing_object(self, base_id: str, object_code: str) -> list[str]:
+        """Return scene_ids that contain this object."""
+        ...
+
     # -- View CRUD --
 
     def get_views(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
