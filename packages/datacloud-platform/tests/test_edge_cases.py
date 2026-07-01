@@ -30,7 +30,6 @@ from fakes import (
     FakeStorageBackend,
 )
 
-OWNER_TYPE = "personal"
 LOCAL = "local-base"
 SCENE = "scene-1"
 
@@ -326,34 +325,32 @@ class TestEmptyDataScenarios:
     """
 
     def test_list_scenes_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes")
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/scenes")
         assert resp.status_code == 200
         data: dict[str, Any] = resp.json()
         assert data["success"] is True
         assert data["data"] == []
 
     def test_list_objects_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects")
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/objects")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_views_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/views")
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/views")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_relations_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/relations")
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/relations")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_actions_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/objects/obj-1/actions"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/objects/obj-1/actions")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -361,13 +358,13 @@ class TestEmptyDataScenarios:
     def test_list_datasources_no_data_returns_200_empty(
         self, client: TestClient
     ) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/datasources")
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/datasources")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_get_scene_details_no_data_returns_200(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}")
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/scenes/{SCENE}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -375,16 +372,14 @@ class TestEmptyDataScenarios:
     def test_query_ontologies_by_scene_no_data_returns_200(
         self, client: TestClient
     ) -> None:
-        resp = client.get(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/scenes/{SCENE}/ontologies"
-        )
+        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/scenes/{SCENE}/ontologies")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_search_ontology_no_data_returns_200(self, client: TestClient) -> None:
         resp = client.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/{LOCAL}/search",
+            f"/api/v1/ontologyBases/{LOCAL}/search",
             json={"keyword": "nonexistent"},
         )
         assert resp.status_code == 200

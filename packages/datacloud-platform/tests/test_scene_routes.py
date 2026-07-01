@@ -35,7 +35,6 @@ from fakes import (
     make_view,
 )
 
-OWNER_TYPE = "personal"
 LOCAL = "local-base"
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -124,7 +123,7 @@ def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
 
 
 def _scenes_url(base_id: str = LOCAL) -> str:
-    return f"/api/v1/ontologyBases/{OWNER_TYPE}/{base_id}/scenes"
+    return f"/api/v1/ontologyBases/{base_id}/scenes"
 
 
 def _scene_url(scene_id: str, base_id: str = LOCAL) -> str:
@@ -196,7 +195,7 @@ class TestSceneCRUD:
         tc = TestClient(app)
 
         body = {"sceneName": "远程场景"}
-        resp = tc.post(f"/api/v1/ontologyBases/{OWNER_TYPE}/remote/scenes", json=body)
+        resp = tc.post("/api/v1/ontologyBases/remote/scenes", json=body)
         assert resp.status_code == 403
 
     def test_update_scene(self, client: TestClient) -> None:
@@ -365,7 +364,7 @@ class TestSceneMembers:
         tc = TestClient(app)
 
         resp = tc.post(
-            f"/api/v1/ontologyBases/{OWNER_TYPE}/remote2/scenes/x/members",
+            "/api/v1/ontologyBases/remote2/scenes/x/members",
             json={"objectCodes": ["obj1"], "viewCodes": []},
         )
         assert resp.status_code == 403
