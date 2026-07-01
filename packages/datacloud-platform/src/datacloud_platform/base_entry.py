@@ -148,6 +148,28 @@ class OntologyBaseRegistry:
         """List all registered entries."""
         return list(self._entries.values())
 
+    def list_filtered(
+        self, *, owner_type: str | None = None, keyword: str | None = None
+    ) -> list[OntologyBaseEntry]:  # type: ignore[valid-type]
+        """List entries filtered by owner_type and/or keyword.
+
+        Keyword matches case-insensitively against ``display_name``,
+        ``description``, and ``base_id``.
+        """
+        entries = list(self._entries.values())
+        if owner_type:
+            entries = [e for e in entries if e.owner_type == owner_type]
+        if keyword:
+            kw = keyword.strip().lower()
+            entries = [
+                e
+                for e in entries
+                if kw in e.display_name.lower()
+                or kw in e.description.lower()
+                or kw in e.base_id.lower()
+            ]
+        return entries
+
     def unregister(self, base_id: str) -> None:
         """Remove an entry by base_id.
 

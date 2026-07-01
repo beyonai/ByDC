@@ -17,9 +17,21 @@ class LibraryMixin:
     All methods operate on the local ``_base_registry`` — no backend routing.
     """
 
-    def list_bases(self) -> list[dict[str, Any]]:
-        """List all registered ontology bases as dicts."""
-        return [asdict(e) for e in self._base_registry.list()]  # type: ignore[attr-defined]
+    def list_bases(
+        self,
+        *,
+        owner_type: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List ontology bases, optionally filtered by owner_type and/or keyword.
+
+        Keyword matches case-insensitively against display_name, description,
+        and base_id.
+        """
+        entries = self._base_registry.list_filtered(  # type: ignore[attr-defined]
+            owner_type=owner_type, keyword=keyword
+        )
+        return [asdict(e) for e in entries]
 
     def base_exists(self, base_id: str) -> bool:
         """Return True if *base_id* is registered."""
