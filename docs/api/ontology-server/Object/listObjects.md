@@ -1,7 +1,7 @@
 # 列出对象类型
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/objects
+GET /api/v1/ontologyBases/{baseId}/objects
 ```
 
 列出本体库下的对象类型摘要列表。LOCAL 从本地 Backend 读取，REMOTE 从外部服务获取。
@@ -12,7 +12,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/objects
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
 
 ---
@@ -107,7 +106,7 @@ ListObjectsResponse
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects"
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo/objects"
 ```
 
 #### Response

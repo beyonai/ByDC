@@ -1,7 +1,7 @@
 # 获取对象详情
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}
+GET /api/v1/ontologyBases/{baseId}/objects/{objectCode}
 ```
 
 获取对象类型完整定义，含属性列表和动作列表。
@@ -12,7 +12,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
 | `objectCode` | string | 对象编码。获取方式见 [listObjects](listObjects.md)。 |
 
@@ -146,7 +145,7 @@ GetObjectResponse
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/objects/by_customer"
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo/objects/by_customer"
 ```
 
 #### Response
