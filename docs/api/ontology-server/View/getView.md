@@ -1,7 +1,7 @@
 # 获取视图详情
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/views/{viewCode}
+GET /api/v1/ontologyBases/{baseId}/views/{viewCode}
 ```
 
 ---
@@ -10,7 +10,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/views/{viewCode}
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 | `viewCode` | string | 视图编码。获取方式见 [listViews](listViews.md)。 |
 

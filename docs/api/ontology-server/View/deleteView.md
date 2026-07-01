@@ -1,7 +1,7 @@
 # 删除视图
 
 ```
-DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/views/{viewCode}
+DELETE /api/v1/ontologyBases/{baseId}/views/{viewCode}
 ```
 
 仅 LOCAL 可用。

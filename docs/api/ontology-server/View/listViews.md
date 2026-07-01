@@ -1,7 +1,7 @@
 # 列出视图
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/views
+GET /api/v1/ontologyBases/{baseId}/views
 ```
 
 列出本体库下的视图摘要列表。
@@ -12,7 +12,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/views
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 
 ---
@@ -58,7 +57,7 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/views
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/views"
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo/views"
 ```
 
 #### Response

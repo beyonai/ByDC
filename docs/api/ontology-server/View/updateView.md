@@ -1,7 +1,7 @@
 # 更新视图
 
 ```
-PUT /api/v1/ontologyBases/{ownerType}/{baseId}/views/{viewCode}
+PUT /api/v1/ontologyBases/{baseId}/views/{viewCode}
 ```
 
 全量替换视图定义。仅 LOCAL 可用。请求体同 [createView](createView.md)。
@@ -12,7 +12,6 @@ PUT /api/v1/ontologyBases/{ownerType}/{baseId}/views/{viewCode}
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 | `viewCode` | string | 视图编码。 |
 
