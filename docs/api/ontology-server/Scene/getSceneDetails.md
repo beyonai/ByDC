@@ -1,7 +1,7 @@
 # 查询场景详情
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}
+GET /api/v1/ontologyBases/{baseId}/scenes/{sceneId}
 ```
 
 查询场景完整本体详情，返回该场景下对象、视图、动作、关系、数据源。支持按视图编码或对象编码筛选。
@@ -33,7 +33,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
 | `sceneId` | string | 场景 ID。获取方式见 [queryScenes](queryScenes.md)。 |
 
@@ -41,5 +40,5 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/bio_platform/scenes/2064947287571644418"
+  "https://$HOSTNAME/api/v1/ontologyBases/bio_platform/scenes/2064947287571644418"
 ```

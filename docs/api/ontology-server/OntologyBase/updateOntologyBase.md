@@ -1,7 +1,7 @@
 # 更新本体库
 
 ```
-PUT /api/v1/ontologyBases/{ownerType}/{baseId}
+PUT /api/v1/ontologyBases/{baseId}
 ```
 
 更新本体库的元信息。所有字段均为可选，仅更新传入的非 `null` 字段（`exclude_none`）。`baseId` 为只读字段，传入也会被忽略。
@@ -12,7 +12,6 @@ PUT /api/v1/ontologyBases/{ownerType}/{baseId}
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | `personal` / `enterprise` |
 | `baseId` | string | 本体库 ID。获取方式见 [listOntologyBases](listOntologyBases.md)。 |
 
 ---
@@ -54,7 +53,6 @@ OntologyBaseUpdate
 |---|---|---|---|
 | `displayName` | string | No | 显示名称。 |
 | `description` | string | No | 描述。 |
-| `ownerType` | string | No | `personal` 或 `enterprise`。 |
 | `sourceUrl` | string | No | 外部服务 base URL。 |
 | `authType` | string | No | 鉴权类型：`none` / `api_key` / `bearer` / `oauth2`。 |
 | `authConfig` | object | No | 鉴权配置，转发时注入 HTTP header。 |
@@ -146,7 +144,7 @@ ApiResponse<OntologyBaseEntry>
 ```bash
 curl -X PUT \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo" \
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo" \
   -d '{
     "displayName": "CRM 演示库 v2",
     "timeoutSec": 60
@@ -184,7 +182,7 @@ curl -X PUT \
 ```bash
 curl -X PUT \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo" \
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo" \
   -d '{
     "ownerType": "enterprise"
   }'

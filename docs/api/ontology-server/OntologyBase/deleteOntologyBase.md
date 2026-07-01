@@ -1,7 +1,7 @@
 # 删除本体库
 
 ```
-DELETE /api/v1/ontologyBases/{ownerType}/{baseId}
+DELETE /api/v1/ontologyBases/{baseId}
 ```
 
 删除本体库。LOCAL 时级联删除所有场景及资源；REMOTE 时仅取消注册，外部源不受影响。
@@ -12,7 +12,6 @@ DELETE /api/v1/ontologyBases/{ownerType}/{baseId}
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](listOntologyBases.md)。 |
 
 ---
@@ -85,7 +84,7 @@ DeleteNamespaceResponse
 
 ```bash
 curl -X DELETE \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo"
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo"
 ```
 
 #### Response

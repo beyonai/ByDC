@@ -1,7 +1,7 @@
 # 查询场景列表
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes
+GET /api/v1/ontologyBases/{baseId}/scenes
 ```
 
 按关键词模糊查询场景列表。REMOTE 时转发到外部服务。
@@ -28,12 +28,11 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/scenes
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
 
 ## Example
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/bio_platform/scenes?queryKeyword=收入"
+  "https://$HOSTNAME/api/v1/ontologyBases/bio_platform/scenes?queryKeyword=收入"
 ```
