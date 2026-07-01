@@ -221,6 +221,10 @@ class DatacloudPlatform(
             logger.info(
                 "Skipping _ensure_default_scene for read-only base_id=%s", base_id
             )
+        except Exception:
+            logger.warning(
+                "_ensure_default_scene failed for base_id=%s", base_id, exc_info=True
+            )
 
         # Auto-seed from OWL path if configured in backend_config
         _owl_path: str = ""

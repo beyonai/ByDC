@@ -71,6 +71,11 @@ def _init_platform() -> DatacloudPlatform:
     register_implementation("knowledge", "none", lambda: _NoopKnowledgeBackend())
     register_implementation("storage", "none", lambda: _NoopStorageBackend())
 
+    # ── Register remote-http implementations ─────────────────────────────
+    from datacloud_platform.backends.presets import _register_remote_implementations
+
+    _register_remote_implementations()
+
     # ── Register presets ────────────────────────────────────────────────
     register_preset(
         "DEFAULT",
