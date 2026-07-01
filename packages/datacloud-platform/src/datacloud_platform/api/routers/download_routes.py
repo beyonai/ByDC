@@ -11,7 +11,7 @@ from fastapi.responses import Response
 from datacloud_platform.config import get_settings
 from datacloud_platform.loader_runtime import get_request_loader_snapshot
 
-router = APIRouter()
+router = APIRouter(tags=["Download"])
 
 
 @router.get("/download/csv/{file_id}")

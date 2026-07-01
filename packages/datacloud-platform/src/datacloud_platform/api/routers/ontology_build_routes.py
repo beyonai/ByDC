@@ -26,7 +26,7 @@ from fastapi import APIRouter, Request
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["Ontology Manager"])
 
 
 # ── session 工厂 ─────────────────────────────────────────────────────────────

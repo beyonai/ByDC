@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from datacloud_platform.loader_runtime import get_request_loader_snapshot
 from datacloud_platform.execution.skill_package_generator import SkillPackageGenerator
 
-router = APIRouter()
+router = APIRouter(tags=["Skills"])
 
 
 @router.get("/package")

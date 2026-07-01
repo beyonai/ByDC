@@ -12,7 +12,7 @@ from datacloud_platform.loader_runtime import get_request_loader_snapshot
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["Terms"])
 
 _DEFAULT_PAGE = 1
 _DEFAULT_PAGE_SIZE = 20

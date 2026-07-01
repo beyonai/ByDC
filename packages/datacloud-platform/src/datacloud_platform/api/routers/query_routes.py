@@ -35,7 +35,7 @@ from datacloud_platform.loader_runtime import (
     get_request_loader_snapshot,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Query"])
 _INCLUDE_PLAN_IN_RESPONSE = False
 
 
