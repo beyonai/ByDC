@@ -68,9 +68,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.post("/{base_id}/objects", tags=["Object"])
     def create_object(base_id: str, body: ObjectType) -> Any:
-        """Create an object (LOCAL only)."""
+        """Create an object (LOCAL only). Auto-added to default scene when no scene specified."""
         try:
-            return ok(data=platform.create_object(base_id, body), message="created")
+            return ok(
+                data=platform.create_object_with_scene(base_id, body), message="created"
+            )
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
         except ValueError as e:
@@ -93,9 +95,9 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.delete("/{base_id}/objects/{code}", tags=["Object"])
     def delete_object(base_id: str, code: str) -> Any:
-        """Delete an object (LOCAL only)."""
+        """Delete an object (LOCAL only). Removes from all scenes before deletion."""
         try:
-            platform.delete_object(base_id, code)
+            platform.delete_object_from_all_scenes(base_id, code)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
@@ -134,9 +136,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.post("/{base_id}/views", tags=["View"])
     def create_view(base_id: str, body: View) -> Any:
-        """Create a view (LOCAL only)."""
+        """Create a view (LOCAL only). Auto-added to default scene when no scene specified."""
         try:
-            return ok(data=platform.create_view(base_id, body), message="created")
+            return ok(
+                data=platform.create_view_with_scene(base_id, body), message="created"
+            )
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
         except ValueError as e:
@@ -159,9 +163,9 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.delete("/{base_id}/views/{code}", tags=["View"])
     def delete_view(base_id: str, code: str) -> Any:
-        """Delete a view (LOCAL only)."""
+        """Delete a view (LOCAL only). Removes from all scenes before deletion."""
         try:
-            platform.delete_view(base_id, code)
+            platform.delete_view_from_all_scenes(base_id, code)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e

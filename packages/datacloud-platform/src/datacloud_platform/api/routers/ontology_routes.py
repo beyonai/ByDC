@@ -233,12 +233,14 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.delete("/{base_id}/scenes/{scene_id}", tags=["Scene"])
     def delete_scene(base_id: str, scene_id: str) -> Any:
-        """Delete a scene — does NOT delete member resources."""
+        """Delete a scene — members migrate to default scene."""
         try:
-            platform.delete_scene(base_id, scene_id)
+            platform.delete_scene_with_migration(base_id, scene_id)
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -267,12 +269,15 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     def remove_scene_members(
         base_id: str, scene_id: str, body: SceneMembersRequest
     ) -> Any:
-        """Remove objects/views from a scene — does NOT delete resources."""
+        """Remove objects/views from a scene — does NOT delete resources.
+        Objects are safely removed (auto-migrated to default scene if last reference).
+        """
         try:
-            result = platform.remove_scene_members(
-                base_id, scene_id, body.object_codes, body.view_codes
-            )
-            return ok(data=result, message="members removed")
+            for obj_code in body.object_codes:
+                platform.remove_object_from_scene_safe(base_id, scene_id, obj_code)
+            for vw_code in body.view_codes:
+                platform.remove_view_from_scene_safe(base_id, scene_id, vw_code)
+            return ok(message="members removed")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
         except ValueError as e:
