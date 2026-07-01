@@ -83,7 +83,45 @@ def create_app(
             logger.info("LoaderRuntimeManager shutdown")
 
     # ── App ─────────────────────────────────────────────────────────────────
-    app = FastAPI(title="DataCloud Platform", version="0.1.0", lifespan=_lifespan)
+    app = FastAPI(
+        title="DataCloud Platform",
+        version="0.1.0",
+        lifespan=_lifespan,
+        openapi_tags=[
+            {
+                "name": "OntologyBase",
+                "description": "本体库管理 — 创建、查询、更新、删除本体库",
+            },
+            {
+                "name": "Scene",
+                "description": "场景管理 — 场景 CRUD、成员管理、本体分页查询",
+            },
+            {"name": "Object", "description": "对象类型管理 — 对象 CRUD 与详情查询"},
+            {"name": "Relation", "description": "关系管理 — 对象间关系 CRUD"},
+            {"name": "View", "description": "视图管理 — 视图 CRUD 与详情查询"},
+            {
+                "name": "Datasource",
+                "description": "数据源管理 — 数据源 CRUD 与详情查询",
+            },
+            {"name": "Action", "description": "动作管理 — 对象动作 CRUD"},
+            {"name": "Instance", "description": "实例查询 — 实例数据条件检索"},
+            {"name": "Graph", "description": "图查询 — N 跳图查询与最短路径"},
+            {"name": "Search", "description": "本体检索 — 跨场景/场景内全文与语义检索"},
+            {"name": "Import", "description": "本体导入 — OWL 文件导入"},
+            {
+                "name": "Query",
+                "description": "自然语言查询 — AI 驱动的自然语言数据查询",
+            },
+            {"name": "Download", "description": "文件下载 — 查询结果 CSV 导出下载"},
+            {"name": "Terms", "description": "术语选项 — 前端表单术语下拉选项"},
+            {"name": "Skills", "description": "技能包 — AI 技能包 JSON 生成"},
+            {
+                "name": "Ontology Manager",
+                "description": "本体管理器 — 个人本体构建与术语管理",
+            },
+            {"name": "System", "description": "系统接口 — 健康检查与加载状态"},
+        ],
+    )
 
     # ── CORS ────────────────────────────────────────────────────────────────
     cors_val = settings.cors_origins.strip()
@@ -127,7 +165,7 @@ def create_app(
     app.mount("/api/v1/mcp", mcp_asgi)
 
     # ── Health ──────────────────────────────────────────────────────────────
-    @app.get("/health")
+    @app.get("/health", tags=["System"])
     async def health() -> dict[str, Any]:
         runtime = getattr(app.state, "loader_runtime", None)
         if runtime is None:
@@ -135,12 +173,12 @@ def create_app(
         status = runtime.status()
         return {"status": "ok", "loaded_bases": status.get("cached_bases", [])}
 
-    @app.get("/api/v1/health")
+    @app.get("/api/v1/health", tags=["System"])
     async def health_v1() -> dict[str, Any]:
         return await health()
 
     # ── Loader status ───────────────────────────────────────────────────────
-    @app.get("/api/v1/loader/status")
+    @app.get("/api/v1/loader/status", tags=["System"])
     async def loader_status() -> dict[str, Any]:
         runtime = getattr(app.state, "loader_runtime", None)
         if runtime is None:
