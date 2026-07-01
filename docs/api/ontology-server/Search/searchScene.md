@@ -1,7 +1,7 @@
 # 场景内检索
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/search
+POST /api/v1/ontologyBases/{baseId}/scenes/{sceneId}/search
 ```
 
 场景内统一检索，支持全文检索、向量语义检索和混合检索。
@@ -35,7 +35,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/scenes/{sceneId}/search
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 | `sceneId` | string | 场景 ID。LOCAL 时直接用于限定检索范围；REMOTE 时注入 body。 |
 
@@ -53,7 +52,7 @@ LOCAL 场景下，请求由 `OntologySearchEngine` 本地处理，不转发外�
 ```bash
 curl -X POST \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/bio_platform/scenes/2064947287571644418/search" \
+  "https://$HOSTNAME/api/v1/ontologyBases/bio_platform/scenes/2064947287571644418/search" \
   -d '{
     "keyword": "客户",
     "queryType": "hybrid",

@@ -1,7 +1,7 @@
 # 跨场景检索
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/search
+POST /api/v1/ontologyBases/{baseId}/search
 ```
 
 跨场景统一检索。调用方在 body 中指定 `sceneId`，`"-1"` 跨所有场景。
@@ -15,7 +15,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/search
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 
 ---
@@ -84,7 +83,7 @@ SearchNamespaceRequest
 ```bash
 curl -X POST \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/bio_platform/search" \
+  "https://$HOSTNAME/api/v1/ontologyBases/bio_platform/search" \
   -d '{
     "sceneId": "-1",
     "keyword": "客户",
