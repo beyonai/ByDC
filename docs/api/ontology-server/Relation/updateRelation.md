@@ -1,7 +1,7 @@
 # 更新关系
 
 ```
-PUT /api/v1/ontologyBases/{ownerType}/{baseId}/relations/{relationCode}
+PUT /api/v1/ontologyBases/{baseId}/relations/{relationCode}
 ```
 
 全量替换关系定义。仅 LOCAL 可用。请求体同 [createRelation](createRelation.md)。
@@ -12,7 +12,6 @@ PUT /api/v1/ontologyBases/{ownerType}/{baseId}/relations/{relationCode}
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 | `relationCode` | string | 关系编码。必须已存在。 |
 

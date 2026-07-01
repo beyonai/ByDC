@@ -1,7 +1,7 @@
 # 创建关系
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/relations
+POST /api/v1/ontologyBases/{baseId}/relations
 ```
 
 创建关系。仅 LOCAL 可用。
@@ -12,7 +12,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/relations
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 
 ---
@@ -86,7 +85,7 @@ CreateRelationRequest
 ```bash
 curl -X POST \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/relations" \
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo/relations" \
   -d '{
     "relationCode": "rel_customer_orders",
     "relationName": "客户关联订单",

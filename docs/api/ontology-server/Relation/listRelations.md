@@ -1,7 +1,7 @@
 # 列出关系
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/relations
+GET /api/v1/ontologyBases/{baseId}/relations
 ```
 
 列出本体库下的关系列表。支持按源对象或目标对象过滤。
@@ -12,7 +12,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/relations
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。获取方式见 [listOntologyBases](../OntologyBase/listOntologyBases.md)。 |
 
 ---
@@ -93,7 +92,7 @@ ListRelationsResponse
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/relations"
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo/relations"
 ```
 
 #### Response
