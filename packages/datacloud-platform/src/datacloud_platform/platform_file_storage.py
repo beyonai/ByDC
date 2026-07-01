@@ -26,7 +26,7 @@ def build_result_file_storage(settings: Settings) -> ResultFileStorage:
 
 def _data_dir() -> Path:
     """Return the datacloud data directory from env or default."""
-    env = os.environ.get("DATACLOUD_DATA_DIR")
+    env = os.environ.get("DATACLOUD_ONTOLOGY_PATH")
     if env:
         return Path(env)
     return Path.home() / ".datacloud"
@@ -61,7 +61,7 @@ def reap_orphan_tmp_files(*, scan_dir: Path | None = None) -> None:
     restrict the scan to a specific directory (e.g. in tests).
 
     Args:
-        scan_dir: Directory to scan. Defaults to ``DATACLOUD_DATA_DIR``
+        scan_dir: Directory to scan. Defaults to ``DATACLOUD_ONTOLOGY_PATH``
             or ``~/.datacloud``.
     """
     if scan_dir is None:

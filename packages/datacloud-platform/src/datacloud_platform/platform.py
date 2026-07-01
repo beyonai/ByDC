@@ -37,6 +37,7 @@ from datacloud_platform.mixins import (
     RelationMixin,
     SceneLoaderMixin,
     SceneMixin,
+    SceneServiceMixin,
     StorageMixin,
     ViewMixin,
 )
@@ -73,6 +74,7 @@ class DatacloudPlatform(
     StorageMixin,
     OrchestrationMixin,
     SceneLoaderMixin,
+    SceneServiceMixin,
 ):
     """Unified ontology + knowledge + execution + storage platform — multi-base router.
 
@@ -198,6 +200,44 @@ class DatacloudPlatform(
             self._ontology_store = OntologyStore(self._entity_store)
             for et in ("bases", "scenes"):
                 self._ontology_store.get_index(et)
+
+    def create_base(self, entry: Any) -> dict[str, Any]:  # noqa: ANN401
+        """Register a new ontology base, then ensure default scene exists.
+
+        Overrides LibraryMixin.create_base to also trigger
+        ``_ensure_default_scene``, which on first call absorbs any
+        pre-existing OWL orphans (e.g. from ``_seed_from_owl_path``).
+
+        Read-only backends (REMOTE) raise ``PermissionError`` on scene
+        creation — we skip the default-scene step gracefully.
+        """
+        result = LibraryMixin.create_base(self, entry)
+        base_id: str = result["base_id"]
+
+        # Ensure default scene exists (absorbs any pre-existing orphans on first call)
+        try:
+            self._ensure_default_scene(base_id)
+        except PermissionError:
+            logger.info(
+                "Skipping _ensure_default_scene for read-only base_id=%s", base_id
+            )
+
+        # Auto-seed from OWL path if configured in backend_config
+        _owl_path: str = ""
+        if isinstance(entry, dict):
+            _owl_path = (
+                entry.get("backend_config", {}).get("ontology", {}).get("owl_path", "")
+            )
+        elif hasattr(entry, "backend_config") and entry.backend_config:
+            _owl_path = (entry.backend_config.get("ontology") or {}).get("owl_path", "")
+
+        if _owl_path:
+            try:
+                self._seed_from_owl_path(base_id, _owl_path)
+            except (PermissionError, AttributeError):
+                logger.info("Skipping _seed_from_owl_path for base_id=%s", base_id)
+
+        return result
 
     def _load_ontology_cached(
         self,

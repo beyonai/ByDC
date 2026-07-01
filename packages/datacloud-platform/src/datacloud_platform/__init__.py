@@ -127,16 +127,14 @@ _platform: DatacloudPlatform | None = None
 
 
 def get_platform() -> DatacloudPlatform:
-    """Return the module-level DatacloudPlatform singleton, lazily initialised."""
+    """Return the module-level DatacloudPlatform singleton, lazily initialised.
+
+    Delegates to ``_init_platform()`` to ensure all backend types, implementations,
+    and presets are registered before constructing the platform.
+    """
     global _platform  # noqa: PLW0603
     if _platform is None:
-        from datacloud_platform.adapters.json_entity_store import JsonEntityStore
-        from datacloud_platform.platform_file_storage import _data_dir
+        from datacloud_platform.main import _init_platform
 
-        entity_store = JsonEntityStore(_data_dir())
-        registry = OntologyBaseRegistry(entity_store)
-        registry.restore()
-        _platform = DatacloudPlatform(
-            _base_registry=registry, _entity_store=entity_store
-        )
+        _platform = _init_platform()
     return _platform

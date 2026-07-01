@@ -10,9 +10,6 @@ Usage::
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
-from typing import Any
 
 from datacloud_platform.platform_file_storage import _data_dir
 
@@ -33,43 +30,6 @@ from datacloud_platform.base_entry import OntologyBaseRegistry
 from datacloud_platform.platform import DatacloudPlatform
 
 logger = logging.getLogger(__name__)
-
-_owl_loaded_path: str | None = None
-
-
-def _load_owl_if_configured(entity_store: JsonEntityStore) -> Any | None:
-    """Load OWL from the configured path into the EntityStore on startup.
-
-    Checks ``DATACLOUD_OWL_PATH`` env var.  When set, loads the OWL ontology
-    and persists it as JSON objects/views/relations so downstream consumers
-    (e.g. OntologyStore) have immediate access.
-    """
-    global _owl_loaded_path
-
-    resolved = os.environ.get("DATACLOUD_OWL_PATH")
-    if not resolved:
-        return None
-
-    owl_path = Path(resolved)
-    if not owl_path.exists():
-        logger.warning("DATACLOUD_OWL_PATH set but path not found: %s", owl_path)
-        return None
-
-    # Use DataCloudDataBackend's parse/save pipeline with the shared entity_store
-    backend = DataCloudDataBackend(entity_store=entity_store)
-    parsed = backend.parse_owl(owl_path)
-    base_path = _data_dir() / "owl_default"
-    counts = backend.save_parsed_content(base_path, parsed)
-
-    _owl_loaded_path = resolved
-    logger.info(
-        "OWL loaded from %s: objects=%d views=%d relations=%d",
-        resolved,
-        counts.get("objects", 0),
-        counts.get("views", 0),
-        counts.get("relations", 0),
-    )
-    return counts
 
 
 def _init_platform() -> DatacloudPlatform:
@@ -138,8 +98,5 @@ def _init_platform() -> DatacloudPlatform:
         _base_registry=registry,
         _entity_store=entity_store,
     )
-
-    # ── OWL startup landing ─────────────────────────────────────────────
-    _load_owl_if_configured(entity_store)
 
     return platform
