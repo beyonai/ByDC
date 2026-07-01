@@ -430,10 +430,18 @@ class RemoteOntologyBackend:
         """Fetch scenes from remote endpoint (no local cache — Platform handles caching)."""
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/listScenes"
-        response = client.post(url, json={"baseId": base_id}, headers=headers)
+        url = f"{self._source_url}/OntologySceneController/query"
+        body: dict[str, Any] = {"pageSize": 200, "pageIndex": 1}
+        response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
-        return cast("list[Any]", response.json())
+        raw = response.json()
+        # Unwrap remote API envelope
+        if isinstance(raw, dict) and raw.get("code") == 200:
+            data = raw.get("data", [])
+            if isinstance(data, list):
+                return data
+            return cast("list[Any]", data.get("records", data))
+        return []
 
     def get_scene_members(
         self, base_id: str, scene_id: str
