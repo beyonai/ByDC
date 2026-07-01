@@ -33,6 +33,21 @@ class OrchestrationMixin:
         know = self._knowledge_for(base_id)  # type: ignore[attr-defined]
         base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
 
+        # 0. Resolve scene — auto-create default scene when scene_id is empty
+        if not scene_id:
+            default_scene = onto.create_scene(
+                base_id,
+                {
+                    "scene_name": "默认场景",
+                    "scene_code": "default",
+                    "scene_desc": "默认场景",
+                },
+            )
+            scene_id = default_scene.get("scene_id", "")
+            if not scene_id:
+                raise ValueError("Failed to resolve default scene for base: " + base_id)
+            logger.info("Auto-resolved default scene: scene_id=%s", scene_id)
+
         # 1. Unzip
         extract_dir = Path(tempfile.mkdtemp(prefix="owl_import_"))
         with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
@@ -55,6 +70,29 @@ class OrchestrationMixin:
                     logger.warning("Failed to create object from OWL import: %s", exc)
             counts["views"] = len(parsed.views)
             counts["relations"] = len(parsed.relations)
+
+        # 3.5 Add imported objects/views to the scene's member list
+        object_codes = [
+            obj.get("object_code", "")
+            for obj in parsed.objects
+            if obj.get("object_code")
+        ]
+        view_codes = [
+            v.get("view_id", v.get("view_code", ""))
+            for v in parsed.views
+            if v.get("view_id") or v.get("view_code")
+        ]
+        if object_codes or view_codes:
+            try:
+                onto.add_scene_members(base_id, scene_id, object_codes, view_codes)
+                logger.info(
+                    "Added %d objects + %d views to scene %s",
+                    len(object_codes),
+                    len(view_codes),
+                    scene_id,
+                )
+            except Exception as exc:
+                logger.warning("Failed to add scene members: %s", exc)
 
         # 4. Sync terms for each object
         for obj_dict in parsed.objects:
