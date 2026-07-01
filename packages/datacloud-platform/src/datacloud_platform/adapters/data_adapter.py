@@ -69,6 +69,10 @@ class DataCloudDataBackend:
         self._scenes: dict[str, dict[str, Any]] | None = (
             None  # lazy loaded (entity_store path)
         )
+        self._scenes_version: str = ""
+        self._object_scene_map: dict[str, set[str]] = {}
+        self._view_scene_map: dict[str, set[str]] = {}
+        self._reverse_index_built: bool = False
 
     # ── OntologyBackend ────────────────────────────────────────────────────
 
@@ -160,7 +164,9 @@ class DataCloudDataBackend:
         """Load parsed ontology directory into a queryable runtime object.
 
         Prefers ``objects_registry.json`` (single file, < 1s) when available.
-        Falls back to full OWL directory traversal for backwards compatibility.
+        On first access without a registry, parses OWL, persists the registry
+        via ``parse_owl()`` + ``save_parsed_content()`` (same pipeline as
+        ``import-owl``), then loads from the newly created registry.
 
         Args:
             base_path: Path to the OWL resource directory root.
@@ -170,19 +176,28 @@ class DataCloudDataBackend:
         """
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
 
-        loader = OntologyLoader()
-
-        # Fast path: unified JSON registry (Phase 2 output)
+        # Fast path: unified JSON registry (< 1s)
         registry = base_path / "objects_registry.json"
         if registry.exists():
             content = _json.loads(registry.read_text(encoding="utf-8"))
+            loader = OntologyLoader()
             loader.load_from_content(content)
             return loader  # type: ignore[return-value]
 
-        # Fallback: old-format OWL directory traversal (~10s)
+        # Fallback: OWL directory exists but no registry yet —
+        # parse → persist (same pipeline as import-owl) → fast path
         if base_path.exists():
-            loader.load_from_owl_resource_directory(str(base_path))
-        return loader  # type: ignore[return-value]
+            logger.info(
+                "objects_registry.json not found in %s, "
+                "falling back to parse_owl + save_parsed_content",
+                base_path,
+            )
+            parsed = self.parse_owl(base_path)
+            self.save_parsed_content(base_path, parsed)
+            return self.load_ontology(base_path)  # recurse → hits fast path above
+
+        # No OWL directory, return empty loader
+        return OntologyLoader()  # type: ignore[return-value]
 
     def load_terms(
         self, _loader: OntologyQueryable, *, library_id: str = "PERSONAL_LIB"
@@ -870,21 +885,35 @@ class DataCloudDataBackend:
     # ── Scene management ──────────────────────────────────────────────────
 
     def _ensure_scenes_loaded(self) -> dict[str, dict[str, Any]]:
-        """Lazy-load scenes from EntityStore into in-memory dict.
-
-        Falls back to an empty dict when no EntityStore is configured.
-        """
-        if self._scenes is not None:
-            return self._scenes
-        if self._entity_store is not None:
-            try:
-                self._scenes = dict(self._entity_store.load_index("scenes"))
-            except Exception:
-                logger.warning("Failed to load scenes index", exc_info=True)
-                self._scenes = {}
-        else:
+        """Load scenes index, invalidating cache on mtime change (cross-process safe)."""
+        if self._entity_store is None:
             self._scenes = {}
+            return self._scenes
+        current_version = self._entity_store.storage_version("scenes")
+        if self._scenes is not None and self._scenes_version == current_version:
+            return self._scenes
+        try:
+            self._scenes = dict(self._entity_store.load_index("scenes"))
+            self._scenes_version = current_version
+            self._reverse_index_built = False
+        except Exception:
+            logger.warning("Failed to load scenes index", exc_info=True)
+            self._scenes = {}
+            self._scenes_version = ""
         return self._scenes
+
+    def _ensure_reverse_index(self) -> None:
+        """Build reverse index from _scenes: object_code → {scene_ids}."""
+        if self._reverse_index_built:
+            return
+        self._object_scene_map = {}
+        self._view_scene_map = {}
+        for sid, scene in (self._scenes or {}).items():
+            for code in scene.get("member_object_codes", []):
+                self._object_scene_map.setdefault(code, set()).add(sid)
+            for code in scene.get("member_view_codes", []):
+                self._view_scene_map.setdefault(code, set()).add(sid)
+        self._reverse_index_built = True
 
     def _save_scenes(self) -> None:
         """Persist in-memory scenes to EntityStore index atomically."""
@@ -1420,6 +1449,60 @@ class DataCloudDataBackend:
         self._delete_scene(scene_id)
         logger.info("Deleted scene: base_id=%s scene_id=%s", base_id, scene_id)
 
+    # ── Scene reverse-lookup queries ────────────────────────────────────────
+
+    def get_object_scene_count(self, base_id: str, object_code: str) -> int:
+        """Return how many scenes this object belongs to."""
+        self._ensure_scenes_loaded()
+        self._ensure_reverse_index()
+        return len(self._object_scene_map.get(object_code, set()))
+
+    def get_view_scene_count(self, base_id: str, view_code: str) -> int:
+        """Return how many scenes this view belongs to."""
+        self._ensure_scenes_loaded()
+        self._ensure_reverse_index()
+        return len(self._view_scene_map.get(view_code, set()))
+
+    def remove_object_from_all_scenes(self, base_id: str, object_code: str) -> int:
+        """Remove object from all scenes. Returns count of scenes removed from."""
+        self._ensure_scenes_loaded()
+        count = 0
+        for scene_id, scene in list((self._scenes or {}).items()):
+            if scene.get("base_id") != base_id:
+                continue
+            obj_set: set[str] = set(scene.get("member_object_codes", []))
+            if object_code in obj_set:
+                obj_set.discard(object_code)
+                scene["member_object_codes"] = list(obj_set)
+                self._save_scene(scene_id, scene)
+                count += 1
+        if count > 0:
+            self._reverse_index_built = False
+        return count
+
+    def remove_view_from_all_scenes(self, base_id: str, view_code: str) -> int:
+        """Remove view from all scenes. Returns count of scenes removed from."""
+        self._ensure_scenes_loaded()
+        count = 0
+        for scene_id, scene in list((self._scenes or {}).items()):
+            if scene.get("base_id") != base_id:
+                continue
+            view_set: set[str] = set(scene.get("member_view_codes", []))
+            if view_code in view_set:
+                view_set.discard(view_code)
+                scene["member_view_codes"] = list(view_set)
+                self._save_scene(scene_id, scene)
+                count += 1
+        if count > 0:
+            self._reverse_index_built = False
+        return count
+
+    def get_scenes_containing_object(self, base_id: str, object_code: str) -> list[str]:
+        """Return scene_ids that contain this object."""
+        self._ensure_scenes_loaded()
+        self._ensure_reverse_index()
+        return list(self._object_scene_map.get(object_code, set()))
+
     # ── Scene member management ────────────────────────────────────────────
 
     def add_scene_members(
@@ -1453,6 +1536,7 @@ class DataCloudDataBackend:
         scene["member_object_codes"] = list(existing_objs | set(object_codes))
         scene["member_view_codes"] = list(existing_views | set(view_codes))
         self._save_scene(scene_id, scene)
+        self._reverse_index_built = False
         logger.info(
             "Added scene members: scene_id=%s objects=%d views=%d",
             scene_id,
@@ -1492,6 +1576,7 @@ class DataCloudDataBackend:
         scene["member_object_codes"] = list(obj_set)
         scene["member_view_codes"] = list(view_set)
         self._save_scene(scene_id, scene)
+        self._reverse_index_built = False
         logger.info(
             "Removed scene members: scene_id=%s objects=%d views=%d",
             scene_id,
@@ -1599,7 +1684,7 @@ class DataCloudDataBackend:
     def _resolve_base_path(base_id: str) -> Path:
         """Resolve a base_id to a filesystem path under the platform data dir.
 
-        Uses ``DATACLOUD_DATA_DIR`` env var when set, otherwise ``~/.datacloud``.
+        Uses ``DATACLOUD_ONTOLOGY_PATH`` env var when set, otherwise ``~/.datacloud``.
         """
         from datacloud_platform.platform_file_storage import _data_dir
 
