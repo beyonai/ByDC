@@ -24,11 +24,10 @@ def create_import_routes(platform: DatacloudPlatform) -> APIRouter:
     Returns:
         APIRouter with prefix ``/api/v1/ontologyBases``, tags ``["import"]``.
     """
-    router = APIRouter(prefix="/api/v1/ontologyBases", tags=["import"])
+    router = APIRouter(prefix="/api/v1/ontologyBases", tags=["Import"])
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/import-owl")
+    @router.post("/{base_id}/scenes/{scene_id}/import-owl")
     async def import_owl(
-        owner_type: str,
         base_id: str,
         scene_id: str,
         file: UploadFile = File(...),  # noqa: B008

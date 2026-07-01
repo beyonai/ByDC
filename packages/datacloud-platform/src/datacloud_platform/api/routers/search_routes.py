@@ -3,8 +3,6 @@
 Prefix: ``/api/v1/ontologyBases``
 """
 
-# ruff: noqa: ARG001  # owner_type is a URL path parameter for routing, not consumed by services
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -24,14 +22,12 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
         platform: A fully configured DatacloudPlatform instance.
 
     Returns:
-        APIRouter with prefix ``/api/v1/ontologyBases``, tags ``["search"]``.
+        APIRouter with prefix ``/api/v1/ontologyBases``.
     """
-    router = APIRouter(prefix="/api/v1/ontologyBases", tags=["search"])
+    router = APIRouter(prefix="/api/v1/ontologyBases")
 
-    @router.post("/{owner_type}/{base_id}/search")
-    def search_ontology_base(
-        owner_type: str, base_id: str, body: dict[str, Any]
-    ) -> Any:
+    @router.post("/{base_id}/search", tags=["Search"])
+    def search_ontology_base(base_id: str, body: dict[str, Any]) -> Any:
         """Cross-scene ontology search. sceneId in body ('-1' for global)."""
         try:
             return ok(
@@ -53,10 +49,8 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/search")
-    def search_ontology(
-        owner_type: str, base_id: str, scene_id: str, body: dict[str, Any]
-    ) -> Any:
+    @router.post("/{base_id}/scenes/{scene_id}/search", tags=["Search"])
+    def search_ontology(base_id: str, scene_id: str, body: dict[str, Any]) -> Any:
         """Vector search across ontology metadata and instances."""
         try:
             return ok(
@@ -78,8 +72,8 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/instances/search")
-    def search_instances(owner_type: str, base_id: str, body: dict[str, Any]) -> Any:
+    @router.post("/{base_id}/instances/search", tags=["Instance"])
+    def search_instances(base_id: str, body: dict[str, Any]) -> Any:
         """Search instances in a base."""
         try:
             return ok(
@@ -93,10 +87,8 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/graph/query")
-    def graph_query(
-        owner_type: str, base_id: str, scene_id: str, body: dict[str, Any]
-    ) -> Any:
+    @router.post("/{base_id}/scenes/{scene_id}/graph/query", tags=["Graph"])
+    def graph_query(base_id: str, scene_id: str, body: dict[str, Any]) -> Any:
         """Query the graph of objects and relations."""
         try:
             return ok(
@@ -112,10 +104,8 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/graph/path")
-    def graph_path(
-        owner_type: str, base_id: str, scene_id: str, body: dict[str, Any]
-    ) -> Any:
+    @router.post("/{base_id}/scenes/{scene_id}/graph/path", tags=["Graph"])
+    def graph_path(base_id: str, scene_id: str, body: dict[str, Any]) -> Any:
         """Find shortest path between two objects."""
         try:
             return ok(
