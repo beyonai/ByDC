@@ -11,6 +11,7 @@ from datacloud_platform.mixins.orchestration import OrchestrationMixin
 from datacloud_platform.mixins.relation import RelationMixin
 from datacloud_platform.mixins.scene import SceneMixin
 from datacloud_platform.mixins.scene_loader import SceneLoaderMixin
+from datacloud_platform.mixins.scene_service import SceneServiceMixin
 from datacloud_platform.mixins.storage import StorageMixin
 from datacloud_platform.mixins.view import ViewMixin
 
@@ -26,6 +27,7 @@ __all__ = [
     "RelationMixin",
     "SceneLoaderMixin",
     "SceneMixin",
+    "SceneServiceMixin",
     "StorageMixin",
     "ViewMixin",
 ]
