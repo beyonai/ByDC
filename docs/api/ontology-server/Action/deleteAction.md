@@ -1,7 +1,7 @@
 # 删除动作
 
 ```
-DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}/actions/{actionCode}
+DELETE /api/v1/ontologyBases/{baseId}/objects/{objectCode}/actions/{actionCode}
 ```
 
 仅 LOCAL 可用。
@@ -12,7 +12,6 @@ DELETE /api/v1/ontologyBases/{ownerType}/{baseId}/objects/{objectCode}/actions/{
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 | `objectCode` | string | 对象编码。 |
 | `actionCode` | string | 动作编码。 |
