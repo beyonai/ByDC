@@ -3,8 +3,6 @@
 Prefix: ``/api/v1/ontologyBases``
 """
 
-# ruff: noqa: ARG001  # owner_type is a URL path parameter for routing, not consumed by services
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -43,20 +41,34 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         platform: A fully configured DatacloudPlatform instance.
 
     Returns:
-        APIRouter with prefix ``/api/v1/ontologyBases``, tags ``["ontology"]``.
+        APIRouter with prefix ``/api/v1/ontologyBases``.
     """
-    router = APIRouter(prefix="/api/v1/ontologyBases", tags=["ontology"])
+    router = APIRouter(prefix="/api/v1/ontologyBases")
 
     # ══════════════════════════════════════════════════
     # OntologyBase management
     # ══════════════════════════════════════════════════
 
-    @router.get("")
-    def list_bases() -> Any:
-        """List all ontology bases."""
-        return ok(data=platform.list_bases())
+    @router.get("", tags=["OntologyBase"])
+    def list_bases(
+        keyword: str | None = Query(
+            default=None, description="模糊查询本体库名称/描述/ID"
+        ),
+    ) -> Any:
+        """List all ontology bases. Optionally filter by keyword."""
+        return ok(data=platform.list_bases(keyword=keyword))
 
-    @router.post("")
+    @router.get("/{owner_type}", tags=["OntologyBase"])
+    def list_bases_by_owner(
+        owner_type: str,
+        keyword: str | None = Query(
+            default=None, description="模糊查询本体库名称/描述/ID"
+        ),
+    ) -> Any:
+        """List ontology bases filtered by owner_type. Optionally filter by keyword."""
+        return ok(data=platform.list_bases(owner_type=owner_type, keyword=keyword))
+
+    @router.post("", tags=["OntologyBase"])
     def create_base(body: OntologyBaseCreate) -> Any:
         """Create an ontology base.
 
@@ -96,8 +108,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         )
         return ok(data=platform.create_base(entry), message="created")
 
-    @router.delete("/{owner_type}/{base_id}")
-    def delete_base(owner_type: str, base_id: str) -> Any:
+    @router.delete("/{base_id}", tags=["OntologyBase"])
+    def delete_base(base_id: str) -> Any:
         """Delete an ontology base."""
         try:
             platform.delete_base(base_id)
@@ -105,8 +117,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{owner_type}/{base_id}")
-    def update_base(owner_type: str, base_id: str, body: OntologyBaseUpdate) -> Any:
+    @router.put("/{base_id}", tags=["OntologyBase"])
+    def update_base(base_id: str, body: OntologyBaseUpdate) -> Any:
         """Update an ontology base.
 
         Only the fields provided in the request body are updated.
@@ -122,9 +134,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     # Scene query + detail
     # ══════════════════════════════════════════════════
 
-    @router.get("/{owner_type}/{base_id}/scenes")
+    @router.get("/{base_id}/scenes", tags=["Scene"])
     def list_scenes(
-        owner_type: str,
         base_id: str,
         keyword: str | None = Query(default=None, description="模糊查询场景列表"),
         cache_mode: CacheMode = CacheMode.REALTIME,
@@ -142,9 +153,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}")
+    @router.get("/{base_id}/scenes/{scene_id}", tags=["Scene"])
     def get_scene_details(
-        owner_type: str,
         base_id: str,
         scene_id: str,
         view_code: str | None = Query(
@@ -168,9 +178,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{owner_type}/{base_id}/scenes/{scene_id}/ontologies")
+    @router.get("/{base_id}/scenes/{scene_id}/ontologies", tags=["Scene"])
     def query_ontologies_by_scene(
-        owner_type: str,
         base_id: str,
         scene_id: str,
         page: int = Query(default=1, ge=1),
@@ -196,8 +205,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     # Scene CRUD
     # ══════════════════════════════════════════════════
 
-    @router.post("/{owner_type}/{base_id}/scenes")
-    def create_scene(owner_type: str, base_id: str, body: SceneCreate) -> Any:
+    @router.post("/{base_id}/scenes", tags=["Scene"])
+    def create_scene(base_id: str, body: SceneCreate) -> Any:
         """Create a scene (grouping container) under a base."""
         try:
             result = platform.create_scene(base_id, body)
@@ -209,10 +218,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{owner_type}/{base_id}/scenes/{scene_id}")
-    def update_scene(
-        owner_type: str, base_id: str, scene_id: str, body: SceneUpdate
-    ) -> Any:
+    @router.put("/{base_id}/scenes/{scene_id}", tags=["Scene"])
+    def update_scene(base_id: str, scene_id: str, body: SceneUpdate) -> Any:
         """Update scene metadata."""
         try:
             result = platform.update_scene(base_id, scene_id, body)
@@ -224,8 +231,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}")
-    def delete_scene(owner_type: str, base_id: str, scene_id: str) -> Any:
+    @router.delete("/{base_id}/scenes/{scene_id}", tags=["Scene"])
+    def delete_scene(base_id: str, scene_id: str) -> Any:
         """Delete a scene — does NOT delete member resources."""
         try:
             platform.delete_scene(base_id, scene_id)
@@ -239,9 +246,9 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     # Scene member management
     # ══════════════════════════════════════════════════
 
-    @router.post("/{owner_type}/{base_id}/scenes/{scene_id}/members")
+    @router.post("/{base_id}/scenes/{scene_id}/members", tags=["Scene"])
     def add_scene_members(
-        owner_type: str, base_id: str, scene_id: str, body: SceneMembersRequest
+        base_id: str, scene_id: str, body: SceneMembersRequest
     ) -> Any:
         """Add objects/views to a scene (idempotent)."""
         try:
@@ -256,9 +263,9 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{owner_type}/{base_id}/scenes/{scene_id}/members")
+    @router.delete("/{base_id}/scenes/{scene_id}/members", tags=["Scene"])
     def remove_scene_members(
-        owner_type: str, base_id: str, scene_id: str, body: SceneMembersRequest
+        base_id: str, scene_id: str, body: SceneMembersRequest
     ) -> Any:
         """Remove objects/views from a scene — does NOT delete resources."""
         try:
