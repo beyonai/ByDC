@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -29,6 +30,12 @@ class OntologyCRUDMixin:
         Side effect: if datacloud-knowledge is installed, writes term data
         so the new object can be hit by vector search.
         """
+        warnings.warn(
+            "create_object() is deprecated; use create_object_with_scene() to "
+            "guarantee scene membership",
+            FutureWarning,
+            stacklevel=2,
+        )
         result = self._ontology_for(base_id).create_object(base_id, obj)
         if _build_terms is not None:
             try:
@@ -81,4 +88,10 @@ class OntologyCRUDMixin:
 
         REMOTE backends raise PermissionError internally.
         """
+        warnings.warn(
+            "delete_object() is deprecated; use delete_object_from_all_scenes() "
+            "to clean up scene references",
+            FutureWarning,
+            stacklevel=2,
+        )
         self._ontology_for(base_id).delete_object(base_id, object_code)

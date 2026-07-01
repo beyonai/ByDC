@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any
 
 from datacloud_platform.backends._contracts import _HasOntologyBackend
@@ -113,6 +114,12 @@ class SceneMixin:
 
     def delete_scene(self: _HasOntologyBackend, base_id: str, scene_id: str) -> None:
         """Delete a scene — does NOT delete member resources."""
+        warnings.warn(
+            "delete_scene() is deprecated; use delete_scene_with_migration() "
+            "to migrate members to default scene",
+            FutureWarning,
+            stacklevel=2,
+        )
         self._ontology_for(base_id).delete_scene(base_id, scene_id)
         if self._ontology_store:
             self._ontology_store.invalidate("scenes")
@@ -142,6 +149,12 @@ class SceneMixin:
         view_codes: list[str],
     ) -> Any:
         """Remove objects/views from a scene — does NOT delete resources."""
+        warnings.warn(
+            "remove_scene_members() is deprecated; use remove_object_from_scene_safe() "
+            "to prevent orphan objects",
+            FutureWarning,
+            stacklevel=2,
+        )
         result = self._ontology_for(base_id).remove_scene_members(
             base_id, scene_id, object_codes, view_codes
         )

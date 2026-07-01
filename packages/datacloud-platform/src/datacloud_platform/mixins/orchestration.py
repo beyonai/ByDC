@@ -33,19 +33,9 @@ class OrchestrationMixin:
         know = self._knowledge_for(base_id)  # type: ignore[attr-defined]
         base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
 
-        # 0. Resolve scene — auto-create default scene when scene_id is empty
+        # 0. Resolve scene — delegate to SceneServiceMixin for shared default-scene logic
         if not scene_id:
-            default_scene = onto.create_scene(
-                base_id,
-                {
-                    "scene_name": "默认场景",
-                    "scene_code": "default",
-                    "scene_desc": "默认场景",
-                },
-            )
-            scene_id = default_scene.get("scene_id", "")
-            if not scene_id:
-                raise ValueError("Failed to resolve default scene for base: " + base_id)
+            scene_id = self._ensure_default_scene(base_id)  # type: ignore[attr-defined]
             logger.info("Auto-resolved default scene: scene_id=%s", scene_id)
 
         # 1. Unzip

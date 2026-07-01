@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any
 
 from datacloud_platform.backends._contracts import _HasOntologyBackend
@@ -39,6 +40,12 @@ class ViewMixin:
 
     def create_view(self: _HasOntologyBackend, base_id: str, view: Any) -> Any:
         """Create a view. Raises PermissionError on read-only backends."""
+        warnings.warn(
+            "create_view() is deprecated; use create_view_with_scene() to "
+            "guarantee scene membership",
+            FutureWarning,
+            stacklevel=2,
+        )
         return self._ontology_for(base_id).create_view(base_id, view)
 
     def update_view(
@@ -49,4 +56,10 @@ class ViewMixin:
 
     def delete_view(self: _HasOntologyBackend, base_id: str, view_code: str) -> None:
         """Delete a view. Raises PermissionError on read-only backends."""
+        warnings.warn(
+            "delete_view() is deprecated; use delete_view_from_all_scenes() "
+            "to clean up scene references",
+            FutureWarning,
+            stacklevel=2,
+        )
         self._ontology_for(base_id).delete_view(base_id, view_code)
