@@ -1,7 +1,7 @@
 # 带条件查询实例数据
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/instances/search
+POST /api/v1/ontologyBases/{baseId}/instances/search
 ```
 
 根据对象类型和查询条件检索实例数据，返回匹配的对象列表。REMOTE 时转发到外部服务。
@@ -17,7 +17,7 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/instances/search
 
 | 外部 | server |
 |---|---|
-| Path: 无 | Path: `{ownerType}`, `{baseId}` |
+| Path: 无 | Path: `{baseId}` |
 
 ### 请求/响应
 
@@ -32,7 +32,6 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/instances/search
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 
 ## Example
@@ -40,7 +39,7 @@ POST /api/v1/ontologyBases/{ownerType}/{baseId}/instances/search
 ```bash
 curl -X POST \
   -H "Content-type: application/json" \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/bio_platform/instances/search" \
+  "https://$HOSTNAME/api/v1/ontologyBases/bio_platform/instances/search" \
   -d '{
     "objectCode": "by_customer",
     "select": ["customer_code", "customer_name"],
