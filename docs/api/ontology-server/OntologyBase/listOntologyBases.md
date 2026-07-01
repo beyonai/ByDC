@@ -2,21 +2,26 @@
 
 ```
 GET /api/v1/ontologyBases
+GET /api/v1/ontologyBases/{ownerType}
 ```
 
-列出所有已注册的本体库，含 LOCAL 和 REMOTE。
+列出已注册的本体库。可按 `ownerType` 过滤，亦可按关键词 `keyword` 模糊查询本体库名称、描述或 ID。
 
 ---
 
 ## Path Parameters
 
-无
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `ownerType` | string | No（仅第二个 URL 变体） | `personal` 或 `enterprise`。不传时列出所有 owner_type 的本体库。 |
 
 ---
 
 ## Query Parameters
 
-无
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `keyword` | string | No | 查询关键词。大小写不敏感，模糊匹配 `displayName`、`description`、`baseId`。
 
 ---
 
@@ -129,4 +134,31 @@ curl -X GET \
     }
   ]
 }
+```
+
+### 按 ownerType 过滤
+
+#### Request
+
+```bash
+curl -X GET \
+  "https://$HOSTNAME/api/v1/ontologyBases/personal"
+```
+
+### 按关键词模糊查询
+
+#### Request
+
+```bash
+curl -X GET \
+  "https://$HOSTNAME/api/v1/ontologyBases?keyword=CRM"
+```
+
+### 按 ownerType + 关键词过滤
+
+#### Request
+
+```bash
+curl -X GET \
+  "https://$HOSTNAME/api/v1/ontologyBases/enterprise?keyword=platform"
 ```
