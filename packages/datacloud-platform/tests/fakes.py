@@ -646,6 +646,66 @@ class FakeOntologyBackend:
         )
         return scene
 
+    # -- Scene reverse-lookup queries (fake) --
+
+    def get_scene_members(
+        self, base_id: str, scene_id: str
+    ) -> tuple[list[str], list[str]]:
+        """Return (object_codes, view_codes) for a scene."""
+        scene = self._scenes_dict.get(scene_id)
+        if scene is None:
+            return ([], [])
+        return (
+            list(scene.get("member_object_codes", [])),
+            list(scene.get("member_view_codes", [])),
+        )
+
+    def get_object_scene_count(self, base_id: str, object_code: str) -> int:  # noqa: ARG002
+        """Return how many scenes this object belongs to."""
+        count = 0
+        for scene in self._scenes_dict.values():
+            if object_code in scene.get("member_object_codes", []):
+                count += 1
+        return count
+
+    def get_view_scene_count(self, base_id: str, view_code: str) -> int:  # noqa: ARG002
+        """Return how many scenes this view belongs to."""
+        count = 0
+        for scene in self._scenes_dict.values():
+            if view_code in scene.get("member_view_codes", []):
+                count += 1
+        return count
+
+    def remove_object_from_all_scenes(self, base_id: str, object_code: str) -> int:  # noqa: ARG002
+        """Remove object from all scenes. Returns count of scenes removed from."""
+        count = 0
+        for scene in self._scenes_dict.values():
+            member_objs = scene.get("member_object_codes", [])
+            if object_code in member_objs:
+                scene["member_object_codes"] = [
+                    c for c in member_objs if c != object_code
+                ]
+                count += 1
+        return count
+
+    def remove_view_from_all_scenes(self, base_id: str, view_code: str) -> int:  # noqa: ARG002
+        """Remove view from all scenes. Returns count of scenes removed from."""
+        count = 0
+        for scene in self._scenes_dict.values():
+            member_views = scene.get("member_view_codes", [])
+            if view_code in member_views:
+                scene["member_view_codes"] = [c for c in member_views if c != view_code]
+                count += 1
+        return count
+
+    def get_scenes_containing_object(self, base_id: str, object_code: str) -> list[str]:  # noqa: ARG002
+        """Return scene_ids that contain this object."""
+        return [
+            scene.get("scene_id", "")
+            for scene in self._scenes_dict.values()
+            if object_code in scene.get("member_object_codes", [])
+        ]
+
 
 # ── Scene grouping test helpers ───────────────────────────────────────────
 

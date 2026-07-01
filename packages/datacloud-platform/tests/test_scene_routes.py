@@ -239,9 +239,8 @@ class TestSceneCRUD:
         assert "del" not in codes
 
     def test_delete_nonexistent_scene_does_not_error(self, client: TestClient) -> None:
-        """Delete of non-existent scene is silently ignored (no-op)."""
+        """Delete of non-existent scene is idempotent (no-op)."""
         resp = client.delete(_scene_url("no-such"))
-        # data_adapter silently ignores, fake backend pops silently
         assert resp.status_code == 200
 
     def test_list_scenes_after_crud(self, client: TestClient) -> None:
@@ -321,9 +320,12 @@ class TestSceneMembers:
         assert resp.status_code == 200
         data = resp.json()
         assert data["message"] == "members removed"
-        assert "obj1" not in data["data"]["member_object_codes"]
-        assert "obj2" in data["data"]["member_object_codes"]
-        assert "view1" in data["data"]["member_view_codes"]  # view untouched
+
+        detail = client.get(_scene_url(self.SCENE_ID))
+        scene_data = detail.json()["data"]["scene"]
+        assert "obj1" not in scene_data["member_object_codes"]
+        assert "obj2" in scene_data["member_object_codes"]
+        assert "view1" in scene_data["member_view_codes"]  # view untouched
 
     def test_add_members_nonexistent_scene(self, client: TestClient) -> None:
         resp = client.post(

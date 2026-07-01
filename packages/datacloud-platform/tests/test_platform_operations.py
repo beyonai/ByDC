@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import warnings
 import zipfile
 
 import pytest
@@ -230,5 +231,9 @@ class TestRemoteWriteDenied:
         self, platform: DatacloudPlatform
     ) -> None:
         """REMOTE delete_object raises PermissionError from the readonly backend."""
-        with pytest.raises(PermissionError, match="read-only"):
+        with (
+            pytest.raises(PermissionError, match="read-only"),
+            warnings.catch_warnings(),
+        ):
+            warnings.simplefilter("ignore", FutureWarning)
             platform.delete_object(REMOTE, "obj1")

@@ -5,6 +5,8 @@ Verifies the 3-layer resolution per base_id: defaults → preset → manual_back
 
 from __future__ import annotations
 
+import warnings
+
 import pytest
 
 from datacloud_platform import DatacloudPlatform
@@ -22,7 +24,9 @@ def test_local_create_object_passthrough(platform: DatacloudPlatform) -> None:
     """LOCAL base create_object passes through to the LOCAL ontology backend."""
     onto_local, *_ = platform._fakes  # type: ignore[attr-defined]
     obj_data: dict[str, str] = {"object_code": "obj1", "object_name": "Test"}
-    result = platform.create_object(LOCAL, obj_data)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        result = platform.create_object(LOCAL, obj_data)
     assert result == obj_data
     assert len(onto_local._created_objects) == 1  # type: ignore[attr-defined]
     assert onto_local._created_objects[0] == (LOCAL, obj_data)  # type: ignore[attr-defined]
@@ -31,7 +35,8 @@ def test_local_create_object_passthrough(platform: DatacloudPlatform) -> None:
 def test_remote_create_object_permission_error(platform: DatacloudPlatform) -> None:
     """REMOTE base create_object raises PermissionError because the backend is readonly."""
     obj_data: dict[str, str] = {"object_code": "obj1", "object_name": "Test"}
-    with pytest.raises(PermissionError, match="read-only"):
+    with pytest.raises(PermissionError, match="read-only"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
         platform.create_object(REMOTE, obj_data)
 
 
@@ -99,7 +104,8 @@ async def test_remote_execution_permission_error(platform: DatacloudPlatform) ->
 
 def test_nonexistent_base_id_key_error(platform: DatacloudPlatform) -> None:
     """An unregistered base_id raises KeyError."""
-    with pytest.raises(KeyError, match="not found"):
+    with pytest.raises(KeyError, match="not found"), warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
         platform.create_object("no-such-base", {})
 
 
