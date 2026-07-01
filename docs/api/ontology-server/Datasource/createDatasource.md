@@ -1,7 +1,7 @@
 # 创建/更新数据源
 
 ```
-POST /api/v1/ontologyBases/{ownerType}/{baseId}/datasources
+POST /api/v1/ontologyBases/{baseId}/datasources
 ```
 
 按 `dbId` 创建或全量替换数据源配置。仅 LOCAL 可用。

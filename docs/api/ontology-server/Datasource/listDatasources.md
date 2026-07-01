@@ -1,7 +1,7 @@
 # 列出数据源
 
 ```
-GET /api/v1/ontologyBases/{ownerType}/{baseId}/datasources
+GET /api/v1/ontologyBases/{baseId}/datasources
 ```
 
 列出本体库下的数据源列表。
@@ -12,7 +12,6 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/datasources
 
 | Parameter | Type | Description |
 |---|---|---|
-| `ownerType` | string | personal / enterprise |
 | `baseId` | string | 本体库 API 名称。 |
 
 ---
@@ -72,7 +71,7 @@ GET /api/v1/ontologyBases/{ownerType}/{baseId}/datasources
 
 ```bash
 curl -X GET \
-  "https://$HOSTNAME/api/v1/ontologyBases/personal/crm_demo/datasources"
+  "https://$HOSTNAME/api/v1/ontologyBases/crm_demo/datasources"
 ```
 
 #### Response
