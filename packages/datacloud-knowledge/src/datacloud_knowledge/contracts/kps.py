@@ -114,12 +114,15 @@ class ActionParamDef:
         param_type: 参数类型（如 "integer"、"string"、"array"）。
         description: 参数中文描述。
         is_required: 是否为必填参数。
+        term_type_code: 绑定的术语类型编码（如 "travel_application_status"），非空时表示该参数有可选值范围。
     """
 
     param_code: str
     param_type: str  # integer | string | array | ...
     description: str
     is_required: bool = False
+    term_type_code: str = ""
+    term_data_type: str = "LIST_TERM"  # LIST_TERM | DICT_TERM，非空 term_type_code 时有效
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,7 +136,7 @@ class ActionDef:
     Attributes:
         action_code: Action 编码（如 "get_by_customer"）。
         action_name: Action 中文名称（如 "获取客户详情"）。
-        action_type: Action 类型：QUERY（查询）或 MUTATION（变更）。
+        action_type: Action 类型：QUERY（查询）或 OPERATION（操作）。
         request_url: API 接口 URL。
         request_method: HTTP 方法：GET | POST | PUT | DELETE。
         request_params: 请求参数列表。
@@ -142,11 +145,15 @@ class ActionDef:
 
     action_code: str
     action_name: str
-    action_type: str  # QUERY | MUTATION
+    action_type: str  # QUERY | OPERATION
     request_url: str
     request_method: str  # GET | POST
+    action_desc: str = ""  # Action 描述
+    script: str = ""  # Action 执行脚本（空字符串表示无脚本）
+    belong_entity: str = ""  # 归属对象编码
     request_params: tuple[ActionParamDef, ...] = ()
     response_params: tuple[ActionParamDef, ...] = ()
+    object_references: tuple[str, ...] = ()  # 脚本依赖的其他对象编码列表
     # function_refs 等 Function 概念落地后追加
 
 

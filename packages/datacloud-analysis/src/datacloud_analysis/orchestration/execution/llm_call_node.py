@@ -62,8 +62,10 @@ def _format_todo_snapshot(active_todos: list[dict[str, Any]], user_query: str) -
         lines.append(f"原始任务：{user_query}")
     return "\n".join(lines)
 
+
 def _get_user_info(gateway_context: Any):
     from datacloud_analysis.reporter import NoOpExecutionReporter
+
     if isinstance(gateway_context, NoOpExecutionReporter):
         return gateway_context.user_id, gateway_context.user_name
     _header_meta: dict[str, Any] = {}
@@ -82,6 +84,7 @@ def _get_user_info(gateway_context: Any):
         getattr(_header, "user_name", "") or _header_meta.get("user_name") or ""
     ).strip()
     return _user_code, _user_name
+
 
 def _build_runtime_dynamic_prompt(state: AgentState, gateway_context: Any) -> str | None:
     """从 state 的 knowledge_snippets 和 gateway_context 构建每次请求的动态 prompt 部分。"""

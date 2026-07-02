@@ -14,7 +14,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from datacloud_knowledge.sync.config import TermSyncConfig
 
 
 @dataclass
@@ -189,6 +192,7 @@ class OntologyAction:
     scope_code: str = ""  # 对象编码或视图编码
     planner_visible: bool = True
     legacy_aliases: list[str] = field(default_factory=list)
+    object_references: list[str] = field(default_factory=list)  # 脚本依赖的其他对象编码列表
 
 
 @dataclass
@@ -254,3 +258,4 @@ class OntologyClass:
     tags: list[str] = field(default_factory=list)
     fields: list[OntologyField] = field(default_factory=list)
     actions: list[OntologyAction] = field(default_factory=list)
+    term_sync: TermSyncConfig | None = field(default=None, repr=False)

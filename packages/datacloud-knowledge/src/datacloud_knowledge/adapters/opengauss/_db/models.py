@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Identity, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -46,11 +46,14 @@ class TermRelation(Base):
 class TermType(Base):
     __tablename__ = "term_type"
 
-    type_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    type_id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    type_code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     type_name: Mapped[str] = mapped_column(String(255), nullable=False)
     type_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
-    type_category: Mapped[int] = mapped_column(nullable=False)
+    type_category: Mapped[int] = mapped_column(Integer, nullable=False)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class TermName(Base):

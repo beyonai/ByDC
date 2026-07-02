@@ -655,7 +655,9 @@ def _build_fields_from_schema(
     is_filter_condition = _is_filter_condition_schema(schema)
     fields: list[dict[str, Any]] = []
     provided_keys = set(values) if isinstance(values, dict) else set()
-    sorted_properties = sorted(properties.items(), key=lambda item: (0 if item[0] in provided_keys else 1))
+    sorted_properties = sorted(
+        properties.items(), key=lambda item: 0 if item[0] in provided_keys else 1
+    )
     for code, property_schema_raw in sorted_properties:
         if code in _IGNORED_SCHEMA_FIELDS or not isinstance(property_schema_raw, dict):
             continue

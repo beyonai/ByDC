@@ -111,6 +111,7 @@ class OntologyLoader:
         self._functions: dict[str, dict[str, Any]] = {}
         self._scenes: dict[str, dict[str, Any]] = {}
         self._config = LoaderConfig()
+        self._resource_path: Path | None = None  # OWL 资源根目录，按需加载依赖对象时使用
 
     def load_from_path(self, path: str | Path) -> None:
         """
@@ -187,6 +188,7 @@ class OntologyLoader:
         from datacloud_data_sdk.ontology.owl_parser import OwlParser
 
         base_path = Path(base_dir)
+        self._resource_path = base_path  # 记录 OWL 资源根目录，供按需加载依赖对象使用
         parser = OwlParser()
         content = parser.parse_resource_directory(
             base_path,
@@ -274,6 +276,7 @@ class OntologyLoader:
                 tags=obj.get("tags", []),
                 fields=fields,
                 actions=actions,
+                term_sync=self._parse_term_sync(obj),
             )
             self._classes[obj["object_code"]] = ontology_class
 
@@ -335,6 +338,7 @@ class OntologyLoader:
                 tags=obj.get("tags", []),
                 fields=fields,
                 actions=actions,
+                term_sync=self._parse_term_sync(obj),
             )
             self._classes[obj["object_code"]] = ontology_class
 
@@ -434,6 +438,41 @@ class OntologyLoader:
 
     def get_function_config(self, function_code: str) -> dict[str, Any]:
         return self._functions.get(function_code, {})
+
+    def load_by_entity_code(self, entity_code: str) -> OntologyClass | None:
+        """按 entity_code 查找已加载的 OntologyClass，不存在返回 None。"""
+        return self._classes.get(entity_code)
+
+    def with_extra_classes(self, extra_codes: list[str]) -> OntologyLoader:
+        """返回一个浅拷贝，按需从 OWL 目录追加加载指定对象，原 loader 不受影响。
+
+        执行逻辑：
+        1. 浅拷贝当前 loader，独立 _classes 字典（保证 self 不被污染）
+        2. 对 extra_codes 中不在 clone._classes 的对象，调用 load_object_with_deps
+           从 _resource_path 加载对应 OWL 文件并合并进 clone._classes
+
+        Args:
+            extra_codes: 需要额外注入的对象编码列表。
+
+        Returns:
+            注入了额外对象的 OntologyLoader 副本。
+        """
+        import copy
+
+        clone = copy.copy(self)
+        clone._classes = dict(self._classes)  # 独立副本，不影响原 loader  # noqa: SLF001
+
+        if self._resource_path is None:
+            return clone
+
+        for entity_code in extra_codes:
+            if entity_code in clone._classes:  # noqa: SLF001
+                continue
+            obj_dir = self._resource_path / "object" / entity_code
+            if obj_dir.is_dir():
+                clone.load_object_with_deps(self._resource_path, entity_code)
+
+        return clone
 
     # --- 核心层 API ---
 
@@ -538,6 +577,21 @@ class OntologyLoader:
     # --- 内部解析 ---
 
     @staticmethod
+    def _parse_term_sync(obj: dict[str, Any]) -> Any:
+        """从对象定义中解析 term_sync 配置，返回 TermSyncConfig 或 None。"""
+        raw = obj.get("term_sync") or obj.get("ext_property", {}).get("term_sync")
+        if not raw or not isinstance(raw, dict) or not raw.get("enabled"):
+            return None
+        try:
+            from datacloud_knowledge.sync.config import (
+                TermSyncConfig,  # type: ignore[import-untyped]
+            )
+
+            return TermSyncConfig.from_dict(raw)
+        except Exception:
+            return None
+
+    @staticmethod
     def _parse_term_meta(
         raw: dict[str, Any],
     ) -> tuple[str | None, str | None, str | None, int | None]:
@@ -631,6 +685,7 @@ class OntologyLoader:
                     function_refs=a.get("function_refs", []),
                     action_type=action_type,
                     script=a.get("script"),
+                    object_references=a.get("object_references", []),
                 )
             )
         return result

@@ -1694,31 +1694,12 @@ class Action:
                 "total": 0,
                 "meta": {"viewId": "auto_view", "columns": [], "total": 0},
             }
-        output_params = [
-            p
-            for p in self._action.params
-            if getattr(p, "direction", "IN") in ("OUT", "INOUT") and getattr(p, "mapping_path", "")
-        ]
-        if output_params:
-            from datacloud_data_sdk.executor.response_mapping import extract_by_mapping_path
-
-            out_params = [(p.param_code, p.mapping_path) for p in output_params]
-            records = extract_by_mapping_path(result, out_params)
-            if records:
-                columns = _build_action_output_columns_meta(output_params)
-            else:
-                records = self._extract_records_fallback(result)
-                column_names = (
-                    list(records[0].keys()) if records and isinstance(records[0], dict) else []
-                )
-                columns = _build_action_columns_meta(column_names, self._action.params)
-        return {
-            "records": records,
-            "total": len(records),
-            "meta": {"viewId": "auto_view", "columns": columns, "total": len(records)},
-            # 透传 Script 返回的扩展标记（如 no_overflow），供上层 build_query_response 使用
-            **{k: v for k, v in result.items() if k not in ("records", "total", "meta")},
-        }
+        normalized = self._normalize_to_unified_format(result)
+        # 透传 Script 返回的扩展标记（如 no_overflow），供上层 build_query_response 使用
+        for k, v in result.items():
+            if k not in ("records", "total", "meta"):
+                normalized[k] = v
+        return normalized
 
     async def _execute_api(self, params: dict[str, Any]) -> dict[str, Any]:
         """

@@ -266,7 +266,16 @@ def _inject_db_object_actions(cls, existing_codes: set, registry) -> None:
 
 
 def _inject_dynamic_table_object_actions(cls, existing_codes: set, registry) -> None:
-    """为 DYNAMIC_TABLE 对象注入 query/compute/insert/update/delete 动作。"""
+    """为 DYNAMIC_TABLE 对象注入 query/compute/insert/update/delete 动作。
+
+    若对象已有自定义（非虚拟）动作，跳过虚拟动作注入，完全以用户定义的动作为准。
+    """
+    # 有自定义脚本动作时不注入虚拟动作，避免与用户定义的动作冲突
+    has_custom_actions = any(not getattr(a, "is_virtual", False) for a in cls.actions)
+    if has_custom_actions:
+        logger.debug("跳过虚拟动作注入：%s 已有自定义动作", cls.object_code)
+        return
+
     from datacloud_data_sdk.virtual_action.generator import (
         build_compute_description,
         build_compute_schema,

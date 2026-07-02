@@ -25,6 +25,7 @@ from datacloud_knowledge.ingestion.owl_generate.models import (
     ViewConfig,
     ViewFieldMapping,
 )
+from datacloud_knowledge.ingestion.owl_generate.renderers.actions import get_action_codes
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 业务逻辑辅助函数（不变）
@@ -229,8 +230,7 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
         for col in table.columns
     }
 
-    action_code = f"query_{table.code}"
-    action_refs = json.dumps([action_code], ensure_ascii=False)
+    action_refs = json.dumps(get_action_codes(config, table.code, table.name), ensure_ascii=False)
     relation_ids = [r.relation_id for r in config.object_relations if r.source_code == table.code]
     relation_refs = json.dumps(relation_ids, ensure_ascii=False)
 
@@ -248,15 +248,18 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
     fields_block = "\n".join(field_refs_xml)
     fields_xml = "\n\n".join(field_xml_parts)
 
-    # 非结构化本体：在 EntityDefinition 上写实体级 ext_property
+    # 实体级 ext_property：合并 kb 绑定 + term_sync 配置
     entity_ext_property_xml = ""
+    entity_ext: dict[str, Any] = {}
     if config.kb_id:
-        kb_ext = json.dumps(
-            {"kb_id": config.kb_id, "kb_directory": config.kb_directory}, ensure_ascii=False
-        )
+        entity_ext["kb_id"] = config.kb_id
+        entity_ext["kb_directory"] = config.kb_directory
+    if config.term_sync:
+        entity_ext["term_sync"] = config.term_sync
+    if entity_ext:
         entity_ext_property_xml = (
             f'        <ext_property rdf:datatype="http://www.w3.org/2001/XMLSchema#string">'
-            f"{_xml_str(kb_ext)}</ext_property>\n"
+            f"{_xml_str(json.dumps(entity_ext, ensure_ascii=False))}</ext_property>\n"
         )
 
     return f"""<?xml version="1.0"?>

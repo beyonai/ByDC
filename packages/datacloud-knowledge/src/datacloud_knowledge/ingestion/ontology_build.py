@@ -37,7 +37,6 @@ class _ObjectFieldsStore(Protocol):
 # ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
 
 
-
 def _redis_env() -> dict[str, Any]:
     """从环境变量读取 Redis 连接参数，与 _init_discovery_redis() 保持一致。"""
     return dict(
@@ -136,6 +135,7 @@ def _submit_object_async(
                 return {"ok": False, "error": f"未找到服务实例: {service_name}"}
             byai_protocol = getattr(byai_instance, "protocol", "http")
             base_url = f"{byai_protocol}://{byai_instance.host}:{byai_instance.port}"
+            logger.info("ByaiService instance url: %s", base_url)
             async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as http:  # noqa: S501
                 with zip_path.open("rb") as zip_file:
                     response = await http.post(
@@ -176,6 +176,7 @@ def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
                 return {"ok": False, "error": f"未找到服务实例: {service_name}"}
 
             base_url = f"http://{instance.host}:{instance.port}"
+            logger.info("ByaiService instance url: %s", base_url)
             async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as client:  # noqa: S501
                 with zip_path.open("rb") as f:
                     response = await client.post(
@@ -304,7 +305,6 @@ def _validate_fields_format(fields: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
-
 # ── OntologyBuildSession ──────────────────────────────────────────────────────
 
 _OBJ_FIELDS_CACHE_TTL = 86400 * 30  # 30 天
@@ -348,6 +348,13 @@ def _load_obj_fields_from_cache(
                 }
             )
     return result
+
+
+def _storage_root() -> Path:
+    mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+    if not mount:
+        raise ValueError("FILE_STORAGE_MINIO_MOUNT_PATH 环境变量未设置")
+    return Path(mount) / "byclaw-datacloud" / "workspaces"
 
 
 class OntologyBuildSession:
@@ -403,9 +410,7 @@ class OntologyBuildSession:
         if kb_id:
             state["kb_id"] = kb_id
             # 补充提示描述，让模型理解需通过 query 参数传入完整文件路径和内容
-            _supplement = (
-                f"进行创建写入和查询详情分析时，需通过 query 参数传入完整的文件路径和完整的文件内容，以确保能获取到完整的数据上下文。"
-            )
+            _supplement = "进行创建写入和查询详情分析时，需通过 query 参数传入完整的文件路径和完整的文件内容，以确保能获取到完整的数据上下文。"
             if state.get("entity_desc"):
                 state["entity_desc"] = state["entity_desc"] + "；" + _supplement
             else:
@@ -607,14 +612,13 @@ class OntologyBuildSession:
             zip_path = output_dir / f"{actual_entity_code}.zip"
             _pack_zip(output_dir, zip_path)
 
-            # 调试：把 zip 复制到 /tmp 方便检查
+            # 调试：把 zip 复制到持久路径方便检查
             import shutil
 
-            debug_zip = Path(f"tmp/debug_{actual_entity_code}.zip")
+            debug_zip = Path(f"{_storage_root()}/tmp/debug_{actual_entity_code}.zip")
             debug_zip.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(zip_path, debug_zip)
             logger.info("DEBUG zip saved to %s", debug_zip)
-            _pack_zip(output_dir, zip_path)
 
             upload_result = _submit_object_async(
                 entity_code=actual_entity_code,
@@ -633,6 +637,7 @@ class OntologyBuildSession:
             entity_code=actual_entity_code,
             entity_name=state.get("entity_name", ""),
             fields=state.get("fields", []),
+            actions=state.get("actions") or [],
             library_code=state.get("library_code", "PERSONAL_LIB"),
             domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
             entity_type="object",
@@ -760,6 +765,7 @@ def _pack_zip(source_dir: Path, zip_path: Path) -> None:
 
     只打包服务端 importObjectZip/importViewZip 所需的文件，
     去掉 object/ 或 view/ 中间层，直接以 {code}/{code}_xxx.owl 为路径。
+    Action OWL 文件 (actions/{action_code}.owl) 也一并包含。
     """
     include_suffixes = {"_definition.owl", "_mapping.owl", "_dbsource.owl", "_relations.owl"}
 
@@ -767,12 +773,23 @@ def _pack_zip(source_dir: Path, zip_path: Path) -> None:
         for file in source_dir.rglob("*.owl"):
             if not file.is_file():
                 continue
-            name = file.name
-            if not any(name.endswith(s) for s in include_suffixes):
-                continue
-            # 去掉 object/ 或 view/ 前缀，直接用 {code}/{filename}
             rel = file.relative_to(source_dir)
             parts = rel.parts
+            name = file.name
+
+            # Action OWL: object/{code}/actions/{action_code}.owl
+            is_action_owl = (
+                len(parts) == 4
+                and parts[0] == "object"
+                and parts[2] == "actions"
+                and name.endswith(".owl")
+            )
+            is_core_owl = any(name.endswith(s) for s in include_suffixes)
+
+            if not is_core_owl and not is_action_owl:
+                continue
+
+            # 去掉 object/ 或 view/ 前缀，直接用 {code}/{...}
             if len(parts) >= 3 and parts[0] in ("object", "view"):
                 arcname = "/".join(parts[1:])
             else:

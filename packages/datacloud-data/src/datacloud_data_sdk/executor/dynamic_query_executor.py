@@ -165,7 +165,7 @@ class DynamicQueryExecutor:
     ) -> dict[str, Any]:
         """执行虚拟查询动作，返回原始数据 {"records": [], "total": 0}。"""
         cls = self._loader.get_ontology_class(object_code)
-        if cls.source_type == "DB":
+        if cls.source_type in ("DB", "DYNAMIC_TABLE"):
             return await self._execute_db(object_code, cls, arguments)
         if cls.source_type == "KNOWLEDGE_BASE":
             return await self._execute_kb(object_code, cls, arguments)

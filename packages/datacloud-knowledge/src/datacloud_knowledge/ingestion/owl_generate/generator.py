@@ -126,13 +126,10 @@ def _write_package(
         relation_file_count += _write_kps_view_files(view_dir, pkg)
         total_term_count += len(pkg.terms)
 
-    # ── Action 生成：写入 actions/ 子目录（独立通道，不作为术语）─────────────
+    # ── Action 生成：写入 object/{table_code}/actions/ 子目录（独立通道，不作为术语）─────
     action_file_count = 0
-    if config.actions:
-        action_file_count = write_action_files(config, "", "")
-    else:
-        for table in tables:
-            action_file_count += write_action_files(config, table.code, table.name)
+    for table in tables:
+        action_file_count += write_action_files(config, table.code, table.name)
 
     logger.info(
         "✓ package (objects=%d, views=%d, terms=%d, relation_files=%d, action_files=%d)",
@@ -276,6 +273,65 @@ def _build_object_package(
                 cardinality="1:1",
             )
         )
+
+        # 内联枚举值：将 term_values 中对应类型的值写入为 TermDef
+        for entry in term_values.get(type_code, []):
+            value_code = entry.get("code", "")
+            value_name = entry.get("name", value_code)
+            if not value_code:
+                continue
+            terms.append(
+                _build_term_def(
+                    config,
+                    term_code=value_code,
+                    term_name=value_name,
+                    term_type_code=type_code,
+                    term_desc=value_name,
+                    parent_term_code=prop_code,
+                )
+            )
+
+    # ── Action 参数内联枚举值（不在 term_bindings 里，但有值术语需要写入）─────
+    # term_values 里来自 action 参数的 auto_ttc 不挂在任何 binding，需单独处理。
+    binding_type_codes = {
+        b.term_type_code for b in config.term_bindings if b.table_code == table.code
+    }
+    for action in config.actions:
+        if action.belong_entity != table.code:
+            continue
+        for param in (*action.request_params, *action.response_params):
+            ttc = param.term_type_code
+            if not ttc or ttc in binding_type_codes:
+                continue
+            # 补充 TermTypeDef（若 term_type_defs 中已注册则跳过）
+            if ttc not in term_type_defs:
+                term_type_defs[ttc] = (param.description or ttc, f"{ttc}术语类型", "DICT_TERM")
+            if ttc not in type_codes:
+                type_codes.add(ttc)
+                name, desc, tdtype = term_type_defs[ttc]
+                term_types.append(
+                    TermTypeDef(
+                        type_code=ttc,
+                        type_name=name,
+                        type_category=_term_data_type_to_category(tdtype),
+                        type_desc=desc,
+                    )
+                )
+            # 写入枚举 TermDef
+            for entry in term_values.get(ttc, []):
+                value_code = entry.get("code", "")
+                value_name = entry.get("name", value_code)
+                if not value_code:
+                    continue
+                terms.append(
+                    _build_term_def(
+                        config,
+                        term_code=value_code,
+                        term_name=value_name,
+                        term_type_code=ttc,
+                        term_desc=value_name,
+                    )
+                )
 
     # ── JOIN 关系（MANY_TO_ONE）────────────────────────────────────────────
     for rel in config.object_relations:
@@ -552,6 +608,7 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
 
     field_roles: dict[tuple[str, str], FieldRole] = {}
     term_bindings: list[TermBinding] = []
+    inline_term_values: dict[str, list[dict[str, str]]] = {}
     for f in fields:
         ext = f.get("ext_property") or {}
         role_rule = ext.get("property_role_rule") or {}
@@ -570,6 +627,90 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
                     term_data_type=f.get("term_data_type", "LIST_TERM"),
                 )
             )
+        elif f.get("term_values"):
+            # 内联枚举值：有限枚举用 DICT_TERM（固定候选值），自动生成 term_type_code
+            auto_type_code = f"{entity_code}_{f['property_code']}"
+            term_bindings.append(
+                TermBinding(
+                    table_code=entity_code,
+                    column_name=f["property_code"],
+                    term_type_code=auto_type_code,
+                    term_data_type="DICT_TERM",
+                )
+            )
+            inline_term_values[auto_type_code] = [
+                {"code": str(v), "name": str(v)} for v in f["term_values"] if v
+            ]
+
+    # Build ActionConfig from state's actions list (workspace-mode custom actions)
+    from datacloud_knowledge.ingestion.owl_generate.models import ActionConfig, ActionParamConfig
+
+    custom_actions: list[ActionConfig] = []
+    for action_meta in state.get("actions", []):
+        if not action_meta.get("action_code"):
+            continue
+        action_code = action_meta["action_code"]
+        ac_type = action_meta.get("action_type", "OPERATION").upper()
+        if ac_type not in ("QUERY", "OPERATION"):
+            ac_type = "OPERATION"
+        ac_method = "GET" if ac_type == "QUERY" else "POST"
+
+        def _build_param(p: dict[str, Any], *, is_output: bool = False) -> ActionParamConfig:
+            """将 action param dict 转换为 ActionParamConfig，处理内联 term_values。"""
+            param_code = p.get("paramCode", "")
+            explicit_ttc = p.get("term_type_code", "")
+            raw_term_values = p.get("term_values") or []
+            # 如果有内联枚举值，自动推导 term_type_code（同字段逻辑）
+            if raw_term_values and not explicit_ttc:
+                auto_ttc = f"{action_code}_{param_code}"
+                inline_term_values[auto_ttc] = [
+                    {"code": str(v), "name": str(v)} if not isinstance(v, dict) else v
+                    for v in raw_term_values
+                    if v
+                ]
+                explicit_ttc = auto_ttc
+            normalized_term_values: list[dict[str, str]] = [
+                {"code": str(v), "name": str(v)} if not isinstance(v, dict) else v
+                for v in raw_term_values
+                if v
+            ]
+            return ActionParamConfig(
+                param_code=param_code,
+                param_type=p.get("type", "string"),
+                description=p.get("paramName", ""),
+                is_required=False if is_output else bool(p.get("isRequired", False)),
+                term_type_code=explicit_ttc,
+                term_data_type=p.get(
+                    "term_data_type", "DICT_TERM" if raw_term_values else "LIST_TERM"
+                ),
+                term_values=normalized_term_values,
+            )
+
+        request_params = [
+            _build_param(p)
+            for p in action_meta.get("params", [])
+            if p.get("direction") == "input" and p.get("paramCode")
+        ]
+        response_params = [
+            _build_param(p, is_output=True)
+            for p in action_meta.get("params", [])
+            if p.get("direction") == "output" and p.get("paramCode")
+        ]
+        custom_actions.append(
+            ActionConfig(
+                action_code=action_meta["action_code"],
+                action_name=action_meta.get("action_name", action_meta["action_code"]),
+                action_type=ac_type,
+                request_url=f"/api/v1/action/{action_meta['action_code']}",
+                request_method=ac_method,
+                action_desc=action_meta.get("action_desc", ""),
+                script=action_meta.get("script", ""),
+                belong_entity=entity_code,
+                request_params=request_params,
+                response_params=response_params,
+                object_references=action_meta.get("object_references") or [],
+            )
+        )
 
     config = OwlGenConfig(
         domain_code=state.get("domain_code", "PERSONAL_DOMAIN"),
@@ -591,9 +732,11 @@ def _generate_object(state: dict[str, Any], output_dir: Path) -> None:
         entity_source=state.get("entity_source", "DYNAMIC_TABLE"),
         kb_id=state.get("kb_id", ""),
         kb_directory=state.get("kb_directory", ""),
+        term_sync=state.get("term_sync") or {},
+        actions=custom_actions,
     )
 
-    generate_from_tables(config, [table], {})
+    generate_from_tables(config, [table], inline_term_values)
 
 
 def _generate_view(state: dict[str, Any], output_dir: Path) -> None:

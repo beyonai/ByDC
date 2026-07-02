@@ -372,6 +372,7 @@ class GraphBuilder:
         self._add_literal(uri, self._ns.action_name, action.action_name)
         self._add_literal(uri, self._ns.actionType, action.action_type)
         self._add_literal(uri, self._ns.action_type, action.action_type)
+        self._add_literal(uri, self._ns.action_desc, action.action_desc)
         self._add_literal(uri, self._ns.requestUrl, action.request_url)
         self._add_literal(uri, self._ns.request_url, action.request_url)
         self._add_literal(uri, self._ns.requestMethod, action.request_method)
@@ -379,23 +380,43 @@ class GraphBuilder:
 
         # Agent Parser compatibility defaults
         self._add_literal(uri, self._ns.function_refs, "[]")
-        self._add_literal(uri, self._ns.belong_entity, "[]")
-        self._add_literal(uri, self._ns.script, "")
+        belong = f'["{action.belong_entity}"]' if action.belong_entity else "[]"
+        self._add_literal(uri, self._ns.belong_entity, belong)
+        self._add_literal(uri, self._ns.script, action.script)
+        object_refs_json = (
+            json.dumps(list(action.object_references)) if action.object_references else "[]"
+        )
+        self._add_literal(uri, self._ns.object_references, object_refs_json)
 
-        for param in action.request_params:
-            self._add_action_param(uri, param, "RequestParameter")
-        for param in action.response_params:
-            self._add_action_param(uri, param, "ResponseParameter")
+        for idx, param in enumerate(action.request_params):
+            param_uri = self._add_action_param(action.action_code, param, "RequestParameter", idx)
+            self._graph.add((uri, self._ns.request_params, param_uri))
+        for idx, param in enumerate(action.response_params):
+            param_uri = self._add_action_param(action.action_code, param, "ResponseParameter", idx)
+            self._graph.add((uri, self._ns.response_params, param_uri))
 
-    def _add_action_param(self, action_uri: Any, param: ActionParamDef, param_type: str) -> None:
-        """添加 Action 的参数定义。
+    def _add_action_param(
+        self,
+        action_code: str,
+        param: ActionParamDef,
+        param_type: str,
+        index: int,
+    ) -> Any:
+        """添加 Action 的参数定义，返回参数节点 URI。
 
         Args:
-            action_uri: Action 的 RDF URI。
+            action_code: 所属 Action 编码，用于构造唯一 URI。
             param: ActionParamDef 实例。
             param_type: "RequestParameter" 或 "ResponseParameter"。
+            index: 参数在列表中的序号，保证同名参数 URI 不冲突。
+
+        Returns:
+            param_uri: 参数节点的 RDF URI，供调用方添加反向引用。
         """
-        param_uri = self._ns[f"param_{_safe_xml_id(param.param_code)}_{_safe_xml_id(param_type)}"]
+        prefix = "param" if param_type == "RequestParameter" else "resp"
+        safe_action = _safe_xml_id(action_code)
+        safe_code = _safe_xml_id(param.param_code)
+        param_uri = self._ns[f"{prefix}_{safe_action}_{safe_code}_{index}"]
         self._graph.add((param_uri, self._RDF.type, self._ns[param_type]))
         self._add_literal(param_uri, self._ns.paramCode, param.param_code)
         self._add_literal(param_uri, self._ns.paramType, param.param_type)
@@ -405,6 +426,12 @@ class GraphBuilder:
             self._ns.isRequired,
             _serialize_truthy(param.is_required),
         )
+        if param.term_type_code:
+            self._add_literal(param_uri, self._ns.termTypeCode, param.term_type_code)
+            self._add_literal(
+                param_uri, self._ns.term_data_type, param.term_data_type or "LIST_TERM"
+            )
+            self._add_literal(param_uri, self._ns.rel_term_codeorname, "code")
 
         # Agent Parser compatibility aliases
         if param_type == "RequestParameter":
@@ -412,6 +439,8 @@ class GraphBuilder:
         elif param_type == "ResponseParameter":
             self._add_literal(param_uri, self._ns.fieldCode, param.param_code)
             self._add_literal(param_uri, self._ns.fieldType, param.param_type)
+
+        return param_uri
 
     # ── KnowledgePackage ─────────────────────────────────────────────────────
 

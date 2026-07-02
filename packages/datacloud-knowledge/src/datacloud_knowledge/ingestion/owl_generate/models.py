@@ -199,6 +199,9 @@ class OwlGenConfig:
     kb_id: str = ""
     kb_directory: str = ""
 
+    # ── 术语同步配置（DYNAMIC_TABLE 模式，记录变更时自动同步到术语库）──
+    term_sync: dict[str, Any] = field(default_factory=dict)
+
     # ── 术语类型业务配置（推荐）──
     # key = term_type_code
     term_type_configs: dict[str, TermTypeConfig] = field(default_factory=dict)
@@ -277,12 +280,20 @@ class ActionParamConfig:
     """Action 参数配置 — 描述请求/响应参数的语义信息。
 
     用于 OwlGenConfig 中配置 Action 的 request/response 参数。
+
+    term_values 用于在参数上直接声明枚举值（不依赖对象字段的独立枚举）。
+    格式为 [{"code": "v1", "name": "名称1"}, ...]，也支持字符串列表。
+    非空时 term_type_code 如果为空，会自动推导为 {action_code}_{param_code}，
+    batch-submit 时随对象术语一起写入术语库。
     """
 
     param_code: str  # 参数编码
     param_type: str = "string"  # 参数类型: integer | string | array | object
     description: str = ""  # 参数中文描述
     is_required: bool = False  # 是否必填
+    term_type_code: str = ""  # 绑定的术语类型编码（非空时参数有可选值范围）
+    term_data_type: str = "LIST_TERM"  # LIST_TERM | DICT_TERM，非空 term_type_code 时有效
+    term_values: list[dict[str, str]] = field(default_factory=list)  # 参数级内联枚举值
 
 
 @dataclass
@@ -297,9 +308,13 @@ class ActionConfig:
 
     action_code: str  # Action 编码（如 get_by_customer）
     action_name: str  # Action 中文名称（如 "获取客户详情"）
-    action_type: str  # QUERY | MUTATION
+    action_type: str  # QUERY | OPERATION
     request_url: str  # API 接口 URL
     request_method: str  # HTTP 方法: GET | POST | PUT | DELETE
+    action_desc: str = ""  # Action 描述
+    script: str = ""  # Action 执行脚本
+    belong_entity: str = ""  # 归属对象编码
     request_params: list[ActionParamConfig] = field(default_factory=list)
     response_params: list[ActionParamConfig] = field(default_factory=list)
     header_params: list[ActionParamConfig] = field(default_factory=list)
+    object_references: list[str] = field(default_factory=list)  # 脚本依赖的其他对象编码列表

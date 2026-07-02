@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
@@ -14,6 +15,8 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.plan.term_resolver import TermResolver
 from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+
+logger = logging.getLogger(__name__)
 
 
 class DynamicTableExecutor:
@@ -75,6 +78,7 @@ class DynamicTableExecutor:
             else:
                 inserted_records.append(dict(record))
 
+        await self._enqueue_sync(object_code, "insert", inserted_records)
         return self._response(cls, inserted_records)
 
     async def update(self, object_code: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -123,6 +127,7 @@ class DynamicTableExecutor:
         records = await self._select_rows(
             cls, resolved_filters, str(arguments.get("filter_relation") or "AND")
         )
+        await self._enqueue_sync(object_code, "update", records)
         return self._response(cls, records)
 
     async def delete(self, object_code: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -144,7 +149,35 @@ class DynamicTableExecutor:
         connector = self._ds.get_connector(cls.datasource_alias or "")
         sql = f"DELETE FROM {_quote(cls.table_name or '', db_type)} WHERE {where_sql}"
         await connector.execute(sql, params)
+        await self._enqueue_sync(object_code, "delete", records)
         return self._response(cls, records)
+
+    async def _enqueue_sync(self, object_code: str, op: str, records: list[dict[str, Any]]) -> None:
+        """非阻塞投递术语同步事件（knowledge 包不可用时静默跳过）。"""
+        try:
+            ontology_cls = self._loader.get_ontology_class(object_code)
+            cfg = getattr(ontology_cls, "term_sync", None)
+            if (
+                cfg is None
+                or not getattr(cfg, "enabled", False)
+                or op not in getattr(cfg, "sync_on", [])
+            ):
+                return
+            from datacloud_knowledge.sync import (  # type: ignore[import-untyped]
+                TermSyncEvent,
+                enqueue_sync,
+            )
+
+            await enqueue_sync(
+                TermSyncEvent(
+                    op=op,
+                    object_code=object_code,
+                    records=records,
+                    config=cfg,
+                )
+            )
+        except Exception:
+            logger.debug("术语同步投递跳过: object=%s op=%s", object_code, op)
 
     async def _select_rows(
         self,

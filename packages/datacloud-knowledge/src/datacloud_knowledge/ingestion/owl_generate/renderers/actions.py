@@ -34,9 +34,9 @@ logger = logging.getLogger(__name__)
 _CRUD_TEMPLATES = [
     ("get", "获取", "QUERY", "GET"),
     ("list", "列表", "QUERY", "GET"),
-    ("create", "创建", "MUTATION", "POST"),
-    ("update", "更新", "MUTATION", "PUT"),
-    ("delete", "删除", "MUTATION", "DELETE"),
+    ("create", "创建", "OPERATION", "POST"),
+    ("update", "更新", "OPERATION", "PUT"),
+    ("delete", "删除", "OPERATION", "DELETE"),
 ]
 
 
@@ -82,12 +82,17 @@ def _build_action_def(config: ActionConfig) -> ActionDef:
         action_type=config.action_type,
         request_url=config.request_url,
         request_method=config.request_method,
+        action_desc=config.action_desc,
+        script=config.script,
+        belong_entity=config.belong_entity,
         request_params=tuple(
             ActionParamDef(
                 param_code=p.param_code,
                 param_type=p.param_type,
                 description=p.description,
                 is_required=p.is_required,
+                term_type_code=p.term_type_code,
+                term_data_type=p.term_data_type,
             )
             for p in config.request_params
         ),
@@ -97,9 +102,12 @@ def _build_action_def(config: ActionConfig) -> ActionDef:
                 param_type=p.param_type,
                 description=p.description,
                 is_required=p.is_required,
+                term_type_code=p.term_type_code,
+                term_data_type=p.term_data_type,
             )
             for p in config.response_params
         ),
+        object_references=tuple(config.object_references),
     )
 
 
@@ -212,7 +220,16 @@ def _extract_action_code_from_graph(graph: Graph) -> str:
     return ""
 
 
+def get_action_codes(config: OwlGenConfig, table_code: str, table_name: str) -> list[str]:
+    """返回指定表的所有 Action code 列表（与 write_action_files 写出的文件名保持一致）。"""
+    if config.actions:
+        return [a.action_code for a in config.actions]
+    base_url = config.db_params.get("api_base_url", "")
+    return [a.action_code for a in _build_crud_actions(table_code, table_name, base_url)]
+
+
 __all__ = [
+    "get_action_codes",
     "render_actions",
     "write_action_files",
 ]

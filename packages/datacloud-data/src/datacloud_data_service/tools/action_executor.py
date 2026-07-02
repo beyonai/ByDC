@@ -21,6 +21,7 @@ from typing import Any
 from datacloud_data_sdk.context import get_current_language
 from datacloud_data_sdk.i18n import translate_exception
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.models import OntologyAction
 from datacloud_data_sdk.utils.json_utils import dump_json
 
 
@@ -68,15 +69,24 @@ class ActionExecutor:
             ActionNotFoundError: 动作不存在时抛出
         """
         cls = self._loader.get_ontology_class(object_code)
+        action_meta: OntologyAction | None = None
         for a in cls.actions:
             if a.action_code == action_code:
+                action_meta = a
                 break
-        else:
+        if action_meta is None:
             from datacloud_data_sdk.exceptions import ActionNotFoundError
 
             raise ActionNotFoundError(object_code, action_code)
 
-        obj = self._loader.get_object(object_code)
+        # 按需构建 exec_loader：注入 object_references 中声明的跨对象依赖
+        exec_loader = self._loader
+        if action_meta.object_references:
+            existing = {c.object_code for c in self._loader.get_ontology_classes()}
+            if any(code not in existing for code in action_meta.object_references):
+                exec_loader = self._loader.with_extra_classes(action_meta.object_references)
+
+        obj = exec_loader.get_object(object_code)
         try:
             result = await obj.invoke_action(action_code, arguments)
         except Exception as exc:

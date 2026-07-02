@@ -20,7 +20,7 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -161,10 +161,25 @@ def create_app(
 
         set_loader_runtime_ref(lambda: getattr(app.state, "loader_runtime", None))
         set_loader_ref(lambda: getattr(app.state, "loader", None))
+
+        # 启动术语同步后台 Worker（db 连接参数从环境变量自动读取）
+        _term_sync_task: asyncio.Task[None] | None = None
+        try:
+            from datacloud_knowledge.sync import term_sync_worker  # type: ignore[import-untyped]
+
+            _term_sync_task = asyncio.create_task(term_sync_worker(), name="term-sync-worker")
+            logger.info("term_sync_worker 已启动")
+        except ImportError:
+            logger.debug("datacloud_knowledge 不可用，跳过 term_sync_worker")
+
         async with _mcp_session_manager.run():
             try:
                 yield
             finally:
+                if _term_sync_task is not None:
+                    _term_sync_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await _term_sync_task
                 await runtime.stop()
 
     app = FastAPI(title="DataCloud Data Service", version="0.1.0", lifespan=_lifespan)
