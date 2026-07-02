@@ -610,7 +610,7 @@ async def object_run_action(body: dict, request: Request):
 
         from datacloud_data_service.tools.debug_executor import run_action_debug
 
-        result = run_action_debug(
+        result = await run_action_debug(
             script=script,
             params=params.get("params", {}),
             db_path=wfm.debug_db_path,

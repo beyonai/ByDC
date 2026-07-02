@@ -297,7 +297,7 @@ def _build_mapper_class(entity_code: str, entity_cls: type, loader: DebugLoader)
 # ── Main executor ─────────────────────────────────────────────────────────────
 
 
-def run_action_debug(
+async def run_action_debug(
     script: str,
     params: dict[str, Any],
     db_path: Path,
@@ -323,8 +323,6 @@ def run_action_debug(
         成功: {"ok": True, "result": {...}, "elapsed_ms": N}
         失败: {"ok": False, "error": "...", "traceback": "...", "elapsed_ms": N}
     """
-    import asyncio
-
     from datacloud_data_sdk.context import InvocationContext
     from datacloud_data_sdk.executor.script_executor import ScriptExecutor
 
@@ -349,13 +347,11 @@ def run_action_debug(
             user_id=user_code,
             extras=extras or None,
         ):
-            result = asyncio.run(
-                executor.execute(
-                    script,
-                    params,
-                    action_code="<debug>",
-                    extra_namespace=extra_namespace,
-                )
+            result = await executor.execute(
+                script,
+                params,
+                action_code="<debug>",
+                extra_namespace=extra_namespace,
             )
         elapsed = round((time.monotonic() - t0) * 1000, 2)
         return {"ok": True, "result": result, "elapsed_ms": elapsed}
