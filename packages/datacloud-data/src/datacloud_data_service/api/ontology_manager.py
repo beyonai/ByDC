@@ -175,6 +175,7 @@ async def workspace_delete(body: dict, request: Request):
         return {"ok": False, "error": str(exc)}
 
 
+@router.get("/workspace/{workspace_name}")
 async def workspace_get(workspace_name: str, request: Request):
     """查询工作区状态（含所有对象和视图摘要）。"""
     uc = _user_code(request)
@@ -661,7 +662,7 @@ async def object_delete(body: dict, request: Request):
             except Exception:
                 logger.warning("工作区对象文件删除失败", exc_info=True)
 
-        _delete_resource_by_code(entity_code)
+        await _delete_resource_by_code(entity_code)
         return {"ok": True, "entity_code": entity_code}
     except Exception as exc:
         logger.exception("object/delete 失败")
@@ -878,7 +879,7 @@ async def view_delete(body: dict, request: Request):
             except Exception:
                 logger.warning("工作区视图文件删除失败", exc_info=True)
 
-        _delete_resource_by_code(view_code)
+        await _delete_resource_by_code(view_code)
         return {"ok": True, "view_code": view_code}
     except Exception as exc:
         logger.exception("view/delete 失败")
@@ -1017,7 +1018,7 @@ async def view_submit(body: dict, request: Request):
 # ── 内部辅助（服务发现下架资源） ─────────────────────────────────────────────
 
 
-def _delete_resource_by_code(resource_code: str) -> None:
+async def _delete_resource_by_code(resource_code: str) -> None:
     """通过服务发现下架本体资源。"""
 
     from by_framework.core.discovery import DiscoveryClient  # type: ignore[import-untyped]
@@ -1025,6 +1026,7 @@ def _delete_resource_by_code(resource_code: str) -> None:
         DiscoveryHttpClient,  # type: ignore[import-untyped]
     )
     from by_framework.util.http_client import RetryConfig  # type: ignore[import-untyped]
+    from redis.asyncio import Redis as AsyncRedis  # type: ignore[import-untyped]
 
     service_name = os.environ.get("BE_DOMAINNAME", "").strip()
     if not service_name:
@@ -1035,48 +1037,34 @@ def _delete_resource_by_code(resource_code: str) -> None:
     if token:
         headers["Beyond-Token"] = token
 
-    async def _call() -> None:
-        from redis.asyncio import Redis as AsyncRedis  # type: ignore[import-untyped]
-
-        _redis = AsyncRedis(
-            host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
-            port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
-            db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
-            password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD"))
-            or None,
-            username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME"))
-            or None,
-            decode_responses=True,
-        )
-        discovery_client = DiscoveryClient(redis_client=_redis, cache_interval=5)
-        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
-        try:
-            async with DiscoveryHttpClient(
-                discovery_client, retry_config=retry_config, health_threshold_ms=-1
-            ) as client:
-                response = await client.post(
-                    service_name,
-                    "/byaiService/tool/deleteResourceByCodeAndOwnerType",
-                    headers=headers,
-                    json={"resourceCode": resource_code, "ownerType": "personal"},
-                )
-        finally:
-            await discovery_client.close()
-            await _redis.aclose()
-
-        resp_body: dict = response.data if isinstance(response.data, dict) else {}
-        if not response.is_success or resp_body.get("code", 0) != 0:
-            raise RuntimeError(
-                f"下架失败 HTTP {response.status_code}: {resp_body.get('msg', resp_body)}"
-            )
-
-    import asyncio  # noqa: PLC0415
-    import concurrent.futures  # noqa: PLC0415
-
+    _redis = AsyncRedis(
+        host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
+        port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
+        db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
+        password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD"))
+        or None,
+        username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME"))
+        or None,
+        decode_responses=True,
+    )
+    discovery_client = DiscoveryClient(redis_client=_redis, cache_interval=5)
+    retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
     try:
-        asyncio.get_running_loop()
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, _call())
-            future.result()
-    except RuntimeError:
-        asyncio.run(_call())
+        async with DiscoveryHttpClient(
+            discovery_client, retry_config=retry_config, health_threshold_ms=-1
+        ) as client:
+            response = await client.post(
+                service_name,
+                "/byaiService/tool/deleteResourceByCodeAndOwnerType",
+                headers=headers,
+                json={"resourceCode": resource_code, "ownerType": "personal"},
+            )
+    finally:
+        await discovery_client.close()
+        await _redis.aclose()
+
+    resp_body: dict = response.data if isinstance(response.data, dict) else {}
+    if not response.is_success or resp_body.get("code", 0) != 0:
+        raise RuntimeError(
+            f"下架失败 HTTP {response.status_code}: {resp_body.get('msg', resp_body)}"
+        )
