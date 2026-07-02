@@ -252,7 +252,7 @@ class HttpKnowledgeSearchBackend:
         )
 
     async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
-        """Upload a generated Markdown document to the configured metadata endpoint."""
+        """Delete any existing document then upload a generated Markdown document."""
         config = self._get_config(request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
         file_content = _render_markdown_with_front_matter(request.labels, request.content)
@@ -267,11 +267,13 @@ class HttpKnowledgeSearchBackend:
         endpoint = self._resolve_endpoint(config)
         if endpoint:
             import_url = self._build_import_url(endpoint, config)
+            delete_url = self._build_delete_url(endpoint, config)
             try:
                 async with httpx.AsyncClient(
                     headers=self._get_beyond_token_header(), timeout=30.0
                 ) as client:
-                    await self._ensure_metadata_properties_http(client, endpoint, config, request)
+                    await self._delete_http(client, delete_url, request, markdown_file_path)
+                    # await self._ensure_metadata_properties_http(client, endpoint, config, request)
 
                     log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
                     resp = await client.post(
@@ -433,6 +435,65 @@ class HttpKnowledgeSearchBackend:
         self._ensure_success(body, request.datasource_alias)
         return body
 
+    async def _delete_http(
+        self,
+        client: httpx.AsyncClient,
+        delete_url: str,
+        request: KnowledgeWriteRequest,
+        markdown_file_path: str,
+    ) -> None:
+        """Delete an existing document via HTTP before re-uploading.
+
+        A 404-equivalent response (resultCode != "0") is treated as success
+        so that the first-time upload of a new document is not blocked.
+        """
+        delete_body = {"knCode": request.kb_id, "filePath": markdown_file_path}
+        log_curl("POST", delete_url, body=delete_body)
+        resp = await client.post(delete_url, json=delete_body)
+        if resp.status_code >= 400:
+            logger.warning(
+                "kb delete returned HTTP %s for %s – proceeding with upload",
+                resp.status_code,
+                markdown_file_path,
+            )
+            return
+        try:
+            body = resp.json()
+        except ValueError:
+            logger.warning("kb delete: invalid JSON response – proceeding with upload")
+            return
+        if isinstance(body, dict) and body.get("resultCode") not in (None, "0", 0):
+            logger.warning(
+                "kb delete non-success resultCode=%s msg=%s – proceeding with upload",
+                body.get("resultCode"),
+                body.get("resultMsg"),
+            )
+
+    async def _delete_by_discovery(
+        self,
+        client: Any,
+        service_name: str,
+        config: dict[str, Any],
+        request: KnowledgeWriteRequest,
+        markdown_file_path: str,
+        headers: dict[str, str],
+    ) -> None:
+        """Delete an existing document via service-discovery before re-uploading."""
+        delete_path = self._build_delete_path(config)
+        delete_body = {"knCode": request.kb_id, "filePath": markdown_file_path}
+        log_curl("POST", delete_path, body=delete_body)
+        resp = await client.post(service_name, delete_path, headers=headers, json=delete_body)
+        body = getattr(resp, "data", None)
+        if not isinstance(body, dict):
+            logger.warning("kb delete: unexpected discovery response – proceeding with upload")
+            return
+        if body.get("resultCode") not in (None, "0", 0):
+            logger.warning(
+                "kb delete non-success resultCode=%s msg=%s – proceeding with upload",
+                body.get("resultCode"),
+                body.get("resultMsg"),
+            )
+
     async def _write_by_discovery(
         self,
         *,
@@ -485,6 +546,14 @@ class HttpKnowledgeSearchBackend:
                 retry_config=retry_config,
                 health_threshold_ms=-1,
             ) as client:
+                await self._delete_by_discovery(
+                    client,
+                    service_name,
+                    config,
+                    request,
+                    markdown_file_path,
+                    json_headers,
+                )
                 await self._ensure_metadata_properties_by_discovery(
                     client,
                     service_name,
@@ -637,6 +706,13 @@ class HttpKnowledgeSearchBackend:
         return _normalize_discovery_path(
             _first_non_empty_str(config.get("import_path"), config.get("importPath")),
             "/api/v1/knowledgeItems/import",
+        )
+
+    @staticmethod
+    def _build_delete_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(config.get("delete_path"), config.get("deletePath")),
+            "/api/v1/knowledgeItems/delete",
         )
 
     @staticmethod
@@ -849,6 +925,20 @@ class HttpKnowledgeSearchBackend:
 
         path = str(
             config.get("import_path") or config.get("importPath") or "/api/v1/knowledgeItems/import"
+        )
+        return endpoint.rstrip("/") + "/" + path.lstrip("/")
+
+    @staticmethod
+    def _build_delete_url(endpoint: str, config: dict[str, Any]) -> str:
+        explicit_url = config.get("delete_url") or config.get("deleteUrl")
+        if explicit_url:
+            return str(explicit_url)
+
+        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/delete"):
+            return endpoint.rstrip("/")
+
+        path = str(
+            config.get("delete_path") or config.get("deletePath") or "/api/v1/knowledgeItems/delete"
         )
         return endpoint.rstrip("/") + "/" + path.lstrip("/")
 
