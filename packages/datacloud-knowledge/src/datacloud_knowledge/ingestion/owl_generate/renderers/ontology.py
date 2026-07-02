@@ -277,7 +277,7 @@ def render_object(config: OwlGenConfig, table: Table) -> str:
         <rdf:type rdf:resource="#EntityDefinition"/>
         <entity_code rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.code)}</entity_code>
         <entity_name rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.name)}</entity_name>
-        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(table.desc or "")}</entity_desc>
+        <entity_desc rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str((table.desc + "。" if table.desc else "") + "需要通过query给完整的上下文给当前对象")}</entity_desc>
         <version rdf:datatype="http://www.w3.org/2001/XMLSchema#string">1.0</version>
         <entity_source rdf:datatype="http://www.w3.org/2001/XMLSchema#string">{_xml_str(config.entity_source)}</entity_source>
 {fields_block}
