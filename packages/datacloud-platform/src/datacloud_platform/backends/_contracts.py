@@ -14,9 +14,9 @@ from datacloud_platform.ontology_store import CacheMode, OntologyStore
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
-    from datacloud_platform.backends.knowledge import KnowledgeBackend
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
     from datacloud_platform.backends.storage import StorageBackend
+    from datacloud_platform.backends.term import TermBackend
 
 
 class _HasOntologyBackend(Protocol):
@@ -30,10 +30,10 @@ class _HasOntologyBackend(Protocol):
     def _ontology_store(self) -> OntologyStore | None: ...
 
 
-class _HasKnowledgeBackend(Protocol):
-    """Requires ``_knowledge_for(base_id)`` routing."""
+class _HasTermBackend(Protocol):
+    """Requires ``_term_for(base_id)`` routing."""
 
-    def _knowledge_for(self, base_id: str) -> KnowledgeBackend: ...
+    def _term_for(self, base_id: str) -> TermBackend: ...
 
 
 class _HasExecutionBackend(Protocol):
