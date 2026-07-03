@@ -103,6 +103,75 @@ class OntologyQueryMixin:
             property_codes=property_codes,
         )
 
+    def resolve_property_name(
+        self: _HasOntologyBackend,
+        base_id: str,
+        name_text: str,
+        scope_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> tuple[str, str] | None:
+        """本体元数据: 中文属性名 → (field_code, field_name)。"""
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return self._ontology_for(base_id).resolve_property_name(
+            loader, name_text, scope_code
+        )
+
+    def resolve_property_names(
+        self: _HasOntologyBackend,
+        base_id: str,
+        name_texts: list[str],
+        scope_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> dict[str, tuple[str, str]]:
+        """批量: 中文属性名列表 → {name_text: (field_code, field_name)}。"""
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return self._ontology_for(base_id).resolve_property_names(
+            loader, name_texts, scope_code
+        )
+
+    def get_property_aliases(
+        self: _HasOntologyBackend,
+        base_id: str,
+        field_code: str,
+        scope_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> list[str]:
+        """反向: field_code → 所有别名（含 field_name）。"""
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return self._ontology_for(base_id).get_property_aliases(
+            loader, field_code, scope_code
+        )
+
+    def get_view_included_objects(
+        self: _HasOntologyBackend,
+        base_id: str,
+        ontology_code: str,
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> list[str]:
+        """视图包含的对象 code 列表（OWL metadata，零 DB）。"""
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return self._ontology_for(base_id).get_view_included_objects(
+            loader, ontology_code
+        )
+
+    def get_joinkey_related_objects(
+        self: _HasOntologyBackend,
+        base_id: str,
+        ontology_code: str,
+        field_codes: list[str],
+        *,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> list[str]:
+        """joinkey 关联的对象 code 列表（OWL metadata，零 DB）。"""
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return self._ontology_for(base_id).get_joinkey_related_objects(
+            loader, ontology_code, field_codes
+        )
+
     # ── Ontology Search & Graph (from KnowledgeBackend → OntologyBackend) ──
 
     def search_ontology(
