@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS domain (
     parent_id    VARCHAR(64),
     domain_desc  TEXT,
     created_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_time TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_domain_name_parent UNIQUE (parent_id, domain_name)
 );
 
 COMMENT ON TABLE domain IS '领域表：术语分类目录，支持无限层级';

@@ -29,10 +29,6 @@ CREATE INDEX IF NOT EXISTS idx_term_name
 CREATE INDEX IF NOT EXISTS idx_term_parent
     ON term(parent_term_id);
 
-CREATE INDEX IF NOT EXISTS idx_term_owl
-    ON term(owl_doc_id)
-    WHERE owl_doc_id IS NOT NULL;
-
 -- 术语领域ID数组 GIN 索引（支持 && 交集查询 和 @> 包含查询）
 CREATE INDEX IF NOT EXISTS idx_term_domain_ids ON term USING GIN (domain_ids);
 
@@ -45,6 +41,11 @@ CREATE INDEX IF NOT EXISTS idx_term_library
 -- term_knowledge
 CREATE INDEX IF NOT EXISTS idx_tk_term
     ON term_knowledge(term_id);
+
+-- 外挂知识库引用去重：同一术语不重复引用同一条外部文档
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tk_ext_ref
+    ON term_knowledge(term_id, ext_system, ext_kb_id, ext_doc_id)
+    WHERE ext_doc_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tk_summary_fts
     ON term_knowledge
@@ -70,10 +71,6 @@ CREATE INDEX IF NOT EXISTS idx_tr_target
 
 CREATE INDEX IF NOT EXISTS idx_tr_category
     ON term_relation(relation_category);
-
-CREATE INDEX IF NOT EXISTS idx_tr_action
-    ON term_relation(action_term_id)
-    WHERE action_term_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_tr_ext_attrs
     ON term_relation USING GIN (ext_attrs);
