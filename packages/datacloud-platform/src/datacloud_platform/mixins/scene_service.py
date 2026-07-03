@@ -5,6 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_platform.adapters.registry_sync import (
+    obj_camel_to_owl,
+    registry_sync_delete,
+    registry_sync_upsert,
+    view_camel_to_registry,
+)
 from datacloud_platform.backends._contracts import _HasOntologyBackend
 
 logger = logging.getLogger(__name__)
@@ -196,15 +202,19 @@ class SceneServiceMixin:
         """Create object. If scene_id is empty, auto-add to default scene."""
         backend = self._ontology_for(base_id)
         result = backend.create_object(base_id, obj)
+        result_dict: dict[str, Any] = result if isinstance(result, dict) else {}
         object_code: str = (
-            result.get("object_code", "")
-            if isinstance(result, dict)
-            else str(getattr(result, "object_code", ""))
+            result_dict.get("objectCode") or result_dict.get("object_code", "")
+            if result_dict
+            else str(getattr(result, "objectCode", "") or getattr(result, "object_code", ""))
         )
         if not scene_id:
             scene_id = self._ensure_default_scene(base_id)  # type: ignore[attr-defined]
         if object_code:
             backend.add_scene_members(base_id, scene_id, [object_code], [])
+        if object_code and result_dict:
+            base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
+            registry_sync_upsert(base_path, "objects", "object_code", object_code, obj_camel_to_owl(result_dict))
         logger.info("create_object_with_scene: %s -> scene %s", object_code, scene_id)
         return result
 
@@ -214,15 +224,23 @@ class SceneServiceMixin:
         """Create view. If scene_id is empty, auto-add to default scene."""
         backend = self._ontology_for(base_id)
         result = backend.create_view(base_id, view)
+        result_dict: dict[str, Any] = result if isinstance(result, dict) else {}
         view_code: str = (
-            result.get("view_code", "")
-            if isinstance(result, dict)
-            else str(getattr(result, "view_code", ""))
+            result_dict.get("viewCode") or result_dict.get("view_code") or result_dict.get("view_id", "")
+            if result_dict
+            else str(
+                getattr(result, "viewCode", "")
+                or getattr(result, "view_code", "")
+                or getattr(result, "view_id", "")
+            )
         )
         if not scene_id:
             scene_id = self._ensure_default_scene(base_id)  # type: ignore[attr-defined]
         if view_code:
             backend.add_scene_members(base_id, scene_id, [], [view_code])
+        if view_code and result_dict:
+            base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
+            registry_sync_upsert(base_path, "views", "view_id", view_code, view_camel_to_registry(result_dict))
         logger.info("create_view_with_scene: %s -> scene %s", view_code, scene_id)
         return result
 
@@ -233,6 +251,8 @@ class SceneServiceMixin:
         backend = self._ontology_for(base_id)
         backend.remove_object_from_all_scenes(base_id, object_code)
         backend.delete_object(base_id, object_code)
+        base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
+        registry_sync_delete(base_path, "objects", "object_code", object_code)
         self._maybe_destroy_default_scene(base_id)  # type: ignore[attr-defined]
         logger.info("delete_object_from_all_scenes: %s deleted", object_code)
 
@@ -243,6 +263,8 @@ class SceneServiceMixin:
         backend = self._ontology_for(base_id)
         backend.remove_view_from_all_scenes(base_id, view_code)
         backend.delete_view(base_id, view_code)
+        base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
+        registry_sync_delete(base_path, "views", "view_id", view_code)
         self._maybe_destroy_default_scene(base_id)  # type: ignore[attr-defined]
         logger.info("delete_view_from_all_scenes: %s deleted", view_code)
 

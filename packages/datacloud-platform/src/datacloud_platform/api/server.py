@@ -167,9 +167,7 @@ def create_app(
     app.include_router(skills_router, prefix="/api/v1/skills")
 
     # ── Factory route (needs platform, now using factory pattern) ───────────
-    app.include_router(
-        create_ontology_build_routes(platform), prefix="/api/v1/ontology-manager"
-    )
+    app.include_router(create_ontology_build_routes(platform))
 
     # ── MCP mount ───────────────────────────────────────────────────────────
     app.mount("/api/v1/mcp", mcp_asgi)
