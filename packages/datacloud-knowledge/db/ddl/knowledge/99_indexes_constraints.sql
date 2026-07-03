@@ -9,6 +9,14 @@ CREATE INDEX IF NOT EXISTS idx_domain_parent
 CREATE INDEX IF NOT EXISTS idx_domain_name
     ON domain(domain_name);
 
+-- domain_library
+CREATE INDEX IF NOT EXISTS idx_dl_library
+    ON domain_library(library_id);
+
+-- domain_term_type
+CREATE INDEX IF NOT EXISTS idx_dtt_type
+    ON domain_term_type(type_code);
+
 -- term_type
 CREATE INDEX IF NOT EXISTS idx_type_name
     ON term_type(type_name);
