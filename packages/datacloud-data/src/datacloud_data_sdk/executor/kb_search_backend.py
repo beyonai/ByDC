@@ -273,7 +273,7 @@ class HttpKnowledgeSearchBackend:
                     headers=self._get_beyond_token_header(), timeout=30.0
                 ) as client:
                     await self._delete_http(client, delete_url, request, markdown_file_path)
-                    # await self._ensure_metadata_properties_http(client, endpoint, config, request)
+                    await self._ensure_metadata_properties_http(client, endpoint, config, request)
 
                     log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
                     resp = await client.post(
