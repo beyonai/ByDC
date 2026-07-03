@@ -339,6 +339,63 @@ class OntologyBackend(Protocol):
         """
         ...
 
+    # ── Property name/code resolution (新增) ─────────────────────
+
+    def resolve_property_name(
+        self,
+        loader: OntologyQueryable,
+        name_text: str,
+        scope_code: str,
+    ) -> tuple[str, str] | None:
+        """本体元数据: 单个中文属性名 → (field_code, field_name)。
+
+        遍历 loader._classes[scope_code].fields，
+        匹配 field_name / aliases。纯内存操作，零 DB 开销。
+
+        Returns:
+            (field_code, field_name) 或 None（未命中）。
+        """
+        ...
+
+    def resolve_property_names(
+        self,
+        loader: OntologyQueryable,
+        name_texts: list[str],
+        scope_code: str,
+    ) -> dict[str, tuple[str, str]]:
+        """批量版。返回 {name_text: (field_code, field_name)}。
+
+        只返回成功解析的条目，未命中的不出现在返回 dict 中。
+        """
+        ...
+
+    def get_property_aliases(
+        self,
+        loader: OntologyQueryable,
+        field_code: str,
+        scope_code: str,
+    ) -> list[str]:
+        """反向: field_code → 所有别名列表（含 field_name）。
+
+        遍历 loader._classes[scope_code].fields，
+        找到匹配 field_code 的 OntologyField，返回其 field_name + aliases。
+        """
+        ...
+
+    # ── Scope resolution helpers (used by unified recall) ──────────────────
+
+    def get_view_included_objects(
+        self, loader: OntologyQueryable, ontology_code: str
+    ) -> list[str]:
+        """返回 ontology_code 对应视图所包含的子对象代码列表。"""
+        ...
+
+    def get_joinkey_related_objects(
+        self, loader: OntologyQueryable, ontology_code: str, field_codes: list[str]
+    ) -> list[str]:
+        """返回通过 join key 与指定字段关联的对象代码列表。"""
+        ...
+
     # ── 本体搜索 & 图查询（从 KnowledgeBackend 迁入）─────────────
 
     def search_ontology(

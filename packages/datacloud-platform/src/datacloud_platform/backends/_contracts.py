@@ -48,6 +48,13 @@ class _HasStorageBackend(Protocol):
     def _storage_for(self, base_id: str) -> StorageBackend | None: ...
 
 
+class _HasOntologyAndTermBackend(_HasOntologyBackend, _HasTermBackend, Protocol):
+    """Requires both OntologyBackend and TermBackend routing.
+
+    Combined protocol for KnowledgeMixin methods that orchestrate across both domains.
+    """
+
+
 class _HasBasePath(Protocol):
     """Requires ``_base_path_for(base_id)`` routing — used by orchestration mixins."""
 
