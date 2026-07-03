@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from datacloud_platform.models.action import Action
 from datacloud_platform.models.common import ok
@@ -21,6 +21,13 @@ from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
+
+
+def _parse_csv(param: str | None) -> list[str] | None:
+    """Split a comma-separated string into a list, ignoring blanks."""
+    if param is None or not param.strip():
+        return None
+    return [v.strip() for v in param.split(",") if v.strip()]
 
 
 def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
@@ -384,6 +391,54 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             return ok(message="deleted")
         except PermissionError as e:
             raise HTTPException(status_code=403, detail=str(e)) from e
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ══════════════════════════════════════════════════
+    # Term bindings (object / view)
+    # ══════════════════════════════════════════════════
+
+    @router.get("/{base_id}/objects/{object_code}/term-bindings", tags=["Object"])
+    def get_object_term_bindings(
+        base_id: str,
+        object_code: str,
+        term_master_type: str | None = Query(default=None),
+        property_codes: str | None = Query(default=None, alias="propertyCodes"),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """Get term type bindings on an object's properties."""
+        try:
+            return ok(
+                data=platform.get_object_property_term_bindings(
+                    base_id,
+                    object_code,
+                    term_master_type=term_master_type,
+                    property_codes=_parse_csv(property_codes),
+                    cache_mode=cache_mode,
+                )
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.get("/{base_id}/views/{view_code}/term-bindings", tags=["View"])
+    def get_view_term_bindings(
+        base_id: str,
+        view_code: str,
+        term_master_type: str | None = Query(default=None),
+        property_codes: str | None = Query(default=None, alias="propertyCodes"),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """Get term type bindings on a view's properties."""
+        try:
+            return ok(
+                data=platform.get_view_property_term_bindings(
+                    base_id,
+                    view_code,
+                    term_master_type=term_master_type,
+                    property_codes=_parse_csv(property_codes),
+                    cache_mode=cache_mode,
+                )
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
