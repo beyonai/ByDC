@@ -37,6 +37,7 @@ from datacloud_platform.api.routers.query_routes import router as query_router
 from datacloud_platform.api.routers.resource_routes import create_resource_routes
 from datacloud_platform.api.routers.search_routes import create_search_routes
 from datacloud_platform.api.routers.skills_routes import router as skills_router
+from datacloud_platform.api.routers.term_routes import create_term_routes
 from datacloud_platform.api.routers.terms_routes import router as terms_router
 from datacloud_platform.config import get_settings
 
@@ -107,6 +108,10 @@ def create_app(
             {"name": "Instance", "description": "实例查询 — 实例数据条件检索"},
             {"name": "Graph", "description": "图查询 — N 跳图查询与最短路径"},
             {"name": "Search", "description": "本体检索 — 跨场景/场景内全文与语义检索"},
+            {
+                "name": "Term",
+                "description": "术语库管理 — 术语/术语类型/术语库/领域/关系/名称/知识 CRUD",
+            },
             {"name": "Import", "description": "本体导入 — OWL 文件导入"},
             {
                 "name": "Query",
@@ -153,6 +158,7 @@ def create_app(
     app.include_router(create_resource_routes(platform))
     app.include_router(create_search_routes(platform))
     app.include_router(create_import_routes(platform))
+    app.include_router(create_term_routes(platform))
 
     # ── Simple routes (no platform dependency) ──────────────────────────────
     app.include_router(query_router, prefix="/api/v1")
