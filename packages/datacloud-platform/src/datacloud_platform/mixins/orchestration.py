@@ -29,8 +29,6 @@ class OrchestrationMixin:
         Returns a summary dict: ``{"objects": N, "views": N, "relations": N}``.
         """
         onto = self._ontology_for(base_id)
-        # knowledge backend accessed via duck-typing (not all mixins provide it)
-        know = self._knowledge_for(base_id)  # type: ignore[attr-defined]
         base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
 
         # 0. Resolve scene — delegate to SceneServiceMixin for shared default-scene logic
@@ -91,7 +89,7 @@ class OrchestrationMixin:
                 name: str = obj_dict.get("object_name", "")
                 source: str = obj_dict.get("object_source", "")
                 fields: list[dict[str, Any]] = obj_dict.get("properties", [])
-                know.sync_terms(
+                self._term_for(base_id).sync_terms(  # type: ignore[attr-defined]
                     code,
                     name,
                     source,
