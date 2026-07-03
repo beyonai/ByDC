@@ -313,6 +313,55 @@ class _NoopOntologyBackend:
         _ = loader
         return []
 
+    # -- Property name / alias resolution (no-op) --
+
+    def resolve_property_name(
+        self,
+        loader: Any,
+        name_text: str,
+        scope_code: str,
+    ) -> tuple[str, str] | None:
+        """Return None — no ontology available."""
+        _ = loader
+        return None
+
+    def resolve_property_names(
+        self,
+        loader: Any,
+        name_texts: list[str],
+        scope_code: str,
+    ) -> dict[str, tuple[str, str]]:
+        """Return empty dict — no ontology available."""
+        _ = loader
+        return {}
+
+    def get_property_aliases(
+        self,
+        loader: Any,
+        field_code: str,
+        scope_code: str,
+    ) -> list[str]:
+        """Return empty list — no ontology available."""
+        _ = loader
+        return []
+
+    def get_view_included_objects(
+        self,
+        loader: Any,
+        ontology_code: str,
+    ) -> list[str]:
+        _ = loader, ontology_code
+        return []
+
+    def get_joinkey_related_objects(
+        self,
+        loader: Any,
+        ontology_code: str,
+        field_codes: list[str],
+    ) -> list[str]:
+        _ = loader, ontology_code, field_codes
+        return []
+
     # -- Ontology search & graph (no-op) --
 
     def search_ontology(

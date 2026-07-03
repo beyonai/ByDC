@@ -1689,6 +1689,139 @@ class DataCloudDataBackend:
                 )
         return result
 
+    def get_view_included_objects(
+        self,
+        loader: OntologyQueryable,
+        ontology_code: str,
+    ) -> list[str]:
+        """视图包含的对象 code 列表（OWL metadata，零 DB）。
+
+        在 loader._relations 中查询 HAS_OBJECT / MANY_TO_ONE 关系，
+        找到该视图所包含的底层对象。用于确定 value recall 的跨本体 scope。
+
+        替代 _collect_view_included_objects() 的 SQL 查询:
+          SELECT target.term_code FROM term JOIN term_relation ...
+          WHERE relation_category IN ('HAS_OBJECT','MANY_TO_ONE')
+        """
+        relations = getattr(loader, "_relations", None) or []
+        result: list[str] = []
+        for rel in relations:
+            source = (
+                getattr(rel, "source_object_code", "")
+                or getattr(rel, "source_code", "")
+                or ""
+            )
+            category = getattr(rel, "relation_category", "") or ""
+            if source != ontology_code:
+                continue
+            if category not in ("HAS_OBJECT", "MANY_TO_ONE"):
+                continue
+            target = (
+                getattr(rel, "target_object_code", "")
+                or getattr(rel, "target_code", "")
+                or ""
+            )
+            if target and target not in result:
+                result.append(target)
+        return result
+
+    def get_joinkey_related_objects(
+        self,
+        loader: OntologyQueryable,
+        ontology_code: str,
+        field_codes: list[str],
+    ) -> list[str]:
+        """joinkey 关联的对象 code 列表（OWL metadata，零 DB）。
+
+        在 loader._relations 中查询 HAS_OBJECT / MANY_TO_ONE 关系，
+        筛选 ext_attrs.joinkeys.sourceField 匹配已确认字段的关联对象。
+
+        替代 _collect_joinkey_related_objects() 的 SQL 查询。
+        """
+        if not field_codes:
+            return []
+        field_set = frozenset(field_codes)
+        relations = getattr(loader, "_relations", None) or []
+        result: list[str] = []
+        for rel in relations:
+            source = (
+                getattr(rel, "source_object_code", "")
+                or getattr(rel, "source_code", "")
+                or ""
+            )
+            category = getattr(rel, "relation_category", "") or ""
+            if source != ontology_code:
+                continue
+            if category not in ("HAS_OBJECT", "MANY_TO_ONE"):
+                continue
+            ext_attrs = getattr(rel, "ext_attrs", None) or {}
+            jks = ext_attrs.get("joinkeys") or []
+            if not jks:
+                continue
+            for jk in jks:
+                if isinstance(jk, dict) and jk.get("sourceField") in field_set:
+                    target = (
+                        getattr(rel, "target_object_code", "")
+                        or getattr(rel, "target_code", "")
+                        or ""
+                    )
+                    if target and target not in result:
+                        result.append(target)
+                    break
+        return result
+
+    def resolve_property_name(
+        self,
+        loader: OntologyQueryable,
+        name_text: str,
+        scope_code: str,
+    ) -> tuple[str, str] | None:
+        """本体元数据: 单个中文属性名 → (field_code, field_name)。
+
+        遍历 loader._classes[scope_code].fields，
+        匹配 field_name / aliases。纯内存操作，零 DB 开销。
+        """
+        cls = loader._classes.get(scope_code)
+        if cls is None:
+            return None
+        for f in cls.fields:
+            field_name: str = getattr(f, "field_name", "") or ""
+            aliases: list[str] = list(getattr(f, "aliases", []) or [])
+            if name_text == field_name or name_text in aliases:
+                return (getattr(f, "field_code", "") or "", field_name)
+        return None
+
+    def resolve_property_names(
+        self,
+        loader: OntologyQueryable,
+        name_texts: list[str],
+        scope_code: str,
+    ) -> dict[str, tuple[str, str]]:
+        """批量版。只返回成功解析的条目。"""
+        result: dict[str, tuple[str, str]] = {}
+        for name_text in name_texts:
+            resolved = self.resolve_property_name(loader, name_text, scope_code)
+            if resolved is not None:
+                result[name_text] = resolved
+        return result
+
+    def get_property_aliases(
+        self,
+        loader: OntologyQueryable,
+        field_code: str,
+        scope_code: str,
+    ) -> list[str]:
+        """反向: field_code → 所有别名（含 field_name）。"""
+        cls = loader._classes.get(scope_code)
+        if cls is None:
+            return []
+        for f in cls.fields:
+            if (getattr(f, "field_code", "") or "") == field_code:
+                result: list[str] = [getattr(f, "field_name", "") or ""]
+                result.extend(getattr(f, "aliases", []) or [])
+                return result
+        return []
+
     # ── OntologyBackend: Search & graph (new) ──────────────────────────────
 
     _ONTOLOGY_TYPE_TO_TERM: dict[str, str] = {
