@@ -6,16 +6,16 @@ import pytest
 from datacloud_platform.backends.registry import (
     get_ontology_backend,
     register_execution_backend,
-    register_knowledge_backend,
     register_ontology_backend,
     register_storage_backend,
+    register_term_backend,
     verify_backend_registration,
 )
 from fakes import (
     FakeExecutionBackend,
-    FakeKnowledgeBackend,
     FakeOntologyBackend,
     FakeStorageBackend,
+    FakeTermBackend,
 )
 
 
@@ -34,15 +34,15 @@ def test_get_missing_backend_raises_keyerror() -> None:
 
 def test_duplicate_registration_raises() -> None:
     """Registering the same name twice raises ValueError."""
-    register_knowledge_backend("dup-know", FakeKnowledgeBackend)
+    register_term_backend("dup-know", FakeTermBackend)
     with pytest.raises(ValueError, match="already registered"):
-        register_knowledge_backend("dup-know", FakeKnowledgeBackend)
+        register_term_backend("dup-know", FakeTermBackend)
 
 
 def test_verify_all_registered() -> None:
     """verify_backend_registration succeeds when all 4 backends are registered."""
     register_ontology_backend("d1", FakeOntologyBackend)
-    register_knowledge_backend("d2", FakeKnowledgeBackend)
+    register_term_backend("d2", FakeTermBackend)
     register_execution_backend("d3", FakeExecutionBackend)
     register_storage_backend("d4", FakeStorageBackend)
     # Should not raise
@@ -59,8 +59,8 @@ def test_verify_missing_backend_raises() -> None:
 
     register_backend_type("ontology", "datacloud-data")
     register_implementation("ontology", "datacloud-data", FakeOntologyBackend)
-    register_backend_type("knowledge", "datacloud-knowledge")
-    register_implementation("knowledge", "datacloud-knowledge", FakeKnowledgeBackend)
+    register_backend_type("term", "datacloud-knowledge")
+    register_implementation("term", "datacloud-knowledge", FakeTermBackend)
     register_backend_type("execution", "datacloud-server")
     register_implementation("execution", "datacloud-server", FakeExecutionBackend)
     # Register storage dimension but NO implementation

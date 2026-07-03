@@ -41,7 +41,7 @@ def test_remote_create_object_permission_error(platform: DatacloudPlatform) -> N
 
 
 def test_local_search_routes_to_knowledge(platform: DatacloudPlatform) -> None:
-    """LOCAL base search() routes through FakeKnowledgeBackend."""
+    """LOCAL base search() routes through FakeTermBackend."""
     _, _, know, *_ = platform._fakes  # type: ignore[attr-defined]
     candidate = MatchCandidate(
         term_id="t1",

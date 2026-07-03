@@ -27,9 +27,9 @@ from datacloud_platform.backends.registry import (
 )
 from fakes import (
     FakeExecutionBackend,
-    FakeKnowledgeBackend,
     FakeOntologyBackend,
     FakeStorageBackend,
+    FakeTermBackend,
 )
 
 if TYPE_CHECKING:
@@ -59,13 +59,13 @@ def fakes() -> dict[str, Any]:
     onto_local = FakeOntologyBackend()
     onto_remote = FakeOntologyBackend()
     onto_remote._readonly = True
-    know = FakeKnowledgeBackend()
+    know = FakeTermBackend()
     exec_ = FakeExecutionBackend()
     stor = FakeStorageBackend()
     return {
         "onto_local": onto_local,
         "onto_remote": onto_remote,
-        "knowledge": know,
+        "term": know,
         "execution": exec_,
         "storage": stor,
     }
@@ -76,18 +76,18 @@ def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
     """Build a TestClient backed entirely by fake backends."""
     onto_local = fakes["onto_local"]
     onto_remote = fakes["onto_remote"]
-    know = fakes["knowledge"]
+    know = fakes["term"]
     exec_ = fakes["execution"]
     stor = fakes["storage"]
 
     register_backend_type("ontology", "fake-data")
-    register_backend_type("knowledge", "fake-knowledge")
+    register_backend_type("term", "fake-knowledge")
     register_backend_type("execution", "fake-exec")
     register_backend_type("storage", "fake-data")
 
     register_implementation("ontology", "fake-data", lambda: onto_local)
     register_implementation("ontology", "remote-http", lambda: onto_remote)
-    register_implementation("knowledge", "fake-knowledge", lambda: know)
+    register_implementation("term", "fake-knowledge", lambda: know)
     register_implementation("execution", "fake-exec", lambda: exec_)
     register_implementation("storage", "fake-data", lambda: stor)
     register_implementation("execution", "none", lambda: None)
@@ -98,7 +98,7 @@ def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
         "REMOTE",
         {
             "ontology": "remote-http",
-            "knowledge": "fake-knowledge",
+            "term": "fake-knowledge",
             "execution": "none",
             "storage": "none",
         },

@@ -20,9 +20,9 @@ from datacloud_platform.backends.registry import (
 )
 from fakes import (
     FakeExecutionBackend,
-    FakeKnowledgeBackend,
     FakeOntologyBackend,
     FakeStorageBackend,
+    FakeTermBackend,
 )
 
 
@@ -55,20 +55,20 @@ def platform(entity_store: JsonEntityStore) -> DatacloudPlatform:
     onto_local = FakeOntologyBackend()
     onto_remote = FakeOntologyBackend()
     onto_remote._readonly = True
-    know = FakeKnowledgeBackend()
+    know = FakeTermBackend()
     exec_ = FakeExecutionBackend()
     stor = FakeStorageBackend()
 
     # Register dimensions
     register_backend_type("ontology", "fake-data")
-    register_backend_type("knowledge", "fake-knowledge")
+    register_backend_type("term", "fake-knowledge")
     register_backend_type("execution", "fake-exec")
     register_backend_type("storage", "fake-data")
 
     # Register implementations
     register_implementation("ontology", "fake-data", lambda: onto_local)
     register_implementation("ontology", "remote-http", lambda: onto_remote)
-    register_implementation("knowledge", "fake-knowledge", lambda: know)
+    register_implementation("term", "fake-knowledge", lambda: know)
     register_implementation("execution", "fake-exec", lambda: exec_)
     register_implementation("storage", "fake-data", lambda: stor)
     register_implementation("execution", "none", lambda: None)  # type: ignore[arg-type,return-value]
@@ -80,7 +80,7 @@ def platform(entity_store: JsonEntityStore) -> DatacloudPlatform:
         "REMOTE",
         {
             "ontology": "remote-http",
-            "knowledge": "fake-knowledge",
+            "term": "fake-knowledge",
             "execution": "none",
             "storage": "none",
         },

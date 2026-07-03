@@ -15,9 +15,9 @@ from datacloud_platform.models.shared import (
 )
 from fakes import (
     FakeExecutionBackend,
-    FakeKnowledgeBackend,
     FakeOntologyBackend,
     FakeStorageBackend,
+    FakeTermBackend,
 )
 
 
@@ -39,7 +39,7 @@ def test_load_ontology(platform: DatacloudPlatform) -> None:
 
 
 def test_search(platform: DatacloudPlatform) -> None:
-    """search() delegates to search_candidates + disambiguate on FakeKnowledgeBackend."""
+    """search() delegates to search_candidates + disambiguate on FakeTermBackend."""
     _, _, know, *_ = platform._fakes  # type: ignore[attr-defined]
 
     candidate = MatchCandidate(
@@ -74,17 +74,17 @@ def test_store_and_retrieve(platform: DatacloudPlatform) -> None:
 def test_backend_switching(entity_store: JsonEntityStore) -> None:
     """Registering alternate backend names and constructing a new multi-base platform works."""
     onto = FakeOntologyBackend()
-    know = FakeKnowledgeBackend()
+    know = FakeTermBackend()
     exec_ = FakeExecutionBackend()
     stor = FakeStorageBackend()
 
     register_backend_type("ontology", "alt-data")
-    register_backend_type("knowledge", "alt-knowledge")
+    register_backend_type("term", "alt-knowledge")
     register_backend_type("execution", "alt-exec")
     register_backend_type("storage", "alt-storage")
 
     register_implementation("ontology", "alt-data", lambda: onto)
-    register_implementation("knowledge", "alt-knowledge", lambda: know)
+    register_implementation("term", "alt-knowledge", lambda: know)
     register_implementation("execution", "alt-exec", lambda: exec_)
     register_implementation("storage", "alt-storage", lambda: stor)
     register_implementation("execution", "none", lambda: None)  # type: ignore[arg-type,return-value]
@@ -102,7 +102,7 @@ def test_backend_switching(entity_store: JsonEntityStore) -> None:
             source_type="LOCAL",
             manual_backends={
                 "ontology": "alt-data",
-                "knowledge": "alt-knowledge",
+                "term": "alt-knowledge",
                 "execution": "alt-exec",
                 "storage": "alt-storage",
             },

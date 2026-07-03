@@ -4,7 +4,7 @@ Usage::
 
     from fakes import (
         FakeOntologyBackend,
-        FakeKnowledgeBackend,
+        FakeTermBackend,
         FakeExecutionBackend,
         FakeStorageBackend,
     )
@@ -1035,8 +1035,8 @@ class FakeSceneBackend:
                 self._scenes[s["scene_id"]] = s
 
 
-class FakeKnowledgeBackend:
-    """In-memory knowledge backend — no datacloud-knowledge SDK dependency.
+class FakeTermBackend:
+    """In-memory term backend — no datacloud-knowledge SDK dependency.
 
     Test code can preset ``candidates``, ``_disambiguated``, ``_terms``
     and other internal dicts/lists to control behaviour.

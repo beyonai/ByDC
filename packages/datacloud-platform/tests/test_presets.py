@@ -16,17 +16,17 @@ from datacloud_platform.backends.resolution import resolve_backend_names
 def _setup_dimensions() -> None:
     """Register the standard 4 Backend dimensions with known defaults."""
     register_backend_type("ontology", "datacloud-data")
-    register_backend_type("knowledge", "datacloud-knowledge")
+    register_backend_type("term", "datacloud-knowledge")
     register_backend_type("execution", "datacloud-server")
     register_backend_type("storage", "datacloud-data")
 
     # Register minimal implementations so get_backend_factory works
     register_implementation("ontology", "datacloud-data", lambda: None)  # type: ignore[arg-type,return-value]
-    register_implementation("knowledge", "datacloud-knowledge", lambda: None)  # type: ignore[arg-type,return-value]
+    register_implementation("term", "datacloud-knowledge", lambda: None)  # type: ignore[arg-type,return-value]
     register_implementation("execution", "datacloud-server", lambda: None)  # type: ignore[arg-type,return-value]
     register_implementation("storage", "datacloud-data", lambda: None)  # type: ignore[arg-type,return-value]
     register_implementation("ontology", "remote-http", lambda: None)  # type: ignore[arg-type,return-value]
-    register_implementation("knowledge", "remote-http", lambda: None)  # type: ignore[arg-type,return-value]
+    register_implementation("term", "remote-http", lambda: None)  # type: ignore[arg-type,return-value]
     register_implementation("execution", "none", lambda: None)  # type: ignore[arg-type,return-value]
     register_implementation("storage", "none", lambda: None)  # type: ignore[arg-type,return-value]
 
@@ -80,14 +80,14 @@ class TestResolveBackendNames:
             "REMOTE",
             {
                 "ontology": "remote-http",
-                "knowledge": "remote-http",
+                "term": "remote-http",
                 "execution": "none",
                 "storage": "none",
             },
         )
         result = resolve_backend_names("REMOTE", {})
         assert result["ontology"] == "remote-http"
-        assert result["knowledge"] == "remote-http"
+        assert result["term"] == "remote-http"
         assert result["execution"] == "none"
         assert result["storage"] == "none"
 
@@ -95,8 +95,8 @@ class TestResolveBackendNames:
         """Manual backends overlay the preset."""
         _setup_dimensions()
         register_preset("LOCAL", {})
-        result = resolve_backend_names("LOCAL", {"knowledge": "remote-http"})
-        assert result["knowledge"] == "remote-http"
+        result = resolve_backend_names("LOCAL", {"term": "remote-http"})
+        assert result["term"] == "remote-http"
         # Rest unchanged
         assert result["ontology"] == "datacloud-data"
         assert result["execution"] == "datacloud-server"
@@ -115,14 +115,14 @@ class TestResolveBackendNames:
             "REMOTE",
             {
                 "ontology": "remote-http",
-                "knowledge": "remote-http",
+                "term": "remote-http",
                 "execution": "none",
                 "storage": "none",
             },
         )
         # Empty string in manual should be ignored
-        result = resolve_backend_names("REMOTE", {"knowledge": ""})
-        assert result["knowledge"] == "remote-http"  # preserved from preset
+        result = resolve_backend_names("REMOTE", {"term": ""})
+        assert result["term"] == "remote-http"  # preserved from preset
 
 
 class TestExtendDimensions:

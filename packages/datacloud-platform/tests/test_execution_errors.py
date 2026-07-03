@@ -17,9 +17,9 @@ from datacloud_platform.backends.registry import (
     register_implementation,
 )
 from fakes import (
-    FakeKnowledgeBackend,
     FakeOntologyBackend,
     FakeStorageBackend,
+    FakeTermBackend,
 )
 
 
@@ -61,17 +61,17 @@ class FailingExecutionBackend:
 async def test_execute_action_permission_denied(entity_store: JsonEntityStore) -> None:
     """platform.execute_action propagates PermissionDeniedError from backend."""
     onto = FakeOntologyBackend()
-    know = FakeKnowledgeBackend()
+    know = FakeTermBackend()
     failing = FailingExecutionBackend()
     stor = FakeStorageBackend()
 
     register_backend_type("ontology", "fake-data")
-    register_backend_type("knowledge", "fake-knowledge")
+    register_backend_type("term", "fake-knowledge")
     register_backend_type("execution", "fake-exec")
     register_backend_type("storage", "fake-data")
 
     register_implementation("ontology", "fake-data", lambda: onto)
-    register_implementation("knowledge", "fake-knowledge", lambda: know)
+    register_implementation("term", "fake-knowledge", lambda: know)
     register_implementation("execution", "fake-exec", lambda: failing)
     register_implementation("storage", "fake-data", lambda: stor)
     register_implementation("execution", "none", lambda: None)  # type: ignore[arg-type,return-value]

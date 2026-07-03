@@ -21,7 +21,7 @@ def test_same_type_impl_same_instance(platform: DatacloudPlatform) -> None:
 def test_different_type_different_instance(platform: DatacloudPlatform) -> None:
     """Different type_name produces a different instance even if impl_name matches."""
     onto = platform._get_backend("ontology", "fake-data")
-    know = platform._get_backend("knowledge", "fake-knowledge")
+    know = platform._get_backend("term", "fake-knowledge")
     assert onto is not know
 
 
