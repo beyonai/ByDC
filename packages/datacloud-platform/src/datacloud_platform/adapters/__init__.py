@@ -7,7 +7,7 @@ Import them here so that callers can register them in the backend registry.
 
 from __future__ import annotations
 
-from datacloud_platform.adapters.data_adapter import DataCloudDataBackend
+from datacloud_platform.adapters.data_adapter._composite import DataCloudDataBackend
 from datacloud_platform.adapters.local_execution_adapter import LocalExecutionBackend
 from datacloud_platform.adapters.none_adapters import (
     _NoopExecutionBackend,

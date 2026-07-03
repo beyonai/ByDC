@@ -1,0 +1,162 @@
+"""Base mixin — __init__, entity_store, knowledge SDK lazy init, static helpers."""
+
+from __future__ import annotations
+
+import logging
+import os
+from pathlib import Path
+from typing import Any
+
+from datacloud_platform.adapters.json_entity_store import JsonEntityStore
+from datacloud_platform.models import ObjectSummary, ViewSummary
+from datacloud_platform.ports.entity_store import EntityStore
+
+logger = logging.getLogger(__name__)
+
+
+_STORAGE_DIR_ENV = "DATACLOUD_STORAGE_DIR"
+_DEFAULT_STORAGE_DIR = ".datacloud_results"
+
+
+def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
+    """Normalize view ``objects`` entries into a flat list of object codes.
+
+    Each entry may be a plain ``str`` or a ``dict`` with an ``object_code`` key.
+    """
+    codes: list[str] = []
+    for item in raw_objects:
+        if isinstance(item, str):
+            codes.append(item)
+        elif isinstance(item, dict):
+            code = item.get("object_code", "")
+            if code:
+                codes.append(code)
+    return codes
+
+
+class DataCloudDataBackendBase:
+    """Foundation mixin: __init__, entity_store, knowledge SDK lazy init, static helpers."""
+
+    def __init__(self, entity_store: EntityStore | None = None) -> None:
+        if entity_store is None:
+            from datacloud_platform.platform_file_storage import _data_dir
+
+            entity_store = JsonEntityStore(_data_dir())
+        self._entity_store: EntityStore = entity_store
+        self._scenes: dict[str, dict[str, Any]] | None = None
+        self._scenes_version: str = ""
+        self._object_scene_map: dict[str, set[str]] = {}
+        self._view_scene_map: dict[str, set[str]] = {}
+        self._reverse_index_built: bool = False
+
+        # Lazy knowledge SDK objects (initialised on first use)
+        self._knowledge_reader: Any = None
+        self._knowledge_search_engine: Any = None
+        self._knowledge_embedding: Any = None
+
+    # ── Knowledge SDK lazy init helpers ────────────────────────────────────
+
+    def _get_knowledge_reader(self) -> Any:
+        if self._knowledge_reader is None:
+            from datacloud_knowledge.adapters import create_reader  # noqa: PLC0415
+
+            self._knowledge_reader = create_reader()
+        return self._knowledge_reader
+
+    def _get_search_engine(self) -> Any:
+        if self._knowledge_search_engine is None:
+            from datacloud_knowledge.adapters.opengauss.engine import (  # noqa: PLC0415
+                PostgresSearchEngine,
+            )
+
+            self._knowledge_search_engine = PostgresSearchEngine()
+        return self._knowledge_search_engine
+
+    def _get_embedding(self) -> Any:
+        if self._knowledge_embedding is None:
+            from datacloud_knowledge.retrieval.embedding.service import (  # noqa: PLC0415
+                EmbeddingService,
+            )
+
+            self._knowledge_embedding = EmbeddingService()
+        return self._knowledge_embedding
+
+    # ── internal helpers ───────────────────────────────────────────────────
+
+    @staticmethod
+    def _resolve_base_path(base_id: str) -> Path:
+        """Resolve a base_id to a filesystem path under the platform data dir."""
+        from datacloud_platform.platform_file_storage import _data_dir
+
+        return _data_dir() / base_id
+
+    @staticmethod
+    def _rebuild_index(
+        entity_store: JsonEntityStore, entity_type: str
+    ) -> dict[str, dict[str, Any]]:
+        """Rebuild and persist the index for *entity_type* (full-scan, batch use only)."""
+        idx = entity_store.rebuild_index(entity_type)
+        entity_store.save_index(entity_type, idx)
+        return idx
+
+    @staticmethod
+    def _incremental_save(
+        entity_store: JsonEntityStore,
+        entity_type: str,
+        code: str,
+        data: dict[str, Any],
+    ) -> None:
+        """Incrementally update a single entity in the index (O(1) read + O(1) write)."""
+        from datacloud_platform.adapters.json_entity_store import _to_index_entry
+
+        idx = entity_store.load_index(entity_type)
+        idx[code] = _to_index_entry(data, entity_type)
+        entity_store.save_index(entity_type, idx)
+
+    @staticmethod
+    def _incremental_delete(
+        entity_store: JsonEntityStore,
+        entity_type: str,
+        code: str,
+    ) -> None:
+        """Incrementally remove a single entity from the index (O(1) read + O(1) write)."""
+        idx = entity_store.load_index(entity_type)
+        idx.pop(code, None)
+        entity_store.save_index(entity_type, idx)
+
+    @staticmethod
+    def _to_summary(ont_class: object) -> ObjectSummary:
+        """Convert an OntologyClass-like object to ObjectSummary."""
+        object_code: str = getattr(ont_class, "object_code", "")
+        object_name: str = getattr(ont_class, "object_name", "")
+        description: str = getattr(ont_class, "description", "")
+        source_type: str = getattr(ont_class, "source_type", "")
+        field_count: int = len(getattr(ont_class, "fields", []))
+        action_count: int = len(getattr(ont_class, "actions", []))
+        return ObjectSummary(
+            object_code=object_code,
+            object_name=object_name,
+            description=description,
+            object_source=source_type,
+            field_count=field_count,
+            action_count=action_count,
+        )
+
+    @staticmethod
+    def _to_view_summary(view_data: dict[str, Any], view_code: str) -> ViewSummary:
+        """Convert a raw view dict to ViewSummary."""
+        normalized_codes = _normalize_object_codes(view_data.get("objects", []))
+        return ViewSummary(
+            view_code=view_data.get("view_id", view_code),
+            view_name=view_data.get("view_name", ""),
+            description=view_data.get("description", "") or "",
+            object_codes=normalized_codes,
+        )
+
+    @staticmethod
+    def _storage_dir() -> Path:
+        """Resolve storage directory from env or default."""
+        env_dir = os.getenv(_STORAGE_DIR_ENV)
+        if env_dir:
+            return Path(env_dir)
+        return Path(_DEFAULT_STORAGE_DIR)
