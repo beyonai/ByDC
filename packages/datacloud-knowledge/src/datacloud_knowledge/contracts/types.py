@@ -468,3 +468,78 @@ class UserScopedNameItem:
     term_id: str
     term_type_code: str
     search_scope: dict[str, object]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 领域模型（Domain CRUD）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class DomainCreate(BaseModel):
+    """领域创建请求模型。
+
+    Attributes:
+        domain_id: 领域 ID（可选，留空由后端生成）。
+        domain_name: 领域名称（必填，1-255 字符）。
+        parent_id: 父级领域 ID（可选）。
+        domain_desc: 领域描述（可选）。
+        library_ids: 关联术语库 ID 列表。
+        term_type_codes: 关联术语类型编码列表。
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    domain_id: str | None = Field(default=None, alias="domainId")
+    domain_name: str = Field(min_length=1, max_length=255, alias="domainName")
+    parent_id: str | None = Field(default=None, alias="parentId")
+    domain_desc: str | None = Field(default=None, alias="domainDesc")
+    library_ids: list[str] = Field(default_factory=list, alias="libraryIds")
+    term_type_codes: list[str] = Field(default_factory=list, alias="termTypeCodes")
+
+
+class DomainUpdate(BaseModel):
+    """领域更新请求模型。
+
+    Attributes:
+        domain_name: 领域名称（1-255 字符，可选）。
+        parent_id: 父级领域 ID（可选）。
+        domain_desc: 领域描述（可选）。
+        library_ids: 关联术语库 ID 列表（可选）。
+        term_type_codes: 关联术语类型编码列表（可选）。
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    domain_name: str | None = Field(default=None, min_length=1, max_length=255, alias="domainName")
+    parent_id: str | None = Field(default=None, alias="parentId")
+    domain_desc: str | None = Field(default=None, alias="domainDesc")
+    library_ids: list[str] | None = Field(default=None, alias="libraryIds")
+    term_type_codes: list[str] | None = Field(default=None, alias="termTypeCodes")
+
+
+class DomainDetail(BaseModel):
+    """领域详情响应模型。
+
+    Attributes:
+        domain_id: 领域 ID。
+        domain_name: 领域名称。
+        parent_id: 父级领域 ID。
+        domain_desc: 领域描述。
+        library_ids: 关联术语库 ID 列表。
+        term_type_codes: 关联术语类型编码列表。
+        children_count: 子领域数量。
+        created_time: 创建时间。
+        updated_time: 更新时间。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    domain_id: str
+    domain_name: str
+    parent_id: str | None = None
+    domain_desc: str | None = None
+    library_ids: list[str] = Field(default_factory=list)
+    term_type_codes: list[str] = Field(default_factory=list)
+    children_count: int = 0
+    created_time: Any | None = None
+    updated_time: Any | None = None

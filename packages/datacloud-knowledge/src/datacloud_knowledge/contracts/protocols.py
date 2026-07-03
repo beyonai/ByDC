@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol, Self
+from typing import Any, Protocol, Self
 
 from .term_provider_types import (
     ImportResult,
@@ -495,6 +495,76 @@ class TermReader(Protocol):
         """
         ...
 
+    # ── Domain ─────────────────────────────────────────────────────
+
+    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]: ...
+
+    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None: ...
+
+    def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]: ...
+
+    # ── TermLibrary ─────────────────────────────────────────────────
+
+    def list_term_libraries(
+        self,
+        *,
+        library_code: str | None = None,
+        library_name: str | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+    def get_term_library(self, *, library_id: str) -> dict[str, Any] | None: ...
+
+    # ── TermType ────────────────────────────────────────────────────
+
+    def list_term_types(self, *, type_category: int | None = None) -> list[dict[str, Any]]: ...
+
+    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None: ...
+
+    # ── TermRelation ────────────────────────────────────────────────
+
+    def list_term_relations(
+        self,
+        *,
+        source_term_id: str | None = None,
+        target_term_id: str | None = None,
+        relation_category: str | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None: ...
+
+    # ── TermName ────────────────────────────────────────────────────
+
+    def list_term_names(
+        self,
+        *,
+        term_id: str | None = None,
+        name_text: str | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+    def get_term_name(self, *, name_id: str) -> dict[str, Any] | None: ...
+
+    # ── TermKnowledge ───────────────────────────────────────────────
+
+    def list_term_knowledges(
+        self,
+        *,
+        term_id: str | None = None,
+        ext_system: str | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+    def get_term_knowledge(self, *, knowledge_id: str) -> dict[str, Any] | None: ...
+
+    # ── Term ────────────────────────────────────────────────────────
+
+    def query_term_relations(
+        self,
+        *,
+        term_id: str,
+        relation_category: str | None = None,
+        direction: str = "both",
+        depth: int = 1,
+    ) -> dict[str, Any]: ...
+
 
 class TermSearchEngine(Protocol):
     """文本召回引擎。每种策略独立暴露，由调用方控制策略组合和 RRF 融合。
@@ -782,3 +852,55 @@ class TermWriter(Protocol):
             ValueError: 术语不存在。
         """
         ...
+
+    # ── Domain ─────────────────────────────────────────────────────
+
+    def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]: ...
+
+    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None: ...
+
+    def delete_domain(self, *, domain_id: str) -> None: ...
+
+    # ── TermLibrary ─────────────────────────────────────────────────
+
+    def create_term_library(self, *, library: dict[str, Any]) -> dict[str, Any]: ...
+
+    def update_term_library(self, *, library_id: str, updates: dict[str, Any]) -> None: ...
+
+    def delete_term_library(self, *, library_id: str) -> None: ...
+
+    # ── TermType ────────────────────────────────────────────────────
+
+    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]: ...
+
+    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None: ...
+
+    def delete_term_type(self, *, type_code: str) -> None: ...
+
+    # ── TermRelation ────────────────────────────────────────────────
+
+    def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]: ...
+
+    def update_term_relation(self, *, relation_id: str, updates: dict[str, Any]) -> None: ...
+
+    def delete_term_relation(self, *, relation_id: str) -> None: ...
+
+    # ── TermName ────────────────────────────────────────────────────
+
+    def create_term_name_wrapper(self, *, name: dict[str, Any]) -> dict[str, Any]: ...
+
+    def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None: ...
+
+    def delete_term_name(self, *, name_id: str) -> None: ...
+
+    # ── TermKnowledge ───────────────────────────────────────────────
+
+    def create_term_knowledge(self, *, knowledge: dict[str, Any]) -> dict[str, Any]: ...
+
+    def update_term_knowledge(self, *, knowledge_id: str, updates: dict[str, Any]) -> None: ...
+
+    def delete_term_knowledge(self, *, knowledge_id: str) -> None: ...
+
+    # ── Term ────────────────────────────────────────────────────────
+
+    def delete_term(self, *, term_id: str) -> None: ...
