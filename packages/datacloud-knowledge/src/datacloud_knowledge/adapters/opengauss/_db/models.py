@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -46,7 +46,8 @@ class TermRelation(Base):
 class TermType(Base):
     __tablename__ = "term_type"
 
-    type_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    type_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    type_code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
     type_name: Mapped[str] = mapped_column(String(255), nullable=False)
     type_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
     type_category: Mapped[int] = mapped_column(nullable=False)
@@ -77,3 +78,38 @@ class TermKnowledge(Base):
     sort_order: Mapped[int] = mapped_column(nullable=False, default=0)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class Domain(Base):
+    __tablename__ = "domain"
+
+    domain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    domain_name: Mapped[str] = mapped_column(String(255))
+    parent_id: Mapped[str | None] = mapped_column(String(64))
+    domain_desc: Mapped[str | None] = mapped_column(Text)
+    created_time: Mapped[datetime] = mapped_column(DateTime)
+    updated_time: Mapped[datetime] = mapped_column(DateTime)
+
+
+class TermLibrary(Base):
+    __tablename__ = "term_library"
+
+    library_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    library_code: Mapped[str] = mapped_column(String(32))
+    library_name: Mapped[str] = mapped_column(String(255))
+    created_time: Mapped[datetime] = mapped_column(DateTime)
+    updated_time: Mapped[datetime] = mapped_column(DateTime)
+
+
+class DomainLibrary(Base):
+    __tablename__ = "domain_library"
+
+    domain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    library_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+
+class DomainTermType(Base):
+    __tablename__ = "domain_term_type"
+
+    domain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    type_code: Mapped[str] = mapped_column(String(32), primary_key=True)

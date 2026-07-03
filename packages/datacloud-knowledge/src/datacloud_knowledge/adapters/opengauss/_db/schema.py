@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 CORE_TABLES = (
     "domain",
+    "domain_library",
+    "domain_term_type",
     "term_library",
     "term_type",
     "term",

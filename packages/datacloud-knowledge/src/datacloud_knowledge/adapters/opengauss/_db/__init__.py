@@ -16,7 +16,11 @@ from .url import (
 
 _LAZY_EXPORTS = {
     "DatabaseContext": ("datacloud_knowledge.adapters.opengauss._db.context", "DatabaseContext"),
+    "Domain": ("datacloud_knowledge.adapters.opengauss._db.models", "Domain"),
+    "DomainLibrary": ("datacloud_knowledge.adapters.opengauss._db.models", "DomainLibrary"),
+    "DomainTermType": ("datacloud_knowledge.adapters.opengauss._db.models", "DomainTermType"),
     "Term": ("datacloud_knowledge.adapters.opengauss._db.models", "Term"),
+    "TermLibrary": ("datacloud_knowledge.adapters.opengauss._db.models", "TermLibrary"),
     "TermRelation": ("datacloud_knowledge.adapters.opengauss._db.models", "TermRelation"),
     "TermType": ("datacloud_knowledge.adapters.opengauss._db.models", "TermType"),
     "get_session": ("datacloud_knowledge.adapters.opengauss._db.connection", "get_session"),
@@ -38,8 +42,12 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "DatabaseContext",
+    "Domain",
+    "DomainLibrary",
+    "DomainTermType",
     "ParsedDatabaseUrl",
     "Term",
+    "TermLibrary",
     "TermRelation",
     "TermType",
     "build_postgres_connection_uri",
