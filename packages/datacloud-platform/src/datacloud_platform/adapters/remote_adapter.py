@@ -1,8 +1,8 @@
-"""Remote adapter — HTTP-forwarding backends for remote ontology & knowledge services.
+"""Remote adapter — HTTP-forwarding backends for remote ontology & term services.
 
 Refactored from datacloud_server/adapters/remote_adapter.py into two separate
 Platform Backend classes: RemoteOntologyBackend (OntologyBackend Protocol) and
-RemoteKnowledgeBackend (KnowledgeBackend Protocol).
+RemoteTermBackend (TermBackend Protocol).
 """
 
 from __future__ import annotations
@@ -678,10 +678,12 @@ class RemoteOntologyBackend:
         return {"library_id": "PERSONAL_LIB", "scene_id": ""}
 
 
-class RemoteKnowledgeBackend:
-    """KnowledgeBackend that forwards search operations to a remote HTTP service.
+class RemoteTermBackend:
+    """TermBackend that forwards term operations to a remote HTTP service.
 
-    Graph query is not supported — always returns empty.
+    NOTE: Remote term backend is not yet fully implemented.  Most methods
+    return empty results or raise NotImplementedError until the remote
+    term API is defined.
     """
 
     def __init__(
@@ -705,7 +707,6 @@ class RemoteKnowledgeBackend:
         """Build authentication headers from auth_config."""
         if not self._auth_config:
             return {}
-        # Direct headers passthrough (for custom auth like ssoType/accountCode)
         headers_dict = self._auth_config.get("headers")
         if isinstance(headers_dict, dict):
             return {str(k): str(v) for k, v in headers_dict.items()}
@@ -720,16 +721,12 @@ class RemoteKnowledgeBackend:
     def configure(
         self, source_url: str, auth_config: dict[str, Any] | None = None
     ) -> None:
-        """Dynamically set source_url and auth_config after construction.
-
-        Used by Platform to inject per-base configuration into backends created
-        by zero-arg factories (which don't know about the base at factory time).
-        """
+        """Dynamically set source_url and auth_config after construction."""
         if source_url:
             self._source_url = source_url.rstrip("/")
         if auth_config is not None:
             self._auth_config = auth_config
-        self._client = None  # Reset client to pick up new config
+        self._client = None
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -738,39 +735,228 @@ class RemoteKnowledgeBackend:
                 self._client.close()
             self._client = None
 
-    # ── KnowledgeBackend Protocol ───────────────────────────────────────
+    # ── TermBackend Protocol ────────────────────────────────────────────
 
-    def search_candidates(
-        self, query: str, *, scope: str = "all", limit: int = 20
-    ) -> list[Any]:
-        """Forward candidate search to remote service."""
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/search/candidates"
-        body: dict[str, Any] = {"query": query, "scope": scope, "limit": limit}
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        return cast("list[Any]", response.json())
-
-    def disambiguate(self, candidates: list[Any], query: str) -> list[Any]:
-        """Forward disambiguation to remote service."""
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/search/disambiguate"
-        body: dict[str, Any] = {"candidates": candidates, "query": query}
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        return cast("list[Any]", response.json())
-
-    def prepare_clarification(
-        self, query: str, slots: list[dict[str, Any]]
+    def search_terms(
+        self,
+        *,
+        dataset_ids: list[str] | None = None,
+        keyword: str | None = None,
+        term_name: str | None = None,
+        term_type: str | None = None,
+        query_type: str = "fulltext",
+        parent_term_code: str | None = None,
+        label_filters: list[dict[str, Any]] | None = None,
+        label_condition: str = "and",
+        term_ids: list[str] | None = None,
+        top_k: int = 20,
+        offset: int = 0,
     ) -> dict[str, Any]:
-        """Forward clarification preparation to remote service."""
-        return {}
+        """Remote term search — not yet implemented."""
+        logger.debug("Remote term: search_terms not yet implemented")
+        return {"data": [], "totalCount": 0}
 
-    def finalize_clarification(self, clarification_id: str) -> dict[str, Any]:
-        """Forward clarification finalization to remote service."""
-        return {}
+    def get_term_detail(
+        self, *, dataset_id: str, term_id: str
+    ) -> dict[str, Any] | None:
+        """Remote term detail — not yet implemented."""
+        logger.debug("Remote term: get_term_detail not yet implemented")
+        return None
+
+    def list_terms(
+        self,
+        *,
+        dataset_id: str,
+        term_type: str | None = None,
+        term_type_no_eq: str | None = None,
+        page_index: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        """Remote term list — not yet implemented."""
+        logger.debug("Remote term: list_terms not yet implemented")
+        return {
+            "data": [],
+            "totalCount": 0,
+            "pageIndex": page_index,
+            "pageSize": page_size,
+        }
+
+    def create_term(self, *, term: dict[str, Any]) -> dict[str, Any]:
+        """Remote term creation — not yet implemented."""
+        raise NotImplementedError("Remote term creation not yet implemented")
+
+    def import_terms(
+        self, *, dataset_id: str, terms: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Remote term import — not yet implemented."""
+        raise NotImplementedError("Remote term import not yet implemented")
+
+    def update_term(
+        self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
+    ) -> None:
+        """Remote term update — not yet implemented."""
+        raise NotImplementedError("Remote term update not yet implemented")
+
+    def delete_term(self, *, term_id: str) -> None:
+        """Remote term deletion — not yet implemented."""
+        raise NotImplementedError("Remote term deletion not yet implemented")
+
+    def query_term_relations(
+        self,
+        *,
+        term_id: str,
+        relation_category: str | None = None,
+        direction: str = "both",
+        depth: int = 1,
+    ) -> dict[str, Any]:
+        """Remote term relations — not yet implemented."""
+        logger.debug("Remote term: query_term_relations not yet implemented")
+        return {"data": [], "totalCount": 0}
+
+    # ── TermRelation ────────────────────────────────────────────────────
+
+    def list_term_relations(
+        self,
+        *,
+        source_term_id: str | None = None,
+        target_term_id: str | None = None,
+        relation_category: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError("Remote term relation not yet implemented")
+
+    def update_term_relation(
+        self, *, relation_id: str, updates: dict[str, Any]
+    ) -> None:
+        raise NotImplementedError("Remote term relation not yet implemented")
+
+    def delete_term_relation(self, *, relation_id: str) -> None:
+        raise NotImplementedError("Remote term relation not yet implemented")
+
+    # ── TermName ────────────────────────────────────────────────────────
+
+    def list_term_names(
+        self, *, term_id: str | None = None, name_text: str | None = None
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_name(self, *, name_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_name(self, *, name: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError("Remote term name not yet implemented")
+
+    def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
+        raise NotImplementedError("Remote term name not yet implemented")
+
+    def delete_term_name(self, *, name_id: str) -> None:
+        raise NotImplementedError("Remote term name not yet implemented")
+
+    # ── TermKnowledge ───────────────────────────────────────────────────
+
+    def list_term_knowledges(
+        self, *, term_id: str | None = None, ext_system: str | None = None
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_knowledge(self, *, knowledge_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_knowledge(self, *, knowledge: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError("Remote term knowledge not yet implemented")
+
+    def update_term_knowledge(
+        self, *, knowledge_id: str, updates: dict[str, Any]
+    ) -> None:
+        raise NotImplementedError("Remote term knowledge not yet implemented")
+
+    def delete_term_knowledge(self, *, knowledge_id: str) -> None:
+        raise NotImplementedError("Remote term knowledge not yet implemented")
+
+    # ── TermLibrary ─────────────────────────────────────────────────────
+
+    def list_term_libraries(
+        self,
+        *,
+        library_code: str | None = None,
+        library_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_library(self, *, library_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_library(self, *, library: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError("Remote term library not yet implemented")
+
+    def update_term_library(self, *, library_id: str, updates: dict[str, Any]) -> None:
+        raise NotImplementedError("Remote term library not yet implemented")
+
+    def delete_term_library(self, *, library_id: str) -> None:
+        raise NotImplementedError("Remote term library not yet implemented")
+
+    # ── TermType ────────────────────────────────────────────────────────
+
+    def list_term_types(
+        self, *, type_category: int | None = None
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError("Remote term type not yet implemented")
+
+    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
+        raise NotImplementedError("Remote term type not yet implemented")
+
+    def delete_term_type(self, *, type_code: str) -> None:
+        raise NotImplementedError("Remote term type not yet implemented")
+
+    # ── Domain ──────────────────────────────────────────────────────────
+
+    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]:
+        return []
+
+    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:
+        raise NotImplementedError("Remote domain not yet implemented")
+
+    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
+        raise NotImplementedError("Remote domain not yet implemented")
+
+    def delete_domain(self, *, domain_id: str) -> None:
+        raise NotImplementedError("Remote domain not yet implemented")
+
+    def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]:
+        return []
+
+    # ── Vector ──────────────────────────────────────────────────────────
+
+    def embed(self, text: str) -> list[float]:
+        """Remote does not support local embedding."""
+        return [0.0] * 768
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Remote does not support local embedding."""
+        return [[0.0] * 768 for _ in texts]
+
+    def search_by_embedding(
+        self, vector: list[float], term_types: list[str], limit: int = 20
+    ) -> list[Any]:
+        """Remote does not support embedding search."""
+        logger.debug("Remote term: search_by_embedding not yet implemented")
+        return []
+
+    # ── Sync ────────────────────────────────────────────────────────────
 
     def sync_terms(
         self,
@@ -781,167 +967,11 @@ class RemoteKnowledgeBackend:
         *,
         backfill_vectors: bool = True,
     ) -> None:
-        """Remote knowledge is read-only — term sync is not supported."""
+        """Remote term is read-only — term sync is not supported."""
         _ = entity_code, entity_name, entity_source, fields, backfill_vectors
-        logger.debug("Remote knowledge: sync_terms skipped (read-only)")
+        logger.debug("Remote term: sync_terms skipped (read-only)")
 
     def remove_terms(self, entity_code: str) -> None:
-        """Remote knowledge is read-only — term removal is not supported."""
+        """Remote term is read-only — term removal is not supported."""
         _ = entity_code
-        logger.debug("Remote knowledge: remove_terms skipped (read-only)")
-
-    def get_term(self, term_code: str, term_type_code: str) -> str | None:
-        """Remote knowledge does not support per-term lookup."""
-        return None
-
-    def term_exists(self, term_code: str, term_type_code: str) -> bool:
-        """Remote knowledge does not support existence checks."""
-        return False
-
-    def get_term_by_ids(
-        self, keys: list[tuple[str, str, str]]
-    ) -> dict[tuple[str, str, str], str]:
-        """Remote knowledge does not support batch lookup."""
-        return {}
-
-    def get_type_codes_by_category(self, categories: list[int]) -> list[str]:
-        """Remote knowledge does not support category lookup."""
-        return []
-
-    def embed(self, text: str) -> list[float]:
-        """Remote knowledge does not support local embedding."""
-        return [0.0] * 768
-
-    def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Remote knowledge does not support local embedding."""
-        return [[0.0] * 768 for _ in texts]
-
-    def search_by_embedding(
-        self, vector: list[float], term_types: list[str], limit: int = 20
-    ) -> list[Any]:
-        """Forward embedding search to remote service."""
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/search/by-embedding"
-        body: dict[str, Any] = {
-            "vector": vector,
-            "termTypes": term_types,
-            "limit": limit,
-        }
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        return cast("list[Any]", response.json())
-
-    def resolve_dimension_value(self, value_term_id: str) -> Any:
-        """Remote knowledge does not support dimension resolution."""
-        from datacloud_platform.models.shared import DimensionProperty
-
-        return DimensionProperty(property_code="", object_code="")
-
-    def get_referenced_by(self, value_term_id: str) -> list[Any]:
-        """Remote knowledge does not support reference lookup."""
-        return []
-
-    def resolve_object_for_property(self, property_code: str) -> str | None:
-        """Remote knowledge does not support property resolution."""
-        return None
-
-    def search_ontology(
-        self,
-        base_id: str,
-        scene_ids: list[str],
-        *,
-        keyword: str,
-        query_type: str = "vector",
-        search_scope: str = "all",
-        ontology_type: list[str] | None = None,
-        object_code: list[str] | None = None,
-        view_code: list[str] | None = None,
-        property_code: list[str] | None = None,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        """Forward ontology search to remote service (no caching — real-time).
-
-        接口层传入的 scene_ids 已经是 scene_id，直接使用。
-        """
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/search/ontology"
-        # TODO(remote-api): 远程 /search/ontology 接受 sceneId（单字符串）而非 sceneIds（数组），
-        # 暂传首个 scene_id。待远程团队支持 sceneIds 列表后改回。
-        body: dict[str, Any] = {
-            "keyword": keyword,
-            "sceneId": scene_ids[0] if scene_ids else "",
-            "queryType": query_type,
-            "searchScope": search_scope,
-            "pageSize": kwargs.get("page_size", 20),
-            "resultPerType": kwargs.get("result_per_type", 5),
-        }
-        if ontology_type:
-            body["ontologyType"] = ontology_type
-        if object_code:
-            body["objectCode"] = object_code
-        if view_code:
-            body["viewCode"] = view_code
-        if property_code:
-            body["propertyCode"] = property_code
-        if "page_token" in kwargs:
-            body["pageToken"] = kwargs["page_token"]
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        raw = response.json()
-        # Unwrap remote API envelope: {code: 200, data: {...}} -> {...}
-        if isinstance(raw, dict) and "data" in raw and raw.get("code") == 200:
-            result = cast("dict[str, Any]", raw["data"])
-        else:
-            result = cast("dict[str, Any]", raw)
-        # Normalize remote field names to local expectations
-        _normalize_remote_search_result(result)
-        return result
-
-    def graph_query(
-        self,
-        base_id: str,
-        scene_id: str,
-        *,
-        object_code: list[str],
-        match_by: str = "name",
-        values: list[str] | None = None,
-        step: int = 1,
-    ) -> dict[str, Any]:
-        """Remote knowledge does not support graph queries — returns empty."""
-        _ = base_id, scene_id, object_code, match_by, values, step
-        return {"nodes": [], "edges": []}
-
-    def update_scores(self, records: list[Any]) -> None:
-        """Remote knowledge does not support score updates."""
-        _ = records
-        logger.debug("Remote knowledge: update_scores skipped (read-only)")
-
-    def search_instances(
-        self,
-        base_id: str,
-        *,
-        object_code: str,
-        select: list[str] | None = None,
-        where: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Remote knowledge does not support instance search — returns empty."""
-        _ = base_id, object_code, select, where
-        logger.debug("Remote knowledge: search_instances skipped (not supported)")
-        return {"data": [], "totalCount": 0}
-
-    def graph_path(
-        self,
-        base_id: str,
-        scene_id: str,
-        *,
-        match_by: str = "name",
-        start_node: str,
-        end_node: str = "",
-        direction: str = "forward",
-    ) -> dict[str, Any]:
-        """Remote knowledge does not support graph path — returns empty."""
-        _ = base_id, scene_id, match_by, start_node, end_node, direction
-        logger.debug("Remote knowledge: graph_path skipped (not supported)")
-        return {"path": [], "edges": [], "hops": -1}
+        logger.debug("Remote term: remove_terms skipped (read-only)")

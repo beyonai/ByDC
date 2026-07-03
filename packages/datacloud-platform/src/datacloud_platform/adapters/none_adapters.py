@@ -287,77 +287,303 @@ class _NoopOntologyBackend:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
+    # -- Property term bindings (no-op) --
 
-class _NoopKnowledgeBackend:
-    """Knowledge backend where all reads return empty/null and mutations are no-ops."""
-
-    def search_candidates(
-        self, query: str, *, scope: str = "all", limit: int = 20
-    ) -> list[Any]:
-        """Return empty list."""
+    def get_object_property_term_bindings(
+        self,
+        loader: Any,
+        object_codes: list[str],
+        *,
+        term_master_type: str | None = None,
+        property_codes: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return empty list — no ontology available."""
+        _ = loader
         return []
 
-    def disambiguate(self, candidates: list[Any], query: str) -> list[Any]:
-        """Return empty list."""
+    def get_view_property_term_bindings(
+        self,
+        loader: Any,
+        view_codes: list[str],
+        *,
+        term_master_type: str | None = None,
+        property_codes: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return empty list — no ontology available."""
+        _ = loader
         return []
 
-    def prepare_clarification(
-        self, query: str, slots: list[dict[str, Any]]
-    ) -> dict[str, Any]:
-        """Return empty dict."""
-        return {}
+    # -- Ontology search & graph (no-op) --
 
-    def finalize_clarification(
+    def search_ontology(
+        self,
+        base_id: str,
+        scene_ids: list[str],
+        *,
+        keyword: str,
+        query_type: str = "vector",
+        search_scope: str = "all",
+        ontology_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
+        limit: int = 20,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
+
+    def search_ontology_batch(
+        self,
+        base_id: str,
+        keyword: str,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
+
+    def graph_query(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        object_code: list[str],
+        match_by: str = "name",
+        values: list[str] | None = None,
+        step: int = 1,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
+
+    def graph_path(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
+
+    def search_instances(
+        self,
+        base_id: str,
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
+
+
+class _NoopTermBackend:
+    """Term backend where all reads return empty/null and mutations are no-ops."""
+
+    # ── Term ────────────────────────────────────────────────────────────
+
+    def search_terms(
         self,
         *,
-        query: str = "",
-        ontology_code: str = "",
-        structured_input: dict[str, Any] | None = None,
-        mode: str = "",
-        needs_clarification: bool = False,
-        form: Any = None,
-        metadata: Any = None,
-        user_id: str | None = None,
-        persist_confirmed_synonyms: bool = True,
-        language: str = "zh_CN",
+        dataset_ids: list[str] | None = None,
+        keyword: str | None = None,
+        term_name: str | None = None,
+        term_type: str | None = None,
+        query_type: str = "fulltext",
+        parent_term_code: str | None = None,
+        label_filters: list[dict[str, Any]] | None = None,
+        label_condition: str = "and",
+        term_ids: list[str] | None = None,
+        top_k: int = 20,
+        offset: int = 0,
     ) -> dict[str, Any]:
-        """No-op — return structured_input unchanged, no synonyms persisted."""
-        return {
-            "structured_input": structured_input or {},
-            "persisted_synonyms": None,
-        }
+        """Return empty search result."""
+        return {"data": [], "totalCount": 0}
 
-    def sync_terms(
-        self,
-        entity_code: str,
-        entity_name: str,
-        entity_source: str,
-        fields: list[dict[str, Any]],
-        *,
-        backfill_vectors: bool = True,
-    ) -> None:
-        """No-op."""
-
-    def remove_terms(self, entity_code: str) -> None:
-        """No-op."""
-
-    def get_term(self, term_code: str, term_type_code: str) -> str | None:
+    def get_term_detail(
+        self, *, dataset_id: str, term_id: str
+    ) -> dict[str, Any] | None:
         """Return None."""
         return None
 
-    def term_exists(self, term_code: str, term_type_code: str) -> bool:
-        """Return False."""
-        return False
-
-    def get_term_by_ids(
-        self, keys: list[tuple[str, str, str]]
-    ) -> dict[tuple[str, str, str], str]:
-        """Return empty dict."""
-        return {}
-
-    def get_type_codes_by_category(self, categories: list[int]) -> list[str]:
+    def list_terms(
+        self,
+        *,
+        dataset_id: str,
+        term_type: str | None = None,
+        term_type_no_eq: str | None = None,
+        page_index: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
         """Return empty list."""
+        return {
+            "data": [],
+            "totalCount": 0,
+            "pageIndex": page_index,
+            "pageSize": page_size,
+        }
+
+    def create_term(self, *, term: dict[str, Any]) -> dict[str, Any]:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Term backend not available")
+
+    def import_terms(
+        self, *, dataset_id: str, terms: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Term backend not available")
+
+    def update_term(
+        self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
+    ) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Term backend not available")
+
+    def delete_term(self, *, term_id: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Term backend not available")
+
+    def query_term_relations(
+        self,
+        *,
+        term_id: str,
+        relation_category: str | None = None,
+        direction: str = "both",
+        depth: int = 1,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        return {"data": [], "totalCount": 0}
+
+    # ── TermRelation ────────────────────────────────────────────────────
+
+    def list_term_relations(
+        self,
+        *,
+        source_term_id: str | None = None,
+        target_term_id: str | None = None,
+        relation_category: str | None = None,
+    ) -> list[dict[str, Any]]:
         return []
+
+    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:
+        raise PermissionError("Term backend not available")
+
+    def update_term_relation(
+        self, *, relation_id: str, updates: dict[str, Any]
+    ) -> None:
+        raise PermissionError("Term backend not available")
+
+    def delete_term_relation(self, *, relation_id: str) -> None:
+        raise PermissionError("Term backend not available")
+
+    # ── TermName ────────────────────────────────────────────────────────
+
+    def list_term_names(
+        self, *, term_id: str | None = None, name_text: str | None = None
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_name(self, *, name_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_name(self, *, name: dict[str, Any]) -> dict[str, Any]:
+        raise PermissionError("Term backend not available")
+
+    def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
+        raise PermissionError("Term backend not available")
+
+    def delete_term_name(self, *, name_id: str) -> None:
+        raise PermissionError("Term backend not available")
+
+    # ── TermKnowledge ───────────────────────────────────────────────────
+
+    def list_term_knowledges(
+        self, *, term_id: str | None = None, ext_system: str | None = None
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_knowledge(self, *, knowledge_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_knowledge(self, *, knowledge: dict[str, Any]) -> dict[str, Any]:
+        raise PermissionError("Term backend not available")
+
+    def update_term_knowledge(
+        self, *, knowledge_id: str, updates: dict[str, Any]
+    ) -> None:
+        raise PermissionError("Term backend not available")
+
+    def delete_term_knowledge(self, *, knowledge_id: str) -> None:
+        raise PermissionError("Term backend not available")
+
+    # ── TermLibrary ─────────────────────────────────────────────────────
+
+    def list_term_libraries(
+        self,
+        *,
+        library_code: str | None = None,
+        library_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_library(self, *, library_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_library(self, *, library: dict[str, Any]) -> dict[str, Any]:
+        raise PermissionError("Term backend not available")
+
+    def update_term_library(self, *, library_id: str, updates: dict[str, Any]) -> None:
+        raise PermissionError("Term backend not available")
+
+    def delete_term_library(self, *, library_id: str) -> None:
+        raise PermissionError("Term backend not available")
+
+    # ── TermType ────────────────────────────────────────────────────────
+
+    def list_term_types(
+        self, *, type_category: int | None = None
+    ) -> list[dict[str, Any]]:
+        return []
+
+    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None:
+        return None
+
+    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+        raise PermissionError("Term backend not available")
+
+    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
+        raise PermissionError("Term backend not available")
+
+    def delete_term_type(self, *, type_code: str) -> None:
+        raise PermissionError("Term backend not available")
+
+    # ── Domain ──────────────────────────────────────────────────────────
+
+    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]:
+        return []
+
+    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None:
+        return None
+
+    def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:
+        raise PermissionError("Term backend not available")
+
+    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
+        raise PermissionError("Term backend not available")
+
+    def delete_domain(self, *, domain_id: str) -> None:
+        raise PermissionError("Term backend not available")
+
+    def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]:
+        return []
+
+    # ── Vector ──────────────────────────────────────────────────────────
 
     def embed(self, text: str) -> list[float]:
         """Return zero vector."""
@@ -373,105 +599,21 @@ class _NoopKnowledgeBackend:
         """Return empty list."""
         return []
 
-    def resolve_dimension_value(self, value_term_id: str) -> Any:
-        """Return empty DimensionProperty."""
-        from datacloud_platform.models.shared import DimensionProperty
+    # ── Sync ────────────────────────────────────────────────────────────
 
-        return DimensionProperty(property_code="", object_code="")
-
-    def get_referenced_by(self, value_term_id: str) -> list[Any]:
-        """Return empty list."""
-        return []
-
-    def resolve_object_for_property(self, property_code: str) -> str | None:
-        """Return None."""
-        return None
-
-    def search_ontology(
+    def sync_terms(
         self,
-        base_id: str,
-        scene_ids: list[str],
+        entity_code: str,
+        entity_name: str,
+        entity_source: str,
+        fields: list[dict[str, Any]],
         *,
-        keyword: str,
-        query_type: str = "vector",
-        search_scope: str = "all",
-        ontology_type: list[str] | None = None,
-        object_code: list[str] | None = None,
-        view_code: list[str] | None = None,
-        property_code: list[str] | None = None,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        """Return empty search result."""
-        return {
-            "metadata": [],
-            "instances": [],
-            "totalCount": {"metadata": 0, "instances": 0},
-        }
-
-    def search_ontology_batch(
-        self,
-        base_id: str,
-        keyword: str,
-        limit: int = 20,
-    ) -> dict[str, Any]:
-        """Return empty batch search result."""
-        return {
-            "metadata": [],
-            "instances": [],
-            "totalCount": {"metadata": 0, "instances": 0},
-        }
-
-    def graph_query(
-        self,
-        base_id: str,
-        scene_id: str,
-        *,
-        object_code: list[str],
-        match_by: str = "name",
-        values: list[str] | None = None,
-        step: int = 1,
-    ) -> dict[str, Any]:
-        """Return empty graph result."""
-        return {"nodes": [], "edges": []}
-
-    def update_scores(self, records: list[Any]) -> None:
+        backfill_vectors: bool = True,
+    ) -> None:
         """No-op."""
 
-    def search_instances(
-        self,
-        base_id: str,
-        *,
-        object_code: str,
-        select: list[str] | None = None,
-        where: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Return empty result."""
-        return {"data": [], "totalCount": 0}
-
-    def graph_path(
-        self,
-        base_id: str,
-        scene_id: str,
-        *,
-        match_by: str = "name",
-        start_node: str,
-        end_node: str = "",
-        direction: str = "forward",
-    ) -> dict[str, Any]:
-        """Return empty path."""
-        return {"path": [], "edges": [], "hops": -1}
-
-    def resolve_field_aliases(
-        self, field_aliases: dict[str, list[str]]
-    ) -> dict[str, list[tuple[str, str]]]:
-        """Return empty dict."""
-        return {}
-
-    def store_clarification_results(
-        self, results: dict[str, Any], user_id: str
-    ) -> list[str]:
-        """Return empty list."""
-        return []
+    def remove_terms(self, entity_code: str) -> None:
+        """No-op."""
 
 
 class _NoopExecutionBackend:
