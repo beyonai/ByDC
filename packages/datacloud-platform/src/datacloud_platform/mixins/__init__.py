@@ -13,6 +13,7 @@ from datacloud_platform.mixins.scene import SceneMixin
 from datacloud_platform.mixins.scene_loader import SceneLoaderMixin
 from datacloud_platform.mixins.scene_service import SceneServiceMixin
 from datacloud_platform.mixins.storage import StorageMixin
+from datacloud_platform.mixins.term import TermMixin
 from datacloud_platform.mixins.view import ViewMixin
 
 __all__ = [
@@ -29,5 +30,6 @@ __all__ = [
     "SceneMixin",
     "SceneServiceMixin",
     "StorageMixin",
+    "TermMixin",
     "ViewMixin",
 ]
