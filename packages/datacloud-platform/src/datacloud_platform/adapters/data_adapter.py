@@ -1,4 +1,4 @@
-"""DataCloudDataBackend — OntologyBackend + StorageBackend via datacloud-data SDK."""
+"""DataCloudDataBackend — OntologyBackend + TermBackend + StorageBackend via SDKs."""
 
 from __future__ import annotations
 
@@ -73,6 +73,38 @@ class DataCloudDataBackend:
         self._object_scene_map: dict[str, set[str]] = {}
         self._view_scene_map: dict[str, set[str]] = {}
         self._reverse_index_built: bool = False
+
+        # Lazy knowledge SDK objects (initialised on first use)
+        self._knowledge_reader: Any = None
+        self._knowledge_search_engine: Any = None
+        self._knowledge_embedding: Any = None
+
+    # ── Knowledge SDK lazy init helpers ────────────────────────────────────
+
+    def _get_knowledge_reader(self) -> Any:
+        if self._knowledge_reader is None:
+            from datacloud_knowledge.adapters import create_reader  # noqa: PLC0415
+
+            self._knowledge_reader = create_reader()
+        return self._knowledge_reader
+
+    def _get_search_engine(self) -> Any:
+        if self._knowledge_search_engine is None:
+            from datacloud_knowledge.adapters.opengauss.engine import (  # noqa: PLC0415
+                PostgresSearchEngine,
+            )
+
+            self._knowledge_search_engine = PostgresSearchEngine()
+        return self._knowledge_search_engine
+
+    def _get_embedding(self) -> Any:
+        if self._knowledge_embedding is None:
+            from datacloud_knowledge.retrieval.embedding.service import (  # noqa: PLC0415
+                EmbeddingService,
+            )
+
+            self._knowledge_embedding = EmbeddingService()
+        return self._knowledge_embedding
 
     # ── OntologyBackend ────────────────────────────────────────────────────
 
@@ -1585,6 +1617,331 @@ class DataCloudDataBackend:
         )
         return scene
 
+    # ── OntologyBackend: Terminology bindings ──────────────────────────────
+
+    def get_object_property_term_bindings(
+        self,
+        loader: OntologyQueryable,
+        object_codes: list[str],
+    ) -> list[dict[str, Any]]:
+        """Extract terminology binding info for properties of given objects.
+
+        Iterates ``loader._classes[code].fields`` and extracts binding code
+        and name for each property with terminology configuration.
+        """
+        result: list[dict[str, Any]] = []
+        for code in object_codes:
+            cls = loader._classes.get(code)
+            if cls is None:
+                continue
+            for f in cls.fields:
+                term_code: str = getattr(f, "field_code", "") or ""
+                term_name: str = getattr(f, "field_name", "") or ""
+                if not term_code:
+                    continue
+                result.append(
+                    {
+                        "objectCode": code,
+                        "objectName": getattr(cls, "object_name", ""),
+                        "propertyCode": term_code,
+                        "propertyName": term_name,
+                        "dataType": getattr(f, "field_type", ""),
+                        "bindingType": "property",
+                    }
+                )
+        return result
+
+    def get_view_property_term_bindings(
+        self,
+        loader: OntologyQueryable,
+        view_codes: list[str],
+    ) -> list[dict[str, Any]]:
+        """Extract terminology binding info for view property mappings.
+
+        Iterates ``loader._views[code].mappings``, resolves source object
+        and property information via ``loader._classes``.
+        """
+        result: list[dict[str, Any]] = []
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        for vc in view_codes:
+            view_data = raw_views.get(vc)
+            if view_data is None:
+                continue
+            for m in view_data.get("mappings", []):
+                prop_code = m.get("property_code", "")
+                src_obj_code = m.get("source_object_code", "")
+                src_col_code = m.get("source_object_column_code", "")
+                if not prop_code:
+                    continue
+                src_obj = loader._classes.get(src_obj_code)
+                src_obj_name = src_obj.object_name if src_obj else src_obj_code
+                result.append(
+                    {
+                        "viewCode": vc,
+                        "viewName": view_data.get("view_name", ""),
+                        "propertyCode": prop_code,
+                        "propertyName": m.get("property_name", ""),
+                        "sourceObjectCode": src_obj_code,
+                        "sourceObjectName": src_obj_name,
+                        "sourceColumnCode": src_col_code,
+                        "bindingType": "view_property",
+                    }
+                )
+        return result
+
+    # ── OntologyBackend: Search & graph (new) ──────────────────────────────
+
+    _ONTOLOGY_TYPE_TO_TERM: dict[str, str] = {
+        "object": "object",
+        "action": "ontology_action",
+        "view": "view",
+        "property": "property",
+        "dimension": "dimension",
+    }
+
+    def search_ontology(
+        self,
+        base_id: str,
+        scene_ids: list[str],
+        *,
+        keyword: str,
+        query_type: str = "vector",
+        search_scope: str = "all",
+        ontology_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Unified vector search across metadata and instance terms.
+
+        Uses the knowledge SDK embedding service and search engine to
+        perform cosine-similarity vector search across metadata and
+        instance term types.
+        """
+        _ = base_id, scene_ids, query_type, kwargs
+
+        if not keyword:
+            return {
+                "metadata": [],
+                "instances": [],
+                "totalCount": {"metadata": 0, "instances": 0},
+            }
+
+        svc = self._get_embedding()
+        vec = svc.get_text_embedding(keyword)
+
+        result: dict[str, Any] = {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
+
+        engine = self._get_search_engine()
+
+        _ALL_METADATA_TYPES = list(self._ONTOLOGY_TYPE_TO_TERM.values())
+        if ontology_type:
+            metadata_types = [
+                self._ONTOLOGY_TYPE_TO_TERM[t]
+                for t in ontology_type
+                if t in self._ONTOLOGY_TYPE_TO_TERM
+            ]
+            if not metadata_types:
+                metadata_types = _ALL_METADATA_TYPES
+        else:
+            metadata_types = _ALL_METADATA_TYPES
+
+        view_code_set: set[str] | None = set(view_code) if view_code else None
+        property_code_set: set[str] | None = (
+            set(property_code) if property_code else None
+        )
+
+        limit = kwargs.get("limit", 20)
+
+        if search_scope in ("metadata", "all"):
+            metadata_hits = engine.search_terms_by_embedding(
+                vector=vec,
+                term_types=metadata_types,
+                term_codes=object_code,
+                limit=limit,
+            )
+            for hit in metadata_hits:
+                term_code = str(hit.get("term_code", ""))
+                term_type = str(hit.get("term_type_code", ""))
+                if view_code_set is not None and term_code not in view_code_set:
+                    continue
+                if property_code_set is not None and term_code not in property_code_set:
+                    continue
+                entry: dict[str, Any] = {
+                    "termCode": term_code,
+                    "termType": term_type,
+                    "nameText": str(hit.get("name_text", hit.get("term_name", ""))),
+                    "score": round(float(hit["score"]), 4),
+                }
+                result["metadata"].append(entry)
+            result["totalCount"]["metadata"] = len(result["metadata"])
+
+        if search_scope in ("instance", "all"):
+            reader = self._get_knowledge_reader()
+            instance_type_codes: list[str] = []
+            try:
+                instance_type_codes = sorted(
+                    reader.get_type_codes_by_category(categories={3, 4, 5})
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to get instance type codes for search_ontology"
+                )
+
+            if instance_type_codes:
+                instance_hits = engine.search_terms_by_embedding(
+                    vector=vec,
+                    term_types=instance_type_codes,
+                    limit=limit,
+                )
+                result["instances"] = [
+                    {
+                        "termCode": hit["term_code"],
+                        "termType": hit["term_type_code"],
+                        "nameText": hit.get("name_text", hit.get("term_name", "")),
+                        "score": round(float(hit["score"]), 4),
+                    }
+                    for hit in instance_hits
+                ]
+                result["totalCount"]["instances"] = len(result["instances"])
+
+        return result
+
+    def search_ontology_batch(
+        self,
+        base_id: str,
+        keyword: str,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Batch search across all scenes of a base via vector search."""
+        _ = base_id
+
+        if not keyword:
+            return {
+                "metadata": [],
+                "instances": [],
+                "totalCount": {"metadata": 0, "instances": 0},
+            }
+
+        svc = self._get_embedding()
+        vec = svc.get_text_embedding(keyword)
+
+        result: dict[str, Any] = {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
+
+        engine = self._get_search_engine()
+
+        _METADATA_TERM_TYPES = {
+            "object",
+            "view",
+            "dimension",
+            "property",
+            "ontology_action",
+        }
+        metadata_hits = engine.search_terms_by_embedding(
+            vector=vec,
+            term_types=list(_METADATA_TERM_TYPES),
+            limit=limit,
+        )
+        seen_metadata: set[tuple[str, str]] = set()
+        for hit in metadata_hits:
+            key = (str(hit["term_code"]), str(hit["term_type_code"]))
+            if key in seen_metadata:
+                continue
+            seen_metadata.add(key)
+            result["metadata"].append(
+                {
+                    "termCode": str(hit["term_code"]),
+                    "termType": str(hit["term_type_code"]),
+                    "nameText": str(hit.get("name_text", hit.get("term_name", ""))),
+                    "score": round(float(hit["score"]), 4),
+                }
+            )
+        result["totalCount"]["metadata"] = len(result["metadata"])
+
+        reader = self._get_knowledge_reader()
+        instance_type_codes: list[str] = []
+        try:
+            instance_type_codes = sorted(
+                reader.get_type_codes_by_category(categories={3, 4, 5})
+            )
+        except Exception:
+            logger.exception(
+                "Failed to get instance type codes for search_ontology_batch"
+            )
+
+        if instance_type_codes:
+            instance_hits = engine.search_terms_by_embedding(
+                vector=vec,
+                term_types=instance_type_codes,
+                limit=limit,
+            )
+            seen_instances: set[tuple[str, str]] = set()
+            for hit in instance_hits:
+                key = (str(hit["term_code"]), str(hit["term_type_code"]))
+                if key in seen_instances:
+                    continue
+                seen_instances.add(key)
+                result["instances"].append(
+                    {
+                        "termCode": str(hit["term_code"]),
+                        "termType": str(hit["term_type_code"]),
+                        "nameText": str(hit.get("name_text", hit.get("term_name", ""))),
+                        "score": round(float(hit["score"]), 4),
+                    }
+                )
+            result["totalCount"]["instances"] = len(result["instances"])
+
+        return result
+
+    def graph_query(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        object_code: list[str],
+        match_by: str = "name",
+        values: list[str] | None = None,
+        step: int = 1,
+    ) -> dict[str, Any]:
+        """Graph traversal query — not yet implemented."""
+        _ = base_id, scene_id, object_code, match_by, values, step
+        return {"nodes": [], "edges": []}
+
+    def search_instances(
+        self,
+        base_id: str,
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Search instances in a base — not yet implemented."""
+        _ = base_id, object_code, select, where
+        return {"data": [], "totalCount": 0}
+
+    def graph_path(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """Find shortest path between two objects — not yet implemented."""
+        _ = base_id, scene_id, match_by, start_node, end_node, direction
+        return {"path": [], "edges": [], "hops": -1}
+
     # ── StorageBackend ─────────────────────────────────────────────────────
 
     def store_result(
@@ -1677,6 +2034,444 @@ class DataCloudDataBackend:
                 )
             )
         return files
+
+    # ── TermBackend ─────────────────────────────────────────────────────────
+
+    def search_terms(
+        self,
+        *,
+        dataset_ids: list[str] | None = None,
+        keyword: str | None = None,
+        term_name: str | None = None,
+        term_type: str | None = None,
+        query_type: str = "fulltext",
+        parent_term_code: str | None = None,
+        label_filters: list[dict[str, Any]] | None = None,
+        label_condition: str = "and",
+        term_ids: list[str] | None = None,
+        top_k: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Multi-strategy term search via datacloud_knowledge provider."""
+        from datacloud_knowledge.provider import query_terms  # noqa: PLC0415
+
+        return query_terms(  # type: ignore[no-any-return]
+            dataset_ids=dataset_ids,
+            keyword=keyword,
+            term_name=term_name,
+            term_type=term_type,
+            query_type=query_type,
+            parent_term_code=parent_term_code,
+            label_filters=label_filters,
+            label_condition=label_condition,
+            term_ids=term_ids,
+            top_k=top_k,
+            offset=offset,
+        )
+
+    def get_term_detail(
+        self, *, dataset_id: str, term_id: str
+    ) -> dict[str, Any] | None:
+        """Get single term detail via datacloud_knowledge provider."""
+        from datacloud_knowledge.provider import (  # noqa: PLC0415
+            get_term_detail as sdk_get_term_detail,
+        )
+
+        return sdk_get_term_detail(dataset_id=dataset_id, term_id=term_id)  # type: ignore[no-any-return]
+
+    def list_terms(
+        self,
+        *,
+        dataset_id: str,
+        term_type: str | None = None,
+        term_type_no_eq: str | None = None,
+        page_index: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        """Paginated term listing via datacloud_knowledge provider."""
+        from datacloud_knowledge.provider import (  # noqa: PLC0415
+            list_terms as sdk_list_terms,
+        )
+
+        return sdk_list_terms(  # type: ignore[no-any-return]
+            dataset_id=dataset_id,
+            term_type=term_type,
+            term_type_no_eq=term_type_no_eq,
+            page_index=page_index,
+            page_size=page_size,
+        )
+
+    def create_term(self, *, term: dict[str, Any]) -> dict[str, Any]:
+        """Create a single term — wraps import_terms."""
+        return self.import_terms(
+            dataset_id=term.get("datasetId", term.get("dataset_id", "")),
+            terms=[term],
+        )
+
+    def import_terms(
+        self, *, dataset_id: str, terms: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Batch import terms via datacloud_knowledge provider."""
+        from datacloud_knowledge.provider import (  # noqa: PLC0415
+            import_terms as sdk_import_terms,
+        )
+
+        return sdk_import_terms(dataset_id=dataset_id, terms=terms)  # type: ignore[no-any-return]
+
+    def update_term(
+        self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
+    ) -> None:
+        """Update a term via datacloud_knowledge provider."""
+        from datacloud_knowledge.provider import (  # noqa: PLC0415
+            update_term as sdk_update_term,
+        )
+
+        sdk_update_term(dataset_id=dataset_id, term_id=term_id, updates=updates)
+
+    def delete_term(self, *, term_id: str) -> None:
+        """Delete a term via datacloud_knowledge writer."""
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.delete_term(term_id=term_id)
+
+    def query_term_relations(
+        self,
+        *,
+        term_id: str,
+        relation_category: str | None = None,
+        direction: str = "both",
+        depth: int = 1,
+    ) -> dict[str, Any]:
+        """Query term relations via knowledge reader."""
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.query_term_relations(  # type: ignore[no-any-return]
+                term_id=term_id,
+                relation_category=relation_category,
+                direction=direction,
+                depth=depth,
+            )
+        except Exception:
+            logger.exception("query_term_relations failed term_id=%s", term_id)
+            return {"data": [], "totalCount": 0}
+
+    # ── TermRelation ────────────────────────────────────────────────────
+
+    def list_term_relations(
+        self,
+        *,
+        source_term_id: str | None = None,
+        target_term_id: str | None = None,
+        relation_category: str | None = None,
+    ) -> list[dict[str, Any]]:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.list_term_relations(  # type: ignore[no-any-return]
+                source_term_id=source_term_id,
+                target_term_id=target_term_id,
+                relation_category=relation_category,
+            )
+        except Exception:
+            logger.exception("list_term_relations failed")
+            return []
+
+    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.get_term_relation(relation_id=relation_id)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("get_term_relation failed relation_id=%s", relation_id)
+            return None
+
+    def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        return writer.create_term_relation(relation=relation)  # type: ignore[no-any-return]
+
+    def update_term_relation(
+        self, *, relation_id: str, updates: dict[str, Any]
+    ) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.update_term_relation(relation_id=relation_id, updates=updates)
+
+    def delete_term_relation(self, *, relation_id: str) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.delete_term_relation(relation_id=relation_id)
+
+    # ── TermName ────────────────────────────────────────────────────────
+
+    def list_term_names(
+        self, *, term_id: str | None = None, name_text: str | None = None
+    ) -> list[dict[str, Any]]:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.list_term_names(term_id=term_id, name_text=name_text)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("list_term_names failed")
+            return []
+
+    def get_term_name(self, *, name_id: str) -> dict[str, Any] | None:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.get_term_name(name_id=name_id)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("get_term_name failed name_id=%s", name_id)
+            return None
+
+    def create_term_name(self, *, name: dict[str, Any]) -> dict[str, Any]:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        return writer.create_term_name(name=name)  # type: ignore[no-any-return]
+
+    def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.update_term_name(name_id=name_id, updates=updates)
+
+    def delete_term_name(self, *, name_id: str) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.delete_term_name(name_id=name_id)
+
+    # ── TermKnowledge ───────────────────────────────────────────────────
+
+    def list_term_knowledges(
+        self, *, term_id: str | None = None, ext_system: str | None = None
+    ) -> list[dict[str, Any]]:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.list_term_knowledges(term_id=term_id, ext_system=ext_system)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("list_term_knowledges failed")
+            return []
+
+    def get_term_knowledge(self, *, knowledge_id: str) -> dict[str, Any] | None:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.get_term_knowledge(knowledge_id=knowledge_id)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("get_term_knowledge failed knowledge_id=%s", knowledge_id)
+            return None
+
+    def create_term_knowledge(self, *, knowledge: dict[str, Any]) -> dict[str, Any]:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        return writer.create_term_knowledge(knowledge=knowledge)  # type: ignore[no-any-return]
+
+    def update_term_knowledge(
+        self, *, knowledge_id: str, updates: dict[str, Any]
+    ) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.update_term_knowledge(knowledge_id=knowledge_id, updates=updates)
+
+    def delete_term_knowledge(self, *, knowledge_id: str) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.delete_term_knowledge(knowledge_id=knowledge_id)
+
+    # ── TermLibrary ─────────────────────────────────────────────────────
+
+    def list_term_libraries(
+        self,
+        *,
+        library_code: str | None = None,
+        library_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.list_term_libraries(  # type: ignore[no-any-return]
+                library_code=library_code, library_name=library_name
+            )
+        except Exception:
+            logger.exception("list_term_libraries failed")
+            return []
+
+    def get_term_library(self, *, library_id: str) -> dict[str, Any] | None:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.get_term_library(library_id=library_id)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("get_term_library failed library_id=%s", library_id)
+            return None
+
+    def create_term_library(self, *, library: dict[str, Any]) -> dict[str, Any]:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        return writer.create_term_library(library=library)  # type: ignore[no-any-return]
+
+    def update_term_library(self, *, library_id: str, updates: dict[str, Any]) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.update_term_library(library_id=library_id, updates=updates)
+
+    def delete_term_library(self, *, library_id: str) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.delete_term_library(library_id=library_id)
+
+    # ── TermType ────────────────────────────────────────────────────────
+
+    def list_term_types(
+        self, *, type_category: int | None = None
+    ) -> list[dict[str, Any]]:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.list_term_types(type_category=type_category)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("list_term_types failed")
+            return []
+
+    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.get_term_type(type_code=type_code)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("get_term_type failed type_code=%s", type_code)
+            return None
+
+    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        return writer.create_term_type(term_type=term_type)  # type: ignore[no-any-return]
+
+    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.update_term_type(type_code=type_code, updates=updates)
+
+    def delete_term_type(self, *, type_code: str) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.delete_term_type(type_code=type_code)
+
+    # ── Domain ──────────────────────────────────────────────────────────
+
+    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.list_domains(parent_id=parent_id)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("list_domains failed")
+            return []
+
+    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.get_domain(domain_id=domain_id)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("get_domain failed domain_id=%s", domain_id)
+            return None
+
+    def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        return writer.create_domain(domain=domain)  # type: ignore[no-any-return]
+
+    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.update_domain(domain_id=domain_id, updates=updates)
+
+    def delete_domain(self, *, domain_id: str) -> None:
+        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+        writer = create_writer()
+        writer.delete_domain(domain_id=domain_id)
+
+    def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]:
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.list_domain_term_types(domain_id=domain_id)  # type: ignore[no-any-return]
+        except Exception:
+            logger.exception("list_domain_term_types failed domain_id=%s", domain_id)
+            return []
+
+    # ── Vector ──────────────────────────────────────────────────────────
+
+    def embed(self, text: str) -> list[float]:
+        """Text → embedding vector."""
+        svc = self._get_embedding()
+        return svc.get_text_embedding(text)  # type: ignore[no-any-return]
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """Batch text → embedding vectors."""
+        svc = self._get_embedding()
+        return svc.get_text_embedding_batch(texts)  # type: ignore[no-any-return]
+
+    def search_by_embedding(
+        self, vector: list[float], term_types: list[str], limit: int = 20
+    ) -> list[Any]:
+        """Vector similarity search for terms."""
+        engine = self._get_search_engine()
+        raw: list[dict[str, Any]] = engine.search_terms_by_embedding(
+            vector=vector,
+            term_types=term_types,
+            limit=limit,
+        )
+        from datacloud_platform.models.shared import EmbeddingHit
+
+        return [
+            EmbeddingHit(
+                term_code=str(h["term_code"]),
+                term_type_code=str(h["term_type_code"]),
+                name_text=str(h.get("name_text", h.get("term_name", ""))),
+                score=round(float(h["score"]), 4),
+            )
+            for h in raw
+        ]
+
+    # ── Sync ────────────────────────────────────────────────────────────
+
+    def sync_terms(
+        self,
+        entity_code: str,
+        entity_name: str,
+        entity_source: str,
+        fields: list[dict[str, Any]],
+        *,
+        backfill_vectors: bool = True,
+    ) -> None:
+        """Sync object term metadata into the knowledge DB."""
+        from datacloud_knowledge.ingestion.term_sync import (  # noqa: PLC0415
+            sync_object_terms,
+        )
+
+        sync_object_terms(
+            entity_code=entity_code,
+            entity_name=entity_name,
+            entity_source=entity_source,
+            fields=fields,
+            backfill_vectors=backfill_vectors,
+        )
+
+    def remove_terms(self, entity_code: str) -> None:
+        """Remove all terms associated with an object."""
+        from datacloud_knowledge.ingestion.term_sync import (  # noqa: PLC0415
+            remove_object_terms,
+        )
+
+        remove_object_terms(entity_code)
 
     # ── internal helpers ───────────────────────────────────────────────────
 
