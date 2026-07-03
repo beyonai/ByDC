@@ -7,12 +7,13 @@ import logging
 import uuid
 from typing import Any
 
+from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
 from datacloud_platform.models import StoredFile
 
 logger = logging.getLogger(__name__)
 
 
-class StorageBackendMixin:
+class StorageBackendMixin(DataCloudDataBackendBase):
     """StorageBackend adapter — store/get/delete/list result files."""
 
     # ── StorageBackend ─────────────────────────────────────────────────────

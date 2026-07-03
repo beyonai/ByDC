@@ -283,14 +283,17 @@ class FakeSceneServicePlatform(SceneServiceMixin):
     (via _HasOntologyBackend protocol + _base_path_for usage).
     """
 
-    def __init__(self, backend: FakeSceneMembershipBackend) -> None:
+    def __init__(self, backend: FakeSceneMembershipBackend, tmp_path: Path | None = None) -> None:
         self._backend = backend
+        self._tmp_path = tmp_path or Path("/tmp/fake_scene_test")
 
     def _ontology_for(self, base_id: str) -> FakeSceneMembershipBackend:  # noqa: ARG002
         return self._backend
 
     def _base_path_for(self, base_id: str) -> Path:  # noqa: ARG002
-        return Path("/fake/base/path")
+        p = self._tmp_path / base_id
+        p.mkdir(parents=True, exist_ok=True)
+        return p
 
     def create_base(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Simulate LibraryMixin.create_base + DatacloudPlatform.create_base."""
@@ -340,9 +343,9 @@ def backend() -> FakeSceneMembershipBackend:
 
 
 @pytest.fixture
-def p(backend: FakeSceneMembershipBackend) -> FakeSceneServicePlatform:
+def p(backend: FakeSceneMembershipBackend, tmp_path: Path) -> FakeSceneServicePlatform:
     """Fresh FakeSceneServicePlatform wrapping the backend."""
-    return FakeSceneServicePlatform(backend)
+    return FakeSceneServicePlatform(backend, tmp_path)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════════

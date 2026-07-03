@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
+
 logger = logging.getLogger(__name__)
 
 
-class TermEntityMixin:
+class TermEntityMixin(DataCloudDataBackendBase):
     """Term knowledge entity CRUD — TermKnowledge, TermLibrary, TermType, Domain."""
 
     # ── TermKnowledge ───────────────────────────────────────────────────

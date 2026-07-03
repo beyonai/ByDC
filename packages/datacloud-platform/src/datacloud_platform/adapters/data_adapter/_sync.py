@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
+
 logger = logging.getLogger(__name__)
 
 
-class SyncMixin:
+class SyncMixin(DataCloudDataBackendBase):
     """Term sync — sync_terms, remove_terms."""
 
     # ── Sync ────────────────────────────────────────────────────────────

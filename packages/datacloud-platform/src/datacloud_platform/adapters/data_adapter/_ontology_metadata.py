@@ -8,19 +8,13 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyQueryable
 
+from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
+
 logger = logging.getLogger(__name__)
 
 
-class OntologyMetadataMixin:
+class OntologyMetadataMixin(DataCloudDataBackendBase):
     """Property resolution, terminology bindings, ontology search & graph."""
-
-    _ONTOLOGY_TYPE_TO_TERM: dict[str, str] = {
-        "object": "object",
-        "action": "ontology_action",
-        "view": "view",
-        "property": "property",
-        "dimension": "dimension",
-    }
 
     # ── OntologyBackend: Terminology bindings ──────────────────────────────
 

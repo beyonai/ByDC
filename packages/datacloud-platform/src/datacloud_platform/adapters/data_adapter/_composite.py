@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
 from datacloud_platform.adapters.data_adapter._ontology import OntologyBackendMixin
 from datacloud_platform.adapters.data_adapter._ontology_metadata import (
     OntologyMetadataMixin,
@@ -16,7 +15,6 @@ from datacloud_platform.adapters.data_adapter._vector import VectorBackendMixin
 
 
 class DataCloudDataBackend(
-    DataCloudDataBackendBase,
     OntologyBackendMixin,
     OntologyMetadataMixin,
     SceneMixin,

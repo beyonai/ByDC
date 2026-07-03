@@ -706,6 +706,141 @@ class FakeOntologyBackend:
             if object_code in scene.get("member_object_codes", [])
         ]
 
+    # -- Ontology search & graph (fake) --
+
+    def search_ontology(
+        self,
+        base_id: str,  # noqa: ARG002
+        scene_ids: list[str],  # noqa: ARG002
+        *,
+        keyword: str,
+        query_type: str = "vector",
+        search_scope: str = "all",
+        ontology_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Return empty results."""
+        return {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
+
+    def search_ontology_batch(
+        self,
+        base_id: str,  # noqa: ARG002
+        keyword: str,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Return empty results."""
+        return {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
+
+    def graph_query(
+        self,
+        base_id: str,  # noqa: ARG002
+        scene_id: str,  # noqa: ARG002
+        *,
+        object_code: list[str],
+        match_by: str = "name",
+        values: list[str] | None = None,
+        step: int = 1,
+    ) -> dict[str, Any]:
+        """Return empty graph."""
+        return {"nodes": [], "edges": []}
+
+    def search_instances(
+        self,
+        base_id: str,  # noqa: ARG002
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Return empty results."""
+        return {"data": [], "totalCount": 0}
+
+    def graph_path(
+        self,
+        base_id: str,  # noqa: ARG002
+        scene_id: str,  # noqa: ARG002
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """Return empty path."""
+        return {"path": [], "edges": [], "hops": -1}
+
+    # -- Property resolution (fake) --
+
+    def get_object_property_term_bindings(
+        self,
+        loader: OntologyQueryable,  # noqa: ARG002
+        object_codes: list[str],  # noqa: ARG002
+    ) -> list[dict[str, Any]]:
+        """Return empty list."""
+        return []
+
+    def get_view_property_term_bindings(
+        self,
+        loader: OntologyQueryable,  # noqa: ARG002
+        view_codes: list[str],  # noqa: ARG002
+    ) -> list[dict[str, Any]]:
+        """Return empty list."""
+        return []
+
+    def get_view_included_objects(
+        self,
+        loader: OntologyQueryable,  # noqa: ARG002
+        ontology_code: str,  # noqa: ARG002
+    ) -> list[str]:
+        """Return empty list."""
+        return []
+
+    def get_joinkey_related_objects(
+        self,
+        loader: OntologyQueryable,  # noqa: ARG002
+        ontology_code: str,  # noqa: ARG002
+        field_codes: list[str],  # noqa: ARG002
+    ) -> list[str]:
+        """Return empty list."""
+        return []
+
+    def resolve_property_name(
+        self,
+        loader: OntologyQueryable,  # noqa: ARG002
+        name_text: str,  # noqa: ARG002
+        scope_code: str,  # noqa: ARG002
+    ) -> tuple[str, str] | None:
+        """Return None — no resolution."""
+        return None
+
+    def resolve_property_names(
+        self,
+        loader: OntologyQueryable,  # noqa: ARG002
+        name_texts: list[str],  # noqa: ARG002
+        scope_code: str,  # noqa: ARG002
+    ) -> dict[str, tuple[str, str]]:
+        """Return empty dict."""
+        return {}
+
+    def get_property_aliases(
+        self,
+        loader: OntologyQueryable,  # noqa: ARG002
+        field_code: str,  # noqa: ARG002
+        scope_code: str,  # noqa: ARG002
+    ) -> list[str]:
+        """Return empty list."""
+        return []
+
 
 # ── Scene grouping test helpers ───────────────────────────────────────────
 

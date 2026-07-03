@@ -9,7 +9,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass
 
-from datacloud_platform.adapters.data_adapter._base import _normalize_object_codes
+from datacloud_platform.adapters.data_adapter._base import (
+    DataCloudDataBackendBase,
+    _normalize_object_codes,
+)
 from datacloud_platform.models.action import Action, ActionParam
 from datacloud_platform.models.datasource import Datasource, DbConnection
 from datacloud_platform.models.object_type import ObjectType
@@ -20,7 +23,7 @@ from datacloud_platform.models.view import View, ViewProperty
 logger = logging.getLogger(__name__)
 
 
-class SceneMixin:
+class SceneMixin(DataCloudDataBackendBase):
     """Scene management — list, query, CRUD, reverse lookup, member management."""
 
     # ── Scene management ──────────────────────────────────────────────────

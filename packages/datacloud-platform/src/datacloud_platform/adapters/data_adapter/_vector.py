@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
 
-class VectorBackendMixin:
+
+class VectorBackendMixin(DataCloudDataBackendBase):
     """Vector backend — embed, embed_batch, search_by_embedding."""
 
     # ── Vector ──────────────────────────────────────────────────────────

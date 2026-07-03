@@ -11,7 +11,10 @@ if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyQueryable
 
 from datacloud_platform.adapters.json_entity_store import JsonEntityStore
-from datacloud_platform.adapters.data_adapter._base import _normalize_object_codes
+from datacloud_platform.adapters.data_adapter._base import (
+    DataCloudDataBackendBase,
+    _normalize_object_codes,
+)
 from datacloud_platform.models import ObjectSummary, ParsedOwlContent
 from datacloud_platform.models.action import Action, ActionParam
 from datacloud_platform.models.datasource import Datasource, DbConnection
@@ -24,7 +27,7 @@ from datacloud_platform.platform_file_storage import atomic_write_json
 logger = logging.getLogger(__name__)
 
 
-class OntologyBackendMixin:
+class OntologyBackendMixin(DataCloudDataBackendBase):
     """OntologyBackend core — parse, load, CRUD (Object/View/Relation/Action/Datasource)."""
 
     # ── OntologyBackend ────────────────────────────────────────────────────
@@ -135,7 +138,7 @@ class OntologyBackendMixin:
             content = _json.loads(registry.read_text(encoding="utf-8"))
             loader = OntologyLoader()
             loader.load_from_content(content)
-            return loader  # type: ignore[return-value]
+            return loader  # type: ignore[no-any-return]
 
         # Fallback: OWL directory exists but no registry yet —
         # parse → persist (same pipeline as import-owl) → fast path
@@ -150,7 +153,7 @@ class OntologyBackendMixin:
             return self.load_ontology(base_path)  # recurse → hits fast path above
 
         # No OWL directory, return empty loader
-        return OntologyLoader()  # type: ignore[return-value]
+        return OntologyLoader()  # type: ignore[no-any-return]
 
     def load_terms(
         self, _loader: OntologyQueryable, *, library_id: str = "PERSONAL_LIB"
@@ -171,7 +174,7 @@ class OntologyBackendMixin:
         from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
 
         _ = library_id  # consumed by concrete TermLoader subclass
-        return TermLoader()  # type: ignore[abstract]
+        return TermLoader()
 
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Create physical table for DYNAMIC_TABLE objects.
