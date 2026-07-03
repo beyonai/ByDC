@@ -785,6 +785,94 @@ class HttpTermAdapter:
         raise NotImplementedError("HTTP 后端不支持 name_id 查询，仅支持术语 CRUD")
 
     # ═════════════════════════════════════════════════════════════════════
+    # TermReader — 新增领域通用方法（NotImplementedError 占位）
+    # ═════════════════════════════════════════════════════════════════════
+
+    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]:
+        """HTTP API 不支持领域列表查询。"""
+        raise NotImplementedError("list_domains not implemented in HTTP adapter")
+
+    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None:
+        """HTTP API 不支持领域详情查询。"""
+        raise NotImplementedError("get_domain not implemented in HTTP adapter")
+
+    def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]:
+        """HTTP API 不支持领域术语类型查询。"""
+        raise NotImplementedError("list_domain_term_types not implemented in HTTP adapter")
+
+    def list_term_libraries(
+        self,
+        *,
+        library_code: str | None = None,
+        library_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """HTTP API 不支持术语库列表查询。"""
+        raise NotImplementedError("list_term_libraries not implemented in HTTP adapter")
+
+    def get_term_library(self, *, library_id: str) -> dict[str, Any] | None:
+        """HTTP API 不支持术语库详情查询。"""
+        raise NotImplementedError("get_term_library not implemented in HTTP adapter")
+
+    def list_term_types(self, *, type_category: int | None = None) -> list[dict[str, Any]]:
+        """HTTP API 不支持术语类型列表查询。"""
+        raise NotImplementedError("list_term_types not implemented in HTTP adapter")
+
+    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None:
+        """HTTP API 不支持术语类型详情查询。"""
+        raise NotImplementedError("get_term_type not implemented in HTTP adapter")
+
+    def list_term_relations(
+        self,
+        *,
+        source_term_id: str | None = None,
+        target_term_id: str | None = None,
+        relation_category: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """HTTP API 不支持术语关系列表查询。"""
+        raise NotImplementedError("list_term_relations not implemented in HTTP adapter")
+
+    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
+        """HTTP API 不支持术语关系详情查询。"""
+        raise NotImplementedError("get_term_relation not implemented in HTTP adapter")
+
+    def list_term_names(
+        self,
+        *,
+        term_id: str | None = None,
+        name_text: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """HTTP API 不支持术语名称列表查询。"""
+        raise NotImplementedError("list_term_names not implemented in HTTP adapter")
+
+    def get_term_name(self, *, name_id: str) -> dict[str, Any] | None:
+        """HTTP API 不支持术语名称详情查询。"""
+        raise NotImplementedError("get_term_name not implemented in HTTP adapter")
+
+    def list_term_knowledges(
+        self,
+        *,
+        term_id: str | None = None,
+        ext_system: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """HTTP API 不支持术语知识列表查询。"""
+        raise NotImplementedError("list_term_knowledges not implemented in HTTP adapter")
+
+    def get_term_knowledge(self, *, knowledge_id: str) -> dict[str, Any] | None:
+        """HTTP API 不支持术语知识详情查询。"""
+        raise NotImplementedError("get_term_knowledge not implemented in HTTP adapter")
+
+    def query_term_relations(
+        self,
+        *,
+        term_id: str,
+        relation_category: str | None = None,
+        direction: str = "both",
+        depth: int = 1,
+    ) -> dict[str, Any]:
+        """HTTP API 不支持术语关系图谱查询。"""
+        raise NotImplementedError("query_term_relations not implemented in HTTP adapter")
+
+    # ═════════════════════════════════════════════════════════════════════
     # TermWriter — 新增协议方法（TermProvider）
     # ═════════════════════════════════════════════════════════════════════
 
@@ -1000,6 +1088,86 @@ class HttpTermAdapter:
     ) -> None:
         """HTTP API 不支持 name_id 级 search_scope 更新。"""
         raise NotImplementedError("HTTP 后端不支持 update_name_search_scope，请使用 OpenGauss 后端")
+
+    # ═════════════════════════════════════════════════════════════════════
+    # TermWriter — 新增领域通用方法（NotImplementedError 占位）
+    # ═════════════════════════════════════════════════════════════════════
+
+    def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:
+        """HTTP API 不支持领域创建。"""
+        raise NotImplementedError("create_domain not implemented in HTTP adapter")
+
+    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
+        """HTTP API 不支持领域更新。"""
+        raise NotImplementedError("update_domain not implemented in HTTP adapter")
+
+    def delete_domain(self, *, domain_id: str) -> None:
+        """HTTP API 不支持领域删除。"""
+        raise NotImplementedError("delete_domain not implemented in HTTP adapter")
+
+    def create_term_library(self, *, library: dict[str, Any]) -> dict[str, Any]:
+        """HTTP API 不支持术语库创建。"""
+        raise NotImplementedError("create_term_library not implemented in HTTP adapter")
+
+    def update_term_library(self, *, library_id: str, updates: dict[str, Any]) -> None:
+        """HTTP API 不支持术语库更新。"""
+        raise NotImplementedError("update_term_library not implemented in HTTP adapter")
+
+    def delete_term_library(self, *, library_id: str) -> None:
+        """HTTP API 不支持术语库删除。"""
+        raise NotImplementedError("delete_term_library not implemented in HTTP adapter")
+
+    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+        """HTTP API 不支持术语类型创建。"""
+        raise NotImplementedError("create_term_type not implemented in HTTP adapter")
+
+    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
+        """HTTP API 不支持术语类型更新。"""
+        raise NotImplementedError("update_term_type not implemented in HTTP adapter")
+
+    def delete_term_type(self, *, type_code: str) -> None:
+        """HTTP API 不支持术语类型删除。"""
+        raise NotImplementedError("delete_term_type not implemented in HTTP adapter")
+
+    def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:
+        """HTTP API 不支持术语关系创建。"""
+        raise NotImplementedError("create_term_relation not implemented in HTTP adapter")
+
+    def update_term_relation(self, *, relation_id: str, updates: dict[str, Any]) -> None:
+        """HTTP API 不支持术语关系更新。"""
+        raise NotImplementedError("update_term_relation not implemented in HTTP adapter")
+
+    def delete_term_relation(self, *, relation_id: str) -> None:
+        """HTTP API 不支持术语关系删除。"""
+        raise NotImplementedError("delete_term_relation not implemented in HTTP adapter")
+
+    def create_term_name_wrapper(self, *, name: dict[str, Any]) -> dict[str, Any]:
+        """HTTP API 不支持 wrapper 式术语名称创建。"""
+        raise NotImplementedError("create_term_name_wrapper not implemented in HTTP adapter")
+
+    def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
+        """HTTP API 不支持术语名称更新。"""
+        raise NotImplementedError("update_term_name not implemented in HTTP adapter")
+
+    def delete_term_name(self, *, name_id: str) -> None:
+        """HTTP API 不支持术语名称删除。"""
+        raise NotImplementedError("delete_term_name not implemented in HTTP adapter")
+
+    def create_term_knowledge(self, *, knowledge: dict[str, Any]) -> dict[str, Any]:
+        """HTTP API 不支持术语知识创建。"""
+        raise NotImplementedError("create_term_knowledge not implemented in HTTP adapter")
+
+    def update_term_knowledge(self, *, knowledge_id: str, updates: dict[str, Any]) -> None:
+        """HTTP API 不支持术语知识更新。"""
+        raise NotImplementedError("update_term_knowledge not implemented in HTTP adapter")
+
+    def delete_term_knowledge(self, *, knowledge_id: str) -> None:
+        """HTTP API 不支持术语知识删除。"""
+        raise NotImplementedError("delete_term_knowledge not implemented in HTTP adapter")
+
+    def delete_term(self, *, term_id: str) -> None:
+        """HTTP API 不支持术语删除。"""
+        raise NotImplementedError("delete_term not implemented in HTTP adapter")
 
     # ═════════════════════════════════════════════════════════════════════
     # 上下文管理器（TermWriter 协议要求）
