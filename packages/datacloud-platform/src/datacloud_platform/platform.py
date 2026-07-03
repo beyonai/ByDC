@@ -1,4 +1,4 @@
-"""DatacloudPlatform — unified ontology + knowledge + execution platform entry point.
+"""DatacloudPlatform — unified ontology + term + execution + storage platform entry point.
 
 Multi-base router: injects OntologyBaseRegistry, routes every operation by base_id.
 Each base independently declares its 4 Backend dimensions via source_type presets
@@ -19,12 +19,13 @@ from typing import TYPE_CHECKING, Any, final
 from datacloud_platform.backends._contracts import (
     _HasBasePath,
     _HasExecutionBackend,
-    _HasKnowledgeBackend,
     _HasOntologyBackend,
     _HasStorageBackend,
+    _HasTermBackend,
 )
 from datacloud_platform.backends.registry import get_backend_factory
 from datacloud_platform.backends.resolution import resolve_backend_names
+from datacloud_platform.backends.term import TermBackend
 from datacloud_platform.mixins import (
     ActionCRUDMixin,
     DatasourceMixin,
@@ -39,15 +40,16 @@ from datacloud_platform.mixins import (
     SceneMixin,
     SceneServiceMixin,
     StorageMixin,
+    TermMixin,
     ViewMixin,
 )
 from datacloud_platform.ontology_store import CacheMode, OntologyStore
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
-    from datacloud_platform.backends.knowledge import KnowledgeBackend
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
     from datacloud_platform.backends.storage import StorageBackend
+    from datacloud_platform.backends.term import TermBackend
     from datacloud_platform.base_entry import OntologyBaseEntry, OntologyBaseRegistry
 
 logger = logging.getLogger(__name__)
@@ -57,9 +59,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DatacloudPlatform(
     _HasOntologyBackend,
-    _HasKnowledgeBackend,
     _HasExecutionBackend,
     _HasStorageBackend,
+    _HasTermBackend,
     _HasBasePath,
     LibraryMixin,
     OntologyQueryMixin,
@@ -70,13 +72,14 @@ class DatacloudPlatform(
     DatasourceMixin,
     ActionCRUDMixin,
     KnowledgeMixin,
+    TermMixin,
     ExecutionMixin,
     StorageMixin,
     OrchestrationMixin,
     SceneLoaderMixin,
     SceneServiceMixin,
 ):
-    """Unified ontology + knowledge + execution + storage platform — multi-base router.
+    """Unified ontology + term + execution + storage platform — multi-base router.
 
     Dependency injection:
       - _base_registry: OntologyBaseRegistry → base_id lookup
@@ -148,11 +151,11 @@ class DatacloudPlatform(
         _configure_if_supported(backend, entry)
         return backend  # type: ignore[no-any-return]
 
-    def _knowledge_for(self, base_id: str) -> KnowledgeBackend:
-        """Resolve and cache the KnowledgeBackend for a given base_id."""
+    def _term_for(self, base_id: str) -> TermBackend:
+        """Resolve and cache the TermBackend for a given base_id."""
         entry = self._resolve_entry(base_id)
         names = self._resolve_names(entry)
-        backend = self._get_backend("knowledge", names["knowledge"])
+        backend = self._get_backend("term", names["term"])
         _configure_if_supported(backend, entry)
         return backend  # type: ignore[no-any-return]
 

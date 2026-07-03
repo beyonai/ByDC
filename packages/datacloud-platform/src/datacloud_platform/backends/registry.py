@@ -12,16 +12,16 @@ from collections.abc import Callable
 from typing import Any
 
 from datacloud_platform.backends.execution import ExecutionBackend
-from datacloud_platform.backends.knowledge import KnowledgeBackend
 from datacloud_platform.backends.ontology import OntologyBackend
 from datacloud_platform.backends.storage import StorageBackend
+from datacloud_platform.backends.term import TermBackend
 
 # ── Type aliases ──
 
 BackendFactory = Callable[[], Any]
 
 OntologyBackendFactory = Callable[[], OntologyBackend]
-KnowledgeBackendFactory = Callable[[], KnowledgeBackend]
+TermBackendFactory = Callable[[], TermBackend]
 ExecutionBackendFactory = Callable[[], ExecutionBackend]
 StorageBackendFactory = Callable[[], StorageBackend]
 
@@ -41,7 +41,7 @@ def register_backend_type(name: str, default_impl: str) -> None:
     """Declare a Backend capability dimension and its default implementation.
 
     Args:
-        name: Dimension name, e.g. "ontology", "knowledge".
+        name: Dimension name, e.g. "ontology", "term".
         default_impl: Default implementation name, e.g. "datacloud-data".
 
     Raises:
@@ -144,10 +144,10 @@ def register_ontology_backend(name: str, factory: OntologyBackendFactory) -> Non
     register_implementation("ontology", name, factory)
 
 
-def register_knowledge_backend(name: str, factory: KnowledgeBackendFactory) -> None:
-    """Register a KnowledgeBackend factory (backward-compat wrapper)."""
-    _ensure_dimension("knowledge")
-    register_implementation("knowledge", name, factory)
+def register_term_backend(name: str, factory: TermBackendFactory) -> None:
+    """Register a TermBackend factory (backward-compat wrapper)."""
+    _ensure_dimension("term")
+    register_implementation("term", name, factory)
 
 
 def register_execution_backend(name: str, factory: ExecutionBackendFactory) -> None:
@@ -168,10 +168,10 @@ def get_ontology_backend(name: str) -> OntologyBackend:
     return get_backend_factory("ontology", name)()  # type: ignore[no-any-return]
 
 
-def get_knowledge_backend(name: str) -> KnowledgeBackend:
-    """Get KnowledgeBackend instance by name (backward-compat wrapper)."""
-    _ensure_dimension("knowledge")
-    return get_backend_factory("knowledge", name)()  # type: ignore[no-any-return]
+def get_term_backend(name: str) -> TermBackend:
+    """Get TermBackend instance by name (backward-compat wrapper)."""
+    _ensure_dimension("term")
+    return get_backend_factory("term", name)()  # type: ignore[no-any-return]
 
 
 def get_execution_backend(name: str) -> ExecutionBackend:

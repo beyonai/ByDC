@@ -25,17 +25,15 @@ def _register_remote_implementations() -> None:
     if _registered_remote:
         return
     from datacloud_platform.adapters.remote_adapter import (  # noqa: PLC0415
-        RemoteKnowledgeBackend,
         RemoteOntologyBackend,
+        RemoteTermBackend,
     )
     from datacloud_platform.backends.registry import register_implementation
 
     register_implementation(
         "ontology", "remote-http", lambda: RemoteOntologyBackend("")
     )
-    register_implementation(
-        "knowledge", "remote-http", lambda: RemoteKnowledgeBackend("")
-    )
+    register_implementation("term", "remote-http", lambda: RemoteTermBackend(""))
     _registered_remote = True
 
 
@@ -50,8 +48,8 @@ def register_preset(name: str, overrides: dict[str, str]) -> None:
     Example:
         register_preset("LOCAL", {})
         register_preset("REMOTE", {
-            "ontology":  "remote-http",
-            "knowledge": "remote-http",
+            "ontology": "remote-http",
+            "term":     "remote-http",
             "execution": "none",
             "storage":   "none",
         })
@@ -60,16 +58,18 @@ def register_preset(name: str, overrides: dict[str, str]) -> None:
 
 
 # ── Built-in presets ──
-register_preset("LOCAL", {})
+register_preset("LOCAL", {"term": "native-data"})
 register_preset(
     "REMOTE",
     {
         "ontology": "remote-http",
-        "knowledge": "remote-http",
+        "term": "remote-http",
         "execution": "local-exec",
         "storage": "none",
     },
 )
+register_preset("DEFAULT", {"term": "native-data"})
+register_preset("DATA_ONLY", {"term": "none"})
 
 # Remote-http implementations are registered lazily by
 # _register_remote_implementations(), called from runtime.py after

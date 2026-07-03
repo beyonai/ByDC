@@ -17,8 +17,8 @@ from datacloud_platform.adapters.data_adapter import DataCloudDataBackend
 from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.adapters.local_execution_adapter import LocalExecutionBackend
 from datacloud_platform.adapters.none_adapters import (
-    _NoopKnowledgeBackend,
     _NoopStorageBackend,
+    _NoopTermBackend,
 )
 from datacloud_platform.api.server import create_app  # noqa: F401
 from datacloud_platform.backends.presets import register_preset
@@ -47,7 +47,7 @@ def _init_platform() -> DatacloudPlatform:
 
     # ── Register backend types ──────────────────────────────────────────
     register_backend_type("ontology", "native-data")
-    register_backend_type("knowledge", "native-data")
+    register_backend_type("term", "native-data")
     register_backend_type("execution", "local-exec")
     register_backend_type("storage", "native-data")
 
@@ -58,7 +58,7 @@ def _init_platform() -> DatacloudPlatform:
         lambda: DataCloudDataBackend(entity_store=entity_store),
     )
     register_implementation(
-        "knowledge",
+        "term",
         "native-data",
         lambda: DataCloudDataBackend(entity_store=entity_store),
     )
@@ -68,7 +68,7 @@ def _init_platform() -> DatacloudPlatform:
         "native-data",
         lambda: DataCloudDataBackend(entity_store=entity_store),
     )
-    register_implementation("knowledge", "none", lambda: _NoopKnowledgeBackend())
+    register_implementation("term", "none", lambda: _NoopTermBackend())
     register_implementation("storage", "none", lambda: _NoopStorageBackend())
 
     # ── Register remote-http implementations ─────────────────────────────
@@ -81,7 +81,7 @@ def _init_platform() -> DatacloudPlatform:
         "DEFAULT",
         {
             "ontology": "native-data",
-            "knowledge": "native-data",
+            "term": "native-data",
             "execution": "local-exec",
             "storage": "native-data",
         },
@@ -90,7 +90,7 @@ def _init_platform() -> DatacloudPlatform:
         "DATA_ONLY",
         {
             "ontology": "native-data",
-            "knowledge": "none",
+            "term": "none",
             "execution": "none",
             "storage": "none",
         },
