@@ -1,22 +1,16 @@
 """对话式个人本体管理 — 业务编排层。
 
-暴露 OntologyBuildSession，支持多轮信息收集、校验、提交、删除。
+暴露 OntologyBuildSession，支持多轮信息收集与校验。
+提交/删除/术语查询等编排逻辑已上移至 datacloud-platform 的 OntologyBuildMixin。
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 import uuid
-import zipfile
-from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 
-from datacloud_knowledge.adapters import create_reader
-from datacloud_knowledge.ingestion.ontology_terms import build_terms
 from datacloud_knowledge.ingestion.workspace_store import get_workspace_store
-from datacloud_knowledge.provider import search_terms_by_type
 
 logger = logging.getLogger(__name__)
 
@@ -24,258 +18,10 @@ _VALID_DATA_TYPES = {"STRING", "INTEGER", "FLOAT", "BOOLEAN", "DATE"}
 _VALID_PROPERTY_ROLES = {"DIMENSION", "MEASURE"}
 
 
-class _ScopeDeletingReader(Protocol):
-    def delete_scope(self, scope: str) -> dict[str, Any]: ...
-
-
 class _ObjectFieldsStore(Protocol):
     def save(self, key: str, state: dict[str, Any], ttl: int = 3600) -> None: ...
 
     def load(self, key: str) -> dict[str, Any]: ...
-
-
-# ── 内部 HTTP 辅助（可被测试 mock）────────────────────────────────────────────
-
-
-def _redis_env() -> dict[str, Any]:
-    """从环境变量读取 Redis 连接参数，与 _init_discovery_redis() 保持一致。"""
-    return {
-        "host": os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
-        "port": int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
-        "db": int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
-        "password": os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD"))
-        or None,
-        "username": os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME"))
-        or None,
-        "decode_responses": True,
-    }
-
-
-def _new_redis() -> Any:
-    """在「当前」event loop 中创建全新的 Redis async 客户端。
-
-    绕过 by_framework.common.redis_client 的模块级单例，避免
-    ``Future attached to a different loop`` 错误。
-    """
-    from redis.asyncio import Redis as AsyncRedis
-
-    return AsyncRedis(**_redis_env())
-
-
-def _init_discovery_redis() -> None:
-    """全局初始化服务发现所需的 Redis 连接（幂等，重复调用无副作用）。
-
-    使用运行环境的标准 REDIS_* 环境变量，与 by-framework-docs 示例保持一致。
-    """
-    from by_framework.common.redis_client import init_redis
-
-    init_redis(
-        host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
-        port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
-        db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
-        password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")) or None,
-        username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
-    )
-
-
-def _submit_object_async(
-    entity_code: str,
-    fields: list[dict[str, Any]] | None,
-    user_code: str,
-    zip_path: Path,
-    token: str,
-) -> dict[str, Any]:
-    """在单个事件循环里完成建表 + 上传，避免跨循环 Redis 连接问题。"""
-    import httpx
-
-    service_name = os.environ.get("BE_DOMAINNAME", "").strip()
-    if not service_name:
-        raise ValueError("BE_DOMAINNAME 环境变量未配置")
-
-    async def _run() -> dict[str, Any]:
-        from by_framework.core.discovery import DiscoveryClient
-
-        _discovery_redis = _new_redis()
-        discovery_client = DiscoveryClient(redis_client=_discovery_redis, cache_interval=5)
-        try:
-            # 建表（DYNAMIC_TABLE 模式）→ 本地 SQLite personal_object.db
-            if fields is not None:
-                import sqlite3 as _sqlite3
-
-                mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
-                if not mount:
-                    return {"ok": False, "error": "FILE_STORAGE_MINIO_MOUNT_PATH 环境变量未设置"}
-                db_dir = Path(mount) / "byclaw-datacloud"
-                db_dir.mkdir(parents=True, exist_ok=True)
-                db_path = db_dir / "personal_object.db"
-                _conn = _sqlite3.connect(db_path)
-                try:
-                    col_defs = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
-                    for f in fields:
-                        col_name = f.get("property_code", "")
-                        if not col_name or col_name.lower() == "id":
-                            continue
-                        sqlite_type = {
-                            "STRING": "TEXT",
-                            "INTEGER": "INTEGER",
-                            "FLOAT": "REAL",
-                            "BOOLEAN": "INTEGER",
-                            "DATE": "TEXT",
-                        }.get(f.get("data_type", "STRING"), "TEXT")
-                        col_defs.append(f"{col_name} {sqlite_type}")
-                    ddl = f"CREATE TABLE IF NOT EXISTS {entity_code} ({', '.join(col_defs)})"
-                    _conn.execute(ddl)
-                    _conn.commit()
-                except _sqlite3.Error as exc:
-                    return {"ok": False, "error": f"建表失败: {exc}"}
-                finally:
-                    _conn.close()
-
-            # 上传 OWL zip
-            byai_instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
-            if not byai_instance:
-                return {"ok": False, "error": f"未找到服务实例: {service_name}"}
-            byai_protocol = getattr(byai_instance, "protocol", "http")
-            base_url = f"{byai_protocol}://{byai_instance.host}:{byai_instance.port}"
-            async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as http:  # noqa: S501
-                with zip_path.open("rb") as zip_file:
-                    response = await http.post(
-                        "/byaiService/tool/importObjectZip",
-                        headers={"Beyond-Token": token},
-                        files={"file": (zip_path.name, zip_file, "application/zip")},
-                        data={"catalogId": "0", "ownerType": "personal"},
-                    )
-        finally:
-            await discovery_client.close()
-            await _discovery_redis.aclose()
-
-        if response.status_code != 200:
-            return {"ok": False, "error": f"HTTP {response.status_code}"}
-        upload_resp: dict[str, Any] = response.json() if response.content else {}
-        if upload_resp.get("code", 0) != 0:
-            return {"ok": False, "error": upload_resp.get("msg", "上传失败")}
-        return {"ok": True, **upload_resp.get("data", {})}
-
-    return cast(dict[str, Any], _run_async_in_thread(_run()))
-
-
-def _import_object_zip(zip_path: Path, token: str) -> dict[str, Any]:
-    """通过服务发现调用门户服务 importObjectZip 上传 OWL zip。"""
-    service_name = os.environ.get("BE_DOMAINNAME", "").strip()
-    if not service_name:
-        raise ValueError("BE_DOMAINNAME 环境变量未配置")
-
-    async def _upload() -> dict[str, Any]:
-        import httpx
-        from by_framework.core.discovery import DiscoveryClient
-
-        _discovery_redis = _new_redis()
-        discovery_client = DiscoveryClient(redis_client=_discovery_redis, cache_interval=5)
-        try:
-            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
-            if not instance:
-                return {"ok": False, "error": f"未找到服务实例: {service_name}"}
-
-            base_url = f"http://{instance.host}:{instance.port}"
-            async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as client:  # noqa: S501
-                with zip_path.open("rb") as f:
-                    response = await client.post(
-                        "/byaiService/tool/importObjectZip",
-                        headers={"Beyond-Token": token},
-                        files={"file": (zip_path.name, f, "application/zip")},
-                        data={"catalogId": "0", "ownerType": "personal"},
-                    )
-        finally:
-            await discovery_client.close()
-            await _discovery_redis.aclose()
-
-        if response.status_code != 200:
-            return {"ok": False, "error": f"HTTP {response.status_code}"}
-        body: dict[str, Any] = response.json() if response.content else {}
-        if body.get("code", 0) != 0:
-            return {"ok": False, "error": body.get("msg", "上传失败")}
-        return {"ok": True, **body.get("data", {})}
-
-    result = _run_async_in_thread(_upload())
-    return result if isinstance(result, dict) else {}
-
-
-def _import_view_zip(zip_path: Path, token: str) -> dict[str, Any]:
-    """通过服务发现调用门户服务 importViewZip 上传 OWL zip。"""
-    service_name = os.environ.get("BE_DOMAINNAME", "").strip()
-    if not service_name:
-        raise ValueError("BE_DOMAINNAME 环境变量未配置")
-
-    async def _upload() -> dict[str, Any]:
-        import httpx
-        from by_framework.core.discovery import DiscoveryClient
-
-        _discovery_redis = _new_redis()
-        discovery_client = DiscoveryClient(redis_client=_discovery_redis, cache_interval=5)
-        try:
-            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
-            if not instance:
-                return {"ok": False, "error": f"未找到服务实例: {service_name}"}
-
-            base_url = f"http://{instance.host}:{instance.port}"
-            async with httpx.AsyncClient(base_url=base_url, timeout=60.0, verify=False) as client:  # noqa: S501
-                with zip_path.open("rb") as f:
-                    response = await client.post(
-                        "/byaiService/tool/importViewZip",
-                        headers={"Beyond-Token": token},
-                        files={"file": (zip_path.name, f, "application/zip")},
-                        data={"catalogId": "0", "ownerType": "personal"},
-                    )
-        finally:
-            await discovery_client.close()
-            await _discovery_redis.aclose()
-
-        if response.status_code != 200:
-            return {"ok": False, "error": f"HTTP {response.status_code}"}
-        body: dict[str, Any] = response.json() if response.content else {}
-        if body.get("code", 0) != 0:
-            return {"ok": False, "error": body.get("msg", "上传失败")}
-        return {"ok": True, **body.get("data", {})}
-
-    result = _run_async_in_thread(_upload())
-    return result if isinstance(result, dict) else {}
-
-
-def _create_sqlite_table(entity_code: str, fields: list[dict[str, Any]], user_code: str) -> None:
-    """通过 datacloud-data SDK 调用 SQLite HTTP API 建表。"""
-    from datacloud_data_sdk.ddl.table_manager import create_table
-
-    create_table(entity_code, fields, user_code)
-
-
-def _run_async_in_thread(coro: Any) -> Any:
-    import asyncio
-    import threading
-
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-
-    result: dict[str, Any] = {}
-    error: dict[str, BaseException] = {}
-
-    def runner() -> None:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result["value"] = loop.run_until_complete(coro)
-        except BaseException as exc:
-            error["exc"] = exc
-        finally:
-            loop.close()
-
-    thread = threading.Thread(target=runner, daemon=True)
-    thread.start()
-    thread.join()
-    if "exc" in error:
-        raise error["exc"]
-    return result.get("value")
 
 
 # ── 字段格式校验（collect 阶段即时拒绝）──────────────────────────────────────
@@ -357,6 +103,15 @@ class OntologyBuildSession:
     key 规则：{session_id}_{entity_code}（session_id 为空时退化为 {entity_code}）。
     """
 
+    def __init__(self, *, user_code: str = "") -> None:
+        """初始化 Session。
+
+        Args:
+            user_code: 用户标识，用于 workspace key 前缀和实体唯一编码生成。
+                       由调用方（OntologyBuildMixin）从请求上下文注入。
+        """
+        self._user_code = user_code
+
     # ── 信息收集 ──────────────────────────────────────────────────────────────
 
     def collect_object_info(
@@ -379,7 +134,7 @@ class OntologyBuildSession:
             if fmt_errors:
                 return {"ok": False, "errors": fmt_errors}
 
-        user_code = os.environ.get("USER_CODE", "")
+        user_code = self._user_code
 
         store = get_workspace_store()
         # key 加工号前缀，隔离多用户并发
@@ -449,7 +204,7 @@ class OntologyBuildSession:
         fields 可用于追加计算属性或覆盖自动加载的字段（按 property_code 合并，
         传入的同名覆盖，不重复的自动保留）。
         """
-        user_code = os.environ.get("USER_CODE", "")
+        user_code = self._user_code
 
         store = get_workspace_store()
         prefix = f"{user_code}:" if user_code else ""
@@ -517,274 +272,3 @@ class OntologyBuildSession:
             missing.append("object_codes")
 
         return {**state, "missing": missing}
-
-    # ── 术语查询 ──────────────────────────────────────────────────────────────
-
-    def list_bindable_term_types(self, keyword: str = "") -> list[dict[str, Any]]:
-        """查询可绑定的 LIST_TERM / DICT_TERM 术语类型（category=1 或 2）。"""
-        reader = create_reader()
-        type_codes = reader.get_type_codes_by_category(categories={1, 2})
-
-        if keyword:
-            type_codes = {tc for tc in type_codes if keyword.lower() in tc.lower()}
-
-        result: list[dict[str, Any]] = []
-        for type_code in sorted(type_codes):
-            try:
-                search_result = reader.search_terms(
-                    term_type_code=type_code,
-                    keyword=None,
-                    limit=3,
-                    offset=0,
-                )
-                samples = [
-                    {"term_code": item.term_code, "term_name": item.term_name}
-                    for item in (search_result.items if hasattr(search_result, "items") else [])
-                ]
-            except Exception:
-                logger.exception("获取术语类型 %s 的示例值失败", type_code)
-                samples = []
-            result.append({"type_code": type_code, "samples": samples})
-
-        return result
-
-    def get_term_type_values(self, term_type_code: str, keyword: str = "") -> list[dict[str, Any]]:
-        """查询指定术语类型下的所有术语值。"""
-        search_result = search_terms_by_type(
-            term_type_code=term_type_code,
-            keyword=keyword or None,
-            limit=200,
-        )
-        return [
-            {"term_code": item.term_code, "term_name": item.term_name}
-            for item in (search_result.items if hasattr(search_result, "items") else [])
-        ]
-
-    # ── 信息提交 ──────────────────────────────────────────────────────────────
-
-    def submit_object(self, entity_code: str, session_id: str = "") -> dict[str, Any]:
-        """提交本体对象：校验 → 生成 OWL → 建表（结构化）→ 上传 → 术语入库。"""
-
-        user_code = os.environ.get("USER_CODE", "")
-        store = get_workspace_store()
-        prefix = f"{user_code}:" if user_code else ""
-        key = f"{prefix}{session_id}_{entity_code}" if session_id else f"{prefix}{entity_code}"
-        state = store.load(key)
-
-        # 兜底：session_id 不一致时，尝试不带 session_id 的 key
-        if not state and session_id:
-            fallback_key = f"{prefix}{entity_code}"
-            state = store.load(fallback_key)
-            if state:
-                key = fallback_key
-
-        if not state:
-            return {"ok": False, "error": "暂存状态不存在，请先收集对象信息"}
-
-        missing: list[str] = []
-        if not state.get("entity_name"):
-            missing.append("entity_name")
-        if not state.get("fields"):
-            missing.append("fields")
-        if missing:
-            return {"ok": False, "missing": missing}
-
-        state.setdefault("library_code", "PERSONAL_LIB")
-        state.setdefault("domain_codes", ("PERSONAL_DOMAIN",))
-        state.setdefault("db_code", "personal_sqlite")
-        state.setdefault("db_type", "PERSONAL_SQLITE")
-        state["entity_source"] = "KNOWLEDGE_BASE" if state.get("kb_id") else "DYNAMIC_TABLE"
-
-        token = os.environ.get("BEYOND_TOKEN", "")
-        actual_entity_code = state["entity_code"]
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            output_dir = Path(tmp_dir)
-            generate_from_definition(state, output_dir)
-
-            zip_path = output_dir / f"{actual_entity_code}.zip"
-            _pack_zip(output_dir, zip_path)
-
-            # 调试：把 zip 复制到 /tmp 方便检查
-            import shutil
-
-            debug_zip = Path(f"/mnt/d/tmp/debug_{actual_entity_code}.zip")
-            debug_zip.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(zip_path, debug_zip)
-            logger.info("DEBUG zip saved to %s", debug_zip)
-            _pack_zip(output_dir, zip_path)
-
-            upload_result = _submit_object_async(
-                entity_code=actual_entity_code,
-                fields=state.get("fields", [])
-                if state["entity_source"] == "DYNAMIC_TABLE"
-                else None,
-                user_code=user_code,
-                zip_path=zip_path,
-                token=token,
-            )
-            if not upload_result.get("ok", True):
-                return {"ok": False, "error": upload_result.get("error", "上传失败")}
-
-        # 术语入库（OWL 上传成功后）
-        terms_result = build_terms(
-            entity_code=actual_entity_code,
-            entity_name=state.get("entity_name", ""),
-            fields=state.get("fields", []),
-            library_code=state.get("library_code", "PERSONAL_LIB"),
-            domain_codes=state.get("domain_codes", ("PERSONAL_DOMAIN",)),
-            entity_type="object",
-            entity_desc=state.get("entity_desc", ""),
-        )
-        if not terms_result.get("ok", True):
-            logger.warning("术语入库失败（OWL 已上传）: %s", terms_result.get("error"))
-
-        store.delete(key)
-        # 缓存对象字段定义（供视图自动展开使用，TTL=30天）
-        _cache_obj_fields(store, prefix, actual_entity_code, state.get("fields", []))
-
-        resource_id = upload_result.get("resourceId") or upload_result.get("resource_id", "")
-        return {
-            "ok": True,
-            "resource_id": resource_id,
-            "entity_code": actual_entity_code,
-            "entity_name": state.get("entity_name", ""),
-            "entity_desc": state.get("entity_desc", ""),
-            "original_code": entity_code,
-            "message": f"本体对象创建成功。您输入的编码 '{entity_code}' 已自动分配为唯一编码 '{actual_entity_code}'",
-        }
-
-    def submit_view(self, view_code: str, session_id: str = "") -> dict[str, Any]:
-        """提交本体视图：校验 → 生成 OWL → 上传 → 术语入库。"""
-
-        user_code = os.environ.get("USER_CODE", "")
-        store = get_workspace_store()
-        prefix = f"{user_code}:" if user_code else ""
-        key = f"{prefix}{session_id}_{view_code}" if session_id else f"{prefix}{view_code}"
-        state = store.load(key)
-
-        # 兜底：session_id 不一致时，尝试不带 session_id 的 key
-        if not state and session_id:
-            fallback_key = f"{prefix}{view_code}"
-            state = store.load(fallback_key)
-            if state:
-                key = fallback_key
-
-        if not state:
-            return {"ok": False, "error": "暂存状态不存在，请先收集视图信息"}
-
-        missing: list[str] = []
-        if not state.get("view_name"):
-            missing.append("view_name")
-        if not state.get("object_relations"):
-            missing.append("object_relations")
-        if not state.get("object_codes"):
-            missing.append("object_codes")
-        if missing:
-            return {"ok": False, "missing": missing}
-
-        # 补齐 object_relations 缺失字段
-        for rel in state.get("object_relations", []):
-            rel.setdefault("relation_type", "MANY_TO_ONE")
-            rel.setdefault("source_libeary", state.get("library_code", "PERSONAL_LIB"))
-            rel.setdefault("target_libeary", state.get("library_code", "PERSONAL_LIB"))
-            rel.setdefault("source_type", "EntityDefinition")
-            rel.setdefault("target_type", "EntityDefinition")
-
-        state.setdefault("library_code", "PERSONAL_LIB")
-        state.setdefault("domain_codes", ("PERSONAL_DOMAIN",))
-
-        token = os.environ.get("BEYOND_TOKEN", "")
-        actual_view_code = state["view_code"]
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            output_dir = Path(tmp_dir)
-            generate_from_definition(state, output_dir)
-
-            zip_path = output_dir / f"{actual_view_code}.zip"
-            _pack_zip(output_dir, zip_path)
-
-            upload_result = _import_view_zip(zip_path, token)
-            if not upload_result.get("ok", True):
-                return {"ok": False, "error": upload_result.get("error", "上传失败")}
-
-        # 术语入库（OWL 上传成功后）
-        terms_result = build_terms(
-            entity_code=actual_view_code,
-            entity_name=state.get("view_name", ""),
-            fields=state.get("fields", []),
-            library_code=state.get("library_code", "PERSONAL_LIB"),
-            domain_codes=state.get("domain_codes", ("PERSONAL_DOMAIN",)),
-            entity_type="view",
-            entity_desc=state.get("view_desc", ""),
-        )
-        if not terms_result.get("ok", True):
-            logger.warning("术语入库失败（OWL 已上传）: %s", terms_result.get("error"))
-
-        store.delete(key)
-        resource_id = upload_result.get("resourceId") or upload_result.get("resource_id", "")
-        return {
-            "ok": True,
-            "resource_id": resource_id,
-            "view_code": actual_view_code,
-            "view_name": state.get("view_name", ""),
-            "view_desc": state.get("view_desc", ""),
-            "original_code": view_code,
-            "message": f"本体视图创建成功。您输入的编码 '{view_code}' 已自动分配为唯一编码 '{actual_view_code}'",
-        }
-
-    # ── 删除 ──────────────────────────────────────────────────────────────────
-
-    def delete_owl_scope(self, scope_type: str, resource_code: str) -> dict[str, Any]:
-        """清除术语库中该 resource_code 下的所有术语数据。
-
-        Args:
-            scope_type: "OBJECT" 或 "VIEW"
-            resource_code: 本体对象或视图的编码
-        """
-        reader = cast(_ScopeDeletingReader, create_reader())
-        scope = f"{scope_type.lower()}:{resource_code}"
-        result = reader.delete_scope(scope)
-        if not result.get("ok"):
-            raise RuntimeError(f"术语删除失败: {result.get('error')}")
-        return {"ok": True}
-
-
-# ── 工具函数 ──────────────────────────────────────────────────────────────────
-
-
-def _pack_zip(source_dir: Path, zip_path: Path) -> None:
-    """将 source_dir 下的核心 OWL 文件打包为 zip。
-
-    只打包服务端 importObjectZip/importViewZip 所需的文件，
-    去掉 object/ 或 view/ 中间层，直接以 {code}/{code}_xxx.owl 为路径。
-    """
-    include_suffixes = {"_definition.owl", "_mapping.owl", "_dbsource.owl", "_relations.owl"}
-
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file in source_dir.rglob("*.owl"):
-            if not file.is_file():
-                continue
-            name = file.name
-            if not any(name.endswith(s) for s in include_suffixes):
-                continue
-            # 去掉 object/ 或 view/ 前缀，直接用 {code}/{filename}
-            rel = file.relative_to(source_dir)
-            parts = rel.parts
-            if len(parts) >= 3 and parts[0] in ("object", "view"):
-                arcname = "/".join(parts[1:])
-            else:
-                arcname = rel.as_posix()
-            zf.write(file, arcname)
-
-
-def _get_generate_from_definition() -> Any:
-    """延迟导入 generate_from_definition，允许测试在模块级 patch。"""
-    from datacloud_knowledge.ingestion.owl_generate import generator as _gen_mod
-
-    return _gen_mod.generate_from_definition
-
-
-def generate_from_definition(workspace_state: dict[str, Any], output_dir: Path) -> None:
-    """模块级代理，供测试 patch 使用。实际实现在 owl_generate/generator.py。"""
-    _get_generate_from_definition()(workspace_state, output_dir)
