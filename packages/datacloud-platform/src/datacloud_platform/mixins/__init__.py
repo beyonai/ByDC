@@ -5,6 +5,7 @@ from datacloud_platform.mixins.datasource import DatasourceMixin
 from datacloud_platform.mixins.execution import ExecutionMixin
 from datacloud_platform.mixins.knowledge import KnowledgeMixin
 from datacloud_platform.mixins.library import LibraryMixin
+from datacloud_platform.mixins.ontology_build import OntologyBuildMixin
 from datacloud_platform.mixins.ontology_crud import OntologyCRUDMixin
 from datacloud_platform.mixins.ontology_query import OntologyQueryMixin
 from datacloud_platform.mixins.orchestration import OrchestrationMixin
@@ -22,6 +23,7 @@ __all__ = [
     "ExecutionMixin",
     "KnowledgeMixin",
     "LibraryMixin",
+    "OntologyBuildMixin",
     "OntologyCRUDMixin",
     "OntologyQueryMixin",
     "OrchestrationMixin",

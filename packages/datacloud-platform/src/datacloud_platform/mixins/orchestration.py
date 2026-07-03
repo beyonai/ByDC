@@ -82,23 +82,6 @@ class OrchestrationMixin:
             except Exception as exc:
                 logger.warning("Failed to add scene members: %s", exc)
 
-        # 4. Sync terms for each object
-        for obj_dict in parsed.objects:
-            try:
-                code: str = obj_dict.get("object_code", "")
-                name: str = obj_dict.get("object_name", "")
-                source: str = obj_dict.get("object_source", "")
-                fields: list[dict[str, Any]] = obj_dict.get("properties", [])
-                self._term_for(base_id).sync_terms(  # type: ignore[attr-defined]
-                    code,
-                    name,
-                    source,
-                    fields,
-                    backfill_vectors=True,
-                )
-            except Exception as exc:
-                logger.warning("Failed to sync terms for object: %s", exc)
-
         # 5. Cleanup
         shutil.rmtree(extract_dir, ignore_errors=True)
 
