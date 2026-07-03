@@ -307,3 +307,100 @@ class OntologyBackend(Protocol):
     def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
         """Delete an action. REMOTE backends raise PermissionError."""
         ...
+
+    # ── Property term bindings (新增) ────────────────────────────
+
+    def get_object_property_term_bindings(
+        self,
+        loader: Any,
+        object_codes: list[str],
+        *,
+        term_master_type: str | None = None,
+        property_codes: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """查询对象下属性绑定的术语类型（批量）。
+
+        返回只含绑定了 terminology 的属性，未绑定的不出现在结果中。
+        """
+        ...
+
+    def get_view_property_term_bindings(
+        self,
+        loader: Any,
+        view_codes: list[str],
+        *,
+        term_master_type: str | None = None,
+        property_codes: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """查询视图下属性绑定的术语类型（批量）。
+
+        视图属性通过 source_object → source_object_property 穿透到底层
+        Object 的 Property.terminology。
+        """
+        ...
+
+    # ── 本体搜索 & 图查询（从 KnowledgeBackend 迁入）─────────────
+
+    def search_ontology(
+        self,
+        base_id: str,
+        scene_ids: list[str],
+        *,
+        keyword: str,
+        query_type: str = "vector",
+        search_scope: str = "all",
+        ontology_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
+        limit: int = 20,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """本体元数据与实例向量检索。"""
+        ...
+
+    def search_ontology_batch(
+        self,
+        base_id: str,
+        keyword: str,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """跨场景批量本体检索。"""
+        ...
+
+    def graph_query(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        object_code: list[str],
+        match_by: str = "name",
+        values: list[str] | None = None,
+        step: int = 1,
+    ) -> dict[str, Any]:
+        """本体图遍历查询。"""
+        ...
+
+    def graph_path(
+        self,
+        base_id: str,
+        scene_id: str,
+        *,
+        match_by: str = "name",
+        start_node: str,
+        end_node: str = "",
+        direction: str = "forward",
+    ) -> dict[str, Any]:
+        """本体图最短路径查询。"""
+        ...
+
+    def search_instances(
+        self,
+        base_id: str,
+        *,
+        object_code: str,
+        select: list[str] | None = None,
+        where: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """本体实例搜索。"""
+        ...
