@@ -35,6 +35,7 @@ from datacloud_platform.mixins import (
     OntologyBuildMixin,
     OntologyCRUDMixin,
     OntologyQueryMixin,
+    OntologyWorkspaceMixin,
     OrchestrationMixin,
     RelationMixin,
     SceneLoaderMixin,
@@ -43,6 +44,7 @@ from datacloud_platform.mixins import (
     StorageMixin,
     TermMixin,
     ViewMixin,
+    WorkspaceActionMixin,
 )
 from datacloud_platform.ontology_store import CacheMode, OntologyStore
 
@@ -66,6 +68,8 @@ class DatacloudPlatform(
     _HasBasePath,
     LibraryMixin,
     OntologyBuildMixin,
+    OntologyWorkspaceMixin,
+    WorkspaceActionMixin,
     OntologyQueryMixin,
     OntologyCRUDMixin,
     SceneMixin,

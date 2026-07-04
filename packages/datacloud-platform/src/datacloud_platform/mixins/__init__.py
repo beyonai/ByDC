@@ -8,6 +8,7 @@ from datacloud_platform.mixins.library import LibraryMixin
 from datacloud_platform.mixins.ontology_build import OntologyBuildMixin
 from datacloud_platform.mixins.ontology_crud import OntologyCRUDMixin
 from datacloud_platform.mixins.ontology_query import OntologyQueryMixin
+from datacloud_platform.mixins.ontology_workspace import OntologyWorkspaceMixin
 from datacloud_platform.mixins.orchestration import OrchestrationMixin
 from datacloud_platform.mixins.relation import RelationMixin
 from datacloud_platform.mixins.scene import SceneMixin
@@ -16,6 +17,7 @@ from datacloud_platform.mixins.scene_service import SceneServiceMixin
 from datacloud_platform.mixins.storage import StorageMixin
 from datacloud_platform.mixins.term import TermMixin
 from datacloud_platform.mixins.view import ViewMixin
+from datacloud_platform.mixins.workspace_action import WorkspaceActionMixin
 
 __all__ = [
     "ActionCRUDMixin",
@@ -26,6 +28,7 @@ __all__ = [
     "OntologyBuildMixin",
     "OntologyCRUDMixin",
     "OntologyQueryMixin",
+    "OntologyWorkspaceMixin",
     "OrchestrationMixin",
     "RelationMixin",
     "SceneLoaderMixin",
@@ -34,4 +37,5 @@ __all__ = [
     "StorageMixin",
     "TermMixin",
     "ViewMixin",
+    "WorkspaceActionMixin",
 ]
