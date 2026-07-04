@@ -311,15 +311,26 @@ class KbSearchExecutor:
             _to_markdown_file_path(req.file_path, req.kb_directory) for req in write_requests
         ]
         meta["kb_files"] = kb_file_paths
-        meta["note"] = _write_summary(kb_file_paths, [])
+        meta["_write_note"] = _write_summary(kb_file_paths, [])
 
         response: dict[str, Any] = {"records": records, "total": len(records), "meta": meta}
         _attach_session_file(response, write_requests)
 
-        # Update note to include session paths once _attach_session_file has run.
+        # Update _write_note to include session paths once _attach_session_file has run.
         session_paths: list[str] = (response.get("file") or {}).get("file_urls") or []
         meta["session_files"] = session_paths
-        meta["note"] = _write_summary(kb_file_paths, session_paths)
+        write_note = _write_summary(kb_file_paths, session_paths)
+        meta["_write_note"] = write_note
+
+        # Expose _write_note as a column so the Agent can surface it in the result table.
+        columns: list[dict[str, str]] = meta.get("columns") or []
+        if not any(c.get("name") == "_write_note" for c in columns):
+            columns.append({"name": "_write_note", "label": "写入说明", "type": "string"})
+            meta["columns"] = columns
+
+        # Inject _write_note into every record so callers can surface it directly.
+        for record in response.get("records") or []:
+            record["_write_note"] = write_note
 
         return response
 
