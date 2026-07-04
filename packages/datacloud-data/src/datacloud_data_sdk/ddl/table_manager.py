@@ -101,3 +101,60 @@ def drop_table(entity_code: str, _user_code: str = "") -> None:
     ddl = f"DROP TABLE IF EXISTS {entity_code}"
     logger.info("drop_table: entity=%s", entity_code)
     _execute_ddl(ddl, "删表")
+
+
+def get_existing_columns(entity_code: str) -> list[str]:
+    """返回表的现有列名列表（不含 id），表不存在时返回空列表。
+
+    Args:
+        entity_code: 表名（即本体对象编码）。
+    """
+    _ensure_db_dir()
+    conn = _connect()
+    try:
+        cursor = conn.execute(f"PRAGMA table_info({entity_code})")
+        rows = cursor.fetchall()
+        return [row[1] for row in rows if row[1].lower() != "id"]
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+
+
+def add_columns(entity_code: str, fields: list[dict[str, Any]]) -> None:
+    """为已有表增加新列（ALTER TABLE ADD COLUMN）。
+
+    幂等：已存在的列跳过。
+
+    Args:
+        entity_code: 表名（即本体对象编码）。
+        fields: 字段列表，每项含 property_code 和 data_type。
+    """
+    existing = set(get_existing_columns(entity_code))
+    for f in fields:
+        col_name = f.get("property_code", "")
+        if not col_name or col_name.lower() == "id" or col_name in existing:
+            continue
+        sqlite_type = _TYPE_MAP.get(f.get("data_type", "STRING"), "TEXT")
+        ddl = f"ALTER TABLE {entity_code} ADD COLUMN {col_name} {sqlite_type}"
+        logger.info("add_column: entity=%s col=%s type=%s", entity_code, col_name, sqlite_type)
+        _execute_ddl(ddl, f"新增列 {col_name}")
+        existing.add(col_name)
+
+
+def drop_columns(entity_code: str, column_names: list[str]) -> None:
+    """从已有表删除指定列（ALTER TABLE DROP COLUMN，需 SQLite >= 3.35）。
+
+    不存在的列跳过。
+
+    Args:
+        entity_code: 表名（即本体对象编码）。
+        column_names: 要删除的列名列表。
+    """
+    existing = set(get_existing_columns(entity_code))
+    for col_name in column_names:
+        if col_name.lower() == "id" or col_name not in existing:
+            continue
+        ddl = f"ALTER TABLE {entity_code} DROP COLUMN {col_name}"
+        logger.info("drop_column: entity=%s col=%s", entity_code, col_name)
+        _execute_ddl(ddl, f"删除列 {col_name}")
