@@ -57,7 +57,7 @@ _FMT_FILE_OTEL = "%(asctime)s [%(levelname)-5s] %(process)d [tid=%(otelTraceID)s
 _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 
 # 日志配置覆盖的命名空间（不触碰 root logger）
-_MANAGED_NAMESPACES = ("datacloud_analysis",)
+_MANAGED_NAMESPACES = ("datacloud_analysis", "datacloud_platform")
 
 # 仅对噪音最大的子模块提升级别，保留 langchain_core 整体的 INFO 诊断
 _NOISY_LOGGERS = (
