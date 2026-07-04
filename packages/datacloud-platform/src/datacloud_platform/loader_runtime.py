@@ -67,8 +67,15 @@ class LoaderRuntimeManager:
             return self._cache[base_id]
         loader = self._build_loader(base_id)
         self._configure_term_loader(loader)
-        # 虚拟动作注入有性能问题，先注释
-        # self._platform.inject_virtual_actions(base_id, loader)
+        # 虚拟动作注入耗时日志
+        import time as _time
+        _t0 = _time.monotonic()
+        self._platform.inject_virtual_actions(base_id, loader)
+        _elapsed = (_time.monotonic() - _t0) * 1000
+        logger.info(
+            "inject_virtual_actions completed for base_id=%s in %.2f ms",
+            base_id, _elapsed,
+        )
         self._configure_runtime_services(loader)
         snapshot = LoaderSnapshot(
             loader=loader,
