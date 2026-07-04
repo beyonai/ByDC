@@ -8,9 +8,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
+from typing import Any
 
-from datacloud_knowledge.adapters import create_reader
 from datacloud_knowledge.contracts.kps import RelationDef, TermDef, TermTypeDef
 from datacloud_knowledge.ingestion.ontology_terms import _register_type, _write_kps_batch
 
@@ -19,12 +18,6 @@ logger = logging.getLogger(__name__)
 _ENTITY_TYPE = "object"
 _LIBRARY_CODE = "PERSONAL_LIB"
 _DOMAIN_CODES = ("PERSONAL_DOMAIN",)
-
-
-class _ScopeDeletingReader:
-    """delete_scope 协议 — TermReader 的运行时可调用方法。"""
-
-    def delete_scope(self, scope: str) -> dict[str, Any]: ...  # type: ignore[empty-body]
 
 
 def sync_object_terms(
@@ -138,9 +131,8 @@ def sync_object_terms(
 def remove_object_terms(entity_code: str) -> dict[str, Any]:
     """从知识库中清除对象的所有术语（级联删除）。
 
-    通过 delete_scope("object:{entity_code}") 级联删除
-    term / term_name / term_relation / term_knowledge 表中
-    该对象下的全部数据。
+    通过 ``delete_scope`` 级联删除 term / term_name / term_relation /
+    term_knowledge 表中该对象下的全部数据。
 
     Args:
         entity_code: 对象编码
@@ -151,8 +143,9 @@ def remove_object_terms(entity_code: str) -> dict[str, Any]:
     logger.info("remove_object_terms: entity=%s", entity_code)
     scope = f"object:{entity_code}"
     try:
-        reader = cast(_ScopeDeletingReader, create_reader())
-        result = reader.delete_scope(scope)
+        from datacloud_knowledge.adapters import delete_scope
+
+        result = delete_scope(scope)
         if not result.get("ok"):
             error_msg = result.get("error", "未知错误")
             logger.error("remove_object_terms 删除失败: entity=%s error=%s", entity_code, error_msg)
