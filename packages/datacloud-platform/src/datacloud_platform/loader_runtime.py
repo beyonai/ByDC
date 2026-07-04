@@ -69,12 +69,14 @@ class LoaderRuntimeManager:
         self._configure_term_loader(loader)
         # 虚拟动作注入耗时日志
         import time as _time
+
         _t0 = _time.monotonic()
         self._platform.inject_virtual_actions(base_id, loader)
         _elapsed = (_time.monotonic() - _t0) * 1000
         logger.info(
             "inject_virtual_actions completed for base_id=%s in %.2f ms",
-            base_id, _elapsed,
+            base_id,
+            _elapsed,
         )
         self._configure_runtime_services(loader)
         snapshot = LoaderSnapshot(
@@ -104,7 +106,7 @@ class LoaderRuntimeManager:
     def _build_loader(self, base_id: str) -> OntologyLoader:
         """Build an OntologyLoader from the platform's ontology backend."""
         base_path = self._platform._base_path_for(base_id)
-        return self._platform.load_ontology(base_id, base_path)  # type: ignore[return-value]
+        return self._platform.load_ontology(base_id, base_path)
 
     def _configure_term_loader(self, loader: OntologyLoader) -> None:
         if getattr(loader._config, "term_loader", None) is not None:
