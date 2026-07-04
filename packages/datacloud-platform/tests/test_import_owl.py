@@ -69,7 +69,14 @@ class TestImportOwlWritesRegistry:
     ) -> None:
         """OWL import must generate objects_registry.json in the base path."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         registry = base_path / "objects_registry.json"
         assert registry.exists(), f"Expected {registry} to be created"
@@ -79,7 +86,14 @@ class TestImportOwlWritesRegistry:
     ) -> None:
         """objects_registry.json must contain objects, views, and relations keys."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         registry = base_path / "objects_registry.json"
         content = json.loads(registry.read_text(encoding="utf-8"))
@@ -95,7 +109,14 @@ class TestImportOwlWritesRegistry:
     ) -> None:
         """The registry file must be valid, parseable JSON."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         registry = base_path / "objects_registry.json"
         content = json.loads(registry.read_text(encoding="utf-8"))
@@ -110,7 +131,14 @@ class TestImportOwlCreatesShardedFiles:
     ) -> None:
         """Each object should have a shard file: objects/{shard}/{code}.json."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         for code in ("order", "product", "customer"):
             shard = code[:2].lower()
@@ -122,7 +150,14 @@ class TestImportOwlCreatesShardedFiles:
     ) -> None:
         """Views should also be sharded under views/{shard}/{code}.json."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         v_code = "v_order_detail"
         shard = v_code[:2].lower()
@@ -134,7 +169,14 @@ class TestImportOwlCreatesShardedFiles:
     ) -> None:
         """Relations should be sharded under relations/{shard}/{code}.json."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         r_code = "order_to_product"
         shard = r_code[:2].lower()
@@ -146,7 +188,14 @@ class TestImportOwlCreatesShardedFiles:
     ) -> None:
         """Shard .json files contain the original entity data."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         es = JsonEntityStore(base_path)
         order = es.get("objects", "order")
@@ -160,7 +209,14 @@ class TestImportOwlCreatesShardedFiles:
     ) -> None:
         """All entity-type _index.json files are rebuilt after import."""
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         for et in ("objects", "views", "relations"):
             index_path = base_path / et / "_index.json"
@@ -170,16 +226,23 @@ class TestImportOwlCreatesShardedFiles:
 
 
 class TestImportOwlNoHardcodedTmp:
-    def test_save_parsed_content_uses_no_hardcoded_tmp(
+    def test_batch_import_ontology_uses_no_hardcoded_tmp(
         self, backend: DataCloudDataBackend, parsed_owl: ParsedOwlContent
     ) -> None:
-        """save_parsed_content writes directly into the base_path, no /tmp dependency.
+        """batch_import_ontology writes directly into the base_path, no /tmp dependency.
 
-        We verify this indirectly: after save_parsed_content, /tmp should NOT
+        We verify this indirectly: after batch_import_ontology, /tmp should NOT
         contain any files related to this import under a hardcoded prefix.
         """
         base_path = backend._resolve_base_path("import-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed_owl)
+        backend.batch_import_ontology(
+            base_path,
+            parsed_owl.objects,
+            parsed_owl.views,
+            parsed_owl.relations,
+            parsed_owl.actions,
+            parsed_owl.dbsources,
+        )
 
         # The function should have written all output under base_path
         # Verify no owl_import_ residue in /tmp (best-effort check)
@@ -201,14 +264,28 @@ class TestImportOwlIdempotency:
             views=[],
             relations=[],
         )
-        backend.save_parsed_content(base_path, parsed1)
+        backend.batch_import_ontology(
+            base_path,
+            parsed1.objects,
+            parsed1.views,
+            parsed1.relations,
+            parsed1.actions,
+            parsed1.dbsources,
+        )
 
         parsed2 = ParsedOwlContent(
             objects=[{"object_code": "a", "object_name": "Second"}],
             views=[],
             relations=[],
         )
-        backend.save_parsed_content(base_path, parsed2)
+        backend.batch_import_ontology(
+            base_path,
+            parsed2.objects,
+            parsed2.views,
+            parsed2.relations,
+            parsed2.actions,
+            parsed2.dbsources,
+        )
 
         es = JsonEntityStore(base_path)
         a = es.get("objects", "a")
@@ -224,7 +301,14 @@ class TestImportOwlIdempotency:
             views=[],
             relations=[],
         )
-        backend.save_parsed_content(base_path, parsed1)
+        backend.batch_import_ontology(
+            base_path,
+            parsed1.objects,
+            parsed1.views,
+            parsed1.relations,
+            parsed1.actions,
+            parsed1.dbsources,
+        )
 
         parsed2 = ParsedOwlContent(
             objects=[
@@ -234,7 +318,14 @@ class TestImportOwlIdempotency:
             views=[],
             relations=[],
         )
-        backend.save_parsed_content(base_path, parsed2)
+        backend.batch_import_ontology(
+            base_path,
+            parsed2.objects,
+            parsed2.views,
+            parsed2.relations,
+            parsed2.actions,
+            parsed2.dbsources,
+        )
 
         es = JsonEntityStore(base_path)
         assert es.get("objects", "a") is not None

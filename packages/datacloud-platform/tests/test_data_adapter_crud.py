@@ -126,7 +126,7 @@ class TestDeleteObject:
 
 class TestLoadOntologyFastPath:
     def test_registry_file_is_written(self, backend: DataCloudDataBackend) -> None:
-        """save_parsed_content writes objects_registry.json."""
+        """batch_import_ontology writes objects_registry.json."""
         from datacloud_platform.models import ParsedOwlContent
 
         parsed = ParsedOwlContent(
@@ -138,7 +138,9 @@ class TestLoadOntologyFastPath:
             relations=[],
         )
         base_path = backend._resolve_base_path("test-base")  # noqa: SLF001
-        counts = backend.save_parsed_content(base_path, parsed)
+        counts = backend.batch_import_ontology(
+    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
+)
         assert counts["objects"] == 2
         registry_path = base_path / "objects_registry.json"
         assert registry_path.exists()
@@ -166,7 +168,9 @@ class TestLoadOntologyFastPath:
             relations=[],
         )
         base_path = backend._resolve_base_path("fast-test")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed)
+        backend.batch_import_ontology(
+    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
+)
 
         start = time.monotonic()
         loader = backend.load_ontology(base_path)
@@ -178,10 +182,10 @@ class TestLoadOntologyFastPath:
 
 
 class TestSaveParsedContent:
-    def test_save_parsed_content_creates_shard_files(
+    def test_batch_import_ontology_creates_shard_files(
         self, backend: DataCloudDataBackend, entity_store: JsonEntityStore
     ) -> None:
-        """save_parsed_content writes per-object .json files in shard directories."""
+        """batch_import_ontology writes per-object .json files in shard directories."""
         from datacloud_platform.models import ParsedOwlContent
 
         parsed = ParsedOwlContent(
@@ -196,7 +200,9 @@ class TestSaveParsedContent:
             ],
         )
         base_path = backend._resolve_base_path("test-base")  # noqa: SLF001
-        counts = backend.save_parsed_content(base_path, parsed)
+        counts = backend.batch_import_ontology(
+    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
+)
 
         assert counts["objects"] == 1
         assert counts["views"] == 1
@@ -207,10 +213,10 @@ class TestSaveParsedContent:
         assert entity_store.get("views", "v_order") is not None
         assert entity_store.get("relations", "r1") is not None
 
-    def test_save_parsed_content_rebuilds_all_indexes(
+    def test_batch_import_ontology_rebuilds_all_indexes(
         self, backend: DataCloudDataBackend
     ) -> None:
-        """All three entity-type indexes are rebuilt after save_parsed_content."""
+        """All three entity-type indexes are rebuilt after batch_import_ontology."""
         from datacloud_platform.models import ParsedOwlContent
 
         parsed = ParsedOwlContent(
@@ -221,7 +227,9 @@ class TestSaveParsedContent:
             ],
         )
         base_path = backend._resolve_base_path("test-base")  # noqa: SLF001
-        backend.save_parsed_content(base_path, parsed)
+        backend.batch_import_ontology(
+    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
+)
 
         es = JsonEntityStore(base_path)
         for et in ("objects", "views", "relations"):
