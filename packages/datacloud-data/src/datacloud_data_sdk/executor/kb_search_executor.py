@@ -28,6 +28,7 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeSearchRequest,
     KnowledgeWriteBackend,
     KnowledgeWriteRequest,
+    _render_markdown_with_front_matter,
     _to_markdown_file_path,
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -304,7 +305,34 @@ class KbSearchExecutor:
         ).convert_by_fields(raw_records, list(getattr(cls, "fields", [])))
         records = _normalize_action_records(records, cls)
         meta = _standard_action_meta(cls, datasource_alias, query)
-        return {"records": records, "total": len(records), "meta": meta}
+
+        # Collect KB file paths from write requests for the summary message.
+        kb_file_paths = [
+            _to_markdown_file_path(req.file_path, req.kb_directory) for req in write_requests
+        ]
+        meta["kb_files"] = kb_file_paths
+        meta["_write_note"] = _write_summary(kb_file_paths, [])
+
+        response: dict[str, Any] = {"records": records, "total": len(records), "meta": meta}
+        _attach_session_file(response, write_requests)
+
+        # Update _write_note to include session paths once _attach_session_file has run.
+        session_paths: list[str] = (response.get("file") or {}).get("file_urls") or []
+        meta["session_files"] = session_paths
+        write_note = _write_summary(kb_file_paths, session_paths)
+        meta["_write_note"] = write_note
+
+        # Expose _write_note as a column so the Agent can surface it in the result table.
+        columns: list[dict[str, str]] = meta.get("columns") or []
+        if not any(c.get("name") == "_write_note" for c in columns):
+            columns.append({"name": "_write_note", "label": "写入说明", "type": "string"})
+            meta["columns"] = columns
+
+        # Inject _write_note into every record so callers can surface it directly.
+        for record in response.get("records") or []:
+            record["_write_note"] = write_note
+
+        return response
 
     def _resolve_backend(
         self,
@@ -543,6 +571,73 @@ class KbSearchExecutor:
             "total": 0,
             "meta": meta,
         }
+
+
+def _write_summary(kb_paths: list[str], session_paths: list[str]) -> str:
+    """Build a human-readable summary of a KB write operation."""
+    lines: list[str] = []
+    if kb_paths:
+        paths_str = ", ".join(kb_paths)
+        lines.append(f"已成功写入知识库，文件路径：{paths_str}")
+    if session_paths:
+        paths_str = ", ".join(session_paths)
+        lines.append(f"同时已写入会话文件，路径：{paths_str}")
+    return "；".join(lines) if lines else "写入完成"
+
+
+def _attach_session_file(
+    response: dict[str, Any],
+    write_requests: list[KnowledgeWriteRequest],
+) -> None:
+    """Write each KB upload into the session's ResultFileStorage.
+
+    File name mirrors the Markdown path used by the KB backend (via
+    ``_to_markdown_file_path``).  Labels are rendered as YAML front matter
+    (via ``_render_markdown_with_front_matter``) so metadata is embedded
+    exactly as it is uploaded to the knowledge base.
+
+    The first written logical path is attached to ``response["file"]``.
+    Failures are non-fatal: a warning is logged and the caller continues.
+    """
+    if not write_requests:
+        return
+
+    import os
+
+    from datacloud_data_sdk.context import get_current_context
+    from datacloud_data_sdk.exceptions import DatacloudError
+    from datacloud_data_sdk.file_storage.base import ResultFileStorage
+    from datacloud_data_sdk.file_storage.local import LocalResultFileStorage
+
+    try:
+        try:
+            ctx = get_current_context()
+        except DatacloudError:
+            ctx = None
+
+        storage: ResultFileStorage = getattr(ctx, "result_file_storage", None)  # type: ignore[assignment]
+        if not isinstance(storage, ResultFileStorage):
+            workspace_dir = str(getattr(ctx, "workspace_dir", "") or "").strip() if ctx else ""
+            storage = LocalResultFileStorage(workspace_dir or os.getcwd())
+
+        written_paths: list[str] = []
+        for req in write_requests:
+            # Derive the same filename the KB backend uses when it stores the file.
+            markdown_file_path = _to_markdown_file_path(req.file_path, req.kb_directory)
+            file_name = PurePosixPath(markdown_file_path).name or "document.md"
+            logical_path = f"/datacloud/kb/{file_name}"
+
+            # Render content with YAML front-matter labels, identical to the KB upload.
+            file_content = _render_markdown_with_front_matter(req.labels, req.content)
+
+            storage.write_text(logical_path, file_content)
+            written_paths.append(logical_path)
+            logger.debug("kb write: saved session file %s", logical_path)
+
+        if written_paths:
+            response["file"] = {"file_url": written_paths[0], "file_urls": written_paths}
+    except Exception:  # noqa: BLE001
+        logger.warning("kb write: failed to save session md file", exc_info=True)
 
 
 def _field_meta(fields: list[Any]) -> list[dict[str, str]]:
