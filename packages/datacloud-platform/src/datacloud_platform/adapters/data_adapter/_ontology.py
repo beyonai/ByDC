@@ -1247,7 +1247,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             with create_writer() as writer:
                 for entity_code in entity_codes:
                     try:
-                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
+                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])
                         if not terms:
                             logger.warning(
                                 "_sync_entity_domains: term not found for code=%s",
@@ -1315,7 +1315,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             with create_writer() as writer:
                 for entity_code in entity_codes:
                     try:
-                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
+                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])
                         if not terms:
                             logger.warning(
                                 "_remove_entity_domains: term not found for code=%s",

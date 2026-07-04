@@ -50,9 +50,9 @@ class LocalExecutionBackend:
         from datacloud_data_sdk.plan.query_plan_generator import LangGraphPlanGenerator
 
         generator = LangGraphPlanGenerator()
-        return generator.generate(query, loader, context)  # type: ignore[arg-type]
+        return generator.generate(query, loader, context)
 
     def build_filters_schema(self, fields: list[Any]) -> dict[str, Any]:
         from datacloud_data_sdk.virtual_action.generator import _build_filters_schema
 
-        return _build_filters_schema(fields)
+        return _build_filters_schema(fields)  # type: ignore[no-any-return]

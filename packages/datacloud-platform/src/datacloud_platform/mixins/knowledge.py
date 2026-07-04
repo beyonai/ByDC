@@ -256,10 +256,10 @@ class KnowledgeMixin:
         # ── Step 2: 字段预解析（OntologyBackend + TermBackend）──
         # 替换 SDK 的 _pre_resolve_terms（内部 create_reader 自管 session）
         # 使用 platform backend 做本体元数据 code/name 映射
-        pre = self._pre_resolve_with_backends(
+        pre = self._pre_resolve_with_backends(  # type: ignore[attr-defined]
             base_id, main_terms, ontology_code, cache_mode
         )
-        cc_pre = self._pre_resolve_with_backends(
+        cc_pre = self._pre_resolve_with_backends(  # type: ignore[attr-defined]
             base_id, cc_terms, ontology_code, cache_mode
         )
         logger.info(
@@ -274,7 +274,7 @@ class KnowledgeMixin:
         # whereValue → search_terms(keyword, term_type) 搜术语实例
         recall_terms = list(pre.unresolved_terms) + list(cc_pre.unresolved_terms)
         recall_map = (
-            self._unified_recall_with_backends(
+            self._unified_recall_with_backends(  # type: ignore[attr-defined]
                 base_id,
                 recall_terms,
                 pre=pre,
@@ -575,6 +575,7 @@ class KnowledgeMixin:
         输入格式与输出格式与 unified_recall 完全一致。
         """
         from datacloud_knowledge.contracts.intent_types import find_paired_where_key
+
         onto = self._ontology_for(base_id)
         term_backend = self._term_for(base_id)
 
