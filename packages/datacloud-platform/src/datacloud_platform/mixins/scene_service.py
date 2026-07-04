@@ -182,17 +182,27 @@ class SceneServiceMixin:
         base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
 
         parsed = backend.parse_owl(Path(owl_path))
-        counts: dict[str, int] = backend.save_parsed_content(base_path, parsed)  # type: ignore[attr-defined]
+        counts: dict[str, int] = backend.batch_import_ontology(
+            base_path,
+            parsed.objects,
+            parsed.views,
+            parsed.relations,
+            parsed.actions,
+            parsed.dbsources,
+        )
 
         self._ensure_default_scene(base_id)  # type: ignore[attr-defined]
 
         logger.info(
-            "_seed_from_owl_path: base_id=%s owl_path=%s objects=%d views=%d relations=%d",
+            "_seed_from_owl_path: base_id=%s owl_path=%s "
+            "objects=%d views=%d relations=%d actions=%d dbsources=%d",
             base_id,
             owl_path,
             counts.get("objects", 0),
             counts.get("views", 0),
             counts.get("relations", 0),
+            counts.get("actions", 0),
+            counts.get("dbsources", 0),
         )
         return counts
 
@@ -206,7 +216,9 @@ class SceneServiceMixin:
         object_code: str = (
             result_dict.get("objectCode") or result_dict.get("object_code", "")
             if result_dict
-            else str(getattr(result, "objectCode", "") or getattr(result, "object_code", ""))
+            else str(
+                getattr(result, "objectCode", "") or getattr(result, "object_code", "")
+            )
         )
         if not scene_id:
             scene_id = self._ensure_default_scene(base_id)  # type: ignore[attr-defined]
@@ -214,7 +226,13 @@ class SceneServiceMixin:
             backend.add_scene_members(base_id, scene_id, [object_code], [])
         if object_code and result_dict:
             base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
-            registry_sync_upsert(base_path, "objects", "object_code", object_code, obj_camel_to_owl(result_dict))
+            registry_sync_upsert(
+                base_path,
+                "objects",
+                "object_code",
+                object_code,
+                obj_camel_to_owl(result_dict),
+            )
         logger.info("create_object_with_scene: %s -> scene %s", object_code, scene_id)
         return result
 
@@ -226,7 +244,9 @@ class SceneServiceMixin:
         result = backend.create_view(base_id, view)
         result_dict: dict[str, Any] = result if isinstance(result, dict) else {}
         view_code: str = (
-            result_dict.get("viewCode") or result_dict.get("view_code") or result_dict.get("view_id", "")
+            result_dict.get("viewCode")
+            or result_dict.get("view_code")
+            or result_dict.get("view_id", "")
             if result_dict
             else str(
                 getattr(result, "viewCode", "")
@@ -240,7 +260,13 @@ class SceneServiceMixin:
             backend.add_scene_members(base_id, scene_id, [], [view_code])
         if view_code and result_dict:
             base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
-            registry_sync_upsert(base_path, "views", "view_id", view_code, view_camel_to_registry(result_dict))
+            registry_sync_upsert(
+                base_path,
+                "views",
+                "view_id",
+                view_code,
+                view_camel_to_registry(result_dict),
+            )
         logger.info("create_view_with_scene: %s -> scene %s", view_code, scene_id)
         return result
 

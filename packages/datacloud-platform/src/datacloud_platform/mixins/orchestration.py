@@ -26,7 +26,7 @@ class OrchestrationMixin:
     ) -> dict[str, Any]:
         """Import an OWL zip: unzip → parse → write objects/views/relations → sync terms.
 
-        Returns a summary dict: ``{"objects": N, "views": N, "relations": N}``.
+        Returns a summary dict: ``{"objects": N, "views": N, "relations": N, "actions": N, "dbsources": N}``.
         """
         onto = self._ontology_for(base_id)
         base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
@@ -44,20 +44,15 @@ class OrchestrationMixin:
         # 2. Parse
         parsed = onto.parse_owl(extract_dir)
 
-        # 3. Write to storage (save_parsed_content or individual create_object fallback)
-        if hasattr(onto, "save_parsed_content"):
-            counts: dict[str, int] = onto.save_parsed_content(base_path, parsed)
-        else:
-            # Fallback for remote / legacy adapters without save_parsed_content
-            counts = {"objects": 0, "views": 0, "relations": 0}
-            for obj_dict in parsed.objects:
-                try:
-                    onto.create_object(base_id, obj_dict)
-                    counts["objects"] += 1
-                except Exception as exc:
-                    logger.warning("Failed to create object from OWL import: %s", exc)
-            counts["views"] = len(parsed.views)
-            counts["relations"] = len(parsed.relations)
+        # 3. Batch import ontology content into backend
+        counts: dict[str, int] = onto.batch_import_ontology(
+            base_path,
+            parsed.objects,
+            parsed.views,
+            parsed.relations,
+            parsed.actions,
+            parsed.dbsources,
+        )
 
         # 3.5 Add imported objects/views to the scene's member list
         object_codes = [
