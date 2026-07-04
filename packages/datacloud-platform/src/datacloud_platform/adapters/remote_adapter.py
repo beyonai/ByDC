@@ -249,6 +249,18 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — term loading is not supported."""
         return None
 
+    def batch_import_ontology(
+        self,
+        base_path: Any,
+        objects: list[dict[str, Any]],
+        views: list[dict[str, Any]],
+        relations: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+        dbsources: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Remote ontology is read-only — batch import is not supported."""
+        raise PermissionError("Remote ontology base is read-only")
+
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Remote ontology is read-only — DDL is not supported."""
         raise PermissionError("Remote ontology base is read-only")

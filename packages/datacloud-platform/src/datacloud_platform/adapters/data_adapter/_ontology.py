@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json as _json
 import logging
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -39,55 +40,91 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             directory: Path to the OWL resource directory.
 
         Returns:
-            ParsedOwlContent with objects, views, relations lists.
+            ParsedOwlContent with objects, views, relations, actions, dbsources.
         """
         from datacloud_data_sdk.ontology.owl_parser import OwlParser  # noqa: PLC0415
 
         raw: dict[str, Any] = OwlParser().parse_resource_directory(directory)
+        objects = list(raw.get("objects", []))
+        views = list(raw.get("views", []))
+        relations = list(raw.get("relations", []))
+
+        # Extract actions from embedded object.actions, adding belongObjectCode
+        actions: list[dict[str, Any]] = []
+        for obj in objects:
+            obj_code = obj.get("object_code", "")
+            for act in obj.get("actions", []):
+                if isinstance(act, dict):
+                    act = dict(act)
+                    act.setdefault("belongObjectCode", obj_code)
+                    actions.append(act)
+
+        # Extract dbsources from datasource_configs dict
+        dbsources: list[dict[str, Any]] = []
+        raw_ds: dict[str, dict[str, Any]] = raw.get("datasource_configs", {}) or {}
+        for alias, cfg in raw_ds.items():
+            dbsources.append(dict(cfg, alias=alias))
+
         return ParsedOwlContent(
-            objects=list(raw.get("objects", [])),
-            views=list(raw.get("views", [])),
-            relations=list(raw.get("relations", [])),
+            objects=objects,
+            views=views,
+            relations=relations,
+            actions=actions,
+            dbsources=dbsources,
         )
 
-    def save_parsed_content(
-        self, base_path: Path, parsed: ParsedOwlContent
+    def batch_import_ontology(
+        self,
+        base_path: Path,
+        objects: list[dict[str, Any]],
+        views: list[dict[str, Any]],
+        relations: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+        dbsources: list[dict[str, Any]],
     ) -> dict[str, int]:
-        """Persist parsed OWL content as ``objects_registry.json`` + shard files.
-
-        Writes a unified JSON registry for fast :meth:`load_ontology` loads and
-        individual shard files for detail queries.  Rebuilds indexes for all
-        three entity types on completion.
+        """Batch import ontology content — writes registry + shard files + rebuilds indexes.
 
         Args:
             base_path: Root directory for the ontology base.
-            parsed: Structured parse result from :meth:`parse_owl`.
+            objects: List of object dicts to persist.
+            views: List of view dicts to persist.
+            relations: List of relation dicts to persist.
+            actions: List of action dicts to persist.
+            dbsources: List of datasource dicts to persist.
 
         Returns:
-            Counts dict with ``objects``, ``views``, ``relations`` keys.
+            Counts dict keyed by entity type.
         """
         entity_store = JsonEntityStore(base_path)
 
-        counts: dict[str, int] = {"objects": 0, "views": 0, "relations": 0}
+        counts: dict[str, int] = {
+            "objects": 0,
+            "views": 0,
+            "relations": 0,
+            "actions": 0,
+            "dbsources": 0,
+        }
 
         # Write unified JSON registry (fast-load path)
         registry: dict[str, list[dict[str, Any]]] = {
-            "objects": parsed.objects,
-            "views": parsed.views,
-            "relations": parsed.relations,
+            "objects": objects,
+            "views": views,
+            "relations": relations,
+            "actions": actions,
+            "dbsources": dbsources,
         }
         base_path.mkdir(parents=True, exist_ok=True)
         atomic_write_json(base_path / "objects_registry.json", registry)
 
         # Write per-object shard files
-        for obj in parsed.objects:
+        for obj in objects:
             obj_code: str = obj.get("object_code", "") or ""
             if obj_code:
                 entity_store.save("objects", obj_code, obj)
                 counts["objects"] += 1
 
         # Write per-view shard files
-        for view in parsed.views:
+        for view in views:
             v_code: str = (
                 view.get("view_code", view.get("viewCode", view.get("view_id", "")))
                 or ""
@@ -97,22 +134,41 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 counts["views"] += 1
 
         # Write per-relation shard files
-        for rel in parsed.relations:
+        for rel in relations:
             r_code: str = rel.get("relation_code", rel.get("relationCode", "")) or ""
             if r_code:
                 entity_store.save("relations", r_code, rel)
                 counts["relations"] += 1
 
+        # Write per-action shard files
+        for act in actions:
+            a_code: str = act.get("action_code", act.get("actionCode", "")) or ""
+            if a_code:
+                entity_store.save("actions", a_code, act)
+                counts["actions"] += 1
+
+        # Write per-datasource shard files
+        for ds in dbsources:
+            db_id: str = ds.get("db_id", ds.get("dbId", "")) or ""
+            if db_id:
+                entity_store.save("datasources", db_id, ds)
+                counts["dbsources"] += 1
+
         # Rebuild all indexes
-        for et in ("objects", "views", "relations"):
+        for et in ("objects", "views", "relations", "actions", "datasources"):
             entity_store.save_index(et, entity_store.rebuild_index(et))
 
+        # Batch sync terms to knowledge DB (single writer, no per-term backfill)
+        self._batch_sync_entity_terms(objects, views, relations, actions)
+
         logger.info(
-            "save_parsed_content: %s objects=%d views=%d relations=%d",
+            "batch_import_ontology: %s objects=%d views=%d relations=%d actions=%d dbsources=%d",
             base_path,
             counts["objects"],
             counts["views"],
             counts["relations"],
+            counts["actions"],
+            counts["dbsources"],
         )
         return counts
 
@@ -121,7 +177,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
         Prefers ``objects_registry.json`` (single file, < 1s) when available.
         On first access without a registry, parses OWL, persists the registry
-        via ``parse_owl()`` + ``save_parsed_content()`` (same pipeline as
+        via ``parse_owl()`` + ``batch_import_ontology()`` (same pipeline as
         ``import-owl``), then loads from the newly created registry.
 
         Args:
@@ -145,11 +201,18 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if base_path.exists():
             logger.info(
                 "objects_registry.json not found in %s, "
-                "falling back to parse_owl + save_parsed_content",
+                "falling back to parse_owl + batch_import_ontology",
                 base_path,
             )
             parsed = self.parse_owl(base_path)
-            self.save_parsed_content(base_path, parsed)
+            self.batch_import_ontology(
+                base_path,
+                parsed.objects,
+                parsed.views,
+                parsed.relations,
+                parsed.actions,
+                parsed.dbsources,
+            )
             return self.load_ontology(base_path)  # recurse → hits fast path above
 
         # No OWL directory, return empty loader
@@ -970,6 +1033,111 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         "relation": "relation",
         "action": "ontology_action",
     }
+
+    @staticmethod
+    def _batch_sync_entity_terms(
+        objects: list[dict[str, Any]],
+        views: list[dict[str, Any]],
+        relations: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+    ) -> None:
+        """Batch-upsert entity terms then backfill vectors in a single batch.
+
+        1. Opens one writer, upserts all terms with ``backfill_vectors=False``.
+        2. Collects all created/updated term_ids.
+        3. After commit, spawns a daemon thread to run ``backfill_tsvector``
+           and ``backfill_embeddings(term_ids=...)`` — leveraging the
+           embedding model's batch API (``batch_size=50``) instead of N
+           individual calls.
+
+        Failures are logged but do not block the import.
+        """
+        try:
+            from datacloud_knowledge.adapters import (  # noqa: PLC0415
+                backfill_embeddings,
+                backfill_tsvector,
+                create_writer,
+            )
+        except ImportError:
+            logger.debug(
+                "_batch_sync_entity_terms skipped (datacloud_knowledge unavailable)"
+            )
+            return
+
+        entities: list[tuple[str, str, str]] = []
+        for obj in objects:
+            code = obj.get("object_code", "")
+            name = obj.get("object_name", "")
+            if code and name:
+                entities.append(("object", code, name))
+        for view in views:
+            code = (
+                view.get("view_code", view.get("viewCode", view.get("view_id", "")))
+                or ""
+            )
+            name = view.get("view_name", "")
+            if code and name:
+                entities.append(("view", code, name))
+        for rel in relations:
+            code = rel.get("relation_code", rel.get("relationCode", "")) or ""
+            name = rel.get("relation_name", "")
+            if code and name:
+                entities.append(("relation", code, name))
+        for act in actions:
+            code = act.get("action_code", act.get("actionCode", "")) or ""
+            name = act.get("action_name", "")
+            if code and name:
+                entities.append(("action", code, name))
+
+        if not entities:
+            return
+
+        term_type_map = {
+            "object": "object",
+            "view": "view",
+            "relation": "relation",
+            "action": "ontology_action",
+        }
+        term_ids: list[str] = []
+        try:
+            with create_writer() as writer:
+                for entity_type, entity_code, entity_name in entities:
+                    try:
+                        term_id = writer.upsert_term(
+                            term_code=entity_code,
+                            term_name=entity_name,
+                            term_type_code=term_type_map[entity_type],
+                            backfill_vectors=False,
+                        )
+                        if term_id:
+                            term_ids.append(term_id)
+                    except Exception:
+                        logger.exception(
+                            "_batch_sync_entity_terms: type=%s code=%s failed",
+                            entity_type,
+                            entity_code,
+                        )
+        except Exception:
+            logger.exception("_batch_sync_entity_terms: batch upsert failed")
+            return
+
+        logger.info("_batch_sync_entity_terms: upserted %d terms", len(term_ids))
+
+        if not term_ids:
+            return
+
+        # Defer vector backfill to background thread — batch API call
+        def _backfill() -> None:
+            try:
+                backfill_tsvector()
+            except Exception:
+                logger.exception("_batch_sync_entity_terms: tsvector backfill failed")
+            try:
+                backfill_embeddings(term_ids=term_ids, batch_size=50)
+            except Exception:
+                logger.exception("_batch_sync_entity_terms: embeddings backfill failed")
+
+        threading.Thread(target=_backfill, daemon=True).start()
 
     def _sync_entity_terms(
         self,

@@ -25,6 +25,18 @@ class _NoopOntologyBackend:
         """Return None."""
         return None
 
+    def batch_import_ontology(
+        self,
+        base_path: Any,
+        objects: list[dict[str, Any]],
+        views: list[dict[str, Any]],
+        relations: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+        dbsources: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")

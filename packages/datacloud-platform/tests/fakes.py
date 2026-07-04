@@ -159,6 +159,26 @@ class FakeOntologyBackend:
         """Look up object by code in _objects."""
         return self._objects.get(object_code)
 
+    def batch_import_ontology(
+        self,
+        base_path: Path,
+        objects: list[dict[str, Any]],
+        views: list[dict[str, Any]],
+        relations: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+        dbsources: list[dict[str, Any]],
+    ) -> dict[str, int]:  # noqa: ARG002
+        """Record batch import and return entity counts."""
+        if self._readonly:
+            raise PermissionError("REMOTE backend is read-only")
+        return {
+            "objects": len(objects),
+            "views": len(views),
+            "relations": len(relations),
+            "actions": len(actions),
+            "dbsources": len(dbsources),
+        }
+
     # -- Object CRUD --
 
     def create_object(self, base_id: str, obj: Any) -> Any:  # noqa: ARG002
