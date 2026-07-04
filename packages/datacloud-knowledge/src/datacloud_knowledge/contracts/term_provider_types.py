@@ -104,6 +104,8 @@ class TermUpdate:
     """百应拓展字段。"""
     synonyms: list[str] | None = None
     """同义词列表 → synonymList。"""
+    domain_ids: list[str] | None = None
+    """所属领域 ID 列表。用于场景归属时补写。"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

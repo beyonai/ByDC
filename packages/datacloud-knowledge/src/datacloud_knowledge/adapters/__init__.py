@@ -355,3 +355,27 @@ def create_bulk_importer(
     )
 
     return BulkImportAdapter(schema=schema, db_url=db_url, conninfo=conninfo)
+
+
+# ── 级联删除 ───────────────────────────────────────────────────────────
+
+
+def delete_scope(scope: str) -> dict[str, Any]:
+    """级联删除指定 scope 下所有术语数据（term + name + relation + knowledge）。
+
+    自管理 session 和事务，与 reader/writer 分离，backend-agnostic 调用方
+    无需知晓底层实现细节。
+
+    Args:
+        scope: scope 字符串，格式 ``"{type}:{code}"``
+               例如 ``"object:by_test"`` 或 ``"view:v_task_summary"``。
+
+    Returns:
+        ``{"ok": True}`` 或 ``{"ok": False, "error": "..."}``。
+    """
+    from datacloud_knowledge.adapters.opengauss._readers._term import (
+        _TermReader,
+    )
+
+    reader = _TermReader()
+    return reader.delete_scope(scope)

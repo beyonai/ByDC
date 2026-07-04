@@ -50,6 +50,7 @@ class _TermWriter(_WriterBase):
         *,
         term_name: str,
         term_type_code: str,
+        term_code: str | None = None,
         library_id: str | None = None,
         domain_ids: list[str],
         parent_term_id: str | None = None,
@@ -61,6 +62,7 @@ class _TermWriter(_WriterBase):
         Args:
             term_name: 术语标准名称。
             term_type_code: 术语类型编码。
+            term_code: 术语编码（业务唯一标识）。None 时自动生成 ``UD_xxx``。
             library_id: 术语库 ID（可选，默认为 NULL）。
             domain_ids: 所属领域 ID 列表。
             parent_term_id: 父术语 ID（可选）。
@@ -72,7 +74,7 @@ class _TermWriter(_WriterBase):
         """
         now = self._now()
         term_id = self._new_id()
-        term_code = self._generate_term_code()
+        db_term_code = term_code if term_code is not None else self._generate_term_code()
 
         self.session.execute(
             text(
@@ -86,7 +88,7 @@ class _TermWriter(_WriterBase):
             ),
             {
                 "term_id": term_id,
-                "term_code": term_code,
+                "term_code": db_term_code,
                 "term_name": term_name,
                 "term_type_code": term_type_code,
                 "library_id": library_id,
@@ -100,7 +102,7 @@ class _TermWriter(_WriterBase):
         log.info(
             "创建术语: term_id=%s term_code=%s term_name=%s user_id=%s",
             term_id,
-            term_code,
+            db_term_code,
             term_name,
             user_id,
         )
@@ -432,6 +434,7 @@ class _TermWriter(_WriterBase):
                 term_id = self.insert_term(
                     term_name=term.term_name,
                     term_type_code=term.term_type,
+                    term_code=term.term_code if term.term_code else None,
                     library_id=dataset_id,
                     domain_ids=[],
                     parent_term_id=term.parent_term_code or None,
@@ -471,6 +474,135 @@ class _TermWriter(_WriterBase):
             len(errors),
         )
         return ImportResult(created=created, term_ids=term_ids, errors=errors)
+
+    def upsert_term(
+        self,
+        *,
+        term_code: str,
+        term_name: str,
+        term_type_code: str,
+        library_id: str | None = None,
+        domain_ids: list[str] | None = None,
+        search_scope: dict[str, object] | None = None,
+        backfill_vectors: bool = True,
+    ) -> str:
+        """UPSERT 单个术语（按 term_code + term_type_code），含 term_name 和向量回填。
+
+        写入流程：
+        1. UPSERT term 行（有则 UPDATE，无则 INSERT）
+        2. UPSERT term_name 行（幂等）
+        3. 提交事务
+        4. 回填 tsvector（best-effort，失败不抛）
+        5. 回填 embedding（best-effort，30s 超时）
+        """
+        now = self._now()
+        domains = domain_ids or []
+        scope = search_scope or {}
+
+        # ── 1. UPSERT term ───────────────────────────────────────────
+        existing = self.session.execute(
+            text(
+                "SELECT term_id, library_id FROM term "
+                "WHERE term_code = :code AND term_type_code = :type AND parent_term_id IS NULL"
+            ),
+            {"code": term_code, "type": term_type_code},
+        ).fetchone()
+
+        if existing is not None:
+            term_id = str(existing[0])
+            # UPDATE 现有行（不覆盖 library_id，除非调用方显式传入）
+            set_parts: dict[str, object] = {
+                "term_name": term_name,
+                "domain_ids": domains,
+                "updated_time": now,
+            }
+            if library_id is not None:
+                set_parts["library_id"] = library_id
+            set_clause = ", ".join(f"{key} = :{key}" for key in set_parts)
+            params: dict[str, object] = dict(set_parts)
+            params["term_id"] = term_id
+            self.session.execute(
+                text(f"UPDATE term SET {set_clause} WHERE term_id = :term_id"),
+                params,
+            )
+            log.info("upsert_term UPDATE: term_id=%s code=%s", term_id, term_code)
+        else:
+            term_id = self._new_id()
+            db_library_id = library_id
+            self.session.execute(
+                text(
+                    "INSERT INTO term "
+                    "(term_id, term_code, term_name, term_type_code, library_id, "
+                    "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
+                    "VALUES ("
+                    ":term_id, :term_code, :term_name, :term_type_code, :library_id, "
+                    ":domain_ids, NULL, NULL, :now, :now"
+                    ")"
+                ),
+                {
+                    "term_id": term_id,
+                    "term_code": term_code,
+                    "term_name": term_name,
+                    "term_type_code": term_type_code,
+                    "library_id": db_library_id,
+                    "domain_ids": domains,
+                    "now": now,
+                },
+            )
+            log.info(
+                "upsert_term INSERT: term_id=%s code=%s",
+                term_id,
+                term_code,
+            )
+
+        # ── 2. UPSERT term_name ──────────────────────────────────────
+        self.create_term_name(
+            term_id=term_id,
+            name_text=term_name,
+            search_scope=scope,
+        )
+
+        # ── 3. 向量回填（best-effort，非阻塞） ─────────────────────────
+        if backfill_vectors:
+            self._backfill_vectors_optional(term_id=term_id)
+
+        return term_id
+
+    def _backfill_vectors_optional(self, *, term_id: str) -> None:
+        """tsvector + embedding 回填（best-effort，失败不抛，超时 30s）。"""
+        import threading
+
+        result_holder: dict[str, object] = {}
+        error_holder: dict[str, Exception] = {}
+
+        def _run() -> None:
+            try:
+                from datacloud_knowledge.adapters import backfill_embeddings
+
+                backfill_embeddings(term_ids=[term_id])
+                result_holder["ok"] = True
+            except Exception as exc:
+                error_holder["exc"] = exc
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        thread.join(timeout=30.0)
+
+        if thread.is_alive():
+            log.warning(
+                "upsert_term 向量回填超时（30s），term_id=%s 请稍后手动执行: "
+                "datacloud-knowledge backfill-embeddings --term-ids %s",
+                term_id,
+                term_id,
+            )
+        elif "exc" in error_holder:
+            log.warning(
+                "upsert_term 向量回填失败: %s，term_id=%s",
+                error_holder["exc"],
+                term_id,
+            )
+        else:
+            log.debug("upsert_term 向量回填完成: term_id=%s", term_id)
 
     def update_term(
         self,
@@ -515,6 +647,8 @@ class _TermWriter(_WriterBase):
             set_parts["desc_summary"] = updates.desc
         if updates.labels is not None:
             set_parts["term_tags"] = json.dumps(updates.labels)
+        if updates.domain_ids is not None:
+            set_parts["domain_ids"] = updates.domain_ids
         # ext_attrs 暂存到 desc_summary 补充字段（OpenGauss 无独立 ext_attrs 列）
         if updates.ext_attrs is not None:
             ext_json = json.dumps(updates.ext_attrs)
