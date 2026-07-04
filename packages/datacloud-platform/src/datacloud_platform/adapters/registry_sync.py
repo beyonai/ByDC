@@ -75,7 +75,9 @@ def registry_sync_upsert(
     else:
         items.append(entry)
     atomic_write_json(registry_path, content)
-    logger.debug("registry_sync_upsert: %s %s=%s → %s", list_key, code_key, code, registry_path)
+    logger.debug(
+        "registry_sync_upsert: %s %s=%s → %s", list_key, code_key, code, registry_path
+    )
 
 
 def registry_sync_delete(
@@ -90,4 +92,6 @@ def registry_sync_delete(
     items: list[dict[str, Any]] = content.get(list_key, [])
     content[list_key] = [o for o in items if o.get(code_key) != code]
     atomic_write_json(registry_path, content)
-    logger.debug("registry_sync_delete: %s %s=%s → %s", list_key, code_key, code, registry_path)
+    logger.debug(
+        "registry_sync_delete: %s %s=%s → %s", list_key, code_key, code, registry_path
+    )

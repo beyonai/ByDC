@@ -139,8 +139,13 @@ class TestLoadOntologyFastPath:
         )
         base_path = backend._resolve_base_path("test-base")  # noqa: SLF001
         counts = backend.batch_import_ontology(
-    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
-)
+            base_path,
+            parsed.objects,
+            parsed.views,
+            parsed.relations,
+            parsed.actions,
+            parsed.dbsources,
+        )
         assert counts["objects"] == 2
         registry_path = base_path / "objects_registry.json"
         assert registry_path.exists()
@@ -169,8 +174,13 @@ class TestLoadOntologyFastPath:
         )
         base_path = backend._resolve_base_path("fast-test")  # noqa: SLF001
         backend.batch_import_ontology(
-    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
-)
+            base_path,
+            parsed.objects,
+            parsed.views,
+            parsed.relations,
+            parsed.actions,
+            parsed.dbsources,
+        )
 
         start = time.monotonic()
         loader = backend.load_ontology(base_path)
@@ -201,8 +211,13 @@ class TestSaveParsedContent:
         )
         base_path = backend._resolve_base_path("test-base")  # noqa: SLF001
         counts = backend.batch_import_ontology(
-    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
-)
+            base_path,
+            parsed.objects,
+            parsed.views,
+            parsed.relations,
+            parsed.actions,
+            parsed.dbsources,
+        )
 
         assert counts["objects"] == 1
         assert counts["views"] == 1
@@ -228,8 +243,13 @@ class TestSaveParsedContent:
         )
         base_path = backend._resolve_base_path("test-base")  # noqa: SLF001
         backend.batch_import_ontology(
-    base_path, parsed.objects, parsed.views, parsed.relations, parsed.actions, parsed.dbsources
-)
+            base_path,
+            parsed.objects,
+            parsed.views,
+            parsed.relations,
+            parsed.actions,
+            parsed.dbsources,
+        )
 
         es = JsonEntityStore(base_path)
         for et in ("objects", "views", "relations"):

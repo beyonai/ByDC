@@ -283,7 +283,9 @@ class FakeSceneServicePlatform(SceneServiceMixin):
     (via _HasOntologyBackend protocol + _base_path_for usage).
     """
 
-    def __init__(self, backend: FakeSceneMembershipBackend, tmp_path: Path | None = None) -> None:
+    def __init__(
+        self, backend: FakeSceneMembershipBackend, tmp_path: Path | None = None
+    ) -> None:
         self._backend = backend
         self._tmp_path = tmp_path or Path("/tmp/fake_scene_test")
 
