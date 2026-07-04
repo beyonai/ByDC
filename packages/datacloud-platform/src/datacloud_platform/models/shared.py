@@ -50,6 +50,8 @@ class ParsedOwlContent:
     objects: list[dict[str, Any]] = field(default_factory=list)
     views: list[dict[str, Any]] = field(default_factory=list)
     relations: list[dict[str, Any]] = field(default_factory=list)
+    actions: list[dict[str, Any]] = field(default_factory=list)
+    dbsources: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

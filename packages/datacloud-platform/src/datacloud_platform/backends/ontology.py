@@ -30,6 +30,26 @@ class OntologyBackend(Protocol):
         """Parse OWL directory, return structured content."""
         ...
 
+    def batch_import_ontology(
+        self,
+        base_path: Path,
+        objects: list[dict[str, Any]],
+        views: list[dict[str, Any]],
+        relations: list[dict[str, Any]],
+        actions: list[dict[str, Any]],
+        dbsources: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Batch import ontology content into the backend.
+
+        Persists objects, views, relations, actions, and dbsources.
+        Each backend determines its own storage strategy.
+        Returns counts keyed by entity type.
+
+        Raises:
+            PermissionError: If the backend is read-only (e.g. REMOTE).
+        """
+        ...
+
     def load_ontology(self, base_path: Path) -> OntologyQueryable:
         """Load parsed ontology directory into queryable runtime object.
 
