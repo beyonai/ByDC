@@ -681,9 +681,15 @@ class SceneMixin(DataCloudDataBackendBase):
         scene["member_view_codes"] = list(existing_views | set(view_codes))
         self._save_scene(scene_id, scene)
         self._reverse_index_built = False
+        # B-domain: fill term domain_codes after scene association (deferred sync)
+        if hasattr(self, "_sync_entity_domains"):
+            self._sync_entity_domains(base_id, scene_id, "object", added_objs)
+            self._sync_entity_domains(base_id, scene_id, "view", added_views)
         logger.info(
-            "Added scene members: scene_id=%s objects=%d views=%d",
+            "Added scene members: scene_id=%s objects=%d views=%d (synced=%d+%d)",
             scene_id,
+            len(added_objs),
+            len(added_views),
             len(added_objs),
             len(added_views),
         )
@@ -721,6 +727,10 @@ class SceneMixin(DataCloudDataBackendBase):
         scene["member_view_codes"] = list(view_set)
         self._save_scene(scene_id, scene)
         self._reverse_index_built = False
+        # B-domain: remove scene_id from term.domain_ids after scene disassociation
+        if hasattr(self, "_remove_entity_domains"):
+            self._remove_entity_domains(base_id, scene_id, "object", object_codes)
+            self._remove_entity_domains(base_id, scene_id, "view", view_codes)
         logger.info(
             "Removed scene members: scene_id=%s objects=%d views=%d",
             scene_id,

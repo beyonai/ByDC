@@ -299,6 +299,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.save("objects", code, obj_dict)
         self._incremental_save(entity_store, "objects", code, obj_dict)
         logger.info("Created object: base_id=%s object_code=%s", base_id, code)
+        self._sync_entity_terms(
+            entity_type="object",
+            entity_code=code,
+            entity_name=obj_dict.get("objectName") or obj_dict.get("object_name", code),
+            entity_desc=obj_dict.get("objectDesc") or obj_dict.get("description", ""),
+            base_id=base_id,
+        )
         return obj_dict
 
     def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
@@ -320,6 +327,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.save("objects", object_code, obj_dict)
         self._incremental_save(entity_store, "objects", object_code, obj_dict)
         logger.info("Updated object: base_id=%s object_code=%s", base_id, object_code)
+        # Re-sync terms: delete old → write new (build_terms is upsert-safe)
+        self._remove_entity_terms(entity_type="object", entity_code=object_code)
+        self._sync_entity_terms(
+            entity_type="object",
+            entity_code=object_code,
+            entity_name=obj_dict.get("objectName")
+            or obj_dict.get("object_name", object_code),
+            entity_desc=obj_dict.get("objectDesc") or obj_dict.get("description", ""),
+            base_id=base_id,
+        )
         return obj_dict
 
     def delete_object(self, base_id: str, object_code: str) -> None:
@@ -334,6 +351,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.delete("objects", object_code)
         self._incremental_delete(entity_store, "objects", object_code)
         logger.info("Deleted object: base_id=%s object_code=%s", base_id, object_code)
+        self._remove_entity_terms(entity_type="object", entity_code=object_code)
 
     # ── View CRUD ──────────────────────────────────────────────────────────
 
@@ -434,6 +452,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.save("views", code, view_dict)
         self._incremental_save(entity_store, "views", code, view_dict)
         logger.info("Created view: base_id=%s view_code=%s", base_id, code)
+        self._sync_entity_terms(
+            entity_type="view",
+            entity_code=code,
+            entity_name=view_dict.get("viewName") or view_dict.get("view_name", code),
+            entity_desc=view_dict.get("description", ""),
+            base_id=base_id,
+        )
         return view_dict
 
     def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
@@ -455,6 +480,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.save("views", view_code, view_dict)
         self._incremental_save(entity_store, "views", view_code, view_dict)
         logger.info("Updated view: base_id=%s view_code=%s", base_id, view_code)
+        self._remove_entity_terms(entity_type="view", entity_code=view_code)
+        self._sync_entity_terms(
+            entity_type="view",
+            entity_code=view_code,
+            entity_name=view_dict.get("viewName")
+            or view_dict.get("view_name", view_code),
+            entity_desc=view_dict.get("description", ""),
+            base_id=base_id,
+        )
         return view_dict
 
     def delete_view(self, base_id: str, view_code: str) -> None:
@@ -469,6 +503,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.delete("views", view_code)
         self._incremental_delete(entity_store, "views", view_code)
         logger.info("Deleted view: base_id=%s view_code=%s", base_id, view_code)
+        self._remove_entity_terms(entity_type="view", entity_code=view_code)
 
     # ── Relation CRUD (stub — datacloud-data SDK does not yet support) ──────
 
@@ -561,6 +596,14 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.save("relations", code, rel_dict)
         self._incremental_save(entity_store, "relations", code, rel_dict)
         logger.info("Created relation: base_id=%s relation_code=%s", base_id, code)
+        self._sync_entity_terms(
+            entity_type="relation",
+            entity_code=code,
+            entity_name=rel_dict.get("relationName")
+            or rel_dict.get("relation_name", code),
+            entity_desc=rel_dict.get("relationDesc") or rel_dict.get("description", ""),
+            base_id=base_id,
+        )
         return rel_dict
 
     def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
@@ -582,6 +625,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.save("relations", rel_code, rel_dict)
         self._incremental_save(entity_store, "relations", rel_code, rel_dict)
         logger.info("Updated relation: base_id=%s rel_code=%s", base_id, rel_code)
+        self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
+        self._sync_entity_terms(
+            entity_type="relation",
+            entity_code=rel_code,
+            entity_name=rel_dict.get("relationName")
+            or rel_dict.get("relation_name", rel_code),
+            entity_desc=rel_dict.get("relationDesc") or rel_dict.get("description", ""),
+            base_id=base_id,
+        )
         return rel_dict
 
     def delete_relation(self, base_id: str, rel_code: str) -> None:
@@ -596,6 +648,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.delete("relations", rel_code)
         self._incremental_delete(entity_store, "relations", rel_code)
         logger.info("Deleted relation: base_id=%s rel_code=%s", base_id, rel_code)
+        self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
 
     # ── Action CRUD (stub — datacloud-data SDK does not yet support) ────────
 
@@ -671,6 +724,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             object_code,
             code,
         )
+        self._sync_entity_terms(
+            entity_type="ontology_action",
+            entity_code=code,
+            entity_name=action_dict.get("actionName")
+            or action_dict.get("action_name", code),
+            entity_desc=action_dict.get("actionDesc")
+            or action_dict.get("description", ""),
+            base_id=base_id,
+        )
         return action_dict
 
     def update_action(
@@ -705,6 +767,18 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             object_code,
             action_code,
         )
+        self._remove_entity_terms(
+            entity_type="ontology_action", entity_code=action_code
+        )
+        self._sync_entity_terms(
+            entity_type="ontology_action",
+            entity_code=action_code,
+            entity_name=action_dict.get("actionName")
+            or action_dict.get("action_name", action_code),
+            entity_desc=action_dict.get("actionDesc")
+            or action_dict.get("description", ""),
+            base_id=base_id,
+        )
         return action_dict
 
     def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
@@ -725,6 +799,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             base_id,
             object_code,
             action_code,
+        )
+        self._remove_entity_terms(
+            entity_type="ontology_action", entity_code=action_code
         )
 
     # ── Datasource CRUD ────────────────────────────────────────────────────
@@ -837,3 +914,278 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.delete("datasources", db_id)
         self._incremental_delete(entity_store, "datasources", db_id)
         logger.info("Deleted datasource: base_id=%s db_id=%s", base_id, db_id)
+
+    # ── Term sync helpers (called by CRUD methods) ─────────────────────────
+
+    @staticmethod
+    def _extract_fields_from_entity(
+        entity_type: str, data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Extract field dicts for term sync, typed by entity kind."""
+        if entity_type == "object":
+            raw_props: list[dict[str, Any]] = data.get("properties", []) or []
+            return [
+                {
+                    "property_code": (
+                        p.get("propertyCode") or p.get("property_code", "")
+                    ),
+                    "property_name": (
+                        p.get("propertyName") or p.get("property_name", "")
+                    ),
+                    "data_type": p.get("dataType", "STRING"),
+                }
+                for p in raw_props
+            ]
+        if entity_type == "view":
+            raw_mappings: list[dict[str, Any]] = (
+                data.get("properties") or data.get("mappings") or []
+            )
+            return [
+                {
+                    "property_code": (
+                        m.get("propertyCode") or m.get("property_code", "")
+                    ),
+                    "property_name": (
+                        m.get("propertyName") or m.get("property_name", "")
+                    ),
+                }
+                for m in raw_mappings
+            ]
+        if entity_type == "action":
+            raw_params: list[dict[str, Any]] = data.get("params", []) or []
+            return [
+                {
+                    "property_code": (p.get("paramCode") or p.get("param_code", "")),
+                    "property_name": (p.get("paramName") or p.get("param_name", "")),
+                }
+                for p in raw_params
+            ]
+        # relation — no sub-fields
+        return []
+
+    # ── Term type mapping (entity_type → knowledge DB term_type_code) ───
+    _TERM_TYPE_MAP: dict[str, str] = {
+        "object": "object",
+        "view": "view",
+        "relation": "relation",
+        "action": "ontology_action",
+    }
+
+    def _sync_entity_terms(
+        self,
+        *,
+        entity_type: str,
+        entity_code: str,
+        entity_name: str,
+        entity_desc: str = "",
+        fields: list[dict[str, Any]] | None = None,
+        base_id: str = "",
+        domain_codes: tuple[str, ...] | None = None,
+    ) -> None:
+        """Write entity term into knowledge DB via ``create_writer``.
+
+        Calls ``upsert_term`` (with explicit term_code=entity_code) and
+        ``create_term_name`` internally.  tsvector + embedding backfill
+        runs in a daemon thread (best-effort, non-blocking).
+
+        ``domain_ids`` defaults to empty; scene membership is managed by
+        ``_sync_entity_domains`` / ``_remove_entity_domains``.
+        """
+        _ = entity_desc, fields
+        try:
+            from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
+            term_type_code = self._TERM_TYPE_MAP.get(entity_type, entity_type)
+            domains = list(domain_codes) if domain_codes else []
+
+            with create_writer() as writer:
+                writer.upsert_term(
+                    term_code=entity_code,
+                    term_name=entity_name,
+                    term_type_code=term_type_code,
+                    library_id=base_id or None,
+                    domain_ids=domains,
+                    search_scope={"base": base_id} if base_id else {},
+                    backfill_vectors=True,
+                )
+            logger.info(
+                "_sync_entity_terms: type=%s term_type=%s code=%s done",
+                entity_type,
+                term_type_code,
+                entity_code,
+            )
+        except ImportError:
+            logger.debug(
+                "_sync_entity_terms skipped (datacloud_knowledge unavailable): "
+                "type=%s code=%s",
+                entity_type,
+                entity_code,
+            )
+        except Exception:
+            logger.exception(
+                "_sync_entity_terms failed: type=%s code=%s", entity_type, entity_code
+            )
+
+    def _remove_entity_terms(self, *, entity_type: str, entity_code: str) -> None:
+        """Remove entity terms from knowledge DB on delete/update.
+
+        Uses the standalone ``delete_scope`` function (reader/writer
+        agnostic) for cascading delete of term + name + relation + knowledge.
+        """
+        try:
+            from datacloud_knowledge.adapters import delete_scope  # noqa: PLC0415
+
+            scope = f"{entity_type}:{entity_code}"
+            delete_scope(scope)
+            logger.info(
+                "_remove_entity_terms: type=%s code=%s done", entity_type, entity_code
+            )
+        except ImportError:
+            logger.debug(
+                "_remove_entity_terms skipped (datacloud_knowledge unavailable): "
+                "type=%s code=%s",
+                entity_type,
+                entity_code,
+            )
+        except Exception:
+            logger.exception(
+                "_remove_entity_terms failed: type=%s code=%s",
+                entity_type,
+                entity_code,
+            )
+
+    def _sync_entity_domains(
+        self,
+        base_id: str,
+        scene_id: str,
+        entity_type: str,
+        entity_codes: list[str],
+    ) -> None:
+        """Called by add_scene_members — merges scene_id into term.domain_ids.
+
+        Reads the existing term by ``term_code = entity_code``, merges
+        ``scene_id`` into its domain_ids set, and writes the merged list
+        back via ``update_term``.  Existing scene IDs are preserved.
+        """
+        if not entity_codes:
+            return
+        try:
+            from datacloud_knowledge.adapters import create_reader, create_writer  # noqa: PLC0415
+            from datacloud_knowledge.contracts.term_provider_types import (  # noqa: PLC0415
+                TermUpdate,
+            )
+
+            reader = create_reader()
+            with create_writer() as writer:
+                for entity_code in entity_codes:
+                    try:
+                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
+                        if not terms:
+                            logger.warning(
+                                "_sync_entity_domains: term not found for code=%s",
+                                entity_code,
+                            )
+                            continue
+                        term_id = str(terms[0].get("term_id", ""))
+                        if not term_id:
+                            continue
+                        current_domains: list[str] = terms[0].get("domain_ids") or []
+                        merged = list({*current_domains, scene_id})
+                        writer.update_term(
+                            dataset_id=base_id,
+                            term_id=term_id,
+                            updates=TermUpdate(domain_ids=merged),
+                        )
+                        logger.info(
+                            "_sync_entity_domains: type=%s code=%s scene=%s domains=%s done",
+                            entity_type,
+                            entity_code,
+                            scene_id,
+                            merged,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "_sync_entity_domains: failed for code=%s, "
+                            "rolling back entire batch",
+                            entity_code,
+                        )
+                        raise
+                # commit handled by context manager exit
+        except ImportError:
+            logger.debug(
+                "_sync_entity_domains skipped (datacloud_knowledge unavailable)"
+            )
+        except Exception:
+            logger.exception(
+                "_sync_entity_domains failed: type=%s scene=%s",
+                entity_type,
+                scene_id,
+            )
+
+    def _remove_entity_domains(
+        self,
+        base_id: str,
+        scene_id: str,
+        entity_type: str,
+        entity_codes: list[str],
+    ) -> None:
+        """Called by remove_scene_members — removes scene_id from term.domain_ids.
+
+        Reads the existing term by ``term_code = entity_code``, removes
+        ``scene_id`` from its domain_ids set, and writes the result back
+        via ``update_term``.  Other scene IDs are preserved.
+        """
+        if not entity_codes:
+            return
+        try:
+            from datacloud_knowledge.adapters import create_reader, create_writer  # noqa: PLC0415
+            from datacloud_knowledge.contracts.term_provider_types import (  # noqa: PLC0415
+                TermUpdate,
+            )
+
+            reader = create_reader()
+            with create_writer() as writer:
+                for entity_code in entity_codes:
+                    try:
+                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
+                        if not terms:
+                            logger.warning(
+                                "_remove_entity_domains: term not found for code=%s",
+                                entity_code,
+                            )
+                            continue
+                        term_id = str(terms[0].get("term_id", ""))
+                        if not term_id:
+                            continue
+                        current_domains: list[str] = terms[0].get("domain_ids") or []
+                        updated = [d for d in current_domains if d != scene_id]
+                        writer.update_term(
+                            dataset_id=base_id,
+                            term_id=term_id,
+                            updates=TermUpdate(domain_ids=updated),
+                        )
+                        logger.info(
+                            "_remove_entity_domains: type=%s code=%s scene=%s domains=%s done",
+                            entity_type,
+                            entity_code,
+                            scene_id,
+                            updated,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "_remove_entity_domains: failed for code=%s, "
+                            "rolling back entire batch",
+                            entity_code,
+                        )
+                        raise
+                # commit handled by context manager exit
+        except ImportError:
+            logger.debug(
+                "_remove_entity_domains skipped (datacloud_knowledge unavailable)"
+            )
+        except Exception:
+            logger.exception(
+                "_remove_entity_domains failed: type=%s scene=%s",
+                entity_type,
+                scene_id,
+            )
