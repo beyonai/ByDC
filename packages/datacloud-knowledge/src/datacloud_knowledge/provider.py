@@ -111,7 +111,10 @@ def resolve_field_aliases(
 ) -> FieldResolutionResult:
     """字段别名消歧。
 
-    在指定作用域下，将用户输入的业务别名（如"销售额"）精确匹配到系统字段编码（如 "sales_amount"）。
+    .. deprecated::
+        此函数绑定对象/字段领域概念（scope_code），违反通用设计。
+        请使用 ``query_terms`` 按 term_type_code + parent_term_code 过滤
+        并结合 ``list_term_names`` 自行编排别名匹配逻辑。
 
     Args:
         terms: 待解析的字段别名列表。
@@ -295,19 +298,15 @@ def get_object_props_by_code(
 ) -> list[PropItem]:
     """根据对象/视图编码查询其下所有属性。
 
-    接收业务编码（如 ``"sales_crm"``），通过知识图谱 HAS_FIELD 关系返回该对象下的
-    所有属性术语。典型用途：前端选择数据对象后，动态展示可查询的字段列表。
+    .. deprecated::
+        此函数绑定对象/属性领域概念，违反通用设计。
+        请使用 ``query_terms(term_type_code="prop", parent_term_code=scope_code)`` 替代。
 
     Args:
         scope_code: 对象/视图编码。
 
     Returns:
         PropItem 列表（term_code=属性编码, term_name=属性名称），按编码排序。
-
-    Example:
-        >>> props = get_object_props_by_code(scope_code="sales_crm")
-        >>> for p in props:
-        ...     print(f"{p.term_code}: {p.term_name}")
     """
     reader = create_reader()
     return reader.get_object_props_by_code(scope_code=scope_code)
@@ -320,8 +319,9 @@ def get_prop_enum_values(
 ) -> dict[str, list[str]]:
     """查询指定属性的可选枚举值。
 
-    接收对象编码和属性编码列表，返回每个属性的可选值（含别名去重）。
-    典型用途：前端下拉框展示字段的过滤候选项。
+    .. deprecated::
+        此函数绑定属性/对象领域概念，违反通用设计。
+        请使用 ``query_terms(parent_term_code=field_code)`` 替代。
 
     Args:
         scope_code: 对象/视图编码。
@@ -329,14 +329,6 @@ def get_prop_enum_values(
 
     Returns:
         {field_code → [可选值列表]}，去重保序。
-
-    Example:
-        >>> values = get_prop_enum_values(
-        ...     scope_code="sales_crm",
-        ...     field_codes=["region", "level"],
-        ... )
-        >>> values["region"]   # → ["华东", "华南", "华北", ...]
-        >>> values["level"]    # → ["高", "中", "低"]
     """
     reader = create_reader()
     return reader.get_prop_enum_values(scope_code=scope_code, field_codes=list(field_codes))

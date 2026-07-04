@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -419,6 +420,12 @@ class _TermReader(_ReaderBase):
             FieldResolutionResult，包含 resolved/ambiguous/unresolved 三类结果。
         """
         _ = library_id  # reserved for future use
+        warnings.warn(
+            "resolve_field_aliases() is deprecated: binds object/field domain "
+            "concepts in the term protocol. Use query_terms + list_term_names instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
 
         effective_values = list(value_terms) if value_terms is not None else []
         if not scope_code or (not terms and not effective_values):
@@ -730,6 +737,12 @@ class _TermReader(_ReaderBase):
         Returns:
             ValueResolutionResult，包含 matched（已知值）和 unmatched（未知值）。
         """
+        warnings.warn(
+            "resolve_value_aliases() is deprecated: binds object/property domain "
+            "concepts in the term protocol. Use query_terms + list_term_names instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         terms_list = list(terms)
         if not terms_list or not scope_code:
             return ValueResolutionResult(unmatched=terms_list)
@@ -832,6 +845,11 @@ class _TermReader(_ReaderBase):
         Returns:
             {source_term_id → [PropItem]} 映射。每个 source_term_id 至少包含一个空列表。
         """
+        warnings.warn(
+            "get_object_props() is deprecated: binds object/property domain concepts. Use query_term_relations instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         source_term_ids_list = list(source_term_ids)
         if not source_term_ids_list:
             return {}
@@ -869,6 +887,11 @@ class _TermReader(_ReaderBase):
 
         先通过 scope_code 查找 view/object 的 term_id，再查询 HAS_FIELD 关系获取属性列表。
         """
+        warnings.warn(
+            "get_object_props_by_code() is deprecated: binds object/property domain concepts. Use query_term_relations instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         if not scope_code:
             return []
 
@@ -927,6 +950,11 @@ class _TermReader(_ReaderBase):
         Returns:
             {source_term_id → [ValueWithAliases]} 映射。每个 source_term_id 至少包含一个空列表。
         """
+        warnings.warn(
+            "get_prop_values_with_aliases() is deprecated: binds property/value domain concepts. Use query_terms instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         source_term_ids_list = list(source_term_ids)
         if not source_term_ids_list:
             return {}
@@ -1014,6 +1042,11 @@ class _TermReader(_ReaderBase):
         Returns:
             {prop_code: type_code}，仅包含有 HAS_TERM 绑定的 prop。
         """
+        warnings.warn(
+            "get_prop_type_map() is deprecated: property-type mapping is entity-specific. Use list_term_types instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         if not scope_code:
             return {}
 
@@ -1083,6 +1116,11 @@ class _TermReader(_ReaderBase):
         Returns:
             {field_code → [枚举值列表]}，去重保序。未命中 field_code 的值为空列表。
         """
+        warnings.warn(
+            "get_prop_enum_values() is deprecated: binds property/enum domain concepts. Use query_terms(parent_term_code=...) instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         field_codes_list = list(field_codes)
         if not scope_code or not field_codes_list:
             return {}
@@ -1181,6 +1219,11 @@ class _TermReader(_ReaderBase):
         Returns:
             最短距离，不可达时返回 None。
         """
+        warnings.warn(
+            "get_bfs_distance() is deprecated: graph traversal in reader protocol. Use query_term_relations(depth=...) instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         if source_term_id == target_term_id:
             return 0
         if max_depth <= 0:
@@ -1264,6 +1307,11 @@ class _TermReader(_ReaderBase):
             ShortestPathNode 列表，每个节点代表一条从根到目标的完整路径。
             无满足条件的根节点时返回空列表。
         """
+        warnings.warn(
+            "get_shortest_path_tree() is deprecated: graph traversal in reader protocol. Use query_term_relations instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         if not target_term_id.strip():
             raise ValueError("target_term_id must not be blank")
         if not source_term_type_codes:
@@ -1413,6 +1461,11 @@ class _TermReader(_ReaderBase):
 
     def get_dimension_values(self) -> Sequence[DimensionValueItem]:
         """查询所有 cat=2 维度枚举值（全量加载到内存）。"""
+        warnings.warn(
+            "get_dimension_values() is deprecated: binds dimension domain concept. Use query_terms instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         try:
             with self._get_session() as session:
                 rows = session.execute(
@@ -1434,6 +1487,11 @@ class _TermReader(_ReaderBase):
 
     def get_user_scoped_names(self, *, user_id: str) -> Sequence[UserScopedNameItem]:
         """查询指定用户作用域下的术语别名记录。"""
+        warnings.warn(
+            "get_user_scoped_names() is deprecated: user-scoped query in reader protocol. Use list_term_names + scope filter instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         try:
             with self._get_session() as session:
                 rows = session.execute(
@@ -1478,6 +1536,11 @@ class _TermReader(_ReaderBase):
 
     def get_type_codes_by_category(self, *, categories: set[int]) -> set[str]:
         """按 term_type 的 type_category 加载 type_code 集合。"""
+        warnings.warn(
+            "get_type_codes_by_category() is deprecated: exposes internal type_category concept. Use list_term_types instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         if not categories:
             return set()
         try:
@@ -1536,6 +1599,11 @@ class _TermReader(_ReaderBase):
         limit: int = 2,
     ) -> Sequence[tuple[str, int]]:
         """查询与指定字段集最佳匹配的对象 term_code。"""
+        warnings.warn(
+            "get_matching_objects() is deprecated: binds object/field/ontology domain concepts. Use query_term_relations + application logic instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         if not field_codes:
             return ()
         try:
@@ -1629,8 +1697,8 @@ class _TermReader(_ReaderBase):
         *,
         term_ids: Sequence[str] | None = None,
         term_codes: Sequence[str] | None = None,
-    ) -> Sequence[dict[str, str | None]]:
-        """批量查询术语的基本字段（term_id, term_code, term_name, term_type_code, parent_term_id, owl_doc_id）。
+    ) -> Sequence[dict[str, object]]:
+        """批量查询术语的基本字段（term_id, term_code, term_name, term_type_code, parent_term_id, owl_doc_id, domain_ids）。
 
         支持按 term_ids 或 term_codes 查询。
         """
@@ -1653,7 +1721,7 @@ class _TermReader(_ReaderBase):
                 rows = session.execute(
                     text(
                         "SELECT term_id, term_code, term_name, term_type_code, "
-                        "parent_term_id, owl_doc_id "
+                        "parent_term_id, owl_doc_id, domain_ids "
                         f"FROM term WHERE {where_col} IN :ids"
                     ).bindparams(bindparam("ids", expanding=True)),
                     {"ids": ids},
@@ -1673,6 +1741,7 @@ class _TermReader(_ReaderBase):
                 "term_type_code": str(r.term_type_code),
                 "parent_term_id": None if r.parent_term_id is None else str(r.parent_term_id),
                 "owl_doc_id": None if r.owl_doc_id is None else str(r.owl_doc_id),
+                "domain_ids": list(r.domain_ids) if r.domain_ids else [],
             }
             for r in rows
         )
@@ -2295,6 +2364,11 @@ class _TermReader(_ReaderBase):
         查找 prop，并将命中的用户输入（terms）映射到 ResolvedField(term_code, term_name)。
         支持值级别消歧（resolve_values=True 时对 value_terms 追加匹配）。
         """
+        warnings.warn(
+            "resolve_field_aliases_with_names() is deprecated: binds field/alias domain concepts. Use query_terms + list_term_names instead.",
+            FutureWarning,
+            stacklevel=2,
+        )
         unique_field_terms = list(dict.fromkeys(terms)) if terms else []
         if not scope_code or not unique_field_terms:
             return FieldResolutionResultWithNames(unresolved=list(unique_field_terms))

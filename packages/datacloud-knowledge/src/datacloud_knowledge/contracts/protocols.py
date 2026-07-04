@@ -145,15 +145,17 @@ class TermReader(Protocol):
     ) -> FieldResolutionResult:
         """轻量级字段 + 值别名精确消歧。
 
-        在 scope_code 对应的视图/对象下查找字段别名（TermName.name_text → prop term_code）
-        和可选值别名（child term 的 term_name/TermName 别名）。
+        .. deprecated::
+            此方法绑定对象/字段领域概念（scope_code），违反术语协议通用设计。
+            请使用 ``query_terms`` 按 term_type_code + parent_term_code 过滤，
+            再结合 ``list_term_names`` 自行编排别名匹配逻辑。
 
         Args:
             terms: 待解析的字段中文名/别名列表。
-            scope_code: 视图或对象 code（如 "scene_enterprise_analysis"）。
-            library_id: 预留参数，v1 不使用。
+            scope_code: 视图或对象 code。
+            library_id: 预留参数。
             resolve_values: 是否对 value_terms 追加值级别消歧。
-            value_terms: 待值消歧的过滤值列表（如企业名、地区名等）。
+            value_terms: 待值消歧的过滤值列表。
 
         Returns:
             FieldResolutionResult，包含 resolved/ambiguous/unresolved 三类结果。
@@ -165,10 +167,13 @@ class TermReader(Protocol):
     ) -> ValueResolutionResult:
         """轻量级属性值精确消歧。
 
-        在 scope_code 对应的 view/object 下，通过关系链路查找 child term 名称和别名匹配。
+        .. deprecated::
+            此方法绑定对象/属性领域概念（scope_code），违反术语协议通用设计。
+            请使用 ``query_terms`` 按 parent_term_code 过滤，再结合
+            ``list_term_names`` 自行编排值别名匹配逻辑。
 
         Args:
-            terms: 待匹配的值列表（如企业名、地区名等）。
+            terms: 待匹配的值列表。
             scope_code: 视图或对象 code。
 
         Returns:
@@ -178,6 +183,11 @@ class TermReader(Protocol):
 
     def get_object_props(self, *, source_term_ids: Sequence[str]) -> dict[str, list[PropItem]]:
         """批量查询对象/视图下的属性（通过 term_relation HAS_FIELD）。
+
+        .. deprecated::
+            此方法绑定对象/属性领域概念，违反术语协议通用设计。
+            将在未来版本移除，请使用通用的 ``query_terms`` 或 ``get_term``
+            配合 term_type_code 过滤实现等价查询。
 
         Args:
             source_term_ids: 源术语 ID 列表（view/object 的 term_id）。
@@ -190,8 +200,9 @@ class TermReader(Protocol):
     def get_object_props_by_code(self, *, scope_code: str) -> list[PropItem]:
         """根据对象 code 查询其所有属性。
 
-        接收对象编码（如 ``"sales_crm"``），通过 HAS_FIELD 关系返回该对象下的所有属性术语。
-        相较于 ``get_object_props``（需要内部 term_id），本方法面向外部消费者，入参为业务编码。
+        .. deprecated::
+            此方法绑定对象/属性领域概念，违反术语协议通用设计。
+            请使用 ``query_terms(term_type_code="prop", parent_term_code=scope_code)`` 替代。
 
         Args:
             scope_code: 对象/视图编码。
@@ -206,7 +217,9 @@ class TermReader(Protocol):
     ) -> dict[str, list[ValueWithAliases]]:
         """批量查询对象下属性的值术语及其别名。
 
-        路径: source → (HAS_FIELD) → prop → (parent_term_id) → child term。
+        .. deprecated::
+            此方法绑定属性/对象领域概念，违反术语协议通用设计。
+            请使用 ``query_terms`` 按 parent_term_code + term_type_code 过滤替代。
 
         Args:
             source_term_ids: 源术语 ID 列表。
@@ -221,7 +234,9 @@ class TermReader(Protocol):
     ) -> dict[str, list[str]]:
         """查询指定 prop 的枚举值（child term_name + 别名）。
 
-        路径: view/object(scope_code) → HAS_FIELD → prop(field_code) → child terms。
+        .. deprecated::
+            此方法绑定属性/对象领域概念，违反术语协议通用设计。
+            请使用 ``query_terms(parent_term_code=field_code)`` 替代。
 
         Args:
             scope_code: 视图或对象 code。
@@ -241,7 +256,9 @@ class TermReader(Protocol):
     ) -> int | None:
         """计算两个术语在图谱中的 BFS 最短距离。
 
-        通过 ``term_relation`` 表递归搜索，相同节点返回 0，不可达返回 None。
+        .. deprecated::
+            此方法实现图遍历/本体推理逻辑，应由上层分析模块编排
+            ``query_term_relations`` 实现，不应下沉到术语 Reader 协议。
 
         Args:
             source_term_id: 源术语 ID。
@@ -262,9 +279,9 @@ class TermReader(Protocol):
     ) -> Sequence[ShortestPathNode]:
         """查询从限定类型根节点到目标术语的最短路径树。
 
-        通过递归 CTE 从 *target_term_id* 向上遍历 ``term_relation`` 表，
-        找到 ``term_type_code IN source_term_type_codes`` 中深度最小的
-        候选根节点，返回完整路径信息。
+        .. deprecated::
+            此方法实现图遍历/本体推理逻辑，应由上层分析模块编排
+            ``query_term_relations`` 实现，不应下沉到术语 Reader 协议。
 
         Args:
             target_term_id: 目标术语 ID（消歧候选项）。
@@ -280,9 +297,9 @@ class TermReader(Protocol):
     def get_dimension_values(self) -> Sequence[DimensionValueItem]:
         """查询所有 cat=2 维度枚举值（全量加载到内存）。
 
-        执行 ``term JOIN term_type WHERE type_category = 2`` 查询，
-        返回 (term_name, type_name) 对列表。维度值数量有界（≤ 几百条），
-        全量加载是安全的。
+        .. deprecated::
+            此方法绑定维度领域概念，违反术语协议通用设计。
+            请使用 ``query_terms`` 按 term_type_code + type_category 过滤实现。
 
         Returns:
             DimensionValueItem 列表，按 term_name 排序。
@@ -292,8 +309,9 @@ class TermReader(Protocol):
     def get_user_scoped_names(self, *, user_id: str) -> Sequence[UserScopedNameItem]:
         """查询指定用户作用域下的术语别名记录。
 
-        在 ``term_name JOIN term`` 表上按 ``search_scope->>'scope_user_id'``
-        过滤，返回用户的专属术语别名索引。
+        .. deprecated::
+            用户作用域查询应由上层模块编排，不应作为 Reader 协议的专用方法。
+            请使用 ``list_term_names(term_id=...)`` 配合 scope 过滤替代。
 
         Args:
             user_id: 用户 ID。
@@ -306,7 +324,9 @@ class TermReader(Protocol):
     def get_type_codes_by_category(self, *, categories: set[int]) -> set[str]:
         """按 term_type 的 type_category 加载 type_code 集合。
 
-        在 ``term_type`` 表上按 ``type_category IN (categories)`` 过滤。
+        .. deprecated::
+            此方法暴露内部 type_category 概念。请使用 ``list_term_types``
+            获取全量 term_type 后自行过滤。
 
         Args:
             categories: type_category 整数值集合（1=列表, 2=字典, 3=本体, 4=文档）。
@@ -325,8 +345,9 @@ class TermReader(Protocol):
     ) -> Sequence[tuple[str, int]]:
         """查询与指定字段集最佳匹配的对象 term_code。
 
-        在视图/对象→对象→属性的关系链上联表查询，统计每个对象
-        匹配到的属性数，按匹配数降序返回。
+        .. deprecated::
+            此方法绑定对象/字段/本体领域概念，违反术语协议通用设计。
+            请使用 ``query_terms`` + ``query_term_relations`` 由上层编排实现。
 
         Args:
             ontology_code: 视图或对象编码。
@@ -667,6 +688,7 @@ class TermWriter(Protocol):
         *,
         term_name: str,
         term_type_code: str,
+        term_code: str | None = None,
         library_id: str | None = None,
         domain_ids: list[str],
         parent_term_id: str | None = None,
@@ -678,6 +700,7 @@ class TermWriter(Protocol):
         Args:
             term_name: 术语标准名称。
             term_type_code: 术语类型编码。
+            term_code: 术语编码（业务唯一标识）。None 时自动生成 ``UD_xxx``。
             library_id: 术语库 ID（可选）。
             domain_ids: 所属领域 ID 列表。
             parent_term_id: 父术语 ID（可选）。
@@ -829,6 +852,40 @@ class TermWriter(Protocol):
 
         Returns:
             ImportResult，含创建数和 term_id 列表。
+        """
+        ...
+
+    def upsert_term(
+        self,
+        *,
+        term_code: str,
+        term_name: str,
+        term_type_code: str,
+        library_id: str | None = None,
+        domain_ids: list[str] | None = None,
+        search_scope: dict[str, Any] | None = None,
+        backfill_vectors: bool = True,
+    ) -> str:
+        """UPSERT 单个术语（按 term_code + term_type_code），含 term_name 和向量回填。
+
+        写入流程：
+        1. UPSERT term 行（INSERT 或 ON CONFLICT UPDATE）
+        2. UPSERT term_name 行
+        3. 提交事务
+        4. 回填 tsvector（best-effort，失败不抛异常）
+        5. 回填 embedding（best-effort，30s 超时，失败写 shell 脚本到 /tmp）
+
+        Args:
+            term_code: 术语编码（业务唯一标识）。
+            term_name: 术语标准名称。
+            term_type_code: 术语类型编码。
+            library_id: 术语库 ID。
+            domain_ids: 所属领域 ID 列表。
+            search_scope: 搜索作用域（JSONB，写入 term_name.search_scope）。
+            backfill_vectors: 是否回填 tsvector + embedding。
+
+        Returns:
+            term_id（UUID）。
         """
         ...
 
