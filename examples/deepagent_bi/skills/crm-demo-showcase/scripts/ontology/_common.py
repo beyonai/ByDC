@@ -9,10 +9,11 @@ import asyncio
 import json
 import logging
 import os
-import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_shared_loop = asyncio.new_event_loop()
 
 # 服务发现目标：对应后端自动注册的服务名
 _SERVICE_NAME = "ByaiService"
@@ -143,26 +144,13 @@ def post_ontology_api(path: str, payload: dict[str, Any]) -> Any:
 
 
 def _run_async_in_thread(coro: Any) -> Any:
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
+    """运行协程：使用模块级持久 event loop 避免多次 asyncio.run() 的 loop 交叉污染。
 
-    result: dict[str, Any] = {}
-    error: dict[str, BaseException] = {}
-
-    def runner() -> None:
-        try:
-            result["value"] = asyncio.run(coro)
-        except BaseException as exc:
-            error["exc"] = exc
-
-    thread = threading.Thread(target=runner, daemon=True)
-    thread.start()
-    thread.join()
-    if "exc" in error:
-        raise error["exc"]
-    return result.get("value")
+    每次 asyncio.run() 创建新 loop → Redis connection pool 的 Future 绑在旧 loop 上，
+    下次 asyncio.run() 访问这些 Future 时触发 "got Future attached to a different loop"。
+    用单个 loop 避免此问题。
+    """
+    return _shared_loop.run_until_complete(coro)
 
 
 def delete_resource_by_code(resource_code: str) -> None:
