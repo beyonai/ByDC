@@ -86,8 +86,6 @@ def main() -> None:
                 "fields": params.get("fields"),
             },
         )
-        if result and "entity_code" in result:
-            result["entity_code"] = entity_code
         print(json.dumps(result, ensure_ascii=False), flush=True)
 
     elif action == "submit":

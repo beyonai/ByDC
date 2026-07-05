@@ -87,15 +87,11 @@ def main() -> None:
             },
         )
         if not result.get("ok", True):
-            output_state = dict(result)
-            output_state["entity_code"] = entity_code
-            print(json.dumps(output_state, ensure_ascii=False), flush=True)
+            print(json.dumps(dict(result), ensure_ascii=False), flush=True)
             return
         missing = result.pop("missing", []) if isinstance(result.get("missing"), list) else []
-        output_state = dict(result)
-        output_state["entity_code"] = entity_code
         print(
-            json.dumps({"ok": True, "state": output_state, "missing": missing}, ensure_ascii=False),
+            json.dumps({"ok": True, "state": dict(result), "missing": missing}, ensure_ascii=False),
             flush=True,
         )
 

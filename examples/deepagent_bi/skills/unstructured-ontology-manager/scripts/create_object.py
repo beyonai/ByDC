@@ -91,8 +91,6 @@ def main() -> None:
             if not params.get("kb_id"):
                 missing.append("kb_id")
             result["missing"] = missing
-        if result and "entity_code" in result:
-            result["entity_code"] = entity_code
         print(json.dumps(result, ensure_ascii=False), flush=True)
 
     elif action == "submit":
