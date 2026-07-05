@@ -24,8 +24,6 @@ logger = logging.getLogger(__name__)
 # ── 平台路由 ──────────────────────────────────────────────────────────────────
 from datacloud_platform import get_platform  # noqa: E402
 
-_base_id = get_platform()._default_base_id()  # fixme: pass base_id explicitly
-
 # ── 进程级图缓存上限（与 worker.py 原有 LRU 上限对齐） ──────────────────────
 _CACHE_MAX: int = 32
 
@@ -223,6 +221,9 @@ class OntologyAgentConfig:
     workspace_dir: str | None = None
     # False 时跳过 KbTermLoader（不连 OpenGauss），适用于 OpenGauss 不可用的环境（如评测 mock 环境）。
     use_kb_term_loader: bool = True
+    # base_id 由调用方显式传入，不再依赖模块级 _default_base_id() 隐式推导。
+    # 默认 "default" 与 byclaw-data worker 侧 _runtime_manager.get_loader("default") 对齐。
+    base_id: str = "default"
 
 
 # ── 缓存 key ──────────────────────────────────────────────────────────────────
@@ -231,9 +232,15 @@ class OntologyAgentConfig:
 def _make_cache_key(
     view_codes: list[str] | None,
     object_codes: list[str] | None,
-) -> tuple[frozenset[str], frozenset[str]]:
-    """构造图缓存 key，view/object 分属两个 frozenset 避免命名空间碰撞。"""
-    return (frozenset(view_codes or []), frozenset(object_codes or []))
+    base_ids: list[str] | None = None,
+) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+    """构造图缓存 key，view/object 分属两个 frozenset 避免命名空间碰撞；
+    base_ids 表示多库场景下参与图构建的本体库集合。"""
+    return (
+        frozenset(view_codes or []),
+        frozenset(object_codes or []),
+        frozenset(base_ids or []),
+    )
 
 
 # ── 初始状态构建辅助 ──────────────────────────────────────────────────────────
@@ -470,8 +477,8 @@ class OntologyAgent:
     def __init__(self, config: OntologyAgentConfig) -> None:
         self._config = config
         self._checkpointer = MemorySaver()
-        # T6 进程级图缓存：OrderedDict 实现 LRU
-        self._graph_cache: OrderedDict[tuple[frozenset[str], frozenset[str]], Any] = OrderedDict()
+        # T6 进程级图缓存：OrderedDict 实现 LRU；key 为 (views, objects, bases) 三元组。
+        self._graph_cache: OrderedDict[tuple, Any] = OrderedDict()
 
     # ── 公开 API ──────────────────────────────────────────────────────────────
 
@@ -565,24 +572,38 @@ class OntologyAgent:
         self,
         view_codes: list[str] | None,
         object_codes: list[str] | None,
-    ) -> tuple[Any, list[str]]:
-        """通过 LoaderRuntimeManager 获取已配置的 OntologyLoader 快照。"""
+        base_ids: list[str] | None = None,
+    ) -> tuple[list[Any], list[str]]:
+        """通过 LoaderRuntimeManager 获取已配置的 OntologyLoader 快照。
+
+        支持多库场景：base_ids 非空时为每个 base_id 构建一个 loader，
+        返回列表；为空时退化到 self._config.base_id 单库模式。
+        返回 (loaders, mounted) 其中 loaders 为列表。
+        """
         from datacloud_platform.config import get_settings  # noqa: PLC0415
         from datacloud_platform.loader_runtime import LoaderRuntimeManager  # noqa: PLC0415
 
         runtime = LoaderRuntimeManager(platform=get_platform(), settings=get_settings())
-        snapshot = runtime.get_loader(_base_id)
-        loader = snapshot.loader
+        _ids = base_ids if base_ids else [self._config.base_id]
+        loaders: list[Any] = []
+        for bid in _ids:
+            snapshot = runtime.get_loader(bid)
+            loaders.append(snapshot.loader)
 
         mounted = list(view_codes or []) + list(object_codes or [])
-        return loader, mounted
+        return loaders, mounted
 
     def _build_and_compile(
         self,
         view_codes: list[str] | None,
         object_codes: list[str] | None,
+        base_ids: list[str] | None = None,
     ) -> Any:
-        """构建并编译 LangGraph 图（无缓存层，供 T6 缓存逻辑调用）。"""
+        """构建并编译 LangGraph 图（无缓存层，供 T6 缓存逻辑调用）。
+
+        多库支持：base_ids 指定多个本体库时，从每个库分别加载工具并合并，
+        使用第一个 loader 作为图的 primary loader。
+        """
         from datacloud_analysis.agent import _log_create_agent_diagnostics  # noqa: PLC0415
         from datacloud_analysis.orchestration.graph_builder import (  # noqa: PLC0415
             build_analysis_graph,
@@ -591,14 +612,27 @@ class OntologyAgent:
             OntologyToolLoader,
         )
 
-        loader, mounted = self._build_loader(view_codes, object_codes)
-        tool_loader = OntologyToolLoader(
-            mounted_objects=mounted,
-            loader=loader,
-            resource_path=self._config.resource_path,
-        )
-        tools = tool_loader.load()
-        redirect_tools = tool_loader.build_all_nl_query_tools()
+        loaders, mounted = self._build_loader(view_codes, object_codes, base_ids)
+
+        # 多库合并：从每个 loader 构建工具，union 合并
+        all_tools: dict[str, Any] = {}
+        all_redirect_tools: dict[str, Any] = {}
+        primary_loader = loaders[0] if loaders else None
+
+        for loader in loaders:
+            tool_loader = OntologyToolLoader(
+                mounted_objects=mounted,
+                loader=loader,
+                resource_path=self._config.resource_path,
+            )
+            tools = tool_loader.load()
+            for k, v in tools.items():
+                if k not in all_tools:
+                    all_tools[k] = v
+            redirect_tools = tool_loader.build_all_nl_query_tools()
+            for k, v in (redirect_tools or {}).items():
+                if k not in all_redirect_tools:
+                    all_redirect_tools[k] = v
 
         # 将动态加载的工具接入全局 TOOL_POOL，并构建 ParamLinkGraph /
         # OntologyRelationGraph 单例。否则 get_param_link_graph() 恒为 None、
@@ -610,7 +644,7 @@ class OntologyAgent:
 
             register_runtime_tool_pool(
                 list(mounted or []),
-                loader,
+                primary_loader,
                 resource_path=self._config.resource_path,
             )
         except Exception:  # noqa: BLE001
@@ -620,29 +654,31 @@ class OntologyAgent:
         _log_create_agent_diagnostics(
             agent_id_display="(dynamic)",
             question_context="(ontology_agent dynamic path)",
-            merged_tools=tools,
+            merged_tools=all_tools,
             mounted_objects=list(mounted or []),
         )
 
         graph = build_analysis_graph(
-            tools=tools, loader=loader, redirect_tools=redirect_tools or None
+            tools=all_tools, loader=primary_loader, redirect_tools=all_redirect_tools or None
         )
-        return graph.compile(checkpointer=self._checkpointer), redirect_tools or {}
+        return graph.compile(checkpointer=self._checkpointer), all_redirect_tools or {}
 
     def _get_or_build_graph(
         self,
         view_codes: list[str] | None,
         object_codes: list[str] | None,
+        base_ids: list[str] | None = None,
     ) -> tuple[Any, dict[str, Any]]:
-        """T6：带 LRU 缓存的图获取入口，返回 (compiled_graph, tools_dict)。"""
-        key = _make_cache_key(view_codes, object_codes)
+        """T6：带 LRU 缓存的图获取入口，返回 (compiled_graph, tools_dict)。
+        多库支持：base_ids 参与缓存 key 计算。"""
+        key = _make_cache_key(view_codes, object_codes, base_ids)
         if key in self._graph_cache:
             self._graph_cache.move_to_end(key)
             logger.debug("ontology_agent: graph cache hit key=%s", key)
             return self._graph_cache[key]
 
         logger.debug("ontology_agent: graph cache miss, building key=%s", key)
-        compiled, tools_dict = self._build_and_compile(view_codes, object_codes)
+        compiled, tools_dict = self._build_and_compile(view_codes, object_codes, base_ids)
         self._graph_cache[key] = (compiled, tools_dict)
         if len(self._graph_cache) > _CACHE_MAX:
             evicted = self._graph_cache.popitem(last=False)
@@ -668,7 +704,32 @@ class OntologyAgent:
     ) -> AsyncGenerator[OntologyAgentEvent, None]:
         """核心事件迭代器：构建图、执行、转换事件。"""
         try:
-            compiled, tools_dict = self._get_or_build_graph(view_codes, object_codes)
+            # 多库支持：从 extras.rel_resource_list 提取唯一的 base_id 列表。
+            # 未指定时退化到 self._config.base_id 单库模式。
+            _base_ids: list[str] | None = None
+            _rel_rl = (extras or {}).get("rel_resource_list")
+            if isinstance(_rel_rl, list) and _rel_rl:
+                _seen: set[str] = set()
+                for _item in _rel_rl:
+                    if not isinstance(_item, dict):
+                        continue
+                    _biz_type = str(
+                        _item.get("resourceBizType") or _item.get("resource_biz_type") or ""
+                    )
+                    _code = str(
+                        _item.get("resourceCode") or _item.get("resource_code") or ""
+                    ).strip()
+                    _base_code = str(
+                        _item.get("ontologyBaseCode") or _item.get("ontology_base_code") or ""
+                    ).strip()
+                    if _biz_type == "ONTOLOGY_BASE" and _code:
+                        _seen.add(_code)
+                    elif _base_code:
+                        _seen.add(_base_code)
+                if _seen:
+                    _base_ids = sorted(_seen)
+                    logger.info("ontology_agent: multi-base mode base_ids=%s", _base_ids)
+            compiled, tools_dict = self._get_or_build_graph(view_codes, object_codes, _base_ids)
         except Exception as exc:
             logger.exception("ontology_agent: failed to build graph")
             yield ErrorEvent(message=str(exc))
