@@ -140,14 +140,12 @@ def _render_mapper(class_name: str, entity_code: str, fields: list[dict[str, Any
         "",
         f"    def update_by_id(self, obj: {class_name}) -> bool:",
         '        """按 id 更新记录。"""',
-        "        return self._loader.update_by_id("
-        f'            "{entity_code}", obj.to_dict()',
+        f'        return self._loader.update_by_id(            "{entity_code}", obj.to_dict()',
         "        )",
         "",
         "    def delete_by_id(self, id: int) -> bool:",
         '        """按主键删除记录。"""',
-        "        return self._loader.delete_by_id("
-        f'            "{entity_code}", id',
+        f'        return self._loader.delete_by_id(            "{entity_code}", id',
         "        )",
         "",
         "    def select(self, q: Any) -> dict[str, Any]:",

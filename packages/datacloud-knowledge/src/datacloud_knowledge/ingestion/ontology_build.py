@@ -123,6 +123,7 @@ class OntologyBuildSession:
         fields: list[dict[str, Any]] | None = None,
         kb_id: str = "",
         kb_directory: str = "",
+        base_id: str = "",
     ) -> dict[str, Any]:
         """收集本体对象信息，合并到暂存状态，返回当前完整状态。
 
@@ -165,6 +166,8 @@ class OntologyBuildSession:
                 state["entity_desc"] = _supplement
         if kb_directory:
             state["kb_directory"] = kb_directory
+        if base_id:
+            state["base_id"] = base_id
 
         if fields:
             existing: dict[str, dict[str, Any]] = {
@@ -196,6 +199,7 @@ class OntologyBuildSession:
         object_codes: list[str] | None = None,
         object_relations: list[dict[str, Any]] | None = None,
         fields: list[dict[str, Any]] | None = None,
+        base_id: str = "",
     ) -> dict[str, Any]:
         """收集本体视图信息，合并到暂存状态，返回当前完整状态。
 
@@ -260,6 +264,9 @@ class OntologyBuildSession:
                     **field,
                 }
             state["fields"] = list(existing.values())
+
+        if base_id:
+            state["base_id"] = base_id
 
         store.save(key, state, ttl=3600)
 
