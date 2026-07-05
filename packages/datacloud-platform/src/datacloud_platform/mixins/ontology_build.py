@@ -49,17 +49,6 @@ class OntologyBuildMixin:
 
         return OntologyBuildSession(user_code=user_code)
 
-    # ── 门户查询 ────────────────────────────────────────────────────────────
-
-    def list_user_bases(self, *, user_code: str = "") -> list[dict[str, str]]:
-        """查询门户服务，获取 user_code 下的本体库列表。
-
-        Raises:
-            NotImplementedError: 门户端点尚未就绪。
-        """
-        del user_code
-        raise NotImplementedError("list_user_bases: 门户端点尚未就绪")
-
     # ── 信息收集（委托给 OntologyBuildSession）─────────────────────────────────
 
     def collect_object_info(
@@ -73,6 +62,7 @@ class OntologyBuildMixin:
         fields: list[dict[str, Any]] | None = None,
         kb_id: str = "",
         kb_directory: str = "",
+        base_id: str = "",
     ) -> dict[str, Any]:
         """收集本体对象信息（多轮），委托给 OntologyBuildSession。"""
         session = self._build_session(user_code)
@@ -86,6 +76,7 @@ class OntologyBuildMixin:
                 fields=fields,
                 kb_id=kb_id,
                 kb_directory=kb_directory,
+                base_id=base_id,
             ),
         )
 
@@ -100,6 +91,7 @@ class OntologyBuildMixin:
         object_codes: list[str] | None = None,
         object_relations: list[dict[str, Any]] | None = None,
         fields: list[dict[str, Any]] | None = None,
+        base_id: str = "",
     ) -> dict[str, Any]:
         """收集本体视图信息（多轮），委托给 OntologyBuildSession。"""
         session = self._build_session(user_code)
@@ -113,6 +105,7 @@ class OntologyBuildMixin:
                 object_codes=object_codes,
                 object_relations=object_relations,
                 fields=fields,
+                base_id=base_id,
             ),
         )
 
@@ -362,7 +355,7 @@ class OntologyBuildMixin:
     # ── 术语查询（走 TermBackend）─────────────────────────────────────────────
 
     def list_bindable_term_types(
-        self: _HasTermBackend, *, keyword: str = ""
+        self: _HasTermBackend, *, base_id: str = "", keyword: str = ""
     ) -> list[dict[str, Any]]:
         """查询可绑定的 LIST_TERM / DICT_TERM 术语类型。
 
@@ -370,8 +363,12 @@ class OntologyBuildMixin:
         1. 通过 list_term_types 获取 category=1,2 的术语类型
         2. 对每个 type_code 取少量示例术语
         3. 按 type_code 分组返回 {type_code, samples}
+
+        Args:
+            base_id: 目标本体库 ID，空则取第一个注册的 base。
         """
-        base_id: str = self._default_base_id()  # type: ignore[attr-defined]
+        if not base_id:
+            base_id = self._default_base_id()  # type: ignore[attr-defined]
         term = self._term_for(base_id)
 
         # 获取所有 LIST_TERM (category=1) 和 DICT_TERM (category=2) 类型
@@ -405,13 +402,22 @@ class OntologyBuildMixin:
         return result
 
     def get_term_type_values(
-        self: _HasTermBackend, *, term_type_code: str, keyword: str = ""
+        self: _HasTermBackend,
+        *,
+        term_type_code: str,
+        base_id: str = "",
+        keyword: str = "",
     ) -> list[dict[str, Any]]:
         """查询指定术语类型下的术语值。
 
         兼容旧版 ontology-manager API，走 TermBackend。
+
+        Args:
+            term_type_code: 术语类型编码。
+            base_id: 目标本体库 ID，空则取第一个注册的 base。
         """
-        base_id: str = self._default_base_id()  # type: ignore[attr-defined]
+        if not base_id:
+            base_id = self._default_base_id()  # type: ignore[attr-defined]
         term = self._term_for(base_id)
 
         search_result = term.search_terms(

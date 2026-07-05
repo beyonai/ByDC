@@ -14,7 +14,7 @@
     POST /api/v1/ontology-manager/term-types/list
     POST /api/v1/ontology-manager/term-types/values
 
-    POST /api/v1/ontology-manager/bases/list
+所有接口均支持通过请求体传入 ``base_id``，空则回落至平台默认本体库。
 """
 
 from __future__ import annotations
@@ -24,8 +24,6 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
-
-from datacloud_platform.models.common import ok
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -51,16 +49,19 @@ class ObjectCollectRequest(BaseModel):
     entity_desc: str = Field(default="", alias="entity_desc")
     kb_id: str = Field(default="", alias="kb_id")
     kb_directory: str = Field(default="", alias="kb_directory")
+    base_id: str = Field(default="", alias="base_id")
     fields: list[dict[str, Any]] | None = Field(default=None, alias="fields")
 
 
 class ObjectSubmitRequest(BaseModel):
     entity_code: str = Field(alias="entity_code")
     session_id: str = Field(default="", alias="session_id")
+    base_id: str = Field(default="", alias="base_id")
 
 
 class ObjectDeleteRequest(BaseModel):
     entity_code: str = Field(..., min_length=1, alias="entity_code")
+    base_id: str = Field(default="", alias="base_id")
 
 
 class ViewCollectRequest(BaseModel):
@@ -68,6 +69,7 @@ class ViewCollectRequest(BaseModel):
     session_id: str = Field(default="", alias="session_id")
     view_name: str = Field(default="", alias="view_name")
     view_desc: str = Field(default="", alias="view_desc")
+    base_id: str = Field(default="", alias="base_id")
     object_codes: list[str] | None = Field(default=None, alias="object_codes")
     object_relations: list[dict[str, Any]] | None = Field(
         default=None, alias="object_relations"
@@ -78,23 +80,23 @@ class ViewCollectRequest(BaseModel):
 class ViewSubmitRequest(BaseModel):
     view_code: str = Field(alias="view_code")
     session_id: str = Field(default="", alias="session_id")
+    base_id: str = Field(default="", alias="base_id")
 
 
 class ViewDeleteRequest(BaseModel):
     view_code: str = Field(..., min_length=1, alias="view_code")
+    base_id: str = Field(default="", alias="base_id")
 
 
 class TermTypesListRequest(BaseModel):
     keyword: str = Field(default="", alias="keyword")
+    base_id: str = Field(default="", alias="base_id")
 
 
 class TermTypesValuesRequest(BaseModel):
     term_type_code: str = Field(..., min_length=1, alias="term_type_code")
     keyword: str = Field(default="", alias="keyword")
-
-
-class BasesListRequest(BaseModel):
-    pass  # user_code 从 header 提取
+    base_id: str = Field(default="", alias="base_id")
 
 
 # ── Factory ────────────────────────────────────────────────────────────────
@@ -133,6 +135,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
                 fields=body.fields,
                 kb_id=body.kb_id,
                 kb_directory=body.kb_directory,
+                base_id=body.base_id,
             )
         except Exception as exc:
             logger.exception("object/collect 失败")
@@ -149,6 +152,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
                 user_code=_user_code,
                 entity_code=body.entity_code,
                 session_id=body.session_id,
+                base_id=body.base_id,
             )
         except Exception as exc:
             logger.exception("object/submit 失败")
@@ -164,6 +168,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
             return platform.delete_build_object(
                 user_code=_user_code,
                 entity_code=body.entity_code,
+                base_id=body.base_id,
             )
         except Exception as exc:
             logger.exception("object/delete 失败")
@@ -187,6 +192,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
                 object_codes=body.object_codes,
                 object_relations=body.object_relations,
                 fields=body.fields,
+                base_id=body.base_id,
             )
         except Exception as exc:
             logger.exception("view/collect 失败")
@@ -203,6 +209,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
                 user_code=_user_code,
                 view_code=body.view_code,
                 session_id=body.session_id,
+                base_id=body.base_id,
             )
         except Exception as exc:
             logger.exception("view/submit 失败")
@@ -218,6 +225,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
             return platform.delete_build_view(
                 user_code=_user_code,
                 view_code=body.view_code,
+                base_id=body.base_id,
             )
         except Exception as exc:
             logger.exception("view/delete 失败")
@@ -229,7 +237,10 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
     async def term_types_list(body: TermTypesListRequest) -> Any:
         """查询可绑定的 LIST_TERM / DICT_TERM 术语类型。"""
         try:
-            result = platform.list_bindable_term_types(keyword=body.keyword)
+            result = platform.list_bindable_term_types(
+                keyword=body.keyword,
+                base_id=body.base_id,
+            )
             return {"ok": True, "data": result}
         except Exception as exc:
             logger.exception("term-types/list 失败")
@@ -242,27 +253,11 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
             result = platform.get_term_type_values(
                 term_type_code=body.term_type_code,
                 keyword=body.keyword,
+                base_id=body.base_id,
             )
             return {"ok": True, "data": result}
         except Exception as exc:
             logger.exception("term-types/values 失败")
-            return {"ok": False, "error": str(exc)}
-
-    # ── 本体库查询 ────────────────────────────────────────────────────────
-
-    @router.post("/bases/list")
-    async def bases_list(
-        body: BasesListRequest,  # noqa: ARG001
-        _user_code: str = Depends(_extract_user_code),
-    ) -> Any:
-        """查询用户的本体库列表。"""
-        try:
-            result = platform.list_user_bases(user_code=_user_code)
-            return ok(data=result, message="ok")
-        except NotImplementedError:
-            return {"ok": False, "error": "门户端点尚未就绪"}
-        except Exception as exc:
-            logger.exception("bases/list 失败")
             return {"ok": False, "error": str(exc)}
 
     return router
