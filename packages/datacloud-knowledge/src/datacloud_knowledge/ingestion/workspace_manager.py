@@ -290,7 +290,7 @@ class WorkspaceFileManager:
         defn = self._load_definition(entity_code)
         if defn is None:
             return []
-        return defn.get("submitted_fields", [])  # type: ignore[return-value]  # noqa: UP037
+        return defn.get("submitted_fields", [])  # type: ignore[return-value]
 
     def diff_fields(self, entity_code: str, current_fields: list[dict[str, Any]]) -> FieldDiff:
         """对比 submitted_fields 快照与当前字段，返回 FieldDiff。
