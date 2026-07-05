@@ -152,12 +152,21 @@ class OntologyBuildMixin:
             base_id = self._default_base_id()  # type: ignore[attr-defined]
 
         # 3. 构建 ObjectType
+        source_config: dict[str, Any] | None = None
+        if entity_source == "KNOWLEDGE_BASE":
+            source_config = {}
+            if state.get("kb_id"):
+                source_config["kb_id"] = state["kb_id"]
+            if state.get("kb_directory"):
+                source_config["kb_directory"] = state["kb_directory"]
+
         obj = ObjectType(
             objectCode=actual_entity_code,
             objectName=state.get("entity_name", actual_entity_code),
             objectDesc=state.get("entity_desc", ""),
             objectSource=entity_source,
             baseId=base_id,
+            sourceConfig=source_config,
             properties=[
                 Property(
                     propertyCode=f.get("property_code", ""),

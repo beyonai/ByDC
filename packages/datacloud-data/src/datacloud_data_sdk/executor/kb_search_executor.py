@@ -484,6 +484,12 @@ class KbSearchExecutor:
             value = ext_property.get("kb_id") or ext_property.get("knCode")
             if value:
                 return str(value)
+        # fallback: submit_object 新路径将 kb_id 存入 source_config
+        source_config = getattr(cls, "source_config", {}) or {}
+        if isinstance(source_config, dict):
+            value = source_config.get("kb_id") or source_config.get("knCode")
+            if value:
+                return str(value)
         return None
 
     @staticmethod
@@ -491,6 +497,12 @@ class KbSearchExecutor:
         ext_property = getattr(cls, "ext_property", {}) or {}
         if isinstance(ext_property, dict):
             value = ext_property.get("kb_directory")
+            if value:
+                return str(value)
+        # fallback: submit_object 新路径将 kb_directory 存入 source_config
+        source_config = getattr(cls, "source_config", {}) or {}
+        if isinstance(source_config, dict):
+            value = source_config.get("kb_directory")
             if value:
                 return str(value)
         return None
