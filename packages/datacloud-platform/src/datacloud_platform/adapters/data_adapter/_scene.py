@@ -512,9 +512,9 @@ class SceneMixin(DataCloudDataBackendBase):
         scene_id = self._generate_scene_id()
         scene_code = scene_code or scene_name
 
-        # 幂等：scene_code 已存在时返回已有场景（不重复创建）
+        # 幂等：scene_code + base_id 已存在时返回已有场景（不重复创建）
         for _sid, _s in scenes.items():
-            if _s.get("scene_code") == scene_code:
+            if _s.get("scene_code") == scene_code and _s.get("base_id") == base_id:
                 logger.info(
                     "Scene with scene_code=%r already exists (scene_id=%s), skipping create",
                     scene_code,
