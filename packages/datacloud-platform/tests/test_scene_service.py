@@ -335,7 +335,7 @@ def _make_view(view_code: str, *, view_name: str = "") -> dict[str, Any]:
 
 
 def _default_scene_code() -> str:
-    return "default"
+    return "20"
 
 
 @pytest.fixture
@@ -842,7 +842,7 @@ class TestCreateBaseAutoDefaultScene:
 
         scenes = backend.list_scenes(self.BASE_ID)
         default_scene = next(
-            (s for s in scenes if s.get("scene_code") == "default"), None
+            (s for s in scenes if s.get("scene_code") == "20"), None
         )
         assert default_scene is not None, "create_base should auto-create default scene"
         assert default_scene["scene_id"] != ""
@@ -880,7 +880,7 @@ class TestCreateBaseAutoDefaultScene:
 
         assert result["base_id"] == self.BASE_ID
         scenes = backend.list_scenes(self.BASE_ID)
-        default_found = any(s.get("scene_code") == "default" for s in scenes)
+        default_found = any(s.get("scene_code") == "20" for s in scenes)
         assert not default_found, "REMOTE base should not create default scene"
 
         backend.create_scene = original_create_scene  # type: ignore[method-assign]
@@ -915,7 +915,7 @@ class TestCreateBaseAutoDefaultScene:
         default_scenes = [
             s
             for s in backend.list_scenes(self.BASE_ID)
-            if s.get("scene_code") == "default"
+            if s.get("scene_code") == "20"
         ]
         assert len(default_scenes) == 1, "create_base must be idempotent"
 
@@ -935,7 +935,13 @@ class TestCreateBaseAutoDefaultScene:
             }
         )
 
-        default_id = backend._scenes.get("default", {}).get("scene_id", "default")
+        # Find default scene by scene_code (now "20"), not by hardcoded scene_id
+        default_id = None
+        for sid, s in (backend._scenes or {}).items():
+            if s.get("scene_code") == "20":
+                default_id = sid
+                break
+        assert default_id is not None, "Default scene (code=20) not found"
         obj, vw = backend.get_scene_members(self.BASE_ID, default_id)
         assert len(obj) == 0
 
@@ -976,7 +982,7 @@ class TestCreateBaseAutoDefaultScene:
         assert result["base_id"] == "owl_test"
         # Default scene created by _ensure_default_scene
         scenes = backend.list_scenes("owl_test")
-        assert any(s.get("scene_code") == "default" for s in scenes), (
+        assert any(s.get("scene_code") == "20" for s in scenes), (
             "create_base should create default scene"
         )
         # _seed_from_owl_path raised AttributeError on fake backend → caught

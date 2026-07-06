@@ -24,8 +24,8 @@ class SceneServiceMixin:
     appears and automatically destroyed when it becomes empty and no orphans exist.
     """
 
-    DEFAULT_SCENE_CODE: str = "default"
-    DEFAULT_SCENE_NAME: str = "默认场景"
+    DEFAULT_SCENE_CODE: str = "20"
+    DEFAULT_SCENE_NAME: str = "平台能力"
 
     # ── Default scene lifecycle ──
 
@@ -34,12 +34,32 @@ class SceneServiceMixin:
 
         On first creation, automatically imports any pre-existing orphan objects/views
         (e.g. from ``_seed_from_owl_path`` at base creation) into the default scene.
+
+        Migrates legacy default scene (code="default") → current code ("20").
         """
         backend = self._ontology_for(base_id)
         scenes = backend.list_scenes(base_id)
         for scene in scenes:
             if scene.get("scene_code") == SceneServiceMixin.DEFAULT_SCENE_CODE:
                 return scene["scene_id"]  # type: ignore[no-any-return]
+
+        # Migration: rename legacy default scene (code="default") to current code
+        for scene in scenes:
+            if scene.get("scene_code") == "default":
+                scene_id = scene["scene_id"]
+                backend.update_scene(base_id, scene_id, {
+                    "scene_name": SceneServiceMixin.DEFAULT_SCENE_NAME,
+                    "scene_code": SceneServiceMixin.DEFAULT_SCENE_CODE,
+                    "scene_desc": scene.get("scene_desc", ""),
+                })
+                logger.info(
+                    "_ensure_default_scene: migrated legacy default scene=%s "
+                    "(code='default' → '%s', name='%s')",
+                    scene_id,
+                    SceneServiceMixin.DEFAULT_SCENE_CODE,
+                    SceneServiceMixin.DEFAULT_SCENE_NAME,
+                )
+                return scene_id
 
         # Create default scene (first time)
         result = backend.create_scene(
