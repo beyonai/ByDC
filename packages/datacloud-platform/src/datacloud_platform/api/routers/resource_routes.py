@@ -1,8 +1,8 @@
 """Object / View / Relation / Action / Datasource CRUD routes (factory pattern).
 
-Resources are base-level — no longer scoped under a scene.
+Resources are base-level — base_id is a query parameter, not a path parameter.
 
-Shared prefix: ``/api/v1/ontologyBases/{base_id}``
+Shared prefix: ``/api/v1/ontologyBases``
 """
 
 from __future__ import annotations
@@ -42,24 +42,30 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     router = APIRouter(prefix="/api/v1/ontologyBases")
 
     # ══════════════════════════════════════════════════
-    # Object CRUD (base-level)
+    # Object CRUD (flat routes — base_id as query param)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{base_id}/objects", tags=["Object"])
+    @router.get("/objects", tags=["Object"])
     def list_objects(
-        base_id: str,
+        base_id: str = Query(default="default"),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        keyword: str | None = Query(default=None),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List objects in a base."""
+        _ = (page, page_size, owner_type, user_code, keyword)
         try:
             return ok(data=platform.get_objects(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{base_id}/objects/{code}", tags=["Object"])
+    @router.get("/objects/{code}", tags=["Object"])
     def get_object(
-        base_id: str,
         code: str,
+        base_id: str = Query(default="default"),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get object detail."""
@@ -73,8 +79,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{base_id}/objects", tags=["Object"])
-    def create_object(base_id: str, body: ObjectType) -> Any:
+    @router.post("/objects", tags=["Object"])
+    def create_object(
+        body: ObjectType,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Create an object (LOCAL only). Auto-added to default scene when no scene specified."""
         try:
             return ok(
@@ -87,8 +96,12 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{base_id}/objects/{code}", tags=["Object"])
-    def update_object(base_id: str, code: str, body: ObjectType) -> Any:
+    @router.put("/objects/{code}", tags=["Object"])
+    def update_object(
+        code: str,
+        body: ObjectType,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Update an object (LOCAL only)."""
         try:
             platform.update_object(base_id, code, body)
@@ -100,8 +113,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{base_id}/objects/{code}", tags=["Object"])
-    def delete_object(base_id: str, code: str) -> Any:
+    @router.delete("/objects/{code}", tags=["Object"])
+    def delete_object(
+        code: str,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Delete an object (LOCAL only). Removes from all scenes before deletion."""
         try:
             platform.delete_object_from_all_scenes(base_id, code)
@@ -112,24 +128,30 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # View CRUD (base-level)
+    # View CRUD (flat routes — base_id as query param)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{base_id}/views", tags=["View"])
+    @router.get("/views", tags=["View"])
     def list_views(
-        base_id: str,
+        base_id: str = Query(default="default"),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        keyword: str | None = Query(default=None),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List views in a base."""
+        _ = (page, page_size, owner_type, user_code, keyword)
         try:
             return ok(data=platform.get_views(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{base_id}/views/{code}", tags=["View"])
+    @router.get("/views/{code}", tags=["View"])
     def get_view(
-        base_id: str,
         code: str,
+        base_id: str = Query(default="default"),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get view detail."""
@@ -141,8 +163,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{base_id}/views", tags=["View"])
-    def create_view(base_id: str, body: View) -> Any:
+    @router.post("/views", tags=["View"])
+    def create_view(
+        body: View,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Create a view (LOCAL only). Auto-added to default scene when no scene specified."""
         try:
             return ok(
@@ -155,8 +180,12 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{base_id}/views/{code}", tags=["View"])
-    def update_view(base_id: str, code: str, body: View) -> Any:
+    @router.put("/views/{code}", tags=["View"])
+    def update_view(
+        code: str,
+        body: View,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Update a view (LOCAL only)."""
         try:
             platform.update_view(base_id, code, body)
@@ -168,8 +197,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{base_id}/views/{code}", tags=["View"])
-    def delete_view(base_id: str, code: str) -> Any:
+    @router.delete("/views/{code}", tags=["View"])
+    def delete_view(
+        code: str,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Delete a view (LOCAL only). Removes from all scenes before deletion."""
         try:
             platform.delete_view_from_all_scenes(base_id, code)
@@ -180,24 +212,30 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # Relation CRUD (base-level)
+    # Relation CRUD (flat routes — base_id as query param)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{base_id}/relations", tags=["Relation"])
+    @router.get("/relations", tags=["Relation"])
     def list_relations(
-        base_id: str,
+        base_id: str = Query(default="default"),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        keyword: str | None = Query(default=None),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List relations in a base."""
+        _ = (page, page_size, owner_type, user_code, keyword)
         try:
             return ok(data=platform.get_relations(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{base_id}/relations/{code}", tags=["Relation"])
+    @router.get("/relations/{code}", tags=["Relation"])
     def get_relation(
-        base_id: str,
         code: str,
+        base_id: str = Query(default="default"),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get relation detail."""
@@ -211,8 +249,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{base_id}/relations", tags=["Relation"])
-    def create_relation(base_id: str, body: Relation) -> Any:
+    @router.post("/relations", tags=["Relation"])
+    def create_relation(
+        body: Relation,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Create a relation (LOCAL only)."""
         try:
             return ok(
@@ -226,8 +267,12 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{base_id}/relations/{code}", tags=["Relation"])
-    def update_relation(base_id: str, code: str, body: Relation) -> Any:
+    @router.put("/relations/{code}", tags=["Relation"])
+    def update_relation(
+        code: str,
+        body: Relation,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Update a relation (LOCAL only)."""
         try:
             platform.update_relation(base_id, code, body)
@@ -239,8 +284,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{base_id}/relations/{code}", tags=["Relation"])
-    def delete_relation(base_id: str, code: str) -> Any:
+    @router.delete("/relations/{code}", tags=["Relation"])
+    def delete_relation(
+        code: str,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Delete a relation (LOCAL only)."""
         try:
             platform.delete_relation(base_id, code)
@@ -251,24 +299,30 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # Datasource CRUD (base-level)
+    # Datasource CRUD (flat routes — base_id as query param)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{base_id}/datasources", tags=["Datasource"])
+    @router.get("/datasources", tags=["Datasource"])
     def list_datasources(
-        base_id: str,
+        base_id: str = Query(default="default"),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        keyword: str | None = Query(default=None),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List datasources in a base."""
+        _ = (page, page_size, owner_type, user_code, keyword)
         try:
             return ok(data=platform.get_datasources(base_id, cache_mode=cache_mode))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{base_id}/datasources/{db_id}", tags=["Datasource"])
+    @router.get("/datasources/{db_id}", tags=["Datasource"])
     def get_datasource(
-        base_id: str,
         db_id: str,
+        base_id: str = Query(default="default"),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get datasource detail."""
@@ -282,8 +336,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{base_id}/datasources", tags=["Datasource"])
-    def create_datasource(base_id: str, body: Datasource) -> Any:
+    @router.post("/datasources", tags=["Datasource"])
+    def create_datasource(
+        body: Datasource,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Create a datasource (LOCAL only)."""
         try:
             return ok(
@@ -297,8 +354,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{base_id}/datasources/{db_id}", tags=["Datasource"])
-    def delete_datasource(base_id: str, db_id: str) -> Any:
+    @router.delete("/datasources/{db_id}", tags=["Datasource"])
+    def delete_datasource(
+        db_id: str,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Delete a datasource (LOCAL only)."""
         try:
             platform.delete_datasource(base_id, db_id)
@@ -309,16 +369,22 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
-    # Action CRUD (base-level, under object)
+    # Action CRUD (flat routes — base_id as query param)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{base_id}/objects/{object_code}/actions", tags=["Action"])
+    @router.get("/objects/{object_code}/actions", tags=["Action"])
     def list_actions(
-        base_id: str,
         object_code: str,
+        base_id: str = Query(default="default"),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        keyword: str | None = Query(default=None),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List actions on an object."""
+        _ = (page, page_size, owner_type, user_code, keyword)
         try:
             return ok(
                 data=platform.get_actions(base_id, object_code, cache_mode=cache_mode)
@@ -326,11 +392,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{base_id}/objects/{object_code}/actions/{code}", tags=["Action"])
+    @router.get("/objects/{object_code}/actions/{code}", tags=["Action"])
     def get_action(
-        base_id: str,
         object_code: str,
         code: str,
+        base_id: str = Query(default="default"),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get action detail."""
@@ -346,11 +412,11 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.post("/{base_id}/objects/{object_code}/actions", tags=["Action"])
+    @router.post("/objects/{object_code}/actions", tags=["Action"])
     def create_action(
-        base_id: str,
         object_code: str,
         body: Action,
+        base_id: str = Query(default="default"),
     ) -> Any:
         """Create an action on an object (LOCAL only)."""
         try:
@@ -365,12 +431,12 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.put("/{base_id}/objects/{object_code}/actions/{code}", tags=["Action"])
+    @router.put("/objects/{object_code}/actions/{code}", tags=["Action"])
     def update_action(
-        base_id: str,
         object_code: str,
         code: str,
         body: Action,
+        base_id: str = Query(default="default"),
     ) -> Any:
         """Update an action on an object (LOCAL only)."""
         try:
@@ -383,8 +449,12 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.delete("/{base_id}/objects/{object_code}/actions/{code}", tags=["Action"])
-    def delete_action(base_id: str, object_code: str, code: str) -> Any:
+    @router.delete("/objects/{object_code}/actions/{code}", tags=["Action"])
+    def delete_action(
+        object_code: str,
+        code: str,
+        base_id: str = Query(default="default"),
+    ) -> Any:
         """Delete an action from an object (LOCAL only)."""
         try:
             platform.delete_action(base_id, object_code, code)
@@ -398,10 +468,10 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     # Term bindings (object / view)
     # ══════════════════════════════════════════════════
 
-    @router.get("/{base_id}/objects/{object_code}/term-bindings", tags=["Object"])
+    @router.get("/objects/{object_code}/term-bindings", tags=["Object"])
     def get_object_term_bindings(
-        base_id: str,
         object_code: str,
+        base_id: str = Query(default="default"),
         term_master_type: str | None = Query(default=None),
         property_codes: str | None = Query(default=None, alias="propertyCodes"),
         cache_mode: CacheMode = CacheMode.REALTIME,
@@ -420,10 +490,10 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    @router.get("/{base_id}/views/{view_code}/term-bindings", tags=["View"])
+    @router.get("/views/{view_code}/term-bindings", tags=["View"])
     def get_view_term_bindings(
-        base_id: str,
         view_code: str,
+        base_id: str = Query(default="default"),
         term_master_type: str | None = Query(default=None),
         property_codes: str | None = Query(default=None, alias="propertyCodes"),
         cache_mode: CacheMode = CacheMode.REALTIME,
