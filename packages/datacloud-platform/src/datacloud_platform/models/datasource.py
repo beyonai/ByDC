@@ -45,5 +45,7 @@ class Datasource(BaseModel):
     db: list[DbConnection] = Field(default_factory=list)
     doc: list[DocSource] = Field(default_factory=list)
     api: list[ApiSource] = Field(default_factory=list)
+    owner_type: str = Field(default="enterprise", alias="ownerType")
+    user_code: str | None = Field(default=None, alias="userCode")
 
     model_config = ConfigDict(extra="allow")

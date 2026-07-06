@@ -20,6 +20,8 @@ class ObjectSummary:
     object_source: str = ""
     field_count: int = 0
     action_count: int = 0
+    owner_type: str = "enterprise"
+    user_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,8 @@ class ViewSummary:
     view_name: str
     description: str = ""
     object_codes: list[str] = field(default_factory=list)
+    owner_type: str = "enterprise"
+    user_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +45,8 @@ class RelationSummary:
     target_object_code: str
     description: str = ""
     relation_cardinality: str = ""
+    owner_type: str = "enterprise"
+    user_code: str | None = None
 
 
 @dataclass(frozen=True)

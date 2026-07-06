@@ -21,6 +21,8 @@ class ObjectType(BaseModel):
     concept_type: str | None = Field(default=None, alias="conceptType")
     object_type: str | None = Field(default=None, alias="objectType")
     domain_type: str | None = Field(default=None, alias="domainType")
+    owner_type: str = Field(default="enterprise", alias="ownerType")
+    user_code: str | None = Field(default=None, alias="userCode")
     base_id: str = Field(alias="baseId")
     source_config: dict[str, Any] | None = Field(default=None, alias="sourceConfig")
     table_name: str | None = Field(default=None, alias="tableName")
@@ -40,5 +42,7 @@ class ObjectTypeSummary(BaseModel):
     concept_type: str | None = Field(default=None, alias="conceptType")
     field_count: int = Field(default=0, alias="fieldCount")
     action_count: int = Field(default=0, alias="actionCount")
+    owner_type: str = Field(default="enterprise", alias="ownerType")
+    user_code: str | None = Field(default=None, alias="userCode")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")

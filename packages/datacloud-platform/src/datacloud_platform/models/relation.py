@@ -27,5 +27,7 @@ class Relation(BaseModel):
     attribute: dict[str, Any] | None = Field(default=None, alias="attribute")
     sort_no: int = Field(default=0, alias="sortNo")
     status: int = Field(default=0, alias="status")
+    owner_type: str = Field(default="enterprise", alias="ownerType")
+    user_code: str | None = Field(default=None, alias="userCode")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")

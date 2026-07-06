@@ -30,5 +30,7 @@ class Action(BaseModel):
     request_url: str | None = Field(default=None, alias="requestUrl")
     request_method: str | None = Field(default=None, alias="requestMethod")
     script: str | None = Field(default=None, alias="script")
+    owner_type: str = Field(default="enterprise", alias="ownerType")
+    user_code: str | None = Field(default=None, alias="userCode")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
