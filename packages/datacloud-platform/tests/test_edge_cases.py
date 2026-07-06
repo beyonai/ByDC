@@ -161,7 +161,7 @@ class TestDataCloudDataBackendCompleteness:
             "objects": [],
             "actions": [],
             "relations": [],
-            "dbsources": {"db": [], "doc": [], "api": []},
+            "dbsources": {"db": [], "doc": [], "api": [], "ownerType": "enterprise", "userCode": None},
             "version": "v0.1.0",
         }
 
@@ -172,7 +172,7 @@ class TestDataCloudDataBackendCompleteness:
         result = self._backend().query_ontologies_by_scene(
             loader, "any-base", "any-scene"
         )
-        assert result == {"data": {"objects": [], "views": []}, "totalCount": 0}
+        assert result == {"data": {"objects": [], "views": []}, "totalCount": 0, "page": 1, "pageSize": 20}
 
     # ── View CRUD ──
 
@@ -332,25 +332,25 @@ class TestEmptyDataScenarios:
         assert data["data"] == []
 
     def test_list_objects_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/objects")
+        resp = client.get(f"/api/v1/ontologyBases/objects?base_id={LOCAL}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_views_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/views")
+        resp = client.get(f"/api/v1/ontologyBases/views?base_id={LOCAL}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_relations_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/relations")
+        resp = client.get(f"/api/v1/ontologyBases/relations?base_id={LOCAL}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
     def test_list_actions_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/objects/obj-1/actions")
+        resp = client.get(f"/api/v1/ontologyBases/objects/obj-1/actions?base_id={LOCAL}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
@@ -358,7 +358,7 @@ class TestEmptyDataScenarios:
     def test_list_datasources_no_data_returns_200_empty(
         self, client: TestClient
     ) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/{LOCAL}/datasources")
+        resp = client.get(f"/api/v1/ontologyBases/datasources?base_id={LOCAL}")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
