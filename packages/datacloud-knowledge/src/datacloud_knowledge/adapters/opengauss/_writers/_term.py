@@ -94,7 +94,7 @@ class _TermWriter(_WriterBase):
                 "library_id": library_id,
                 "domain_ids": domain_ids,
                 "parent_term_id": parent_term_id,
-                "term_tags": json.dumps(term_tags) if term_tags else None,
+                "term_tags": json.dumps(term_tags) if term_tags else "{}",
                 "now": now,
             },
         )
@@ -536,7 +536,7 @@ class _TermWriter(_WriterBase):
                     "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
                     "VALUES ("
                     ":term_id, :term_code, :term_name, :term_type_code, :library_id, "
-                    ":domain_ids, NULL, NULL, :now, :now"
+                    ":domain_ids, NULL, :term_tags, :now, :now"
                     ")"
                 ),
                 {
@@ -546,6 +546,7 @@ class _TermWriter(_WriterBase):
                     "term_type_code": term_type_code,
                     "library_id": db_library_id,
                     "domain_ids": domains,
+                    "term_tags": "{}",
                     "now": now,
                 },
             )
