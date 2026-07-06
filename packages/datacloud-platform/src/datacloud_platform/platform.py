@@ -46,6 +46,7 @@ from datacloud_platform.mixins import (
     ViewMixin,
     WorkspaceActionMixin,
 )
+from datacloud_platform.adapters.byclaw_sync import ByClawSyncAdapter
 from datacloud_platform.ontology_store import CacheMode, OntologyStore
 
 if TYPE_CHECKING:
@@ -107,6 +108,10 @@ class DatacloudPlatform(
     _ontology_store: OntologyStore | None = field(default=None, init=True)
     """OntologyStore — in-memory index cache, built from _entity_store."""
 
+    # ── Sync adapter (CRUD hook for ByClaw resource table) ──
+    _sync_adapter: Any = field(default=None, init=False)
+    """ByClawSyncAdapter — CRUD hook for syncing resources to ByClaw resource table."""
+
     # ── Backend instance cache ──
     _backend_cache: dict[str, Any] = field(default_factory=dict, init=False)
 
@@ -155,6 +160,9 @@ class DatacloudPlatform(
         names = self._resolve_names(entry)
         backend = self._get_backend("ontology", names["ontology"])
         _configure_if_supported(backend, entry)
+        # Inject sync hook if available
+        if self._sync_adapter is not None:
+            backend._sync_hook = self._sync_adapter
         return backend  # type: ignore[no-any-return]
 
     def _term_for(self, base_id: str) -> TermBackend:
@@ -209,6 +217,16 @@ class DatacloudPlatform(
             self._ontology_store = OntologyStore(self._entity_store)
             for et in ("bases", "scenes"):
                 self._ontology_store.get_index(et)
+
+        # Initialize ByClaw sync adapter (if discovery is available)
+        try:
+            self._sync_adapter = ByClawSyncAdapter()
+            logger.info("ByClawSyncAdapter initialized")
+        except Exception:
+            logger.warning(
+                "ByClawSyncAdapter initialization failed — sync disabled", exc_info=True
+            )
+            self._sync_adapter = None
 
     def create_base(self, entry: Any) -> dict[str, Any]:  # noqa: ANN401
         """Register a new ontology base, then ensure default scene exists.
