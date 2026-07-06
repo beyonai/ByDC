@@ -152,6 +152,7 @@ class OntologyBuildSession:
                 else f"p_{entity_code}_{short_id}"
             )
             state["entity_code"] = unique_code
+            key = f"{prefix}{session_id}_{unique_code}" if session_id else f"{prefix}{unique_code}"
         if entity_name:
             state["entity_name"] = entity_name
         if entity_desc:
