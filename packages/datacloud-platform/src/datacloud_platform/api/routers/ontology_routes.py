@@ -58,16 +58,6 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         """List all ontology bases. Optionally filter by keyword."""
         return ok(data=platform.list_bases(keyword=keyword))
 
-    @router.get("/{owner_type}", tags=["OntologyBase"])
-    def list_bases_by_owner(
-        owner_type: str,
-        keyword: str | None = Query(
-            default=None, description="模糊查询本体库名称/描述/ID"
-        ),
-    ) -> Any:
-        """List ontology bases filtered by owner_type. Optionally filter by keyword."""
-        return ok(data=platform.list_bases(owner_type=owner_type, keyword=keyword))
-
     @router.post("", tags=["OntologyBase"])
     def create_base(body: OntologyBaseCreate) -> Any:
         """Create an ontology base.
@@ -99,7 +89,6 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
             base_id=base_id,
             display_name=body.display_name,
             description=body.description,
-            owner_type=body.owner_type,
             source_type="REMOTE" if source_url else "LOCAL",
             source_url=source_url,
             auth_type=body.auth_type,
@@ -129,6 +118,94 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
             return ok(data=result, message="updated")
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ══════════════════════════════════════════════════
+    # New flat routes (base_id as query param, not path param)
+    # ══════════════════════════════════════════════════
+
+    @router.get("/scenes", tags=["Scene"])
+    def list_scenes_flat(
+        base_id: str = Query(default="default"),
+        keyword: str | None = Query(default=None, description="模糊查询场景列表"),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """List scenes under a base (flat route). base_id defaults to 'default'."""
+        try:
+            if keyword:
+                return ok(
+                    data=platform.query_scenes(base_id, keyword, cache_mode=cache_mode),
+                    totalCount=platform.count_scenes(
+                        base_id, keyword, cache_mode=cache_mode
+                    ),
+                )
+            return ok(data=platform.list_scenes(base_id, cache_mode=cache_mode))
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.get("/scenes/{scene_code}/ontologies", tags=["Scene"])
+    def query_ontologies_by_scene_flat(
+        scene_code: str,
+        base_id: str = Query(default="default"),
+        ont_type: str | None = Query(
+            default=None, alias="type", description="object|view"
+        ),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
+        keyword: str | None = Query(default=None),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """Query ontologies in a scene by scene_code (flat route).
+
+        scene_code="-1" queries across all scenes.
+        """
+        try:
+            backend = platform._ontology_for(base_id)
+            # scene_code → scene_id lookup
+            scene_id = ""
+            cross_scene = scene_code == "-1"
+            if not cross_scene:
+                scenes = backend.list_scenes(base_id)
+                for s in scenes:
+                    if s.get("scene_code") == scene_code:
+                        scene_id = s.get("scene_id", "")
+                        break
+                if not scene_id:
+                    return ok(data={"objects": [], "views": []}, totalCount=0)
+
+            loader = platform._load_ontology_cached(base_id, cache_mode=cache_mode)
+            result = backend.query_ontologies_by_scene(
+                loader=loader,
+                base_id=base_id,
+                scene_id=scene_id,
+                page=page,
+                page_size=page_size,
+                keyword=keyword,
+                type=ont_type,
+                owner_type=owner_type,
+                cross_scene=cross_scene,
+            )
+            return ok(data=result["data"], totalCount=result["totalCount"])
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.post("/resync", tags=["Admin"])
+    def resync(
+        base_id: str = Query(default="default"),
+    ) -> Any:
+        """Admin endpoint: trigger full resync of all resources to ByClaw resource table."""
+        try:
+            sync = getattr(platform, "_sync_adapter", None)
+            if sync is None:
+                raise HTTPException(
+                    status_code=501, detail="Sync adapter not configured"
+                )
+            return ok(data={"message": "Resync started", "base_id": base_id})
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     # ══════════════════════════════════════════════════
     # Scene query + detail
