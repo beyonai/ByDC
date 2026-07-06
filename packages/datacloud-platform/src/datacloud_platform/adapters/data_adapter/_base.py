@@ -34,6 +34,26 @@ def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
     return codes
 
 
+def _build_sync_payload(
+    resource_type: str,
+    resource_code: str,
+    resource_name: str,
+    resource_desc: str = "",
+    base_code: str = "",
+    owner_type: str = "enterprise",
+) -> dict[str, Any]:
+    """Build a standardized sync payload for ByClaw resource table."""
+    return {
+        "systemCode": "byclaw-datacloud",
+        "resourceBizType": resource_type,
+        "resourceCode": resource_code,
+        "resourceName": resource_name,
+        "resourceDesc": resource_desc,
+        "ontologyBaseCode": base_code,
+        "ownerType": owner_type,
+    }
+
+
 class DataCloudDataBackendBase:
     """Foundation mixin: __init__, entity_store, knowledge SDK lazy init, static helpers."""
 
@@ -133,6 +153,8 @@ class DataCloudDataBackendBase:
         source_type: str = getattr(ont_class, "source_type", "")
         field_count: int = len(getattr(ont_class, "fields", []))
         action_count: int = len(getattr(ont_class, "actions", []))
+        owner_type: str = getattr(ont_class, "owner_type", "enterprise")
+        user_code: str | None = getattr(ont_class, "user_code", None)
         return ObjectSummary(
             object_code=object_code,
             object_name=object_name,
@@ -140,17 +162,25 @@ class DataCloudDataBackendBase:
             object_source=source_type,
             field_count=field_count,
             action_count=action_count,
+            owner_type=owner_type,
+            user_code=user_code,
         )
 
     @staticmethod
     def _to_view_summary(view_data: dict[str, Any], view_code: str) -> ViewSummary:
         """Convert a raw view dict to ViewSummary."""
         normalized_codes = _normalize_object_codes(view_data.get("objects", []))
+        owner_type: str = view_data.get(
+            "owner_type", view_data.get("ownerType", "enterprise")
+        )
+        user_code: str | None = view_data.get("user_code", view_data.get("userCode"))
         return ViewSummary(
             view_code=view_data.get("view_id", view_code),
             view_name=view_data.get("view_name", ""),
             description=view_data.get("description", "") or "",
             object_codes=normalized_codes,
+            owner_type=owner_type,
+            user_code=user_code,
         )
 
     @staticmethod
@@ -160,3 +190,25 @@ class DataCloudDataBackendBase:
         if env_dir:
             return Path(env_dir)
         return Path(_DEFAULT_STORAGE_DIR)
+
+    def _invoke_sync_hook(self, method: str, resource_type: str, **kwargs: Any) -> None:
+        """Invoke sync hook if configured. Never raises."""
+        hook = getattr(self, "_sync_hook", None)
+        if hook is None:
+            return
+        try:
+            if method in ("on_create", "on_update"):
+                payload = _build_sync_payload(resource_type, **kwargs)
+                if method == "on_create":
+                    hook.on_create(resource_type, payload)
+                else:
+                    hook.on_update(resource_type, payload)
+            elif method == "on_delete":
+                hook.on_delete(resource_type, **kwargs)
+        except Exception:
+            logger.warning(
+                "Sync hook failed: method=%s type=%s",
+                method,
+                resource_type,
+                exc_info=True,
+            )
