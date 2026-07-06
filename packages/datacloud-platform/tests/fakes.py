@@ -524,6 +524,9 @@ class FakeOntologyBackend:
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
+        type: str | None = None,
+        owner_type: str | None = None,
+        cross_scene: bool = False,
     ) -> dict[str, Any]:
         """Return preset _ontologies_by_scene or empty result.
 

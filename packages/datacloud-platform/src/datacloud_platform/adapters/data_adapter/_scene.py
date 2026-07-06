@@ -421,23 +421,37 @@ class SceneMixin(DataCloudDataBackendBase):
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
+        type: str | None = None,
+        owner_type: str | None = None,
+        cross_scene: bool = False,
     ) -> dict[str, Any]:
-        """Query ontologies (objects + views) in a scene with optional keyword filter.
+        """Query ontologies (objects + views) with pagination, type, and owner_type filters.
 
-        Looks up the scene's member_object_codes and member_view_codes from the
-        local scene registry, fetches matching ObjectSummary / ViewSummary from
-        *loader*, applies optional keyword filter, and returns both lists.
+        Supports cross-scene mode: when scene_id is empty and cross_scene=True,
+        iterates all scenes and collects all member codes.
         """
-        _ = page, page_size  # pagination removed — objects/views returned as full lists
-
-        # 1. Look up scene member codes
+        # 1. Collect member codes (single scene, cross-scene, or all)
+        member_obj_codes: set[str] = set()
+        member_view_codes: set[str] = set()
         scenes = self._ensure_scenes_loaded()
-        scene = scenes.get(scene_id)
-        if scene is None:
-            return {"data": {"objects": [], "views": []}, "totalCount": 0}
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
 
-        member_obj_codes: list[str] = scene.get("member_object_codes", [])
-        member_view_codes: list[str] = scene.get("member_view_codes", [])
+        if not scene_id and cross_scene:
+            # Cross-scene: query ALL objects/views in the base (including orphans
+            # without scene membership), not just scene members.
+            member_obj_codes.update(loader._classes.keys())
+            member_view_codes.update(raw_views.keys())
+        else:
+            found = scenes.get(scene_id)
+            if found is None:
+                return {
+                    "data": {"objects": [], "views": []},
+                    "totalCount": 0,
+                    "page": page,
+                    "pageSize": page_size,
+                }
+            member_obj_codes.update(found.get("member_object_codes", []))
+            member_view_codes.update(found.get("member_view_codes", []))
 
         # 2. Convert member codes to summaries via loader
         all_objects: list[dict[str, Any]] = []
@@ -445,40 +459,70 @@ class SceneMixin(DataCloudDataBackendBase):
             cls = loader._classes.get(code)
             if cls is not None:
                 summary = self._to_summary(cls)
-                all_objects.append(dataclasses.asdict(summary))
+                summary_dict = dataclasses.asdict(summary)
 
-        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+                # owner_type filter
+                if owner_type and summary.owner_type != owner_type:
+                    continue
+
+                # keyword filter
+                if keyword:
+                    kw = keyword.strip().lower()
+                    if (
+                        kw not in (summary.object_name or "").lower()
+                        and kw not in summary.object_code.lower()
+                        and kw not in (summary.description or "").lower()
+                    ):
+                        continue
+
+                all_objects.append(summary_dict)
+
         all_views: list[dict[str, Any]] = []
         for code in member_view_codes:
             view_data = raw_views.get(code)
             if view_data is not None:
                 view_sum = self._to_view_summary(view_data, code)
-                all_views.append(dataclasses.asdict(view_sum))
+                summary_dict = dataclasses.asdict(view_sum)
 
-        # 3. Keyword filter (case-insensitive on name / code / description)
-        if keyword:
-            kw = keyword.strip().lower()
-            all_objects = [
-                o
-                for o in all_objects
-                if kw in (o.get("object_name", "") or "").lower()
-                or kw in (o.get("object_code", "") or "").lower()
-                or kw in (o.get("description", "") or "").lower()
-            ]
-            all_views = [
-                v
-                for v in all_views
-                if kw in (v.get("view_name", "") or "").lower()
-                or kw in (v.get("view_code", "") or "").lower()
-                or kw in (v.get("description", "") or "").lower()
-            ]
+                # owner_type filter
+                if owner_type and view_sum.owner_type != owner_type:
+                    continue
 
-        # 4. Total count (objects + views)
+                # keyword filter
+                if keyword:
+                    kw = keyword.strip().lower()
+                    if (
+                        kw not in (view_sum.view_name or "").lower()
+                        and kw not in (view_sum.view_code or "").lower()
+                        and kw not in (view_sum.description or "").lower()
+                    ):
+                        continue
+
+                all_views.append(summary_dict)
+
+        # 3. Type filter (all/object/view)
+        if type == "object":
+            all_views = []
+        elif type == "view":
+            all_objects = []
+
+        # 4. Pagination
         total = len(all_objects) + len(all_views)
+        offset = (page - 1) * page_size
+
+        # objects-first ordering: slice objects, then views
+        paged_objects = all_objects[offset : offset + page_size]
+        remaining = page_size - len(paged_objects)
+        paged_views: list[dict[str, Any]] = []
+        if remaining > 0:
+            view_start = max(0, offset - len(all_objects))
+            paged_views = all_views[view_start : view_start + remaining]
 
         return {
-            "data": {"objects": all_objects, "views": all_views},
+            "data": {"objects": paged_objects, "views": paged_views},
             "totalCount": total,
+            "page": page,
+            "pageSize": page_size,
         }
 
     # ── Scene CRUD ────────────────────────────────────────────────────────
@@ -542,6 +586,14 @@ class SceneMixin(DataCloudDataBackendBase):
             scene_id,
             scene_code,
         )
+        self._invoke_sync_hook(
+            "on_create",
+            "SCENE",
+            resource_code=scene_id,
+            resource_name=scene_name,
+            resource_desc=scene_desc or "",
+            base_code=base_id,
+        )
         return new_scene
 
     def update_scene(self, base_id: str, scene_id: str, updates: Any) -> dict[str, Any]:
@@ -564,6 +616,10 @@ class SceneMixin(DataCloudDataBackendBase):
                 scene["scene_name"] = updates.get(
                     "scene_name", updates.get("sceneName")
                 )
+            if "scene_code" in updates or "sceneCode" in updates:
+                scene["scene_code"] = updates.get(
+                    "scene_code", updates.get("sceneCode")
+                )
             if "scene_desc" in updates or "sceneDesc" in updates:
                 scene["scene_desc"] = updates.get(
                     "scene_desc", updates.get("sceneDesc")
@@ -576,6 +632,14 @@ class SceneMixin(DataCloudDataBackendBase):
 
         self._save_scene(scene_id, scene)
         logger.info("Updated scene: base_id=%s scene_id=%s", base_id, scene_id)
+        self._invoke_sync_hook(
+            "on_update",
+            "SCENE",
+            resource_code=scene_id,
+            resource_name=scene.get("scene_name", ""),
+            resource_desc=scene.get("scene_desc", ""),
+            base_code=base_id,
+        )
         return scene
 
     def delete_scene(self, base_id: str, scene_id: str) -> None:
@@ -592,6 +656,12 @@ class SceneMixin(DataCloudDataBackendBase):
         del scenes[scene_id]
         self._delete_scene(scene_id)
         logger.info("Deleted scene: base_id=%s scene_id=%s", base_id, scene_id)
+        self._invoke_sync_hook(
+            "on_delete",
+            "SCENE",
+            resource_code=scene_id,
+            base_code=base_id,
+        )
 
     # ── Scene reverse-lookup queries ────────────────────────────────────────
 
@@ -693,6 +763,14 @@ class SceneMixin(DataCloudDataBackendBase):
             len(added_objs),
             len(added_views),
         )
+        self._invoke_sync_hook(
+            "on_update",
+            "SCENE",
+            resource_code=scene_id,
+            resource_name=scene.get("scene_name", ""),
+            resource_desc=scene.get("scene_desc", ""),
+            base_code=base_id,
+        )
         return scene
 
     def remove_scene_members(
@@ -736,5 +814,13 @@ class SceneMixin(DataCloudDataBackendBase):
             scene_id,
             len(object_codes),
             len(view_codes),
+        )
+        self._invoke_sync_hook(
+            "on_update",
+            "SCENE",
+            resource_code=scene_id,
+            resource_name=scene.get("scene_name", ""),
+            resource_desc=scene.get("scene_desc", ""),
+            base_code=base_id,
         )
         return scene
