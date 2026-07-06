@@ -263,19 +263,47 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         _drop_table(object_code)
 
     def get_objects(
-        self, loader: OntologyQueryable, base_id: str
+        self,
+        loader: OntologyQueryable,
+        base_id: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
     ) -> list[ObjectSummary]:
-        """Get all object summaries under a base.
+        """Get all object summaries under a base with optional filtering.
 
         Args:
             loader: An OntologyQueryable with _classes populated.
             base_id: Base / project identifier.
+            owner_type: Filter by owner_type (enterprise/personal).
+            user_code: Filter by user_code when owner_type is personal.
+            keyword: Case-insensitive filter on name/code/description.
 
         Returns:
-            List of ObjectSummary for every class in the loader.
+            List of ObjectSummary for matching classes.
         """
         _ = base_id
-        return [self._to_summary(cls) for cls in loader._classes.values()]
+        result: list[ObjectSummary] = []
+        for cls in loader._classes.values():
+            cls_owner: str = getattr(cls, "owner_type", "enterprise")
+            if owner_type and cls_owner != owner_type:
+                continue
+            if owner_type == "personal" and user_code:
+                cls_user: str | None = getattr(cls, "user_code", None)
+                if cls_user != user_code:
+                    continue
+            summary = self._to_summary(cls)
+            if keyword:
+                kw = keyword.strip().lower()
+                if (
+                    kw not in (summary.object_name or "").lower()
+                    and kw not in summary.object_code.lower()
+                    and kw not in (summary.description or "").lower()
+                ):
+                    continue
+            result.append(summary)
+        return result
 
     def get_object_detail(
         self, loader: OntologyQueryable, object_code: str
@@ -359,6 +387,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         code: str = obj_dict.get("object_code") or obj_dict.get("objectCode", "")
         if not code:
             raise ValueError("object_code is required for object creation")
+        # Normalize owner_type/user_code
+        _owner_type: str = obj_dict.get("ownerType") or obj_dict.get(
+            "owner_type", "enterprise"
+        )
+        _user_code: str | None = obj_dict.get("userCode") or obj_dict.get("user_code")
+        obj_dict["ownerType"] = _owner_type
+        obj_dict["owner_type"] = _owner_type
+        if _user_code:
+            obj_dict["userCode"] = _user_code
+            obj_dict["user_code"] = _user_code
         entity_store.save("objects", code, obj_dict)
         self._incremental_save(entity_store, "objects", code, obj_dict)
         self._upsert_object_registry(base_path, self._to_registry_entry(obj_dict))
@@ -370,6 +408,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_name=obj_dict.get("objectName") or obj_dict.get("object_name", code),
             entity_desc=obj_dict.get("objectDesc") or obj_dict.get("description", ""),
             base_id=base_id,
+        )
+        self._invoke_sync_hook(
+            "on_create",
+            "OBJECT",
+            resource_code=code,
+            resource_name=obj_dict.get("objectName")
+            or obj_dict.get("object_name", code),
+            resource_desc=obj_dict.get("objectDesc") or obj_dict.get("object_desc", ""),
+            base_code=base_id,
+            owner_type=obj_dict.get("ownerType")
+            or obj_dict.get("owner_type", "enterprise"),
         )
         return obj_dict
 
@@ -389,6 +438,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         obj_dict: dict[str, Any] = (
             obj if isinstance(obj, dict) else obj.model_dump(by_alias=True)
         )
+        # Normalize owner_type/user_code
+        _owner_type: str = obj_dict.get("ownerType") or obj_dict.get(
+            "owner_type", "enterprise"
+        )
+        _user_code: str | None = obj_dict.get("userCode") or obj_dict.get("user_code")
+        obj_dict["ownerType"] = _owner_type
+        obj_dict["owner_type"] = _owner_type
+        if _user_code:
+            obj_dict["userCode"] = _user_code
+            obj_dict["user_code"] = _user_code
         entity_store.save("objects", object_code, obj_dict)
         self._incremental_save(entity_store, "objects", object_code, obj_dict)
         self._upsert_object_registry(base_path, self._to_registry_entry(obj_dict))
@@ -403,6 +462,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             or obj_dict.get("object_name", object_code),
             entity_desc=obj_dict.get("objectDesc") or obj_dict.get("description", ""),
             base_id=base_id,
+        )
+        self._invoke_sync_hook(
+            "on_update",
+            "OBJECT",
+            resource_code=object_code,
+            resource_name=obj_dict.get("objectName")
+            or obj_dict.get("object_name", object_code),
+            resource_desc=obj_dict.get("objectDesc") or obj_dict.get("object_desc", ""),
+            base_code=base_id,
+            owner_type=obj_dict.get("ownerType")
+            or obj_dict.get("owner_type", "enterprise"),
         )
         return obj_dict
 
@@ -444,10 +514,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
         entry: dict[str, Any] = {
             "object_code": code,
-            "object_name": obj_dict.get("object_name") or obj_dict.get("objectName", code),
-            "description": obj_dict.get("description") or obj_dict.get("objectDesc", ""),
+            "object_name": obj_dict.get("object_name")
+            or obj_dict.get("objectName", code),
+            "description": obj_dict.get("description")
+            or obj_dict.get("objectDesc", ""),
             "source_type": source_type,
-            "concept_type": obj_dict.get("concept_type") or obj_dict.get("conceptType", ""),
+            "concept_type": obj_dict.get("concept_type")
+            or obj_dict.get("conceptType", ""),
             "table_name": obj_dict.get("table_name") or obj_dict.get("tableName", ""),
             "fields": fields,
             "actions": obj_dict.get("actions", []),
@@ -466,7 +539,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 else {}
             )
         except (ValueError, OSError):
-            logger.warning("objects_registry.json unreadable, starting fresh: %s", registry_path)
+            logger.warning(
+                "objects_registry.json unreadable, starting fresh: %s", registry_path
+            )
             content = {}
 
         objects: list[dict[str, Any]] = list(content.get("objects") or [])
@@ -514,6 +589,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         self._incremental_delete(entity_store, "objects", object_code)
         logger.info("Deleted object: base_id=%s object_code=%s", base_id, object_code)
         self._remove_entity_terms(entity_type="object", entity_code=object_code)
+        self._invoke_sync_hook(
+            "on_delete",
+            "OBJECT",
+            resource_code=object_code,
+            base_code=base_id,
+        )
 
     # ── View CRUD ──────────────────────────────────────────────────────────
 
@@ -621,6 +702,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_desc=view_dict.get("description", ""),
             base_id=base_id,
         )
+        self._invoke_sync_hook(
+            "on_create",
+            "VIEW",
+            resource_code=code,
+            resource_name=view_dict.get("viewName") or view_dict.get("view_name", code),
+            resource_desc=view_dict.get("description", ""),
+            base_code=base_id,
+            owner_type=view_dict.get("ownerType")
+            or view_dict.get("owner_type", "enterprise"),
+        )
         return view_dict
 
     def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
@@ -651,6 +742,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_desc=view_dict.get("description", ""),
             base_id=base_id,
         )
+        self._invoke_sync_hook(
+            "on_update",
+            "VIEW",
+            resource_code=view_code,
+            resource_name=view_dict.get("viewName")
+            or view_dict.get("view_name", view_code),
+            resource_desc=view_dict.get("description", ""),
+            base_code=base_id,
+            owner_type=view_dict.get("ownerType")
+            or view_dict.get("owner_type", "enterprise"),
+        )
         return view_dict
 
     def delete_view(self, base_id: str, view_code: str) -> None:
@@ -666,6 +768,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         self._incremental_delete(entity_store, "views", view_code)
         logger.info("Deleted view: base_id=%s view_code=%s", base_id, view_code)
         self._remove_entity_terms(entity_type="view", entity_code=view_code)
+        self._invoke_sync_hook(
+            "on_delete",
+            "VIEW",
+            resource_code=view_code,
+            base_code=base_id,
+        )
 
     # ── Relation CRUD (stub — datacloud-data SDK does not yet support) ──────
 
@@ -766,6 +874,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_desc=rel_dict.get("relationDesc") or rel_dict.get("description", ""),
             base_id=base_id,
         )
+        self._invoke_sync_hook(
+            "on_create",
+            "RELATION",
+            resource_code=code,
+            resource_name=rel_dict.get("relationName")
+            or rel_dict.get("relation_name", code),
+            resource_desc=rel_dict.get("relationDesc")
+            or rel_dict.get("relation_desc", ""),
+            base_code=base_id,
+        )
         return rel_dict
 
     def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
@@ -796,6 +914,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_desc=rel_dict.get("relationDesc") or rel_dict.get("description", ""),
             base_id=base_id,
         )
+        self._invoke_sync_hook(
+            "on_update",
+            "RELATION",
+            resource_code=rel_code,
+            resource_name=rel_dict.get("relationName")
+            or rel_dict.get("relation_name", rel_code),
+            resource_desc=rel_dict.get("relationDesc")
+            or rel_dict.get("relation_desc", ""),
+            base_code=base_id,
+        )
         return rel_dict
 
     def delete_relation(self, base_id: str, rel_code: str) -> None:
@@ -811,6 +939,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         self._incremental_delete(entity_store, "relations", rel_code)
         logger.info("Deleted relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
+        self._invoke_sync_hook(
+            "on_delete",
+            "RELATION",
+            resource_code=rel_code,
+            base_code=base_id,
+        )
 
     # ── Action CRUD (stub — datacloud-data SDK does not yet support) ────────
 
@@ -895,6 +1029,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             or action_dict.get("description", ""),
             base_id=base_id,
         )
+        self._invoke_sync_hook(
+            "on_create",
+            "ACTION",
+            resource_code=code,
+            resource_name=action_dict.get("actionName")
+            or action_dict.get("action_name", code),
+            resource_desc=action_dict.get("actionDesc")
+            or action_dict.get("action_desc", ""),
+            base_code=base_id,
+        )
         return action_dict
 
     def update_action(
@@ -941,6 +1085,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             or action_dict.get("description", ""),
             base_id=base_id,
         )
+        self._invoke_sync_hook(
+            "on_update",
+            "ACTION",
+            resource_code=action_code,
+            resource_name=action_dict.get("actionName")
+            or action_dict.get("action_name", action_code),
+            resource_desc=action_dict.get("actionDesc")
+            or action_dict.get("action_desc", ""),
+            base_code=base_id,
+        )
         return action_dict
 
     def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
@@ -964,6 +1118,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
         self._remove_entity_terms(
             entity_type="ontology_action", entity_code=action_code
+        )
+        self._invoke_sync_hook(
+            "on_delete",
+            "ACTION",
+            resource_code=action_code,
+            base_code=base_id,
         )
 
     # ── Datasource CRUD ────────────────────────────────────────────────────
@@ -1062,6 +1222,14 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.save("datasources", db_id, ds_dict)
         self._incremental_save(entity_store, "datasources", db_id, ds_dict)
         logger.info("Created datasource: base_id=%s db_id=%s", base_id, db_id)
+        self._invoke_sync_hook(
+            "on_create",
+            "DATASOURCE",
+            resource_code=db_id,
+            resource_name=db_id,
+            resource_desc="",
+            base_code=base_id,
+        )
         return ds_dict
 
     def delete_datasource(self, base_id: str, db_id: str) -> None:
@@ -1076,6 +1244,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.delete("datasources", db_id)
         self._incremental_delete(entity_store, "datasources", db_id)
         logger.info("Deleted datasource: base_id=%s db_id=%s", base_id, db_id)
+        self._invoke_sync_hook(
+            "on_delete",
+            "DATASOURCE",
+            resource_code=db_id,
+            base_code=base_id,
+        )
 
     # ── Term sync helpers (called by CRUD methods) ─────────────────────────
 
@@ -1201,6 +1375,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         try:
             with create_writer() as writer:
                 for entity_type, entity_code, entity_name in entities:
+                    # Wrap each entity in a savepoint so one failure
+                    # doesn't roll back previously successful upserts.
+                    sp = writer.session.begin_nested()
                     try:
                         term_id = writer.upsert_term(
                             term_code=entity_code,
@@ -1210,7 +1387,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                         )
                         if term_id:
                             term_ids.append(term_id)
+                        sp.commit()
                     except Exception:
+                        sp.rollback()
                         logger.exception(
                             "_batch_sync_entity_terms: type=%s code=%s failed",
                             entity_type,
