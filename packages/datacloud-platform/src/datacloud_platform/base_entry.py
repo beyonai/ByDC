@@ -83,7 +83,6 @@ class OntologyBaseEntry:
     base_id: str
     display_name: str
     description: str = ""
-    owner_type: str = "personal"
     source_url: str | None = None
     auth_type: str | None = None
     auth_config: dict[str, Any] | None = None
@@ -148,17 +147,13 @@ class OntologyBaseRegistry:
         """List all registered entries."""
         return list(self._entries.values())
 
-    def list_filtered(
-        self, *, owner_type: str | None = None, keyword: str | None = None
-    ) -> list[OntologyBaseEntry]:  # type: ignore[valid-type]
-        """List entries filtered by owner_type and/or keyword.
+    def list_filtered(self, *, keyword: str | None = None) -> list[OntologyBaseEntry]:  # type: ignore[valid-type]
+        """List entries filtered by keyword.
 
         Keyword matches case-insensitively against ``display_name``,
         ``description``, and ``base_id``.
         """
         entries = list(self._entries.values())
-        if owner_type:
-            entries = [e for e in entries if e.owner_type == owner_type]
         if keyword:
             kw = keyword.strip().lower()
             entries = [

@@ -20,16 +20,15 @@ class LibraryMixin:
     def list_bases(
         self,
         *,
-        owner_type: str | None = None,
         keyword: str | None = None,
     ) -> list[dict[str, Any]]:
-        """List ontology bases, optionally filtered by owner_type and/or keyword.
+        """List ontology bases, optionally filtered by keyword.
 
         Keyword matches case-insensitively against display_name, description,
         and base_id.
         """
         entries = self._base_registry.list_filtered(  # type: ignore[attr-defined]
-            owner_type=owner_type, keyword=keyword
+            keyword=keyword
         )
         return [asdict(e) for e in entries]
 
