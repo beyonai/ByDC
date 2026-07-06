@@ -361,6 +361,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             raise ValueError("object_code is required for object creation")
         entity_store.save("objects", code, obj_dict)
         self._incremental_save(entity_store, "objects", code, obj_dict)
+        self._upsert_object_registry(base_path, self._to_registry_entry(obj_dict))
+        self._invalidate_loader_cache(base_id)
         logger.info("Created object: base_id=%s object_code=%s", base_id, code)
         self._sync_entity_terms(
             entity_type="object",
@@ -389,6 +391,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
         entity_store.save("objects", object_code, obj_dict)
         self._incremental_save(entity_store, "objects", object_code, obj_dict)
+        self._upsert_object_registry(base_path, self._to_registry_entry(obj_dict))
+        self._invalidate_loader_cache(base_id)
         logger.info("Updated object: base_id=%s object_code=%s", base_id, object_code)
         # Re-sync terms: delete old → write new (build_terms is upsert-safe)
         self._remove_entity_terms(entity_type="object", entity_code=object_code)
@@ -401,6 +405,101 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             base_id=base_id,
         )
         return obj_dict
+
+    @staticmethod
+    def _to_registry_entry(obj_dict: dict[str, Any]) -> dict[str, Any]:
+        """Convert camelCase ObjectType dict to objects_registry.json snake_case format.
+
+        Extracts kb_id/kb_directory from sourceConfig into ext_property so that
+        OntologyLoader (which reads ext_property) can find them at runtime.
+        """
+        code = obj_dict.get("object_code") or obj_dict.get("objectCode", "")
+        source_type = (
+            obj_dict.get("source_type")
+            or obj_dict.get("objectSource")
+            or obj_dict.get("sourceType", "DB")
+        )
+        # Merge ext_property; promote kb_id/kb_directory from sourceConfig when absent
+        ext_property: dict[str, Any] = dict(
+            obj_dict.get("ext_property") or obj_dict.get("extProperty") or {}
+        )
+        source_config = obj_dict.get("source_config") or obj_dict.get("sourceConfig")
+        if isinstance(source_config, dict):
+            for kb_key in ("kb_id", "kb_directory", "knCode"):
+                if source_config.get(kb_key) and kb_key not in ext_property:
+                    ext_property[kb_key] = source_config[kb_key]
+
+        # Normalise properties → fields
+        raw_fields = obj_dict.get("fields") or obj_dict.get("properties") or []
+        fields: list[dict[str, Any]] = [
+            {
+                "field_code": f.get("field_code") or f.get("propertyCode", ""),
+                "field_name": f.get("field_name") or f.get("propertyName", ""),
+                "field_type": f.get("field_type") or f.get("dataType", "STRING"),
+                "is_primary_key": bool(f.get("is_primary_key", False)),
+                "source_column": f.get("source_column") or f.get("sourceColumn"),
+            }
+            for f in raw_fields
+        ]
+
+        entry: dict[str, Any] = {
+            "object_code": code,
+            "object_name": obj_dict.get("object_name") or obj_dict.get("objectName", code),
+            "description": obj_dict.get("description") or obj_dict.get("objectDesc", ""),
+            "source_type": source_type,
+            "concept_type": obj_dict.get("concept_type") or obj_dict.get("conceptType", ""),
+            "table_name": obj_dict.get("table_name") or obj_dict.get("tableName", ""),
+            "fields": fields,
+            "actions": obj_dict.get("actions", []),
+        }
+        if ext_property:
+            entry["ext_property"] = ext_property
+        return entry
+
+    def _upsert_object_registry(self, base_path: Path, entry: dict[str, Any]) -> None:
+        """Incrementally upsert one object into objects_registry.json."""
+        registry_path = base_path / "objects_registry.json"
+        try:
+            content: dict[str, Any] = (
+                _json.loads(registry_path.read_text(encoding="utf-8"))
+                if registry_path.exists()
+                else {}
+            )
+        except (ValueError, OSError):
+            logger.warning("objects_registry.json unreadable, starting fresh: %s", registry_path)
+            content = {}
+
+        objects: list[dict[str, Any]] = list(content.get("objects") or [])
+        code = entry["object_code"]
+        for i, obj in enumerate(objects):
+            if obj.get("object_code") == code:
+                objects[i] = entry
+                break
+        else:
+            objects.append(entry)
+
+        content["objects"] = objects
+        content.setdefault("views", [])
+        content.setdefault("relations", [])
+        base_path.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(registry_path, content)
+
+    @staticmethod
+    def _invalidate_loader_cache(base_id: str) -> None:
+        """Invalidate the in-memory OntologyLoader cache so the next request rebuilds it.
+
+        Uses the module-level runtime ref registered by the API server at startup.
+        Safe to call even when running outside the API (e.g. tests) — silently no-ops.
+        """
+        try:
+            from datacloud_platform.api.mcp_handler import _get_loader_runtime  # noqa: PLC0415
+
+            runtime = _get_loader_runtime()
+            if runtime is not None and hasattr(runtime, "invalidate"):
+                runtime.invalidate(base_id)
+                logger.debug("Loader cache invalidated for base_id=%s", base_id)
+        except Exception:
+            logger.debug("_invalidate_loader_cache: skipped (runtime not available)")
 
     def delete_object(self, base_id: str, object_code: str) -> None:
         """Delete an ontology object.
