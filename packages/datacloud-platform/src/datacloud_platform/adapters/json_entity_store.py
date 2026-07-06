@@ -155,9 +155,14 @@ def _to_index_entry(data: dict[str, Any], entity_type: str) -> dict[str, Any]:
     singular = entity_type.rstrip("s")
     code_key = f"{singular}_code"
     name_key = f"{singular}_name"
+    # Fallback to camelCase keys produced by model_dump(by_alias=True)
+    camel_code_key = singular + "Code"  # e.g. objectCode, viewCode
+    camel_name_key = singular + "Name"  # e.g. objectName, viewName
+    code: str = data.get(code_key) or data.get(camel_code_key, "") or ""
+    name: str = data.get(name_key) or data.get(camel_name_key, "") or ""
     return {
-        "code": data.get(code_key),
-        "name": data.get(name_key, ""),
-        "shard": data.get(code_key, "")[:2].lower(),
+        "code": code,
+        "name": name,
+        "shard": code[:2].lower(),
         "field_count": len(data.get("fields", data.get("properties", []))),
     }

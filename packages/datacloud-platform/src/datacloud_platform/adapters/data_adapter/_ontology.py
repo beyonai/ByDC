@@ -757,6 +757,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             raise ValueError("relation_code is required for relation creation")
         entity_store.save("relations", code, rel_dict)
         self._incremental_save(entity_store, "relations", code, rel_dict)
+        from datacloud_platform.adapters.registry_sync import (  # noqa: PLC0415
+            registry_sync_upsert,
+            rel_camel_to_registry,
+        )
+        registry_sync_upsert(base_path, "relations", "relation_code", code, rel_camel_to_registry(rel_dict))
         logger.info("Created relation: base_id=%s relation_code=%s", base_id, code)
         self._sync_entity_terms(
             entity_type="relation",
@@ -786,6 +791,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
         entity_store.save("relations", rel_code, rel_dict)
         self._incremental_save(entity_store, "relations", rel_code, rel_dict)
+        from datacloud_platform.adapters.registry_sync import (  # noqa: PLC0415
+            registry_sync_upsert,
+            rel_camel_to_registry,
+        )
+        registry_sync_upsert(base_path, "relations", "relation_code", rel_code, rel_camel_to_registry(rel_dict))
         logger.info("Updated relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
         self._sync_entity_terms(
@@ -809,6 +819,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store = JsonEntityStore(base_path)
         entity_store.delete("relations", rel_code)
         self._incremental_delete(entity_store, "relations", rel_code)
+        from datacloud_platform.adapters.registry_sync import registry_sync_delete  # noqa: PLC0415
+        registry_sync_delete(base_path, "relations", "relation_code", rel_code)
         logger.info("Deleted relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
 

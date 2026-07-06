@@ -85,7 +85,15 @@ class DataCloudDataBackendBase:
 
     @staticmethod
     def _resolve_base_path(base_id: str) -> Path:
-        """Resolve a base_id to a filesystem path under the platform data dir."""
+        """Resolve a base_id to a filesystem path, honouring backend_config.ontology.base_path."""
+        try:
+            from datacloud_platform import get_platform
+
+            platform = get_platform()
+            if hasattr(platform, "_base_path_for"):
+                return platform._base_path_for(base_id)  # type: ignore[no-any-return]
+        except Exception:  # noqa: BLE001
+            pass
         from datacloud_platform.platform_file_storage import _data_dir
 
         return _data_dir() / base_id
