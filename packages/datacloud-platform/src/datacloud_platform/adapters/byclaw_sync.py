@@ -158,8 +158,11 @@ class ByClawSyncAdapter(ResourceSyncHook):
             return ""
         service_name = os.getenv("BE_DOMAINNAME", "ByaiService").strip()
         try:
-            instance = await self._discovery.get_service(service_name)
-            return f"http://{instance[0]}:{instance[1]}"
+            instance = await self._discovery.discover(service_name)
+            if instance is None:
+                logger.warning("No %s instance found", service_name)
+                return ""
+            return f"http://{instance.host}:{instance.port}"
         except Exception:
             logger.warning("Failed to discover %s service", service_name)
             return ""
