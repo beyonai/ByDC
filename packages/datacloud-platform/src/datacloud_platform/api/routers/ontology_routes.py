@@ -207,6 +207,29 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+    @router.get("/{base_id}/detail", tags=["Base"])
+    def get_base_details(
+        base_id: str,
+        view_code: str | None = Query(default=None, alias="viewCode"),
+        object_code: str | None = Query(default=None, alias="objectCode"),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """Get comprehensive base detail — all scenes, objects, views, relations,
+        actions, dbsources under a base. Supports optional view_code/object_code filtering.
+        All resources include ownerType/userCode fields."""
+        try:
+            loader = platform._load_ontology_cached(base_id, cache_mode=cache_mode)
+            backend = platform._ontology_for(base_id)
+            result = backend.get_base_details(
+                loader,
+                base_id,
+                view_code=_parse_csv(view_code),
+                object_code=_parse_csv(object_code),
+            )
+            return ok(data=result)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
     # ══════════════════════════════════════════════════
     # Scene query + detail
     # ══════════════════════════════════════════════════

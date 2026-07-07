@@ -56,9 +56,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List objects in a base."""
-        _ = (page, page_size, owner_type, user_code, keyword)
         try:
-            return ok(data=platform.get_objects(base_id, cache_mode=cache_mode))
+            return ok(
+                data=platform.get_objects(
+                    base_id,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    keyword=keyword,
+                    cache_mode=cache_mode,
+                )
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -142,9 +149,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List views in a base."""
-        _ = (page, page_size, owner_type, user_code, keyword)
         try:
-            return ok(data=platform.get_views(base_id, cache_mode=cache_mode))
+            return ok(
+                data=platform.get_views(
+                    base_id,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    keyword=keyword,
+                    cache_mode=cache_mode,
+                )
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -226,9 +240,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List relations in a base."""
-        _ = (page, page_size, owner_type, user_code, keyword)
         try:
-            return ok(data=platform.get_relations(base_id, cache_mode=cache_mode))
+            return ok(
+                data=platform.get_relations(
+                    base_id,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    keyword=keyword,
+                    cache_mode=cache_mode,
+                )
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -313,9 +334,14 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List datasources in a base."""
-        _ = (page, page_size, owner_type, user_code, keyword)
         try:
-            return ok(data=platform.get_datasources(base_id, cache_mode=cache_mode))
+            return ok(
+                data=platform.get_datasources(
+                    base_id,
+                    keyword=keyword,
+                    cache_mode=cache_mode,
+                )
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -384,10 +410,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List actions on an object."""
-        _ = (page, page_size, owner_type, user_code, keyword)
         try:
             return ok(
-                data=platform.get_actions(base_id, object_code, cache_mode=cache_mode)
+                data=platform.get_actions(
+                    base_id,
+                    object_code,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    keyword=keyword,
+                    cache_mode=cache_mode,
+                )
             )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
@@ -464,6 +496,25 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
+    @router.get("/objects/{object_code}/subtree", tags=["Object"])
+    def get_object_subtree(
+        object_code: str,
+        base_id: str = Query(default="default"),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """Get an object's subtree — detail + related views, relations, actions."""
+        try:
+            loader = platform._load_ontology_cached(base_id, cache_mode=cache_mode)
+            backend = platform._ontology_for(base_id)
+            result = backend.get_object_subtree(loader, base_id, object_code)
+            if result["object"] is None:
+                raise HTTPException(
+                    status_code=404, detail=f"Object '{object_code}' not found"
+                )
+            return ok(data=result)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
     # ══════════════════════════════════════════════════
     # Term bindings (object / view)
     # ══════════════════════════════════════════════════
@@ -509,6 +560,53 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
                     cache_mode=cache_mode,
                 )
             )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # ══════════════════════════════════════════════════
+    # Cross-resource queries (view → objects, object → relations)
+    # ══════════════════════════════════════════════════
+
+    @router.get("/views/{view_code}/objects", tags=["View"])
+    def get_objects_by_view(
+        view_code: str,
+        base_id: str = Query(default="default"),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        keyword: str | None = Query(default=None),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """Query objects (code/name/description) referenced by a view.
+
+        Supports ownerType, userCode, and keyword filtering.
+        """
+        try:
+            return ok(data=platform.get_objects_by_view(
+                base_id, view_code,
+                owner_type=owner_type, user_code=user_code, keyword=keyword,
+                cache_mode=cache_mode,
+            ))
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.get("/objects/{object_code}/relations", tags=["Object"])
+    def get_relations_by_object(
+        object_code: str,
+        base_id: str = Query(default="default"),
+        owner_type: str | None = Query(default=None, alias="ownerType"),
+        user_code: str | None = Query(default=None, alias="userCode"),
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> Any:
+        """Query all relation details involving *object_code* (as source or target).
+
+        Supports ownerType and userCode filtering on relations.
+        """
+        try:
+            return ok(data=platform.get_relations_by_object(
+                base_id, object_code,
+                owner_type=owner_type, user_code=user_code,
+                cache_mode=cache_mode,
+            ))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
