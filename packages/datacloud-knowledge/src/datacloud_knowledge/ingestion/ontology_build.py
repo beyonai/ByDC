@@ -141,6 +141,7 @@ class OntologyBuildSession:
         # key 加工号前缀，隔离多用户并发
         prefix = f"{user_code}:" if user_code else ""
         key = f"{prefix}{session_id}_{entity_code}" if session_id else f"{prefix}{entity_code}"
+        original_key = key
         state: dict[str, Any] = store.load(key)
 
         # 首次收集时，自动生成带工号+随机后缀的唯一编码
@@ -153,6 +154,10 @@ class OntologyBuildSession:
             )
             state["entity_code"] = unique_code
             key = f"{prefix}{session_id}_{unique_code}" if session_id else f"{prefix}{unique_code}"
+        else:
+            # 用 state 中的 entity_code 构造保存 key（可能是生成的唯一码）
+            stored_code = state["entity_code"]
+            key = f"{prefix}{session_id}_{stored_code}" if session_id else f"{prefix}{stored_code}"
         if entity_name:
             state["entity_name"] = entity_name
         if entity_desc:
@@ -182,6 +187,9 @@ class OntologyBuildSession:
             state["fields"] = list(existing.values())
 
         store.save(key, state, ttl=3600)
+        # 同时用原始短码 key 保存，让 submit 传短码也能查找到
+        if original_key != key:
+            store.save(original_key, state, ttl=3600)
 
         missing: list[str] = []
         if not state.get("entity_name"):
