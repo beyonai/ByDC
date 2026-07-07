@@ -166,6 +166,8 @@ class OntologyBuildMixin:
             objectDesc=state.get("entity_desc", ""),
             objectSource=entity_source,
             baseId=base_id,
+            ownerType="personal" if user_code else "enterprise",
+            userCode=user_code or None,
             sourceConfig=source_config,
             properties=[
                 Property(
@@ -253,6 +255,8 @@ class OntologyBuildMixin:
             viewName=state.get("view_name", actual_view_code),
             description=state.get("view_desc", ""),
             objectCodes=object_codes,
+            ownerType="personal" if user_code else "enterprise",
+            userCode=user_code or None,
             properties=[
                 ViewProperty(
                     propertyCode=f.get("property_code", ""),
