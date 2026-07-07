@@ -439,6 +439,7 @@ class SceneMixin(DataCloudDataBackendBase):
         keyword: str | None = None,
         type: str | None = None,
         owner_type: str | None = None,
+        user_code: str | None = None,
         cross_scene: bool = False,
     ) -> dict[str, Any]:
         """Query ontologies (objects + views) with pagination, type, and owner_type filters.
@@ -481,6 +482,10 @@ class SceneMixin(DataCloudDataBackendBase):
                 if owner_type and summary.owner_type != owner_type:
                     continue
 
+                # user_code filter
+                if user_code and summary.user_code != user_code:
+                    continue
+
                 # keyword filter
                 if keyword:
                     kw = keyword.strip().lower()
@@ -502,6 +507,10 @@ class SceneMixin(DataCloudDataBackendBase):
 
                 # owner_type filter
                 if owner_type and view_sum.owner_type != owner_type:
+                    continue
+
+                # user_code filter
+                if user_code and view_sum.user_code != user_code:
                     continue
 
                 # keyword filter

@@ -186,6 +186,7 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
                 keyword=keyword,
                 type=ont_type,
                 owner_type=owner_type,
+                user_code=user_code,
                 cross_scene=cross_scene,
             )
             return ok(data=result["data"], totalCount=result["totalCount"])
