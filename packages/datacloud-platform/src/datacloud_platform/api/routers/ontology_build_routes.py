@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from datacloud_platform.adapters.byclaw_sync import hook_ctx
+
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
 
@@ -144,10 +146,14 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.post("/object/submit")
     async def object_submit(
         body: ObjectSubmitRequest,
+        request: Request,
         _user_code: str = Depends(_extract_user_code),
     ) -> Any:
         """提交本体对象。"""
         try:
+            beyond_token: str | None = request.headers.get("Beyond-Token")
+            if beyond_token:
+                hook_ctx.set({"beyond_token": beyond_token})
             return platform.submit_object(
                 user_code=_user_code,
                 entity_code=body.entity_code,
@@ -161,10 +167,14 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.post("/object/delete")
     async def object_delete(
         body: ObjectDeleteRequest,
+        request: Request,
         _user_code: str = Depends(_extract_user_code),
     ) -> Any:
         """删除本体对象。"""
         try:
+            beyond_token: str | None = request.headers.get("Beyond-Token")
+            if beyond_token:
+                hook_ctx.set({"beyond_token": beyond_token})
             return platform.delete_build_object(
                 user_code=_user_code,
                 entity_code=body.entity_code,
@@ -201,10 +211,14 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.post("/view/submit")
     async def view_submit(
         body: ViewSubmitRequest,
+        request: Request,
         _user_code: str = Depends(_extract_user_code),
     ) -> Any:
         """提交本体视图。"""
         try:
+            beyond_token: str | None = request.headers.get("Beyond-Token")
+            if beyond_token:
+                hook_ctx.set({"beyond_token": beyond_token})
             return platform.submit_view(
                 user_code=_user_code,
                 view_code=body.view_code,
@@ -218,10 +232,14 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.post("/view/delete")
     async def view_delete(
         body: ViewDeleteRequest,
+        request: Request,
         _user_code: str = Depends(_extract_user_code),
     ) -> Any:
         """删除本体视图。"""
         try:
+            beyond_token: str | None = request.headers.get("Beyond-Token")
+            if beyond_token:
+                hook_ctx.set({"beyond_token": beyond_token})
             return platform.delete_build_view(
                 user_code=_user_code,
                 view_code=body.view_code,
