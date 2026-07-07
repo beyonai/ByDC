@@ -18,12 +18,17 @@ class RelationMixin:
         self: _HasOntologyBackend,
         base_id: str,
         *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
-        """Get all relations under a base."""
+        """Get all relations under a base with optional filtering."""
         backend = self._ontology_for(base_id)
         loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_relations(loader, base_id)
+        return backend.get_relations(
+            loader, base_id, owner_type=owner_type, user_code=user_code, keyword=keyword
+        )
 
     def get_relation_detail(
         self: _HasOntologyBackend,
@@ -36,6 +41,23 @@ class RelationMixin:
         backend = self._ontology_for(base_id)
         loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return backend.get_relation_detail(loader, base_id, rel_code)
+
+    def get_relations_by_object(
+        self: _HasOntologyBackend,
+        base_id: str,
+        object_code: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        cache_mode: CacheMode = CacheMode.REALTIME,
+    ) -> list[dict[str, Any]]:
+        """Get all relation details involving *object_code* (source or target), with filtering."""
+        backend = self._ontology_for(base_id)
+        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return backend.get_relations_by_object(
+            loader, base_id, object_code,
+            owner_type=owner_type, user_code=user_code,
+        )
 
     def create_relation(self: _HasOntologyBackend, base_id: str, rel: Any) -> Any:
         """Create a relation. Raises PermissionError on read-only backends."""

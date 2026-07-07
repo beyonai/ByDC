@@ -18,12 +18,13 @@ class DatasourceMixin:
         self: _HasOntologyBackend,
         base_id: str,
         *,
+        keyword: str | None = None,
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
-        """Get all datasources under a base."""
+        """Get all datasources under a base with optional filtering."""
         backend = self._ontology_for(base_id)
         loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_datasources(loader, base_id)
+        return backend.get_datasources(loader, base_id, keyword=keyword)
 
     def get_datasource_detail(
         self: _HasOntologyBackend,
