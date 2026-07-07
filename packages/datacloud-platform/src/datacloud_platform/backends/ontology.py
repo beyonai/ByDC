@@ -162,6 +162,10 @@ class OntologyBackend(Protocol):
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
+        type: str | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        cross_scene: bool = False,
     ) -> dict[str, Any]:
         """Query ontologies (objects) in a scene with pagination and keyword filter."""
         ...
