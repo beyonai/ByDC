@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from contextvars import ContextVar
 from typing import Any
 
 import httpx
@@ -12,6 +13,12 @@ import httpx
 from datacloud_platform.adapters.data_adapter._hooks import ResourceSyncHook
 
 logger = logging.getLogger(__name__)
+
+# Per-request hook context carried automatically across async Task boundaries.
+# Routes set ``hook_ctx.set({"beyond_token": header_value})``;
+# _post_async reads it as an override for the process-level BEYOND_TOKEN env var.
+# Keys: beyond_token (str | None)
+hook_ctx: ContextVar[dict[str, Any]] = ContextVar("hook_ctx", default={})
 
 # Resource type constants
 RESOURCE_TYPE_ONTOLOGY_BASE = "ONTOLOGY_BASE"
@@ -32,17 +39,49 @@ class ByClawSyncAdapter(ResourceSyncHook):
 
     def __init__(self, beyond_token: str | None = None) -> None:
         self._token: str = beyond_token or os.getenv("BEYOND_TOKEN") or ""
-        self._system_code = "byclaw-datacloud"
+        self._system_code = os.getenv(
+            "DATACLOUD_DOMAINNAME", "byclaw-datacloud"
+        ).strip()
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(5.0))
         self._discovery: Any = None  # DiscoveryClient | False | None
 
     def _ensure_discovery(self) -> None:
-        """Lazy-init the DiscoveryClient."""
+        """Lazy-init the DiscoveryClient.
+
+        Initializes the global by_framework Redis client from
+        DATACLOUD_GATEWAY_REDIS_* (or REDIS_*) env vars before creating
+        the DiscoveryClient, so that service discovery connects to the
+        configured Redis instead of defaulting to localhost.
+        """
         if self._discovery is not None:
             return
         try:
-            from by_framework.core.discovery import DiscoveryClient
+            from by_framework.common.redis_client import init_redis  # noqa: PLC0415
+            from by_framework.core.discovery import DiscoveryClient  # noqa: PLC0415
 
+            init_redis(
+                host=os.getenv(
+                    "DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")
+                ),
+                port=int(
+                    os.getenv(
+                        "DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379")
+                    )
+                ),
+                db=int(
+                    os.getenv(
+                        "DATACLOUD_GATEWAY_REDIS_DB", os.getenv("REDIS_DATABASE", "0")
+                    )
+                ),
+                password=os.getenv(
+                    "DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")
+                )
+                or None,
+                username=os.getenv(
+                    "DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")
+                )
+                or None,
+            )
             self._discovery = DiscoveryClient(cache_interval=30)
         except ImportError:
             logger.warning("by_framework.core.discovery not available — sync disabled")
@@ -89,6 +128,8 @@ class ByClawSyncAdapter(ResourceSyncHook):
 
     async def _post_async(self, path: str, payload: dict[str, Any]) -> None:
         """Post payload to ByClaw open API via service discovery."""
+        ctx = hook_ctx.get()
+        beyond_token: str = ctx.get("beyond_token") or self._token
         self._ensure_discovery()
         if not self._discovery:
             return
@@ -99,7 +140,7 @@ class ByClawSyncAdapter(ResourceSyncHook):
                 url,
                 json=payload,
                 headers={
-                    "Beyond-Token": self._token,
+                    "Beyond-Token": beyond_token,
                     "Content-Type": "application/json",
                 },
             )
@@ -115,10 +156,10 @@ class ByClawSyncAdapter(ResourceSyncHook):
         """Discover ByClaw service URL from Redis."""
         if self._discovery is False:
             return ""
-        # discovery_client.get_service("byclaw-datacloud") → (host, port)
+        service_name = os.getenv("BE_DOMAINNAME", "ByaiService").strip()
         try:
-            instance = await self._discovery.get_service("byclaw-datacloud")
+            instance = await self._discovery.get_service(service_name)
             return f"http://{instance[0]}:{instance[1]}"
         except Exception:
-            logger.warning("Failed to discover byclaw-datacloud service")
+            logger.warning("Failed to discover %s service", service_name)
             return ""
