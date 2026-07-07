@@ -147,6 +147,7 @@ class FakeOntologyBackend:
         self,
         loader: OntologyQueryable,
         _base_id: str,
+        **kwargs: Any,
     ) -> list[ObjectSummary]:
         """Return all objects from _objects."""
         return list(self._objects.values())
@@ -205,13 +206,28 @@ class FakeOntologyBackend:
 
     # -- View CRUD (fake) --
 
-    def get_views(self, loader: Any, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
+    def get_views(
+        self, loader: Any, base_id: str, **kwargs: Any
+    ) -> list[dict[str, Any]]:  # noqa: ARG002
         """Return preset _views for the scene."""
         _ = loader
         result = []
         for vlist in self._views.values():
             result.extend(vlist)
         return result
+
+    def get_objects_by_view(  # noqa: ARG002
+        self,
+        loader: Any,
+        base_id: str,
+        view_code: str,
+        **kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        """Return objects referenced by a view."""
+        _ = (loader, base_id, view_code)
+        return [
+            {"objectCode": "obj1", "objectName": "对象1", "objectDesc": "desc", "ownerType": "enterprise", "userCode": None}
+        ]
 
     def get_view_detail(
         self,
@@ -252,7 +268,9 @@ class FakeOntologyBackend:
 
     # -- Relation CRUD (fake) --
 
-    def get_relations(self, loader: Any, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
+    def get_relations(
+        self, loader: Any, base_id: str, **kwargs: Any
+    ) -> list[dict[str, Any]]:  # noqa: ARG002
         """Return preset _relations for the scene."""
         _ = loader
         result = []
@@ -270,6 +288,17 @@ class FakeOntologyBackend:
                 if r.get("relationCode") == rel_code:
                     return r
         return None
+
+    def get_relations_by_object(  # noqa: ARG002
+        self,
+        loader: Any,
+        base_id: str,
+        object_code: str,
+        **kwargs: Any,
+    ) -> list[dict[str, Any]]:
+        """Return relations involving object_code."""
+        _ = (loader, base_id, object_code)
+        return []
 
     def create_relation(self, base_id: str, rel: Any) -> Any:  # noqa: ARG002
         """Record created relation."""
@@ -297,7 +326,7 @@ class FakeOntologyBackend:
     # -- Action CRUD (fake) --
 
     def get_actions(  # noqa: ARG002
-        self, loader: Any, base_id: str, object_code: str
+        self, loader: Any, base_id: str, object_code: str, **kwargs: Any
     ) -> list[dict[str, Any]]:
         """Return preset _actions for the object."""
         _ = loader
@@ -342,7 +371,9 @@ class FakeOntologyBackend:
 
     # -- Datasource CRUD (fake) --
 
-    def get_datasources(self, loader: Any, base_id: str) -> list[dict[str, Any]]:  # noqa: ARG002
+    def get_datasources(
+        self, loader: Any, base_id: str, **kwargs: Any
+    ) -> list[dict[str, Any]]:  # noqa: ARG002
         """Return preset _datasources for the scene."""
         _ = loader
         result = []
@@ -556,6 +587,33 @@ class FakeOntologyBackend:
             total = len(objects) + len(views)
             return {"data": {"objects": objects, "views": views}, "totalCount": total}
         return result
+
+    def get_base_details(  # noqa: ARG002
+        self, loader: object, base_id: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        """Return base details — all objects, views, relations, actions, dbsources, scenes."""
+        return {
+            "base": {"baseId": base_id},
+            "scenes": [],
+            "views": [],
+            "objects": [],
+            "actions": [],
+            "relations": [],
+            "dbsources": {"db": [], "doc": [], "api": []},
+            "version": "v0.1.0",
+        }
+
+    def get_object_subtree(  # noqa: ARG002
+        self, loader: object, base_id: str, object_code: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        """Return object subtree — detail + related views, relations, actions."""
+        return {
+            "object": None,
+            "views": [],
+            "relations": [],
+            "actions": [],
+            "dbsources": {"db": [], "doc": [], "api": []},
+        }
 
     # -- Scene CRUD (fake) --
 
