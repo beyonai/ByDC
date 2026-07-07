@@ -593,7 +593,7 @@ def _write_summary(kb_paths: list[str], session_paths: list[str]) -> str:
         lines.append(f"已成功写入知识库，文件路径：{paths_str}")
     if session_paths:
         paths_str = ", ".join(session_paths)
-        lines.append(f"同时已写入会话文件，路径：{paths_str}")
+        lines.append(f"同时把已打标的文件写入到会话空间，路径：{paths_str}")
     return "；".join(lines) if lines else "写入完成"
 
 
