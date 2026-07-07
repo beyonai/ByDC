@@ -38,7 +38,9 @@ def _action_camel_to_owl(a: dict[str, Any]) -> dict[str, Any]:
     ]
     result: dict[str, Any] = {
         "action_code": a.get("actionCode") or a.get("action_code", ""),
-        "action_name": a.get("actionName") or a.get("action_name") or a.get("actionCode", ""),
+        "action_name": a.get("actionName")
+        or a.get("action_name")
+        or a.get("actionCode", ""),
         "action_type": a.get("actionType") or a.get("action_type") or "",
         "description": a.get("actionDesc") or a.get("description", ""),
         "belong_class": a.get("belongObjectCode") or a.get("belong_class", ""),
@@ -104,6 +106,12 @@ def obj_camel_to_owl(obj_dict: dict[str, Any]) -> dict[str, Any]:
     ext_property: dict[str, Any] = dict(
         obj_dict.get("ext_property") or obj_dict.get("extProperty") or {}
     )
+    _owner = obj_dict.get("ownerType")
+    if _owner and _owner != "enterprise":
+        ext_property.setdefault("owner_type", _owner)
+    _user = obj_dict.get("userCode")
+    if _user:
+        ext_property.setdefault("user_code", _user)
     source_config = obj_dict.get("source_config") or obj_dict.get("sourceConfig")
     if isinstance(source_config, dict):
         for kb_key in ("kb_id", "kb_directory", "knCode"):
@@ -133,10 +141,14 @@ def rel_camel_to_registry(rel_dict: dict[str, Any]) -> dict[str, Any]:
         or "ONE_TO_MANY"
     )
     return {
-        "relation_code": rel_dict.get("relationCode") or rel_dict.get("relation_code", ""),
-        "relation_name": rel_dict.get("relationName") or rel_dict.get("relation_name", ""),
-        "source_class": rel_dict.get("sourceObjectCode") or rel_dict.get("source_class", ""),
-        "target_class": rel_dict.get("targetObjectCode") or rel_dict.get("target_class", ""),
+        "relation_code": rel_dict.get("relationCode")
+        or rel_dict.get("relation_code", ""),
+        "relation_name": rel_dict.get("relationName")
+        or rel_dict.get("relation_name", ""),
+        "source_class": rel_dict.get("sourceObjectCode")
+        or rel_dict.get("source_class", ""),
+        "target_class": rel_dict.get("targetObjectCode")
+        or rel_dict.get("target_class", ""),
         "relation_type": relation_type,
         "join_keys": join_keys,
         "description": rel_dict.get("relationDesc") or rel_dict.get("description", ""),
@@ -145,7 +157,7 @@ def rel_camel_to_registry(rel_dict: dict[str, Any]) -> dict[str, Any]:
 
 def view_camel_to_registry(view_dict: dict[str, Any]) -> dict[str, Any]:
     """Convert a camelCase View dict to registry snake_case for objects_registry.json."""
-    return {
+    result: dict[str, Any] = {
         "view_id": view_dict.get("viewCode", ""),
         "view_name": view_dict.get("viewName", ""),
         "description": view_dict.get("description") or "",
@@ -160,6 +172,17 @@ def view_camel_to_registry(view_dict: dict[str, Any]) -> dict[str, Any]:
             for p in view_dict.get("properties", [])
         ],
     }
+    # Persist owner_type/user_code in ext_property (extension bag)
+    ext_property: dict[str, Any] = {}
+    _owner = view_dict.get("ownerType")
+    if _owner and _owner != "enterprise":
+        ext_property["owner_type"] = _owner
+    _user = view_dict.get("userCode")
+    if _user:
+        ext_property["user_code"] = _user
+    if ext_property:
+        result["ext_property"] = ext_property
+    return result
 
 
 def registry_sync_upsert(

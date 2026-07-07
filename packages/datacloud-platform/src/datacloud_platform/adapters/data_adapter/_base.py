@@ -161,8 +161,12 @@ class DataCloudDataBackendBase:
         source_type: str = getattr(ont_class, "source_type", "")
         field_count: int = len(getattr(ont_class, "fields", []))
         action_count: int = len(getattr(ont_class, "actions", []))
-        owner_type: str = getattr(ont_class, "owner_type", "enterprise")
-        user_code: str | None = getattr(ont_class, "user_code", None)
+        owner_type: str = (getattr(ont_class, "ext_property", None) or {}).get(
+            "owner_type", "enterprise"
+        )
+        user_code: str | None = (getattr(ont_class, "ext_property", None) or {}).get(
+            "user_code"
+        )
         return ObjectSummary(
             object_code=object_code,
             object_name=object_name,
@@ -178,10 +182,14 @@ class DataCloudDataBackendBase:
     def _to_view_summary(view_data: dict[str, Any], view_code: str) -> ViewSummary:
         """Convert a raw view dict to ViewSummary."""
         normalized_codes = _normalize_object_codes(view_data.get("objects", []))
-        owner_type: str = view_data.get(
-            "owner_type", view_data.get("ownerType", "enterprise")
+        ext = view_data.get("ext_property", {}) or {}
+        owner_type: str = ext.get(
+            "owner_type",
+            view_data.get("owner_type", view_data.get("ownerType", "enterprise")),
         )
-        user_code: str | None = view_data.get("user_code", view_data.get("userCode"))
+        user_code: str | None = ext.get(
+            "user_code", view_data.get("user_code", view_data.get("userCode"))
+        )
         return ViewSummary(
             view_code=view_data.get("view_id", view_code),
             view_name=view_data.get("view_name", ""),

@@ -286,11 +286,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         _ = base_id
         result: list[ObjectSummary] = []
         for cls in loader._classes.values():
-            cls_owner: str = getattr(cls, "owner_type", "enterprise")
+            ext = getattr(cls, "ext_property", None) or {}
+            cls_owner: str = ext.get("owner_type", "enterprise")
             if owner_type and cls_owner != owner_type:
                 continue
             if owner_type == "personal" and user_code:
-                cls_user: str | None = getattr(cls, "user_code", None)
+                cls_user: str | None = ext.get("user_code")
                 if cls_user != user_code:
                     continue
             summary = self._to_summary(cls)
@@ -500,6 +501,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             for kb_key in ("kb_id", "kb_directory", "knCode"):
                 if source_config.get(kb_key) and kb_key not in ext_property:
                     ext_property[kb_key] = source_config[kb_key]
+        # Persist owner_type/user_code in ext_property (extension bag)
+        _owner = obj_dict.get("owner_type") or obj_dict.get("ownerType")
+        if _owner and _owner != "enterprise":
+            ext_property.setdefault("owner_type", _owner)
+        _user = obj_dict.get("user_code") or obj_dict.get("userCode")
+        if _user:
+            ext_property.setdefault("user_code", _user)
 
         # Normalise properties → fields
         raw_fields = obj_dict.get("fields") or obj_dict.get("properties") or []
@@ -524,9 +532,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             "concept_type": obj_dict.get("concept_type")
             or obj_dict.get("conceptType", ""),
             "table_name": obj_dict.get("table_name") or obj_dict.get("tableName", ""),
-            "owner_type": obj_dict.get("owner_type")
-            or obj_dict.get("ownerType", "enterprise"),
-            "user_code": obj_dict.get("user_code") or obj_dict.get("userCode"),
             "fields": fields,
             "actions": obj_dict.get("actions", []),
         }
@@ -628,9 +633,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
         result: list[dict[str, Any]] = []
         for vc, view_data in raw_views.items():
-            # owner_type filter
+            # owner_type filter — read from ext_property first, fall back to top-level
+            ext = view_data.get("ext_property", {}) or {}
             v_owner: str = (
-                view_data.get("owner_type", view_data.get("ownerType", "enterprise"))
+                ext.get(
+                    "owner_type",
+                    view_data.get(
+                        "owner_type", view_data.get("ownerType", "enterprise")
+                    ),
+                )
                 or "enterprise"
             )
             if owner_type and v_owner != owner_type:
@@ -749,11 +760,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             cls = loader._classes.get(code)
             if cls is None:
                 continue
-            cls_owner: str = getattr(cls, "owner_type", "enterprise")
+            ext = getattr(cls, "ext_property", None) or {}
+            cls_owner: str = ext.get("owner_type", "enterprise")
             if owner_type and cls_owner != owner_type:
                 continue
             if owner_type == "personal" and user_code:
-                cls_user: str | None = getattr(cls, "user_code", None)
+                cls_user: str | None = ext.get("user_code")
                 if cls_user != user_code:
                     continue
             obj_dict: dict[str, Any] = {

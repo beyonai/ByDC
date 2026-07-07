@@ -148,8 +148,12 @@ class SceneMixin(DataCloudDataBackendBase):
                 objectDesc=getattr(cls, "description", None),
                 objectSource=getattr(cls, "source_type", None),
                 conceptType=getattr(cls, "concept_type", None),
-                ownerType=getattr(cls, "owner_type", "enterprise"),
-                userCode=getattr(cls, "user_code", None),
+                ownerType=getattr(cls, "owner_type", None)
+                or (getattr(cls, "ext_property", {}) or {}).get(
+                    "owner_type", "enterprise"
+                ),
+                userCode=getattr(cls, "user_code", None)
+                or (getattr(cls, "ext_property", {}) or {}).get("user_code"),
                 baseId=base_id,
                 tableName=getattr(cls, "table_name", None),
                 properties=[
