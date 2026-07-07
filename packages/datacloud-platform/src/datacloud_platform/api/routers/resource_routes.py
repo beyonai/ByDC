@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+
+from datacloud_platform.adapters.byclaw_sync import hook_ctx
 
 from datacloud_platform.models.action import Action
 from datacloud_platform.models.common import ok
@@ -87,11 +89,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.post("/objects", tags=["Object"])
-    def create_object(
+    async def create_object(
         body: ObjectType,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Create an object (LOCAL only). Auto-added to default scene when no scene specified."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             return ok(
                 data=platform.create_object_with_scene(base_id, body), message="created"
@@ -104,12 +110,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.put("/objects/{code}", tags=["Object"])
-    def update_object(
+    async def update_object(
         code: str,
         body: ObjectType,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Update an object (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.update_object(base_id, code, body)
             return ok(data={"objectCode": code})
@@ -121,11 +131,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.delete("/objects/{code}", tags=["Object"])
-    def delete_object(
+    async def delete_object(
         code: str,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Delete an object (LOCAL only). Removes from all scenes before deletion."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.delete_object_from_all_scenes(base_id, code)
             return ok(message="deleted")
@@ -178,11 +192,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.post("/views", tags=["View"])
-    def create_view(
+    async def create_view(
         body: View,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Create a view (LOCAL only). Auto-added to default scene when no scene specified."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             return ok(
                 data=platform.create_view_with_scene(base_id, body), message="created"
@@ -195,12 +213,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.put("/views/{code}", tags=["View"])
-    def update_view(
+    async def update_view(
         code: str,
         body: View,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Update a view (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.update_view(base_id, code, body)
             return ok(data={"viewCode": code})
@@ -212,11 +234,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.delete("/views/{code}", tags=["View"])
-    def delete_view(
+    async def delete_view(
         code: str,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Delete a view (LOCAL only). Removes from all scenes before deletion."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.delete_view_from_all_scenes(base_id, code)
             return ok(message="deleted")
@@ -271,11 +297,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.post("/relations", tags=["Relation"])
-    def create_relation(
+    async def create_relation(
         body: Relation,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Create a relation (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             return ok(
                 data=platform.create_relation(base_id, body),
@@ -289,12 +319,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.put("/relations/{code}", tags=["Relation"])
-    def update_relation(
+    async def update_relation(
         code: str,
         body: Relation,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Update a relation (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.update_relation(base_id, code, body)
             return ok(data={"relationCode": code})
@@ -306,11 +340,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.delete("/relations/{code}", tags=["Relation"])
-    def delete_relation(
+    async def delete_relation(
         code: str,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Delete a relation (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.delete_relation(base_id, code)
             return ok(message="deleted")
@@ -363,11 +401,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.post("/datasources", tags=["Datasource"])
-    def create_datasource(
+    async def create_datasource(
         body: Datasource,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Create a datasource (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             return ok(
                 data=platform.create_datasource(base_id, body),
@@ -381,11 +423,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.delete("/datasources/{db_id}", tags=["Datasource"])
-    def delete_datasource(
+    async def delete_datasource(
         db_id: str,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Delete a datasource (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.delete_datasource(base_id, db_id)
             return ok(message="deleted")
@@ -445,12 +491,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.post("/objects/{object_code}/actions", tags=["Action"])
-    def create_action(
+    async def create_action(
         object_code: str,
         body: Action,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Create an action on an object (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             return ok(
                 data=platform.create_action(base_id, object_code, body),
@@ -464,13 +514,17 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.put("/objects/{object_code}/actions/{code}", tags=["Action"])
-    def update_action(
+    async def update_action(
         object_code: str,
         code: str,
         body: Action,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Update an action on an object (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.update_action(base_id, object_code, code, body)
             return ok(data={"actionCode": code})
@@ -482,12 +536,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.delete("/objects/{object_code}/actions/{code}", tags=["Action"])
-    def delete_action(
+    async def delete_action(
         object_code: str,
         code: str,
+        request: Request,
         base_id: str = Query(default="default"),
     ) -> Any:
         """Delete an action from an object (LOCAL only)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.delete_action(base_id, object_code, code)
             return ok(message="deleted")
@@ -581,11 +639,16 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         Supports ownerType, userCode, and keyword filtering.
         """
         try:
-            return ok(data=platform.get_objects_by_view(
-                base_id, view_code,
-                owner_type=owner_type, user_code=user_code, keyword=keyword,
-                cache_mode=cache_mode,
-            ))
+            return ok(
+                data=platform.get_objects_by_view(
+                    base_id,
+                    view_code,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    keyword=keyword,
+                    cache_mode=cache_mode,
+                )
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -602,11 +665,15 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         Supports ownerType and userCode filtering on relations.
         """
         try:
-            return ok(data=platform.get_relations_by_object(
-                base_id, object_code,
-                owner_type=owner_type, user_code=user_code,
-                cache_mode=cache_mode,
-            ))
+            return ok(
+                data=platform.get_relations_by_object(
+                    base_id,
+                    object_code,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    cache_mode=cache_mode,
+                )
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 

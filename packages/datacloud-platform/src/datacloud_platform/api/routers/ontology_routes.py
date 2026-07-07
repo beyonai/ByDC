@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+
+from datacloud_platform.adapters.byclaw_sync import hook_ctx
 
 from datacloud_platform.base_entry import (
     OntologyBaseEntry,
@@ -306,8 +308,11 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     # ══════════════════════════════════════════════════
 
     @router.post("/{base_id}/scenes", tags=["Scene"])
-    def create_scene(base_id: str, body: SceneCreate) -> Any:
+    async def create_scene(base_id: str, body: SceneCreate, request: Request) -> Any:
         """Create a scene (grouping container) under a base."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             result = platform.create_scene(base_id, body)
             return ok(data=result, message="created")
@@ -319,8 +324,13 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.put("/{base_id}/scenes/{scene_id}", tags=["Scene"])
-    def update_scene(base_id: str, scene_id: str, body: SceneUpdate) -> Any:
+    async def update_scene(
+        base_id: str, scene_id: str, body: SceneUpdate, request: Request
+    ) -> Any:
         """Update scene metadata."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             result = platform.update_scene(base_id, scene_id, body)
             return ok(data=result, message="updated")
@@ -332,8 +342,11 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.delete("/{base_id}/scenes/{scene_id}", tags=["Scene"])
-    def delete_scene(base_id: str, scene_id: str) -> Any:
+    async def delete_scene(base_id: str, scene_id: str, request: Request) -> Any:
         """Delete a scene — members migrate to default scene."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             platform.delete_scene_with_migration(base_id, scene_id)
             return ok(message="deleted")
@@ -349,10 +362,13 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     # ══════════════════════════════════════════════════
 
     @router.post("/{base_id}/scenes/{scene_id}/members", tags=["Scene"])
-    def add_scene_members(
-        base_id: str, scene_id: str, body: SceneMembersRequest
+    async def add_scene_members(
+        base_id: str, scene_id: str, body: SceneMembersRequest, request: Request
     ) -> Any:
         """Add objects/views to a scene (idempotent)."""
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             result = platform.add_scene_members(
                 base_id, scene_id, body.object_codes, body.view_codes
@@ -366,12 +382,15 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.delete("/{base_id}/scenes/{scene_id}/members", tags=["Scene"])
-    def remove_scene_members(
-        base_id: str, scene_id: str, body: SceneMembersRequest
+    async def remove_scene_members(
+        base_id: str, scene_id: str, body: SceneMembersRequest, request: Request
     ) -> Any:
         """Remove objects/views from a scene — does NOT delete resources.
         Objects are safely removed (auto-migrated to default scene if last reference).
         """
+        beyond_token: str | None = request.headers.get("Beyond-Token")
+        if beyond_token:
+            hook_ctx.set({"beyond_token": beyond_token})
         try:
             for obj_code in body.object_codes:
                 platform.remove_object_from_scene_safe(base_id, scene_id, obj_code)
