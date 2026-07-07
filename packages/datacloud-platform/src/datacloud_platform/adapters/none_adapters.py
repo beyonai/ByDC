@@ -260,9 +260,11 @@ class _NoopOntologyBackend:
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
+        **kwargs: object,
     ) -> dict[str, Any]:
         """Return empty result."""
         _ = loader
+        _ = kwargs
         return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # -- Scene CRUD (no-op) --

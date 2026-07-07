@@ -553,12 +553,14 @@ class RemoteOntologyBackend:
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
+        **kwargs: object,
     ) -> dict[str, Any]:
         """Query ontologies by scene with pagination via remote OntologySceneController.
 
         Supports scene_id="-1" for all scenes (global search).
         """
         _ = loader
+        _ = kwargs
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologySceneController/queryOntologies"
