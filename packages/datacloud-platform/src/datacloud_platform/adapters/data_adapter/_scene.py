@@ -148,6 +148,8 @@ class SceneMixin(DataCloudDataBackendBase):
                 objectDesc=getattr(cls, "description", None),
                 objectSource=getattr(cls, "source_type", None),
                 conceptType=getattr(cls, "concept_type", None),
+                ownerType=getattr(cls, "owner_type", "enterprise"),
+                userCode=getattr(cls, "user_code", None),
                 baseId=base_id,
                 tableName=getattr(cls, "table_name", None),
                 properties=[
@@ -192,6 +194,10 @@ class SceneMixin(DataCloudDataBackendBase):
                 viewName=view_data.get("view_name", ""),
                 description=view_data.get("description"),
                 objectCodes=normalized_codes,
+                ownerType=view_data.get(
+                    "owner_type", view_data.get("ownerType", "enterprise")
+                ),
+                userCode=view_data.get("user_code", view_data.get("userCode")),
                 properties=[
                     ViewProperty(
                         propertyName=m.get("property_name", ""),
@@ -255,6 +261,8 @@ class SceneMixin(DataCloudDataBackendBase):
                     relationDesc=getattr(r, "relation_desc", None)
                     or getattr(r, "description", None),
                     relationSceneType=getattr(r, "relation_scene_type", None),
+                    ownerType=getattr(r, "owner_type", "enterprise"),
+                    userCode=getattr(r, "user_code", None),
                 )
             elif isinstance(r, dict):
                 rel = Relation(
@@ -267,6 +275,8 @@ class SceneMixin(DataCloudDataBackendBase):
                     targetObjectName=tgt_name,
                     relationDesc=r.get("relation_desc") or r.get("description"),
                     relationSceneType=r.get("relation_scene_type"),
+                    ownerType=r.get("owner_type", r.get("ownerType", "enterprise")),
+                    userCode=r.get("user_code") or r.get("userCode"),
                 )
             else:
                 continue
@@ -370,6 +380,8 @@ class SceneMixin(DataCloudDataBackendBase):
                     actionDesc=getattr(a, "description", None),
                     requestUrl=getattr(a, "request_url", None),
                     requestMethod=getattr(a, "request_method", None),
+                    ownerType=getattr(a, "owner_type", "enterprise"),
+                    userCode=getattr(a, "user_code", None),
                     params=[
                         ActionParam(
                             paramCode=p.param_code,
@@ -500,11 +512,13 @@ class SceneMixin(DataCloudDataBackendBase):
 
                 all_views.append(summary_dict)
 
-        # 3. Type filter (all/object/view)
-        if type == "object":
-            all_views = []
-        elif type == "view":
-            all_objects = []
+        # 3. Type filter (all/object/view) — case-insensitive
+        if type:
+            t = type.lower()
+            if t == "object":
+                all_views = []
+            elif t == "view":
+                all_objects = []
 
         # 4. Pagination
         total = len(all_objects) + len(all_views)
@@ -523,6 +537,252 @@ class SceneMixin(DataCloudDataBackendBase):
             "totalCount": total,
             "page": page,
             "pageSize": page_size,
+        }
+
+    def get_base_details(
+        self,
+        loader: Any,
+        base_id: str,
+        *,
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Get comprehensive base-level detail — all objects, views, relations, actions, dbsources.
+
+        Similar to get_scene_details but scoped to the entire base, not a single scene.
+        Supports optional view_code/object_code filtering.
+        """
+        # Collect all object codes from loader
+        all_classes = getattr(loader, "_classes", {}) or {}
+        all_object_codes = list(all_classes.keys())
+
+        # Collect all view codes from loader
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        all_view_codes = list(raw_views.keys())
+
+        # Filter by view_code / object_code
+        if view_code and not object_code:
+            target_views = [vc for vc in all_view_codes if vc in view_code]
+            target_objects = all_object_codes
+        elif object_code and not view_code:
+            target_views = []
+            target_objects = [oc for oc in all_object_codes if oc in object_code]
+        elif view_code and object_code:
+            target_views = [vc for vc in all_view_codes if vc in view_code]
+            target_objects = list(set(object_code) | set(all_object_codes))
+        else:
+            target_views = list(all_view_codes)
+            target_objects = list(all_object_codes)
+
+        target_obj_set = set(target_objects)
+
+        objects = self.extract_objects_detail(base_id, loader, sorted(target_obj_set))
+        views = self.extract_views_detail(base_id, loader, target_views)
+        relations = self.extract_relations(base_id, loader, target_obj_set)
+
+        # Extract actions from all matching objects
+        actions: list[dict[str, Any]] = []
+        for code in sorted(target_obj_set):
+            cls = all_classes.get(code)
+            if cls is None:
+                continue
+            for a in getattr(cls, "actions", []):
+                act = Action(
+                    actionCode=a.action_code,
+                    actionName=a.action_name,
+                    actionType=a.action_type,
+                    belongObjectCode=a.belong_class,
+                    actionDesc=getattr(a, "description", None),
+                    requestUrl=getattr(a, "request_url", None),
+                    requestMethod=getattr(a, "request_method", None),
+                    ownerType=getattr(a, "owner_type", "enterprise"),
+                    userCode=getattr(a, "user_code", None),
+                    params=[
+                        ActionParam(
+                            paramCode=p.param_code,
+                            paramName=p.param_name,
+                            paramType=getattr(p, "param_type", None),
+                            isRequired=1 if p.required else 0,
+                            direction=getattr(p, "direction", None),
+                            mappingPath=getattr(p, "mapping_path", None),
+                        )
+                        for p in getattr(a, "params", [])
+                    ],
+                )
+                actions.append(act.model_dump(by_alias=True))
+
+        # Build dbsources
+        used_db_ids: set[str] = set()
+        for obj_dict in objects:
+            for prop in obj_dict.get("properties", []):
+                db_id = prop.get("dbId")
+                if db_id:
+                    used_db_ids.add(db_id)
+        dbs: list[DbConnection] = []
+        for db_id in sorted(used_db_ids):
+            dbs.append(DbConnection(dbId=db_id, dbCode=db_id, dbType="", dbParams={}))
+
+        # Collect all scenes under this base
+        scenes_list = self.list_scenes(base_id)
+
+        return {
+            "base": {"baseId": base_id},
+            "scenes": scenes_list,
+            "views": views,
+            "objects": objects,
+            "actions": actions,
+            "relations": relations,
+            "dbsources": Datasource(db=dbs).model_dump(by_alias=True),
+            "version": "v0.1.0",
+        }
+
+    def get_object_subtree(
+        self,
+        loader: Any,
+        base_id: str,
+        object_code: str,
+    ) -> dict[str, Any]:
+        """Get a single object's full subtree — detail + related views, relations, actions.
+
+        Args:
+            loader: An OntologyQueryable with _classes/_views/_relations populated.
+            base_id: Base identifier.
+            object_code: Target object code.
+
+        Returns:
+            Dict with object, views, relations, actions, dbsources.
+        """
+        all_classes = getattr(loader, "_classes", {}) or {}
+        cls = all_classes.get(object_code)
+        if cls is None:
+            return {
+                "object": None,
+                "views": [],
+                "relations": [],
+                "actions": [],
+                "dbsources": {"db": [], "doc": [], "api": []},
+            }
+
+        # Object detail
+        objects = self.extract_objects_detail(base_id, loader, [object_code])
+
+        # Views that reference this object
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        related_views: list[str] = []
+        for vc, vd in raw_views.items():
+            objs = vd.get("objects", [])
+            for obj_entry in objs:
+                obj_code = (
+                    obj_entry
+                    if isinstance(obj_entry, str)
+                    else obj_entry.get("object_code", "")
+                )
+                if obj_code == object_code:
+                    related_views.append(vc)
+                    break
+        views = self.extract_views_detail(base_id, loader, related_views)
+
+        # Relations involving this object (bidirectional)
+        raw_relations: list[Any] = getattr(loader, "_relations", None) or []
+        relations: list[dict[str, Any]] = []
+        for r in raw_relations:
+            if hasattr(r, "source_class"):
+                src = r.source_class
+                tgt = r.target_class
+            elif isinstance(r, dict):
+                src = r.get("source_class", "")
+                tgt = r.get("target_class", "")
+            else:
+                continue
+            if src != object_code and tgt != object_code:
+                continue
+
+            src_name = ""
+            tgt_name = ""
+            src_cls = all_classes.get(src)
+            if src_cls is not None:
+                src_name = src_cls.object_name
+            tgt_cls = all_classes.get(tgt)
+            if tgt_cls is not None:
+                tgt_name = tgt_cls.object_name
+
+            if hasattr(r, "relation_code"):
+                rel = Relation(
+                    relationCode=r.relation_code,
+                    relationName=getattr(r, "relation_name", None),
+                    sourceObjectCode=src,
+                    targetObjectCode=tgt,
+                    relationCardinality=getattr(r, "relation_type", None),
+                    sourceObjectName=src_name,
+                    targetObjectName=tgt_name,
+                    relationDesc=getattr(r, "relation_desc", None)
+                    or getattr(r, "description", None),
+                    relationSceneType=getattr(r, "relation_scene_type", None),
+                    ownerType=getattr(r, "owner_type", "enterprise"),
+                    userCode=getattr(r, "user_code", None),
+                )
+            elif isinstance(r, dict):
+                rel = Relation(
+                    relationCode=r.get("relation_code", ""),
+                    relationName=r.get("relation_name"),
+                    sourceObjectCode=src,
+                    targetObjectCode=tgt,
+                    relationCardinality=r.get("relation_type"),
+                    sourceObjectName=src_name,
+                    targetObjectName=tgt_name,
+                    relationDesc=r.get("relation_desc") or r.get("description"),
+                    relationSceneType=r.get("relation_scene_type"),
+                    ownerType=r.get("owner_type", r.get("ownerType", "enterprise")),
+                    userCode=r.get("user_code") or r.get("userCode"),
+                )
+            else:
+                continue
+            relations.append(rel.model_dump(by_alias=True))
+
+        # Actions on this object
+        actions: list[dict[str, Any]] = []
+        for a in getattr(cls, "actions", []):
+            act = Action(
+                actionCode=a.action_code,
+                actionName=a.action_name,
+                actionType=a.action_type,
+                belongObjectCode=a.belong_class,
+                actionDesc=getattr(a, "description", None),
+                requestUrl=getattr(a, "request_url", None),
+                requestMethod=getattr(a, "request_method", None),
+                ownerType=getattr(a, "owner_type", "enterprise"),
+                userCode=getattr(a, "user_code", None),
+                params=[
+                    ActionParam(
+                        paramCode=p.param_code,
+                        paramName=p.param_name,
+                        paramType=getattr(p, "param_type", None),
+                        isRequired=1 if p.required else 0,
+                        direction=getattr(p, "direction", None),
+                        mappingPath=getattr(p, "mapping_path", None),
+                    )
+                    for p in getattr(a, "params", [])
+                ],
+            )
+            actions.append(act.model_dump(by_alias=True))
+
+        # Dbsources from object properties
+        used_db_ids: set[str] = set()
+        for obj_dict in objects:
+            for prop in obj_dict.get("properties", []):
+                db_id = prop.get("dbId")
+                if db_id:
+                    used_db_ids.add(db_id)
+        dbs: list[DbConnection] = []
+        for db_id in sorted(used_db_ids):
+            dbs.append(DbConnection(dbId=db_id, dbCode=db_id, dbType="", dbParams={}))
+
+        return {
+            "object": objects[0] if objects else None,
+            "views": views,
+            "relations": relations,
+            "actions": actions,
+            "dbsources": Datasource(db=dbs).model_dump(by_alias=True),
         }
 
     # ── Scene CRUD ────────────────────────────────────────────────────────

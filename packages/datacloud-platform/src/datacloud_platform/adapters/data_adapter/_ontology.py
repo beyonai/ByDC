@@ -326,6 +326,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             objectDesc=getattr(cls, "description", None),
             objectSource=getattr(cls, "source_type", None),
             conceptType=getattr(cls, "concept_type", None),
+            ownerType=getattr(cls, "owner_type", "enterprise"),
+            userCode=getattr(cls, "user_code", None),
             baseId="",
             properties=[
                 Property(
@@ -522,6 +524,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             "concept_type": obj_dict.get("concept_type")
             or obj_dict.get("conceptType", ""),
             "table_name": obj_dict.get("table_name") or obj_dict.get("tableName", ""),
+            "owner_type": obj_dict.get("owner_type")
+            or obj_dict.get("ownerType", "enterprise"),
+            "user_code": obj_dict.get("user_code") or obj_dict.get("userCode"),
             "fields": fields,
             "actions": obj_dict.get("actions", []),
         }
@@ -598,12 +603,23 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
     # ── View CRUD ──────────────────────────────────────────────────────────
 
-    def get_views(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
-        """Get all views from the loaded ontology.
+    def get_views(
+        self,
+        loader: Any,
+        base_id: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get all views from the loaded ontology with optional filtering.
 
         Args:
             loader: An OntologyQueryable with _views populated.
             base_id: Base / project identifier.
+            owner_type: Filter by owner_type (enterprise/personal).
+            user_code: Filter by user_code when owner_type is personal.
+            keyword: Case-insensitive filter on view_name/view_code/description.
 
         Returns:
             List of View dicts (alias-mapped).
@@ -612,12 +628,27 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
         result: list[dict[str, Any]] = []
         for vc, view_data in raw_views.items():
+            # owner_type filter
+            v_owner: str = (
+                view_data.get("owner_type", view_data.get("ownerType", "enterprise"))
+                or "enterprise"
+            )
+            if owner_type and v_owner != owner_type:
+                continue
+            if owner_type == "personal" and user_code:
+                v_user: str | None = view_data.get("user_code") or view_data.get(
+                    "userCode"
+                )
+                if v_user != user_code:
+                    continue
             normalized_codes = _normalize_object_codes(view_data.get("objects", []))
             view = View(
                 viewCode=view_data.get("view_id", vc),
                 viewName=view_data.get("view_name", ""),
                 description=view_data.get("description"),
                 objectCodes=normalized_codes,
+                ownerType=v_owner,
+                userCode=v_user,
                 properties=[
                     ViewProperty(
                         propertyName=m.get("property_name", ""),
@@ -628,7 +659,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     for m in view_data.get("mappings", [])
                 ],
             )
-            result.append(view.model_dump(by_alias=True))
+            view_dict = view.model_dump(by_alias=True)
+            # keyword filter
+            if keyword:
+                kw = keyword.strip().lower()
+                if (
+                    kw not in (view_dict.get("viewName", "") or "").lower()
+                    and kw not in (view_dict.get("viewCode", "") or "").lower()
+                    and kw not in (view_dict.get("description", "") or "").lower()
+                ):
+                    continue
+            result.append(view_dict)
         return result
 
     def get_view_detail(
@@ -655,6 +696,10 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             viewName=view_data.get("view_name", ""),
             description=view_data.get("description"),
             objectCodes=normalized_codes,
+            ownerType=view_data.get(
+                "owner_type", view_data.get("ownerType", "enterprise")
+            ),
+            userCode=view_data.get("user_code", view_data.get("userCode")),
             properties=[
                 ViewProperty(
                     propertyName=m.get("property_name", ""),
@@ -666,6 +711,68 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             ],
         )
         return view.model_dump(by_alias=True)
+
+    def get_objects_by_view(
+        self,
+        loader: Any,
+        base_id: str,
+        view_code: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get object summaries (code/name/description) referenced by a view.
+
+        Supports owner_type/user_code/keyword filtering.
+
+        Args:
+            loader: An OntologyQueryable with _views and _classes populated.
+            base_id: Base / project identifier.
+            view_code: View code to look up.
+            owner_type: Filter objects by owner_type (enterprise/personal).
+            user_code: Filter by user_code when owner_type is personal.
+            keyword: Case-insensitive filter on object_name/object_code/description.
+
+        Returns:
+            List of object dicts with objectCode/objectName/objectDesc/ownerType/userCode.
+        """
+        _ = base_id
+        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
+        view_data = raw_views.get(view_code)
+        if view_data is None:
+            return []
+
+        normalized_codes = _normalize_object_codes(view_data.get("objects", []))
+        result: list[dict[str, Any]] = []
+        for code in normalized_codes:
+            cls = loader._classes.get(code)
+            if cls is None:
+                continue
+            cls_owner: str = getattr(cls, "owner_type", "enterprise")
+            if owner_type and cls_owner != owner_type:
+                continue
+            if owner_type == "personal" and user_code:
+                cls_user: str | None = getattr(cls, "user_code", None)
+                if cls_user != user_code:
+                    continue
+            obj_dict: dict[str, Any] = {
+                "objectCode": cls.object_code,
+                "objectName": cls.object_name,
+                "objectDesc": getattr(cls, "description", ""),
+                "ownerType": cls_owner,
+                "userCode": getattr(cls, "user_code", None),
+            }
+            if keyword:
+                kw = keyword.strip().lower()
+                if (
+                    kw not in (cls.object_name or "").lower()
+                    and kw not in cls.object_code.lower()
+                    and kw not in (getattr(cls, "description", "") or "").lower()
+                ):
+                    continue
+            result.append(obj_dict)
+        return result
 
     def create_view(self, base_id: str, view: Any) -> Any:
         """Persist a new view via JsonEntityStore.
@@ -777,7 +884,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
     # ── Relation CRUD (stub — datacloud-data SDK does not yet support) ──────
 
-    def get_relations(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+    def get_relations(
+        self,
+        loader: Any,
+        base_id: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get all relations from the loaded ontology.
 
         Supports both OntologyRelation objects and raw dicts.
@@ -815,6 +930,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     relationDesc=getattr(r, "relation_desc", None)
                     or getattr(r, "description", None),
                     relationSceneType=getattr(r, "relation_scene_type", None),
+                    ownerType=getattr(r, "owner_type", "enterprise"),
+                    userCode=getattr(r, "user_code", None),
                 )
             elif isinstance(r, dict):
                 rel = Relation(
@@ -827,10 +944,21 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     targetObjectName=tgt_name,
                     relationDesc=r.get("relation_desc") or r.get("description"),
                     relationSceneType=r.get("relation_scene_type"),
+                    ownerType=r.get("owner_type", r.get("ownerType", "enterprise")),
+                    userCode=r.get("user_code") or r.get("userCode"),
                 )
             else:
                 continue
             result.append(rel.model_dump(by_alias=True))
+        if keyword:
+            kw = keyword.strip().lower()
+            result = [
+                r
+                for r in result
+                if kw in (r.get("relationName", "") or "").lower()
+                or kw in (r.get("relationCode", "") or "").lower()
+                or kw in (r.get("relationDesc", "") or "").lower()
+            ]
         return result
 
     def get_relation_detail(
@@ -841,6 +969,46 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             if r.get("relationCode") == rel_code:
                 return r
         return None
+
+    def get_relations_by_object(
+        self,
+        loader: Any,
+        base_id: str,
+        object_code: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get all relation details where *object_code* is source or target.
+
+        Supports owner_type/user_code filtering on the relations.
+
+        Args:
+            loader: An OntologyQueryable with _relations and _classes populated.
+            base_id: Base / project identifier.
+            object_code: Object to find relations for (bidirectional — source or target).
+            owner_type: Filter relations by owner_type.
+            user_code: Filter by user_code when owner_type is personal.
+
+        Returns:
+            List of relation dicts (full detail, alias-mapped).
+        """
+        all_relations = self.get_relations(loader, base_id)
+        result: list[dict[str, Any]] = []
+        for r in all_relations:
+            src: str = r.get("sourceObjectCode", "")
+            tgt: str = r.get("targetObjectCode", "")
+            if src != object_code and tgt != object_code:
+                continue
+            rel_owner: str = r.get("ownerType", "enterprise")
+            if owner_type and rel_owner != owner_type:
+                continue
+            if owner_type == "personal" and user_code:
+                rel_user: str | None = r.get("userCode")
+                if rel_user != user_code:
+                    continue
+            result.append(r)
+        return result
 
     def create_relation(self, base_id: str, rel: Any) -> Any:
         """Persist a new relation via JsonEntityStore.
@@ -869,7 +1037,14 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             registry_sync_upsert,
             rel_camel_to_registry,
         )
-        registry_sync_upsert(base_path, "relations", "relation_code", code, rel_camel_to_registry(rel_dict))
+
+        registry_sync_upsert(
+            base_path,
+            "relations",
+            "relation_code",
+            code,
+            rel_camel_to_registry(rel_dict),
+        )
         logger.info("Created relation: base_id=%s relation_code=%s", base_id, code)
         self._sync_entity_terms(
             entity_type="relation",
@@ -913,7 +1088,14 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             registry_sync_upsert,
             rel_camel_to_registry,
         )
-        registry_sync_upsert(base_path, "relations", "relation_code", rel_code, rel_camel_to_registry(rel_dict))
+
+        registry_sync_upsert(
+            base_path,
+            "relations",
+            "relation_code",
+            rel_code,
+            rel_camel_to_registry(rel_dict),
+        )
         logger.info("Updated relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
         self._sync_entity_terms(
@@ -948,6 +1130,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         entity_store.delete("relations", rel_code)
         self._incremental_delete(entity_store, "relations", rel_code)
         from datacloud_platform.adapters.registry_sync import registry_sync_delete  # noqa: PLC0415
+
         registry_sync_delete(base_path, "relations", "relation_code", rel_code)
         logger.info("Deleted relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
@@ -961,13 +1144,20 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     # ── Action CRUD (stub — datacloud-data SDK does not yet support) ────────
 
     def get_actions(
-        self, loader: Any, base_id: str, object_code: str
+        self,
+        loader: Any,
+        base_id: str,
+        object_code: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Get all actions for an object from the loaded ontology."""
+        """Get all actions for an object from the loaded ontology with optional filtering."""
         cls = loader._classes.get(object_code)
         if cls is None:
             return []
-        return [
+        result: list[dict[str, Any]] = [
             Action(
                 actionCode=a.action_code,
                 actionName=a.action_name,
@@ -976,6 +1166,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 actionDesc=getattr(a, "description", None),
                 requestUrl=getattr(a, "request_url", None),
                 requestMethod=getattr(a, "request_method", None),
+                ownerType=getattr(a, "owner_type", "enterprise"),
+                userCode=getattr(a, "user_code", None),
                 params=[
                     ActionParam(
                         paramCode=p.param_code,
@@ -990,6 +1182,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             ).model_dump(by_alias=True)
             for a in getattr(cls, "actions", [])
         ]
+        # keyword filter
+        if keyword:
+            kw = keyword.strip().lower()
+            result = [
+                a
+                for a in result
+                if kw in (a.get("actionName", "") or "").lower()
+                or kw in (a.get("actionCode", "") or "").lower()
+                or kw in (a.get("actionDesc", "") or "").lower()
+            ]
+        return result
 
     def get_action_detail(
         self, loader: Any, base_id: str, object_code: str, action_code: str
@@ -1140,7 +1343,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
     # ── Datasource CRUD ────────────────────────────────────────────────────
 
-    def get_datasources(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+    def get_datasources(
+        self,
+        loader: Any,
+        base_id: str,
+        *,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get all datasources from the loaded ontology.
 
         Scans all classes in the loader, collects unique dbId values from
