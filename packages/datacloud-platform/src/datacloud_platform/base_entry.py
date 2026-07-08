@@ -210,28 +210,40 @@ class OntologyBaseRegistry:
     # ── Persistence ────────────────────────────────────────────────────────
 
     def restore(self) -> None:
-        """Load entries from the EntityStore ``bases`` index.
+        """Load entries from EntityStore entity files (not the lightweight index).
 
-        Called once at startup to hydrate the in-memory registry from disk.
-        Idempotent — clears and replaces current entries.
+        The index carries ``{code, name}`` for fast enumeration; full entry
+        data is read from per-base entity files under ``bases/{shard}/{code}.json``.
         """
         index = self._store.load_index("bases")
         self._entries.clear()
-        for base_id, data in index.items():
+        for base_id in index:
+            data = self._store.get("bases", base_id)
+            if data is None:
+                logger.warning(
+                    "Base entity file not found for base_id='%s', skipping", base_id
+                )
+                continue
             try:
                 entry = OntologyBaseEntry(**data)
                 self._entries[entry.base_id] = entry
             except (TypeError, ValueError) as exc:
-                logger.warning(
-                    "Skipping invalid base entry '%s' in bases index: %s",
-                    base_id,
-                    exc,
-                )
+                logger.warning("Skipping invalid base entry '%s': %s", base_id, exc)
         logger.info("Restored %d ontology base(s) from EntityStore", len(self._entries))
 
     def _rebuild_index(self) -> None:
-        """Persist the full in-memory registry as the ``bases`` entity-type index."""
-        entries: dict[str, dict[str, Any]] = {
-            base_id: asdict(entry) for base_id, entry in self._entries.items()
-        }
+        """Persist the full in-memory registry as the ``bases`` entity-type index.
+
+        Writes normalized index entries (``code`` + ``name``) compatible
+        with the EntityStore's ``load_index`` / ``save`` / ``save_index`` contract.
+        """
+        entries: dict[str, dict[str, Any]] = {}
+        for base_id, entry in self._entries.items():
+            d = asdict(entry)
+            entries[base_id] = {
+                "code": d.get("base_id", base_id),
+                "name": d.get("display_name", ""),
+                "shard": base_id[:2].lower(),
+                "field_count": 0,
+            }
         self._store.save_index("bases", entries)

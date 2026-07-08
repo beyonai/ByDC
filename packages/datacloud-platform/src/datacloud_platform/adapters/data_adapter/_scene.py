@@ -60,11 +60,24 @@ class SceneMixin(DataCloudDataBackendBase):
         self._reverse_index_built = True
 
     def _save_scenes(self) -> None:
-        """Persist in-memory scenes to EntityStore index atomically."""
+        """Persist in-memory scenes to EntityStore index atomically.
+
+        Normalizes entries to the ``{code, name, shard, field_count}``
+        index format required by ``load_index``.
+        """
         if self._scenes is None or self._entity_store is None:
             return
-        self._entity_store.save_index("scenes", self._scenes)
-        logger.info("Saved %d scenes to EntityStore", len(self._scenes))
+        normalized: dict[str, dict[str, Any]] = {}
+        for sid, scene in self._scenes.items():
+            normalized[sid] = {
+                "code": scene.get("scene_id", sid),
+                "name": scene.get("scene_name", ""),
+                "shard": str(sid)[:2].lower(),
+                "field_count": len(scene.get("member_object_codes", []))
+                + len(scene.get("member_view_codes", [])),
+            }
+        self._entity_store.save_index("scenes", normalized)
+        logger.info("Saved %d scenes to EntityStore", len(normalized))
 
     def _save_scene(self, scene_id: str, scene: dict[str, Any]) -> None:
         """Persist a single scene file and the index atomically."""
