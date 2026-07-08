@@ -285,7 +285,7 @@ class DatacloudPlatform(
         """
         try:
             return self._ontology_for(base_id).load_ontology(
-                self._base_path_for(base_id)
+                self._base_path_for(base_id), base_id=base_id
             )
         except PermissionError:
             # Remote backends don't support load_ontology — return a stub the

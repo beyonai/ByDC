@@ -50,7 +50,7 @@ class OntologyBackend(Protocol):
         """
         ...
 
-    def load_ontology(self, base_path: Path) -> OntologyQueryable:
+    def load_ontology(self, base_path: Path, *, base_id: str = "") -> OntologyQueryable:
         """Load parsed ontology directory into queryable runtime object.
 
         Returns OntologyQueryable protocol, not concrete OntologyLoader class.

@@ -77,6 +77,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         relations: list[dict[str, Any]],
         actions: list[dict[str, Any]],
         dbsources: list[dict[str, Any]],
+        *,
+        base_id: str = "",
     ) -> dict[str, int]:
         """Batch import ontology content — writes registry + shard files + rebuilds indexes.
 
@@ -91,7 +93,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Returns:
             Counts dict keyed by entity type.
         """
-        entity_store = self._entity_store.sub_store(base_path.name)
+        entity_store = self._entity_store.sub_store(base_id or base_path.name)
 
         counts: dict[str, int] = {
             "objects": 0,
@@ -168,7 +170,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
         return counts
 
-    def load_ontology(self, base_path: Path) -> OntologyQueryable:
+    def load_ontology(self, base_path: Path, *, base_id: str = "") -> OntologyQueryable:
         """Load ontology from EntityStore into a queryable runtime object.
 
         Reads all entity types from the store and assembles an OntologyLoader.
@@ -176,14 +178,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
         Args:
             base_path: Path to the OWL resource directory root
-                       (used for OWL fallback and store namespace derivation).
+                       (used for OWL fallback).
+            base_id: Explicit base namespace key.  When empty, falls back to
+                     ``base_path.name`` (backward-compatible with JSON store).
 
         Returns:
             An OntologyLoader instance that satisfies OntologyQueryable.
         """
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
 
-        base_id = base_path.name
+        base_id = base_id or base_path.name
         store = self._entity_store.sub_store(base_id)
 
         # Build registry-like content from store
@@ -252,8 +256,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 parsed.relations,
                 parsed.actions,
                 parsed.dbsources,
+                base_id=base_id,
             )
-            return self.load_ontology(base_path)  # recurse → store now has data
+            return self.load_ontology(
+                base_path, base_id=base_id
+            )  # recurse → store now has data
 
         # No OWL directory, return empty loader
         return OntologyLoader()  # type: ignore[return-value]
