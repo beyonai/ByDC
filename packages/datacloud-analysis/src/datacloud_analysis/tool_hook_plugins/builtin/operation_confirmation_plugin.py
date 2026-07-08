@@ -8,7 +8,7 @@ import logging
 from copy import deepcopy
 from typing import Any
 
-from datacloud_platform.errors import TermAmbiguousError, TermNotFoundError
+from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
 
 from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.tool_hook_plugins.types import (

@@ -32,6 +32,7 @@ from datacloud_platform.api.routers.import_routes import create_import_routes
 from datacloud_platform.api.routers.ontology_build_routes import (
     create_ontology_build_routes,
 )
+from datacloud_platform.api.routers.workspace_routes import create_workspace_routes
 from datacloud_platform.api.routers.ontology_routes import create_ontology_routes
 from datacloud_platform.api.routers.query_routes import router as query_router
 from datacloud_platform.api.routers.resource_routes import create_resource_routes
@@ -168,6 +169,7 @@ def create_app(
 
     # ── Factory route (needs platform, now using factory pattern) ───────────
     app.include_router(create_ontology_build_routes(platform))
+    app.include_router(create_workspace_routes(platform))
 
     # ── MCP mount ───────────────────────────────────────────────────────────
     app.mount("/api/v1/mcp", mcp_asgi)

@@ -678,6 +678,23 @@ class _NoopTermBackend:
     def remove_terms(self, entity_code: str) -> None:
         """No-op."""
 
+    # ── TermSyncHandler ─────────────────────────────────────────────
+
+    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+        """No-op."""
+
+    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+        """No-op — returns empty list."""
+        return []
+
+    def delete_terms(
+        self,
+        *,
+        term_ids: list[str] | None = None,
+        terms: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """No-op."""
+
 
 class _NoopExecutionBackend:
     """Execution backend where all operations are forbidden."""

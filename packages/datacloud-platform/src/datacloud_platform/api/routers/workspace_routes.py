@@ -56,6 +56,7 @@ def _extract_user_code(request: Request) -> str:
 class WorkspaceInitRequest(BaseModel):
     workspace_name: str = Field(..., min_length=1, alias="workspace_name")
     workspace_desc: str = Field(default="", alias="workspace_desc")
+    object_codes: list[str] | None = Field(default=None, alias="object_codes")
 
 
 class WorkspaceDeleteRequest(BaseModel):
@@ -64,6 +65,7 @@ class WorkspaceDeleteRequest(BaseModel):
 
 class BatchSubmitRequest(BaseModel):
     workspace_name: str = Field(..., min_length=1, alias="workspace_name")
+    base_id: str = Field(default="", alias="base_id")
     only: list[str] = Field(default_factory=list, alias="only")
     confirm_drop_columns: bool = Field(default=False, alias="confirm_drop_columns")
 
@@ -73,6 +75,7 @@ class WorkspaceObjectCollectRequest(BaseModel):
     entity_code: str = Field(..., min_length=1, alias="entity_code")
     entity_name: str = Field(default="", alias="entity_name")
     entity_desc: str = Field(default="", alias="entity_desc")
+    table_name: str | None = Field(default=None, alias="table_name")
     fields: list[dict[str, Any]] | None = Field(default=None, alias="fields")
     term_sync: dict[str, Any] | None = Field(default=None, alias="term_sync")
 
@@ -123,6 +126,7 @@ class RunActionRequest(BaseModel):
     entity_code: str = Field(..., min_length=1, alias="entity_code")
     action_code: str = Field(..., min_length=1, alias="action_code")
     params: dict[str, Any] = Field(default_factory=dict, alias="params")
+    script: str | None = Field(default=None, alias="script")
 
 
 # ── Factory ─────────────────────────────────────────────────────────────────
@@ -137,13 +141,13 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
     Returns:
         APIRouter with prefix ``/api/v1/ontology-manager``。
     """
-    router = APIRouter(prefix="/api/v1/ontology-manager", tags=["Workspace"])
+    router = APIRouter(prefix="/api/v1/ontology-manager/workspace", tags=["Workspace"])
 
     # ═══════════════════════════════════════════════════════════════════════
     # 工作区管理
     # ═══════════════════════════════════════════════════════════════════════
 
-    @router.post("/workspace/init")
+    @router.post("/init")
     async def workspace_init(
         body: WorkspaceInitRequest,
         _user_code: str = Depends(_extract_user_code),
@@ -154,12 +158,13 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
                 user_code=_user_code,
                 workspace_name=body.workspace_name,
                 workspace_desc=body.workspace_desc,
+                object_codes=body.object_codes or None,
             )
         except Exception as exc:
             logger.exception("workspace/init 失败")
             return {"ok": False, "error": str(exc)}
 
-    @router.get("/workspace/list")
+    @router.get("/list")
     async def workspace_list(
         _user_code: str = Depends(_extract_user_code),
     ) -> Any:
@@ -170,7 +175,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
             logger.exception("workspace/list 失败")
             return {"ok": False, "error": str(exc)}
 
-    @router.get("/workspace/{workspace_name}")
+    @router.get("/{workspace_name}")
     async def workspace_get(
         workspace_name: str,
         _user_code: str = Depends(_extract_user_code),
@@ -184,7 +189,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
             logger.exception("workspace/get 失败")
             return {"ok": False, "error": str(exc)}
 
-    @router.post("/workspace/delete")
+    @router.post("/delete")
     async def workspace_delete(
         body: WorkspaceDeleteRequest,
         _user_code: str = Depends(_extract_user_code),
@@ -198,7 +203,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
             logger.exception("workspace/delete 失败")
             return {"ok": False, "error": str(exc)}
 
-    @router.post("/workspace/batch-submit")
+    @router.post("/batch-submit")
     async def workspace_batch_submit(
         body: BatchSubmitRequest,
         _user_code: str = Depends(_extract_user_code),
@@ -208,6 +213,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
             return platform.workspace_batch_submit(
                 user_code=_user_code,
                 workspace_name=body.workspace_name,
+                base_id=body.base_id,
                 only=body.only or None,
                 confirm_drop_columns=body.confirm_drop_columns,
             )
@@ -236,6 +242,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
                     entity_desc=body.entity_desc,
                     fields=body.fields,
                     term_sync=body.term_sync,
+                    table_name=body.table_name,
                 )
             # 无 workspace_name：退回旧 session 模式
             return platform.collect_object_info(
@@ -463,6 +470,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
                 entity_code=body.entity_code,
                 action_code=body.action_code,
                 params=body.params,
+                script=body.script,
             )
         except Exception as exc:
             logger.exception("object/run-action 失败")
@@ -508,7 +516,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
     # SDK
     # ═══════════════════════════════════════════════════════════════════════
 
-    @router.get("/workspace/{workspace_name}/sdk/{entity_code}")
+    @router.get("/{workspace_name}/sdk/{entity_code}")
     async def workspace_sdk(
         workspace_name: str,
         entity_code: str,

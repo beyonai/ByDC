@@ -84,8 +84,18 @@ class WorkspaceFileManager:
 
     # ── workspace.json ────────────────────────────────────────────────────────
 
-    def init(self, workspace_desc: str = "") -> dict[str, Any]:
-        """初始化工作区目录和 workspace.json，幂等。"""
+    def init(
+        self,
+        workspace_desc: str = "",
+        object_codes: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """初始化工作区目录和 workspace.json，幂等。
+
+        Args:
+            workspace_desc: 工作区描述。
+            object_codes: 预声明对象编码列表，写入 draft 占位状态。
+                已存在的工作区调用时追加新编码（不覆盖已有状态）。
+        """
         self._root.mkdir(parents=True, exist_ok=True)
         ws_file = self._root / "workspace.json"
         if not ws_file.exists():
@@ -97,6 +107,18 @@ class WorkspaceFileManager:
             if workspace_desc:
                 state["workspace_desc"] = workspace_desc
             ws_file.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        if object_codes:
+            raw = self._load_workspace_raw()
+            objs: dict[str, Any] = raw.setdefault("objects", {})
+            changed = False
+            for code in object_codes:
+                if code and code not in objs:
+                    objs[code] = {"status": "draft"}
+                    changed = True
+            if changed:
+                self._save_workspace_raw(raw)
+
         return self._load_workspace_raw()
 
     def _load_workspace_raw(self) -> dict[str, Any]:
@@ -203,6 +225,7 @@ class WorkspaceFileManager:
         entity_desc: str = "",
         fields: list[dict[str, Any]] | None = None,
         term_sync: dict[str, Any] | None = None,
+        table_name: str | None = None,
     ) -> dict[str, Any]:
         """合并写入对象的 definition.json 和 fields.json。"""
         obj_dir = self._root / "objects" / entity_code
@@ -220,6 +243,8 @@ class WorkspaceFileManager:
             definition["entity_desc"] = entity_desc
         if term_sync is not None:
             definition["term_sync"] = term_sync
+        if table_name is not None:
+            definition["table_name"] = table_name
         def_file.write_text(json.dumps(definition, ensure_ascii=False, indent=2), encoding="utf-8")
 
         # fields.json — merge by property_code

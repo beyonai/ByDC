@@ -989,3 +989,23 @@ class RemoteTermBackend:
         """Remote term is read-only — term removal is not supported."""
         _ = entity_code
         logger.debug("Remote term: remove_terms skipped (read-only)")
+
+    # ── TermSyncHandler ─────────────────────────────────────────────
+
+    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+        """Remote term: sync methods not supported over HTTP adapter."""
+        logger.debug("Remote term: ensure_term_type skipped (not supported)")
+
+    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+        """Remote term: sync methods not supported over HTTP adapter."""
+        logger.debug("Remote term: upsert_terms skipped (not supported)")
+        return []
+
+    def delete_terms(
+        self,
+        *,
+        term_ids: list[str] | None = None,
+        terms: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Remote term: sync methods not supported over HTTP adapter."""
+        logger.debug("Remote term: delete_terms skipped (not supported)")

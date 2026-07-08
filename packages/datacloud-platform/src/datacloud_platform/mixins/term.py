@@ -7,13 +7,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from datacloud_knowledge.sync import TermSyncHandler  # type: ignore[import-untyped]
+
 from datacloud_platform.backends._contracts import _HasTermBackend
 
 
-class TermMixin:
+class TermMixin(TermSyncHandler):
     """Mixin for term-level atomic operations.
 
     Thin wrapper over TermBackend — 每个方法 = 一次 backend 调用，不做编排。
+    同时实现 TermSyncHandler 协议，可作为 term_sync_worker 的 handler。
     """
 
     # ── Term ───────────────────────────────────────────────────────
@@ -278,3 +281,19 @@ class TermMixin:
 
     def remove_terms(self: _HasTermBackend, base_id: str, entity_code: str) -> None:
         self._term_for(base_id).remove_terms(entity_code)
+
+    # ── TermSyncHandler 实现（固定使用 default 空间，供 term_sync_worker 注入）──
+
+    def ensure_term_type(self: _HasTermBackend, *, type_code: str, type_name: str) -> None:
+        self._term_for("default").ensure_term_type(type_code=type_code, type_name=type_name)
+
+    def upsert_terms(self: _HasTermBackend, *, terms: list[dict[str, Any]]) -> list[str]:
+        return self._term_for("default").upsert_terms(terms=terms)
+
+    def delete_terms(
+        self: _HasTermBackend,
+        *,
+        term_ids: list[str] | None = None,
+        terms: list[dict[str, Any]] | None = None,
+    ) -> None:
+        self._term_for("default").delete_terms(term_ids=term_ids, terms=terms)

@@ -113,6 +113,7 @@ class OntologyLoader:
         self._functions: dict[str, dict[str, Any]] = {}
         self._views: dict[str, dict[str, Any]] = {}
         self._config = LoaderConfig()
+        self._resource_path: Path | None = None  # OWL 资源根目录，按需加载依赖对象时使用
 
     def load_from_path(self, path: str | Path) -> None:
         """
@@ -247,6 +248,7 @@ class OntologyLoader:
         from datacloud_data_sdk.ontology.owl_parser import OwlParser
 
         base_path = Path(base_dir)
+        self._resource_path = base_path  # 记录 OWL 资源根目录，供按需加载依赖对象使用
         parser = OwlParser()
         content = parser.parse_resource_directory(
             base_path,
@@ -334,6 +336,7 @@ class OntologyLoader:
                 tags=obj.get("tags", []),
                 fields=fields,
                 actions=actions,
+                term_sync=self._parse_term_sync(obj),
             )
             self._classes[obj["object_code"]] = ontology_class
 
@@ -401,6 +404,7 @@ class OntologyLoader:
                 tags=obj.get("tags", []),
                 fields=fields,
                 actions=actions,
+                term_sync=self._parse_term_sync(obj),
             )
             self._classes[obj["object_code"]] = ontology_class
 
@@ -500,6 +504,29 @@ class OntologyLoader:
 
     def get_function_config(self, function_code: str) -> dict[str, Any]:
         return self._functions.get(function_code, {})
+
+    def load_by_entity_code(self, entity_code: str) -> OntologyClass | None:
+        """按 entity_code 查找已加载的 OntologyClass，不存在返回 None。"""
+        return self._classes.get(entity_code)
+
+    def with_extra_classes(self, extra_codes: list[str]) -> OntologyLoader:
+        """返回一个浅拷贝，按需从 OWL 目录追加加载指定对象，原 loader 不受影响。"""
+        import copy
+
+        clone = copy.copy(self)
+        clone._classes = dict(self._classes)  # noqa: SLF001
+
+        if self._resource_path is None:
+            return clone
+
+        for entity_code in extra_codes:
+            if entity_code in clone._classes:  # noqa: SLF001
+                continue
+            obj_dir = self._resource_path / "object" / entity_code
+            if obj_dir.is_dir():
+                clone.load_object_with_deps(self._resource_path, entity_code)
+
+        return clone
 
     def get_action_params(self, action_code: str) -> dict[str, Any]:
         """读取指定 action 的入参/出参绑定信息，供 ParamLinkGraph 构建串联索引。
@@ -664,6 +691,21 @@ class OntologyLoader:
     # --- 内部解析 ---
 
     @staticmethod
+    def _parse_term_sync(obj: dict[str, Any]) -> Any:
+        """从对象定义中解析 term_sync 配置，返回 TermSyncConfig 或 None。"""
+        raw = obj.get("term_sync") or obj.get("ext_property", {}).get("term_sync")
+        if not raw or not isinstance(raw, dict) or not raw.get("enabled"):
+            return None
+        try:
+            from datacloud_knowledge.sync.config import (  # type: ignore[import-untyped]
+                TermSyncConfig,
+            )
+
+            return TermSyncConfig.from_dict(raw)
+        except Exception:  # noqa: BLE001
+            return None
+
+    @staticmethod
     def _parse_term_meta(
         raw: dict[str, Any],
     ) -> tuple[str | None, str | None, str | None, int | None]:
@@ -687,15 +729,23 @@ class OntologyLoader:
     def _parse_action_param(self, p: dict[str, Any]) -> OntologyActionParam:
         ts, tt, tf, did = self._parse_term_meta(p)
         term_set = ts if ts is not None else p.get("term_set")
+        param_code = p.get("param_code") or p.get("paramCode", "")
+        param_name = p.get("param_name") or p.get("paramName", param_code)
+        param_type = p.get("param_type") or p.get("paramType", "STRING")
+        required: bool = bool(p.get("required") or p.get("isRequired", False))
+        mapping_path = p.get("mapping_path") or p.get("mappingPath", "")
+        # 规范化 direction：兼容 "input"/"output"（workspace 存储格式）和 "IN"/"OUT"（OWL 格式）
+        _dir_raw = (p.get("direction") or "IN").upper()
+        direction = {"INPUT": "IN", "OUTPUT": "OUT"}.get(_dir_raw, _dir_raw)
         return OntologyActionParam(
-            param_code=p["param_code"],
-            param_name=p.get("param_name", p["param_code"]),
-            direction=p.get("direction", "IN"),
-            param_type=p.get("param_type", "STRING"),
-            required=p.get("required", False),
+            param_code=param_code,
+            param_name=param_name,
+            direction=direction,
+            param_type=param_type,
+            required=required,
             default_value=p.get("default_value"),
             data_format=p.get("data_format") or None,
-            mapping_path=p.get("mapping_path", ""),
+            mapping_path=mapping_path,
             json_path=p.get("json_path", ""),
             object_property=p.get("object_property"),
             object_code=p.get("object_code"),
@@ -721,7 +771,7 @@ class OntologyLoader:
                 aliases=f.get("aliases", []),
                 required=f.get("required", False),
                 is_primary_key=f.get("is_primary_key", False),
-                source_column=f.get("source_column"),
+                source_column=f.get("source_column") or f.get("sourceColumn"),
                 term_set=term_set,
                 term_type=tt,
                 term_field=tf,
@@ -747,13 +797,14 @@ class OntologyLoader:
     ) -> list[OntologyAction]:
         result: list[OntologyAction] = []
         for a in raw_actions:
-            action_type = a.get("action_type")
+            action_type = a.get("action_type") or a.get("actionType")
             if not action_type:
                 continue  # 未配置 action_type 时跳过该动作
             function_refs: list[str] = list(a.get("function_refs", []) or [])
             script = a.get("script")
-            request_url = a.get("request_url")
-            request_method = a.get("request_method")
+            request_url = a.get("request_url") or a.get("requestUrl")
+            request_method = a.get("request_method") or a.get("requestMethod")
+            action_code: str = a.get("action_code") or a.get("actionCode", "")
             # Auto-generate function config when action has request_url but no script.
             # Handles both: (a) empty function_refs → generate fn_code + config;
             # (b) existing function_refs but missing config → fill in config.
@@ -761,7 +812,7 @@ class OntologyLoader:
             # usable function configs for _execute_api.
             if request_url and not script:
                 if not function_refs:
-                    fn_code = self._build_generated_function_code(a["action_code"])
+                    fn_code = self._build_generated_function_code(action_code)
                     function_refs = [fn_code]
                 for fn_code in function_refs:
                     if fn_code not in self._functions:
@@ -772,9 +823,9 @@ class OntologyLoader:
                             self._functions[fn_code] = fn_config
             result.append(
                 OntologyAction(
-                    action_code=a["action_code"],
-                    action_name=a.get("action_name", a["action_code"]),
-                    description=a.get("description", ""),
+                    action_code=action_code,
+                    action_name=a.get("action_name") or a.get("actionName") or action_code,
+                    description=a.get("description") or a.get("actionDesc", ""),
                     belong_class=belong_class,
                     params=[self._parse_action_param(p) for p in a.get("params", [])],
                     function_refs=function_refs,
@@ -782,6 +833,7 @@ class OntologyLoader:
                     script=script,
                     request_url=request_url,
                     request_method=request_method,
+                    object_references=a.get("object_references") or a.get("objectReferences", []),
                 )
             )
         return result

@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_platform.models.action import Action, ActionParam
 from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
@@ -45,7 +46,12 @@ class OntologyWorkspaceMixin:
     # ── 工作区 CRUD ──────────────────────────────────────────────────────────
 
     def workspace_init(
-        self, *, user_code: str, workspace_name: str, workspace_desc: str = ""
+        self,
+        *,
+        user_code: str,
+        workspace_name: str,
+        workspace_desc: str = "",
+        object_codes: list[str] | None = None,
     ) -> dict[str, Any]:
         """初始化工作区目录和 workspace.json（幂等）。"""
         if not user_code:
@@ -54,7 +60,10 @@ class OntologyWorkspaceMixin:
             return {"ok": False, "error": "workspace_name 不能为空"}
         try:
             wfm = self._get_wfm(user_code, workspace_name.strip())
-            state = wfm.init(workspace_desc=workspace_desc.strip())
+            state = wfm.init(
+                workspace_desc=workspace_desc.strip(),
+                object_codes=object_codes or None,
+            )
             return {
                 "ok": True,
                 "workspace_name": workspace_name.strip(),
@@ -128,6 +137,7 @@ class OntologyWorkspaceMixin:
         entity_desc: str = "",
         fields: list[dict[str, Any]] | None = None,
         term_sync: dict[str, Any] | None = None,
+        table_name: str | None = None,
     ) -> dict[str, Any]:
         """收集对象字段定义（工作区模式，多轮合并写入文件）。"""
         if not user_code:
@@ -152,6 +162,7 @@ class OntologyWorkspaceMixin:
                 entity_desc=entity_desc.strip(),
                 fields=fields,
                 term_sync=term_sync,
+                table_name=table_name,
             )
             return result
         except Exception:
@@ -208,6 +219,7 @@ class OntologyWorkspaceMixin:
         *,
         user_code: str,
         workspace_name: str,
+        base_id: str = "",
         only: list[str] | None = None,
         confirm_drop_columns: bool = False,
     ) -> dict[str, Any]:
@@ -221,6 +233,7 @@ class OntologyWorkspaceMixin:
         Args:
             user_code: 用户标识。
             workspace_name: 工作区名称。
+            base_id: 目标 Base ID；为空时退回第一个注册的 Base。
             only: 可选，只提交指定的 entity_code 列表。
             confirm_drop_columns: 确认删除字段（有删列变更时必须为 True）。
         """
@@ -233,7 +246,7 @@ class OntologyWorkspaceMixin:
         except FileNotFoundError as exc:
             return {"ok": False, "error": str(exc)}
 
-        base_id: str = self._default_base_id()  # type: ignore[attr-defined]
+        resolved_base_id: str = base_id or self._default_base_id()  # type: ignore[attr-defined]
 
         # ── 2. 预检：字段删除变更 ──
         pending_drops = self._precheck_column_drops(wfm, state, only_codes)
@@ -252,13 +265,13 @@ class OntologyWorkspaceMixin:
             }
 
         # ── 3. 提交对象 ──
-        submitted_objects, submitted_views, failed = self._batch_submit_objects(
-            wfm, state, base_id, only_codes, confirm_drop_columns
+        submitted_objects, submitted_views, failed, sdk_files = self._batch_submit_objects(
+            wfm, state, resolved_base_id, only_codes, confirm_drop_columns
         )
 
         # ── 4. 提交视图 ──
         view_submitted, view_failed = self._batch_submit_views(
-            wfm, state, base_id, only_codes
+            wfm, state, resolved_base_id, only_codes
         )
         submitted_views.extend(view_submitted)
         failed.extend(view_failed)
@@ -268,6 +281,7 @@ class OntologyWorkspaceMixin:
             "submitted_objects": submitted_objects,
             "submitted_views": submitted_views,
             "failed": failed,
+            "sdk_files": sdk_files,
         }
 
     # ── 内部：预检 ────────────────────────────────────────────────────────────
@@ -302,12 +316,13 @@ class OntologyWorkspaceMixin:
         base_id: str,
         only_codes: list[str],
         confirm_drop_columns: bool,
-    ) -> tuple[list[str], list[str], list[dict[str, Any]]]:
+    ) -> tuple[list[str], list[str], list[dict[str, Any]], dict[str, str]]:
         """提交对象：DDL → CRUD → 术语 → SDK → 状态更新。"""
         from datacloud_knowledge.ingestion.sdk_generator import generate_mapper_sdk
 
         submitted: list[str] = []
         failed: list[dict[str, Any]] = []
+        sdk_files: dict[str, str] = {}
 
         for obj_summary in state.get("objects", []):
             entity_code: str = obj_summary["entity_code"]
@@ -323,13 +338,36 @@ class OntologyWorkspaceMixin:
                 entity_name: str = defn.get("entity_name", entity_code)
                 entity_desc: str = defn.get("entity_desc", "")
                 entity_source = "DYNAMIC_TABLE"
+                table_name: str | None = defn.get("table_name") or entity_code
+
+                # 与旧版 OWL generator 一致：若字段列表里没有 id，自动插入主键字段
+                has_id = any(f.get("property_code", "").lower() == "id" for f in fields)
+                if not has_id:
+                    fields = [
+                        {
+                            "property_code": "id",
+                            "property_name": "主键",
+                            "data_type": "INTEGER",
+                            "is_primary_key": True,
+                        },
+                        *fields,
+                    ]
 
                 # DDL
                 self._apply_ddl(
                     entity_code, fields, obj_status, wfm, confirm_drop_columns
                 )
 
-                # 构建 ObjectType
+                # 加载 Action 元数据（构建 ObjectType 和写术语库都需要）
+                action_codes = wfm._list_action_codes(entity_code)  # noqa: SLF001
+                actions_meta: list[dict[str, Any]] = [
+                    full
+                    for ac in action_codes
+                    if (full := wfm.get_action_full(entity_code, ac) or {})
+                ]
+                term_sync_cfg: dict[str, Any] | None = defn.get("term_sync") or None
+
+                # 构建 ObjectType（含 Actions + term_sync，确保写入 registry）
                 obj = self._build_object_type(
                     entity_code,
                     entity_name,
@@ -337,17 +375,23 @@ class OntologyWorkspaceMixin:
                     entity_source,
                     base_id,
                     fields,
+                    table_name=table_name,
+                    actions_meta=actions_meta,
+                    term_sync=term_sync_cfg,
                 )
 
                 # CRUD: 创建对象 + 加入场景
                 self.create_object_with_scene(base_id, obj)  # type: ignore[attr-defined]
 
-                # 内联 term_values → 写术语库
-                self._write_inline_terms(base_id, fields, entity_code)
+                # 内联 term_values → 写术语库（含 field + action param 枚举）
+                self._write_inline_terms(
+                    base_id, entity_code, fields, actions=actions_meta
+                )
 
                 # SDK 生成
                 sdk_content = generate_mapper_sdk(entity_code, entity_name, fields)
                 wfm.save_sdk(entity_code, sdk_content)
+                sdk_files[entity_code] = sdk_content
 
                 # 状态更新
                 wfm.update_entity_status(entity_code, "submitted")
@@ -361,7 +405,7 @@ class OntologyWorkspaceMixin:
                 wfm.update_entity_status(entity_code, "failed")
                 failed.append({"code": entity_code, "error": "对象提交失败"})
 
-        return submitted, [], failed
+        return submitted, [], failed, sdk_files
 
     # ── 内部：DDL ─────────────────────────────────────────────────────────────
 
@@ -410,12 +454,23 @@ class OntologyWorkspaceMixin:
         entity_source: str,
         base_id: str,
         fields: list[dict[str, Any]],
+        *,
+        table_name: str | None = None,
+        actions_meta: list[dict[str, Any]] | None = None,
+        term_sync: dict[str, Any] | None = None,
     ) -> ObjectType:
         """从工作区字段列表构建 ObjectType 模型。
 
         处理两种术语绑定方式：
         - term_type_code: 直接绑定已有术语类型
         - term_values: 内联枚举值，自动推导 term_type_code
+
+        Args:
+            actions_meta: Action 元数据列表（来自 wfm.get_action_full），
+                嵌入 ObjectType.actions，确保写入 objects_registry.json 后
+                生产 loader 能正常加载脚本。
+            term_sync: 对象级术语同步配置 dict（来自 definition.json），
+                作为 extra 字段嵌入，loader 通过 _parse_term_sync 读取。
         """
         properties: list[Property] = []
         for f in fields:
@@ -433,6 +488,10 @@ class OntologyWorkspaceMixin:
                     termField=prop_code,
                 )
 
+            # source_column 优先取字段里显式指定的值，缺省回退到 property_code
+            # 与旧版 OWL 一致：source_table_code=entity_code, source_column_code=col.name
+            source_col = f.get("source_column") or f.get("sourceColumn") or prop_code
+            is_pk = bool(f.get("is_primary_key", False))
             properties.append(
                 Property(
                     propertyName=f.get("property_name", prop_code),
@@ -440,8 +499,48 @@ class OntologyWorkspaceMixin:
                     propertyDesc=f.get("property_desc", ""),
                     dataType=f.get("data_type", "STRING"),
                     terminology=terminology,
+                    sourceColumn=source_col,
+                    businessKey=1 if is_pk else 0,
                 )
             )
+
+        actions: list[Action] = [
+            Action(
+                actionCode=a.get("action_code", ""),
+                actionName=a.get("action_name", ""),
+                actionType=a.get("action_type", "OPERATION"),
+                belongObjectCode=entity_code,
+                actionDesc=a.get("action_desc", ""),
+                script=a.get("script"),
+                params=[
+                    ActionParam(
+                        paramCode=p.get("paramCode", p.get("param_code", "")),
+                        paramName=p.get("paramName", p.get("param_name", "")),
+                        paramType=p.get("paramType", p.get("param_type")),
+                        isRequired=1 if p.get("required") else 0,
+                        direction=p.get("direction"),
+                        mappingPath=p.get("mappingPath", p.get("mapping_path")),
+                    )
+                    for p in a.get("params", [])
+                ],
+                object_references=a.get("object_references") or [],  # type: ignore[call-arg]
+            )
+            for a in (actions_meta or [])
+            if a.get("action_code")
+        ]
+
+        extra: dict[str, object] = {"term_sync": term_sync} if term_sync else {}
+
+        # DYNAMIC_TABLE 对象必须携带 source_config，与旧版 OWL 生成路径保持一致。
+        # OWL 流程中 db_code 固定为 "personal_sqlite"，connector_type 为 "BYCLAW_SQL_EXECUTE"。
+        # loader 从 source_config.alias 读取 datasource_alias，缺失会导致动作执行报错。
+        if entity_source == "DYNAMIC_TABLE":
+            extra["source_config"] = {
+                "alias": "personal_sqlite",
+                "db_type": "SQLITE",
+                "datasource_id": None,
+                "connector_type": "BYCLAW_SQL_EXECUTE",
+            }
 
         return ObjectType(
             objectCode=entity_code,
@@ -449,7 +548,10 @@ class OntologyWorkspaceMixin:
             objectDesc=entity_desc,
             objectSource=entity_source,
             baseId=base_id,
+            tableName=table_name,
             properties=properties,
+            actions=actions,
+            **extra,  # type: ignore[arg-type]
         )
 
     # ── 内部：内联 term_values 写入术语库 ──────────────────────────────────────
@@ -457,53 +559,73 @@ class OntologyWorkspaceMixin:
     def _write_inline_terms(
         self,
         base_id: str,
-        fields: list[dict[str, Any]],
         entity_code: str,
+        fields: list[dict[str, Any]],
+        *,
+        actions: list[dict[str, Any]] | None = None,
     ) -> None:
-        """将字段的内联 term_values 写入 TermBackend。
+        """将字段及 Action 参数的内联 term_values 写入术语库（TermBackend 路径）。
 
-        对于每个有 term_values 的字段：
-        1. 自动推导 term_type_code = {entity_code}_{property_code}
-        2. create_term_type() 创建术语类型（DICT_TERM，category=2）
-        3. create_term() 逐个写入术语实例
+        对每个有 term_values 的字段或 action param：
+        1. create_term_type() — 注册术语类型（DICT_TERM，幂等）
+        2. create_term() — 逐个写入术语实例（幂等）
         """
         term_backend = self._term_for(base_id)  # type: ignore[attr-defined]
+
+        # 收集所有需要写入的 (type_code, type_name, term_values) 三元组
+        entries: list[tuple[str, str, list[dict[str, str]]]] = []
 
         for f in fields:
             raw_values = f.get("term_values") or []
             if not raw_values:
                 continue
-
             prop_code = f.get("property_code", "")
             explicit_ttc = f.get("term_type_code", "")
             auto_ttc = explicit_ttc if explicit_ttc else f"{entity_code}_{prop_code}"
             prop_name = f.get("property_name", prop_code)
-
-            # 规范化 term_values：支持字符串列表和 dict 列表
             term_values: list[dict[str, str]] = [
                 v if isinstance(v, dict) else {"code": str(v), "name": str(v)}
                 for v in raw_values
                 if v
             ]
-            if not term_values:
-                continue
+            if term_values:
+                entries.append((auto_ttc, prop_name, term_values))
 
+        for action_meta in actions or []:
+            action_code = action_meta.get("action_code", "")
+            for param in action_meta.get("params", []):
+                raw_pv = param.get("term_values") or []
+                if not raw_pv:
+                    continue
+                param_code = param.get("paramCode") or param.get("param_code", "")
+                explicit_ttc = param.get("term_type_code", "")
+                auto_ttc = explicit_ttc if explicit_ttc else f"{action_code}_{param_code}"
+                param_name = param.get("paramName") or param.get("param_name", param_code)
+                param_values: list[dict[str, str]] = [
+                    v if isinstance(v, dict) else {"code": str(v), "name": str(v)}
+                    for v in raw_pv
+                    if v
+                ]
+                if param_values:
+                    entries.append((auto_ttc, param_name, param_values))
+
+        if not entries:
+            return
+
+        for type_code, type_name, term_values in entries:
             try:
-                # 创建术语类型（幂等，已存在时报错可忽略）
                 term_backend.create_term_type(
                     term_type={
-                        "typeCode": auto_ttc,
-                        "typeName": prop_name,
+                        "typeCode": type_code,
+                        "typeName": type_name,
                         "typeCategory": 2,  # DICT_TERM
-                        "typeDesc": f"{entity_code}.{prop_code} 枚举值",
+                        "typeDesc": "",
                         "isBuiltin": False,
                     }
                 )
             except Exception:
-                # 类型已存在时忽略
-                logger.debug("term_type may already exist: %s", auto_ttc, exc_info=True)
+                logger.debug("term_type may already exist: %s", type_code, exc_info=True)
 
-            # 逐个写入术语实例
             for entry in term_values:
                 value_code = entry.get("code", "")
                 value_name = entry.get("name", value_code)
@@ -512,7 +634,7 @@ class OntologyWorkspaceMixin:
                 try:
                     term_backend.create_term(
                         term={
-                            "termTypeCode": auto_ttc,
+                            "termTypeCode": type_code,
                             "termName": value_name,
                             "termCode": value_code,
                             "libraryCode": "PERSONAL_LIB",
@@ -520,19 +642,14 @@ class OntologyWorkspaceMixin:
                         }
                     )
                 except Exception:
-                    # 术语已存在时忽略
                     logger.debug(
-                        "term may already exist: %s/%s",
-                        auto_ttc,
-                        value_code,
-                        exc_info=True,
+                        "term may already exist: %s/%s", type_code, value_code, exc_info=True
                     )
 
             logger.info(
-                "_write_inline_terms: entity=%s field=%s ttc=%s count=%d",
+                "_write_inline_terms: entity=%s ttc=%s count=%d",
                 entity_code,
-                prop_code,
-                auto_ttc,
+                type_code,
                 len(term_values),
             )
 
