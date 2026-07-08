@@ -161,7 +161,13 @@ class TestDataCloudDataBackendCompleteness:
             "objects": [],
             "actions": [],
             "relations": [],
-            "dbsources": {"db": [], "doc": [], "api": [], "ownerType": "enterprise", "userCode": None},
+            "dbsources": {
+                "db": [],
+                "doc": [],
+                "api": [],
+                "ownerType": "enterprise",
+                "userCode": None,
+            },
             "version": "v0.1.0",
         }
 
@@ -172,7 +178,12 @@ class TestDataCloudDataBackendCompleteness:
         result = self._backend().query_ontologies_by_scene(
             loader, "any-base", "any-scene"
         )
-        assert result == {"data": {"objects": [], "views": []}, "totalCount": 0, "page": 1, "pageSize": 20}
+        assert result == {
+            "data": {"objects": [], "views": []},
+            "totalCount": 0,
+            "page": 1,
+            "pageSize": 20,
+        }
 
     # ── View CRUD ──
 
@@ -350,7 +361,9 @@ class TestEmptyDataScenarios:
         assert data["success"] is True
 
     def test_list_actions_no_data_returns_200_empty(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/objects/obj-1/actions?base_id={LOCAL}")
+        resp = client.get(
+            f"/api/v1/ontologyBases/objects/obj-1/actions?base_id={LOCAL}"
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True

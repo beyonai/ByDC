@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Request
 
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -72,10 +73,10 @@ def _update_base(
 def _get_base_detail(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     loader = platform._load_ontology_cached(base_id)
     backend = platform._ontology_for(base_id)
-    result = backend.get_base_details(  # type: ignore[attr-defined]
+    result = backend.get_base_details(
         loader,
         base_id,
         view_code=params.get("view_code"),
@@ -89,7 +90,10 @@ def _resync(platform: DatacloudPlatform, params: dict[str, Any], _req: Request) 
     if sync is None:
         raise NotImplementedError("Sync adapter not configured")
     return ok(
-        data={"message": "Resync started", "base_id": params.get("base_id", "default")}
+        data={
+            "message": "Resync started",
+            "base_id": params.get("base_id", DEFAULT_BASE_ID),
+        }
     )
 
 

@@ -493,7 +493,9 @@ class TestObjectRoutes:
         assert len(onto._deleted_objects) == 1
 
     def test_delete_object_remote_forbidden(self, client: TestClient) -> None:
-        resp = client.delete(f"/api/v1/ontologyBases/objects/obj-remote?base_id={REMOTE}")
+        resp = client.delete(
+            f"/api/v1/ontologyBases/objects/obj-remote?base_id={REMOTE}"
+        )
         assert resp.status_code == 403
 
 
@@ -649,7 +651,9 @@ class TestRelationRoutes:
         assert data["data"][0]["relationCode"] == "r1"
 
     def test_get_relation_not_found(self, client: TestClient) -> None:
-        resp = client.get(f"/api/v1/ontologyBases/relations/nonexistent?base_id={LOCAL}")
+        resp = client.get(
+            f"/api/v1/ontologyBases/relations/nonexistent?base_id={LOCAL}"
+        )
         assert resp.status_code == 404
 
     def test_get_relation_detail(
@@ -761,7 +765,9 @@ class TestActionRoutes:
         onto = fakes["onto_local"]
         onto._actions["obj1"] = [{"actionCode": "a1", "actionName": "动作1"}]
 
-        resp = client.get(f"/api/v1/ontologyBases/objects/obj1/actions/a1?base_id={LOCAL}")
+        resp = client.get(
+            f"/api/v1/ontologyBases/objects/obj1/actions/a1?base_id={LOCAL}"
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["data"]["actionCode"] == "a1"

@@ -841,9 +841,7 @@ class TestCreateBaseAutoDefaultScene:
         )
 
         scenes = backend.list_scenes(self.BASE_ID)
-        default_scene = next(
-            (s for s in scenes if s.get("scene_code") == "20"), None
-        )
+        default_scene = next((s for s in scenes if s.get("scene_code") == "20"), None)
         assert default_scene is not None, "create_base should auto-create default scene"
         assert default_scene["scene_id"] != ""
 
@@ -913,9 +911,7 @@ class TestCreateBaseAutoDefaultScene:
         )
 
         default_scenes = [
-            s
-            for s in backend.list_scenes(self.BASE_ID)
-            if s.get("scene_code") == "20"
+            s for s in backend.list_scenes(self.BASE_ID) if s.get("scene_code") == "20"
         ]
         assert len(default_scenes) == 1, "create_base must be idempotent"
 

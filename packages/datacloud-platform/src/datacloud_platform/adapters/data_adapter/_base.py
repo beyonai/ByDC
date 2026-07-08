@@ -113,46 +113,12 @@ class DataCloudDataBackendBase:
 
             platform = get_platform()
             if hasattr(platform, "_base_path_for"):
-                return platform._base_path_for(base_id)  # type: ignore[no-any-return]
+                return platform._base_path_for(base_id)
         except Exception:  # noqa: BLE001
             pass
         from datacloud_platform.platform_file_storage import _data_dir
 
         return _data_dir() / base_id
-
-    @staticmethod
-    def _rebuild_index(
-        entity_store: JsonEntityStore, entity_type: str
-    ) -> dict[str, dict[str, Any]]:
-        """Rebuild and persist the index for *entity_type* (full-scan, batch use only)."""
-        idx = entity_store.rebuild_index(entity_type)
-        entity_store.save_index(entity_type, idx)
-        return idx
-
-    @staticmethod
-    def _incremental_save(
-        entity_store: JsonEntityStore,
-        entity_type: str,
-        code: str,
-        data: dict[str, Any],
-    ) -> None:
-        """Incrementally update a single entity in the index (O(1) read + O(1) write)."""
-        from datacloud_platform.adapters.json_entity_store import _to_index_entry
-
-        idx = entity_store.load_index(entity_type)
-        idx[code] = _to_index_entry(data, entity_type)
-        entity_store.save_index(entity_type, idx)
-
-    @staticmethod
-    def _incremental_delete(
-        entity_store: JsonEntityStore,
-        entity_type: str,
-        code: str,
-    ) -> None:
-        """Incrementally remove a single entity from the index (O(1) read + O(1) write)."""
-        idx = entity_store.load_index(entity_type)
-        idx.pop(code, None)
-        entity_store.save_index(entity_type, idx)
 
     @staticmethod
     def _to_summary(ont_class: object) -> ObjectSummary:

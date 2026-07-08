@@ -72,7 +72,13 @@ class OntologyBackend(Protocol):
         ...
 
     def get_objects(
-        self, loader: OntologyQueryable, base_id: str
+        self,
+        loader: OntologyQueryable,
+        base_id: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
     ) -> list[ObjectSummary]:
         """Get all object summaries under a base."""
         ...
@@ -81,6 +87,23 @@ class OntologyBackend(Protocol):
         self, loader: OntologyQueryable, object_code: str
     ) -> dict[str, Any] | None:
         """Get single object detail (full ObjectType with properties and actions)."""
+        ...
+
+    def get_object_subtree(
+        self, loader: Any, base_id: str, object_code: str
+    ) -> dict[str, Any]:
+        """Get an object's subtree — detail + related views, relations, actions."""
+        ...
+
+    def get_base_details(
+        self,
+        loader: Any,
+        base_id: str,
+        *,
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Get comprehensive base detail — scenes, objects, views, relations, actions, dbsources."""
         ...
 
     # -- Object CRUD --
@@ -230,7 +253,15 @@ class OntologyBackend(Protocol):
 
     # -- View CRUD --
 
-    def get_views(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+    def get_views(
+        self,
+        loader: Any,
+        base_id: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get all views under a base from the loaded ontology."""
         ...
 
@@ -238,6 +269,19 @@ class OntologyBackend(Protocol):
         self, loader: Any, base_id: str, view_code: str
     ) -> dict[str, Any] | None:
         """Get single view detail by code from the loaded ontology."""
+        ...
+
+    def get_objects_by_view(
+        self,
+        loader: Any,
+        base_id: str,
+        view_code: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get objects referenced by a view, with optional filtering."""
         ...
 
     def create_view(self, base_id: str, obj: Any) -> Any:
@@ -254,7 +298,15 @@ class OntologyBackend(Protocol):
 
     # -- Relation CRUD --
 
-    def get_relations(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+    def get_relations(
+        self,
+        loader: Any,
+        base_id: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get all relations under a base from the loaded ontology."""
         ...
 
@@ -262,6 +314,18 @@ class OntologyBackend(Protocol):
         self, loader: Any, base_id: str, rel_code: str
     ) -> dict[str, Any] | None:
         """Get single relation detail by code from the loaded ontology."""
+        ...
+
+    def get_relations_by_object(
+        self,
+        loader: Any,
+        base_id: str,
+        object_code: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get all relation details involving object_code (source or target), with filtering."""
         ...
 
     def create_relation(self, base_id: str, obj: Any) -> Any:
@@ -278,7 +342,9 @@ class OntologyBackend(Protocol):
 
     # -- Datasource CRUD --
 
-    def get_datasources(self, loader: Any, base_id: str) -> list[dict[str, Any]]:
+    def get_datasources(
+        self, loader: Any, base_id: str, *, keyword: str | None = None
+    ) -> list[dict[str, Any]]:
         """Get all datasources under a base from the loaded ontology."""
         ...
 
@@ -299,7 +365,14 @@ class OntologyBackend(Protocol):
     # -- Action CRUD --
 
     def get_actions(
-        self, loader: Any, base_id: str, object_code: str
+        self,
+        loader: Any,
+        base_id: str,
+        object_code: str,
+        *,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get all actions on an object from the loaded ontology."""
         ...

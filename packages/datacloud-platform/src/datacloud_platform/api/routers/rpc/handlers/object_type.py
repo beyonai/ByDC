@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Request
 
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.ontology_store import CacheMode
 
@@ -29,7 +30,7 @@ def _list_objects(
 ) -> Any:
     return ok(
         data=platform.get_objects(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),
             keyword=params.get("keyword"),
@@ -43,7 +44,7 @@ def _get_object(
 ) -> Any:
     code: str = params["code"]  # KeyError → 404
     obj = platform.get_object_detail(
-        params.get("base_id", "default"),
+        params.get("base_id", DEFAULT_BASE_ID),
         code,
         cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
@@ -57,7 +58,7 @@ def _create_object(
 ) -> Any:
     return ok(
         data=platform.create_object_with_scene(
-            params.get("base_id", "default"),
+            params.get("base_id", DEFAULT_BASE_ID),
             ObjectType(**(params.get("object") or {})),
         ),
         message="created",
@@ -69,7 +70,7 @@ def _update_object(
 ) -> Any:
     code: str = params["code"]
     platform.update_object(
-        params.get("base_id", "default"),
+        params.get("base_id", DEFAULT_BASE_ID),
         code,
         ObjectType(**(params.get("object") or {})),
     )
@@ -80,7 +81,7 @@ def _delete_object(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     platform.delete_object_from_all_scenes(
-        params.get("base_id", "default"), params["code"]
+        params.get("base_id", DEFAULT_BASE_ID), params["code"]
     )
     return ok(message="deleted")
 
@@ -88,14 +89,14 @@ def _delete_object(
 def _get_subtree(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     code: str = params["object_code"]
     loader = platform._load_ontology_cached(
         base_id,
         cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
     backend = platform._ontology_for(base_id)
-    result = backend.get_object_subtree(loader, base_id, code)  # type: ignore[attr-defined]
+    result = backend.get_object_subtree(loader, base_id, code)
     if result["object"] is None:
         raise KeyError(f"Object '{code}' not found")
     return ok(data=result)
@@ -106,7 +107,7 @@ def _get_term_bindings(
 ) -> Any:
     return ok(
         data=platform.get_object_property_term_bindings(
-            params.get("base_id", "default"),
+            params.get("base_id", DEFAULT_BASE_ID),
             params["object_code"],
             term_master_type=params.get("term_master_type"),
             property_codes=_parse_csv(params.get("property_codes")),
@@ -120,7 +121,7 @@ def _get_relations(
 ) -> Any:
     return ok(
         data=platform.get_relations_by_object(
-            params.get("base_id", "default"),
+            params.get("base_id", DEFAULT_BASE_ID),
             params["object_code"],
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),

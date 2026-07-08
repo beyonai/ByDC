@@ -55,8 +55,11 @@ class RelationMixin:
         backend = self._ontology_for(base_id)
         loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return backend.get_relations_by_object(
-            loader, base_id, object_code,
-            owner_type=owner_type, user_code=user_code,
+            loader,
+            base_id,
+            object_code,
+            owner_type=owner_type,
+            user_code=user_code,
         )
 
     def create_relation(self: _HasOntologyBackend, base_id: str, rel: Any) -> Any:

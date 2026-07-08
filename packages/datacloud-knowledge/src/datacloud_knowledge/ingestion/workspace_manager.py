@@ -23,7 +23,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +290,7 @@ class WorkspaceFileManager:
         defn = self._load_definition(entity_code)
         if defn is None:
             return []
-        return defn.get("submitted_fields", [])  # type: ignore[return-value]
+        return cast("list[dict[str, Any]]", defn.get("submitted_fields", []))
 
     def diff_fields(self, entity_code: str, current_fields: list[dict[str, Any]]) -> FieldDiff:
         """对比 submitted_fields 快照与当前字段，返回 FieldDiff。

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json as _json
 import logging
 import threading
 from pathlib import Path
@@ -11,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyQueryable
 
-from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.adapters.data_adapter._base import (
     DataCloudDataBackendBase,
     _normalize_object_codes,
@@ -23,7 +21,6 @@ from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.property import Property
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
-from datacloud_platform.platform_file_storage import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +92,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Returns:
             Counts dict keyed by entity type.
         """
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_path.name)
 
         counts: dict[str, int] = {
             "objects": 0,
@@ -105,58 +102,58 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             "dbsources": 0,
         }
 
-        # Write unified JSON registry (fast-load path)
-        registry: dict[str, list[dict[str, Any]]] = {
-            "objects": objects,
-            "views": views,
-            "relations": relations,
-            "actions": actions,
-            "dbsources": dbsources,
-        }
-        base_path.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(base_path / "objects_registry.json", registry)
-
-        # Write per-object shard files
-        for obj in objects:
-            obj_code: str = obj.get("object_code", "") or ""
-            if obj_code:
-                entity_store.save("objects", obj_code, obj)
-                counts["objects"] += 1
-
-        # Write per-view shard files
-        for view in views:
-            v_code: str = (
-                view.get("view_code", view.get("viewCode", view.get("view_id", "")))
-                or ""
-            )
-            if v_code:
-                entity_store.save("views", v_code, view)
-                counts["views"] += 1
-
-        # Write per-relation shard files
-        for rel in relations:
-            r_code: str = rel.get("relation_code", rel.get("relationCode", "")) or ""
-            if r_code:
-                entity_store.save("relations", r_code, rel)
-                counts["relations"] += 1
-
-        # Write per-action shard files
-        for act in actions:
-            a_code: str = act.get("action_code", act.get("actionCode", "")) or ""
-            if a_code:
-                entity_store.save("actions", a_code, act)
-                counts["actions"] += 1
-
-        # Write per-datasource shard files
-        for ds in dbsources:
-            db_id: str = ds.get("db_id", ds.get("dbId", "")) or ""
-            if db_id:
-                entity_store.save("datasources", db_id, ds)
-                counts["dbsources"] += 1
-
-        # Rebuild all indexes
-        for et in ("objects", "views", "relations", "actions", "datasources"):
-            entity_store.save_index(et, entity_store.rebuild_index(et))
+        # Batch-write entities via save_batch (EntityStore handles index + version)
+        entity_store.save_batch(
+            "objects",
+            [(o.get("object_code", ""), o) for o in objects if o.get("object_code")],
+        )
+        counts["objects"] = sum(1 for o in objects if o.get("object_code"))
+        entity_store.save_batch(
+            "views",
+            [
+                (v.get("view_code") or v.get("viewCode") or v.get("view_id", ""), v)
+                for v in views
+                if v.get("view_code") or v.get("viewCode") or v.get("view_id", "")
+            ],
+        )
+        counts["views"] = sum(
+            1
+            for v in views
+            if v.get("view_code") or v.get("viewCode") or v.get("view_id", "")
+        )
+        entity_store.save_batch(
+            "relations",
+            [
+                (r.get("relation_code") or r.get("relationCode", ""), r)
+                for r in relations
+                if r.get("relation_code") or r.get("relationCode", "")
+            ],
+        )
+        counts["relations"] = sum(
+            1 for r in relations if r.get("relation_code") or r.get("relationCode", "")
+        )
+        entity_store.save_batch(
+            "actions",
+            [
+                (a.get("action_code") or a.get("actionCode", ""), a)
+                for a in actions
+                if a.get("action_code") or a.get("actionCode", "")
+            ],
+        )
+        counts["actions"] = sum(
+            1 for a in actions if a.get("action_code") or a.get("actionCode", "")
+        )
+        entity_store.save_batch(
+            "datasources",
+            [
+                (d.get("db_id") or d.get("dbId", ""), d)
+                for d in dbsources
+                if d.get("db_id") or d.get("dbId", "")
+            ],
+        )
+        counts["dbsources"] = sum(
+            1 for d in dbsources if d.get("db_id") or d.get("dbId", "")
+        )
 
         # Batch sync terms to knowledge DB (single writer, no per-term backfill)
         self._batch_sync_entity_terms(objects, views, relations, actions)
@@ -173,36 +170,61 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         return counts
 
     def load_ontology(self, base_path: Path) -> OntologyQueryable:
-        """Load parsed ontology directory into a queryable runtime object.
+        """Load ontology from EntityStore into a queryable runtime object.
 
-        Prefers ``objects_registry.json`` (single file, < 1s) when available.
-        On first access without a registry, parses OWL, persists the registry
-        via ``parse_owl()`` + ``batch_import_ontology()`` (same pipeline as
-        ``import-owl``), then loads from the newly created registry.
+        Reads all entity types from the store and assembles an OntologyLoader.
+        Falls back to OWL parsing when the store has no data for this base.
 
         Args:
-            base_path: Path to the OWL resource directory root.
+            base_path: Path to the OWL resource directory root
+                       (used for OWL fallback and store namespace derivation).
 
         Returns:
             An OntologyLoader instance that satisfies OntologyQueryable.
         """
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
 
-        # Fast path: unified JSON registry (< 1s)
-        registry = base_path / "objects_registry.json"
-        if registry.exists():
-            content = _json.loads(registry.read_text(encoding="utf-8"))
-            loader = OntologyLoader()
-            loader.load_from_content(content)
-            return loader  # type: ignore[no-any-return]
+        base_id = base_path.name
+        store = self._entity_store.sub_store(base_id)
 
-        # Fallback: OWL directory exists but no registry yet —
-        # parse → persist (same pipeline as import-owl) → fast path
+        # Build registry-like content from store
+        all_objects = [
+            store.get("objects", code) for code in store.load_index("objects")
+        ]
+        all_objects = [o for o in all_objects if o]
+        all_views = [store.get("views", code) for code in store.load_index("views")]
+        all_views = [v for v in all_views if v]
+        all_relations = [
+            store.get("relations", code) for code in store.load_index("relations")
+        ]
+        all_relations = [r for r in all_relations if r]
+        all_actions = [
+            store.get("actions", code) for code in store.load_index("actions")
+        ]
+        all_actions = [a for a in all_actions if a]
+        all_dbsources = [
+            store.get("datasources", db_id) for db_id in store.load_index("datasources")
+        ]
+        all_dbsources = [d for d in all_dbsources if d]
+
+        if any([all_objects, all_views, all_relations, all_actions, all_dbsources]):
+            loader = OntologyLoader()
+            loader.load_from_content(
+                {
+                    "objects": all_objects,
+                    "views": all_views,
+                    "relations": all_relations,
+                    "actions": all_actions,
+                    "dbsources": all_dbsources,
+                }
+            )
+            return loader  # type: ignore[return-value]
+
+        # Fallback: OWL directory exists but store is empty
         if base_path.exists():
             logger.info(
-                "objects_registry.json not found in %s, "
-                "falling back to parse_owl + batch_import_ontology",
-                base_path,
+                "Store empty for base_id=%s, falling back to parse_owl + batch_import_ontology",
+                base_id,
             )
             parsed = self.parse_owl(base_path)
             self.batch_import_ontology(
@@ -213,10 +235,10 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 parsed.actions,
                 parsed.dbsources,
             )
-            return self.load_ontology(base_path)  # recurse → hits fast path above
+            return self.load_ontology(base_path)  # recurse → store now has data
 
         # No OWL directory, return empty loader
-        return OntologyLoader()  # type: ignore[no-any-return]
+        return OntologyLoader()  # type: ignore[return-value]
 
     def load_terms(
         self, _loader: OntologyQueryable, *, library_id: str = "PERSONAL_LIB"
@@ -237,7 +259,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
 
         _ = library_id  # consumed by concrete TermLoader subclass
-        return TermLoader()
+        return TermLoader()  # type: ignore[abstract]
 
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Create physical table for DYNAMIC_TABLE objects.
@@ -370,7 +392,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     # ── Object CRUD (stub — datacloud-data SDK does not yet support) ────────
 
     def create_object(self, base_id: str, obj: Any) -> Any:
-        """Persist a new ontology object via JsonEntityStore.
+        """Persist a new ontology object via EntityStore.
 
         Args:
             base_id: Base / project identifier.
@@ -382,8 +404,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Raises:
             ValueError: If object_code is missing or empty.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         obj_dict: dict[str, Any] = (
             obj if isinstance(obj, dict) else obj.model_dump(by_alias=True)
         )
@@ -401,9 +422,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             obj_dict["userCode"] = _user_code
             obj_dict["user_code"] = _user_code
         entity_store.save("objects", code, obj_dict)
-        self._incremental_save(entity_store, "objects", code, obj_dict)
-        self._upsert_object_registry(base_path, self._to_registry_entry(obj_dict))
-        self._invalidate_loader_cache(base_id)
         logger.info("Created object: base_id=%s object_code=%s", base_id, code)
         self._sync_entity_terms(
             entity_type="object",
@@ -436,8 +454,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Returns:
             The updated object dict.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         obj_dict: dict[str, Any] = (
             obj if isinstance(obj, dict) else obj.model_dump(by_alias=True)
         )
@@ -452,9 +469,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             obj_dict["userCode"] = _user_code
             obj_dict["user_code"] = _user_code
         entity_store.save("objects", object_code, obj_dict)
-        self._incremental_save(entity_store, "objects", object_code, obj_dict)
-        self._upsert_object_registry(base_path, self._to_registry_entry(obj_dict))
-        self._invalidate_loader_cache(base_id)
         logger.info("Updated object: base_id=%s object_code=%s", base_id, object_code)
         # Re-sync terms: delete old → write new (build_terms is upsert-safe)
         self._remove_entity_terms(entity_type="object", entity_code=object_code)
@@ -479,113 +493,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
         return obj_dict
 
-    @staticmethod
-    def _to_registry_entry(obj_dict: dict[str, Any]) -> dict[str, Any]:
-        """Convert camelCase ObjectType dict to objects_registry.json snake_case format.
-
-        Extracts kb_id/kb_directory from sourceConfig into ext_property so that
-        OntologyLoader (which reads ext_property) can find them at runtime.
-        """
-        code = obj_dict.get("object_code") or obj_dict.get("objectCode", "")
-        source_type = (
-            obj_dict.get("source_type")
-            or obj_dict.get("objectSource")
-            or obj_dict.get("sourceType", "DB")
-        )
-        # Merge ext_property; promote kb_id/kb_directory from sourceConfig when absent
-        ext_property: dict[str, Any] = dict(
-            obj_dict.get("ext_property") or obj_dict.get("extProperty") or {}
-        )
-        source_config = obj_dict.get("source_config") or obj_dict.get("sourceConfig")
-        if isinstance(source_config, dict):
-            for kb_key in ("kb_id", "kb_directory", "knCode"):
-                if source_config.get(kb_key) and kb_key not in ext_property:
-                    ext_property[kb_key] = source_config[kb_key]
-        # Persist owner_type/user_code in ext_property (extension bag)
-        _owner = obj_dict.get("owner_type") or obj_dict.get("ownerType")
-        if _owner and _owner != "enterprise":
-            ext_property.setdefault("owner_type", _owner)
-        _user = obj_dict.get("user_code") or obj_dict.get("userCode")
-        if _user:
-            ext_property.setdefault("user_code", _user)
-
-        # Normalise properties → fields
-        raw_fields = obj_dict.get("fields") or obj_dict.get("properties") or []
-        fields: list[dict[str, Any]] = [
-            {
-                "field_code": f.get("field_code") or f.get("propertyCode", ""),
-                "field_name": f.get("field_name") or f.get("propertyName", ""),
-                "field_type": f.get("field_type") or f.get("dataType", "STRING"),
-                "is_primary_key": bool(f.get("is_primary_key", False)),
-                "source_column": f.get("source_column") or f.get("sourceColumn"),
-            }
-            for f in raw_fields
-        ]
-
-        entry: dict[str, Any] = {
-            "object_code": code,
-            "object_name": obj_dict.get("object_name")
-            or obj_dict.get("objectName", code),
-            "description": obj_dict.get("description")
-            or obj_dict.get("objectDesc", ""),
-            "source_type": source_type,
-            "concept_type": obj_dict.get("concept_type")
-            or obj_dict.get("conceptType", ""),
-            "table_name": obj_dict.get("table_name") or obj_dict.get("tableName", ""),
-            "fields": fields,
-            "actions": obj_dict.get("actions", []),
-        }
-        if ext_property:
-            entry["ext_property"] = ext_property
-        return entry
-
-    def _upsert_object_registry(self, base_path: Path, entry: dict[str, Any]) -> None:
-        """Incrementally upsert one object into objects_registry.json."""
-        registry_path = base_path / "objects_registry.json"
-        try:
-            content: dict[str, Any] = (
-                _json.loads(registry_path.read_text(encoding="utf-8"))
-                if registry_path.exists()
-                else {}
-            )
-        except (ValueError, OSError):
-            logger.warning(
-                "objects_registry.json unreadable, starting fresh: %s", registry_path
-            )
-            content = {}
-
-        objects: list[dict[str, Any]] = list(content.get("objects") or [])
-        code = entry["object_code"]
-        for i, obj in enumerate(objects):
-            if obj.get("object_code") == code:
-                objects[i] = entry
-                break
-        else:
-            objects.append(entry)
-
-        content["objects"] = objects
-        content.setdefault("views", [])
-        content.setdefault("relations", [])
-        base_path.mkdir(parents=True, exist_ok=True)
-        atomic_write_json(registry_path, content)
-
-    @staticmethod
-    def _invalidate_loader_cache(base_id: str) -> None:
-        """Invalidate the in-memory OntologyLoader cache so the next request rebuilds it.
-
-        Uses the module-level runtime ref registered by the API server at startup.
-        Safe to call even when running outside the API (e.g. tests) — silently no-ops.
-        """
-        try:
-            from datacloud_platform.api.mcp_handler import _get_loader_runtime  # noqa: PLC0415
-
-            runtime = _get_loader_runtime()
-            if runtime is not None and hasattr(runtime, "invalidate"):
-                runtime.invalidate(base_id)
-                logger.debug("Loader cache invalidated for base_id=%s", base_id)
-        except Exception:
-            logger.debug("_invalidate_loader_cache: skipped (runtime not available)")
-
     def delete_object(self, base_id: str, object_code: str) -> None:
         """Delete an ontology object.
 
@@ -593,10 +500,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             base_id: Base / project identifier.
             object_code: Target object code.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         entity_store.delete("objects", object_code)
-        self._incremental_delete(entity_store, "objects", object_code)
         logger.info("Deleted object: base_id=%s object_code=%s", base_id, object_code)
         self._remove_entity_terms(entity_type="object", entity_code=object_code)
         self._invoke_sync_hook(
@@ -787,7 +692,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         return result
 
     def create_view(self, base_id: str, view: Any) -> Any:
-        """Persist a new view via JsonEntityStore.
+        """Persist a new view via EntityStore.
 
         Args:
             base_id: Base / project identifier.
@@ -799,8 +704,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Raises:
             ValueError: If view_code is missing or empty.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         view_dict: dict[str, Any] = (
             view if isinstance(view, dict) else view.model_dump(by_alias=True)
         )
@@ -812,7 +716,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if not code:
             raise ValueError("view_code is required for view creation")
         entity_store.save("views", code, view_dict)
-        self._incremental_save(entity_store, "views", code, view_dict)
         logger.info("Created view: base_id=%s view_code=%s", base_id, code)
         self._sync_entity_terms(
             entity_type="view",
@@ -844,13 +747,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Returns:
             The updated view dict.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         view_dict: dict[str, Any] = (
             view if isinstance(view, dict) else view.model_dump(by_alias=True)
         )
         entity_store.save("views", view_code, view_dict)
-        self._incremental_save(entity_store, "views", view_code, view_dict)
         logger.info("Updated view: base_id=%s view_code=%s", base_id, view_code)
         self._remove_entity_terms(entity_type="view", entity_code=view_code)
         self._sync_entity_terms(
@@ -881,10 +782,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             base_id: Base / project identifier.
             view_code: Target view code.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         entity_store.delete("views", view_code)
-        self._incremental_delete(entity_store, "views", view_code)
         logger.info("Deleted view: base_id=%s view_code=%s", base_id, view_code)
         self._remove_entity_terms(entity_type="view", entity_code=view_code)
         self._invoke_sync_hook(
@@ -956,7 +855,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     targetObjectName=tgt_name,
                     relationDesc=r.get("relation_desc") or r.get("description"),
                     relationSceneType=r.get("relation_scene_type"),
-                    ownerType=r.get("owner_type", r.get("ownerType", "enterprise")),
+                    ownerType=str(
+                        r.get("owner_type", r.get("ownerType", "enterprise"))
+                    ),
                     userCode=r.get("user_code") or r.get("userCode"),
                 )
             else:
@@ -1023,7 +924,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         return result
 
     def create_relation(self, base_id: str, rel: Any) -> Any:
-        """Persist a new relation via JsonEntityStore.
+        """Persist a new relation via EntityStore.
 
         Args:
             base_id: Base / project identifier.
@@ -1035,8 +936,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Raises:
             ValueError: If relation_code is missing or empty.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         rel_dict: dict[str, Any] = (
             rel if isinstance(rel, dict) else rel.model_dump(by_alias=True)
         )
@@ -1044,19 +944,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if not code:
             raise ValueError("relation_code is required for relation creation")
         entity_store.save("relations", code, rel_dict)
-        self._incremental_save(entity_store, "relations", code, rel_dict)
-        from datacloud_platform.adapters.registry_sync import (  # noqa: PLC0415
-            registry_sync_upsert,
-            rel_camel_to_registry,
-        )
-
-        registry_sync_upsert(
-            base_path,
-            "relations",
-            "relation_code",
-            code,
-            rel_camel_to_registry(rel_dict),
-        )
         logger.info("Created relation: base_id=%s relation_code=%s", base_id, code)
         self._sync_entity_terms(
             entity_type="relation",
@@ -1089,25 +976,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Returns:
             The updated relation dict.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         rel_dict: dict[str, Any] = (
             rel if isinstance(rel, dict) else rel.model_dump(by_alias=True)
         )
         entity_store.save("relations", rel_code, rel_dict)
-        self._incremental_save(entity_store, "relations", rel_code, rel_dict)
-        from datacloud_platform.adapters.registry_sync import (  # noqa: PLC0415
-            registry_sync_upsert,
-            rel_camel_to_registry,
-        )
-
-        registry_sync_upsert(
-            base_path,
-            "relations",
-            "relation_code",
-            rel_code,
-            rel_camel_to_registry(rel_dict),
-        )
         logger.info("Updated relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
         self._sync_entity_terms(
@@ -1137,13 +1010,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             base_id: Base / project identifier.
             rel_code: Target relation code.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         entity_store.delete("relations", rel_code)
-        self._incremental_delete(entity_store, "relations", rel_code)
-        from datacloud_platform.adapters.registry_sync import registry_sync_delete  # noqa: PLC0415
-
-        registry_sync_delete(base_path, "relations", "relation_code", rel_code)
         logger.info("Deleted relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
         self._invoke_sync_hook(
@@ -1216,7 +1084,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         return None
 
     def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
-        """Persist a new action under an object via JsonEntityStore.
+        """Persist a new action under an object via EntityStore.
 
         Args:
             base_id: Base / project identifier.
@@ -1229,8 +1097,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Raises:
             ValueError: If action_code is missing or empty.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         action_dict: dict[str, Any] = (
             action if isinstance(action, dict) else action.model_dump(by_alias=True)
         )
@@ -1240,7 +1107,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         # Ensure parent object_code is recorded
         action_dict["belongObjectCode"] = object_code
         entity_store.save("actions", code, action_dict)
-        self._incremental_save(entity_store, "actions", code, action_dict)
         logger.info(
             "Created action: base_id=%s object_code=%s action_code=%s",
             base_id,
@@ -1286,14 +1152,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Returns:
             The updated action dict.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         action_dict: dict[str, Any] = (
             action if isinstance(action, dict) else action.model_dump(by_alias=True)
         )
         action_dict["belongObjectCode"] = object_code
         entity_store.save("actions", action_code, action_dict)
-        self._incremental_save(entity_store, "actions", action_code, action_dict)
         logger.info(
             "Updated action: base_id=%s object_code=%s action_code=%s",
             base_id,
@@ -1333,10 +1197,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             action_code: Target action code.
         """
         _ = object_code  # stored entity keyed by action_code; object_code is context only
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         entity_store.delete("actions", action_code)
-        self._incremental_delete(entity_store, "actions", action_code)
         logger.info(
             "Deleted action: base_id=%s object_code=%s action_code=%s",
             base_id,
@@ -1428,7 +1290,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         return Datasource(db=[db_conn]).model_dump(by_alias=True)
 
     def create_datasource(self, base_id: str, ds: Any) -> Any:
-        """Persist a new datasource via JsonEntityStore.
+        """Persist a new datasource via EntityStore.
 
         Args:
             base_id: Base / project identifier.
@@ -1440,8 +1302,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Raises:
             ValueError: If db_id is missing or empty.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         ds_dict: dict[str, Any] = (
             ds if isinstance(ds, dict) else ds.model_dump(by_alias=True)
         )
@@ -1453,7 +1314,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if not db_id:
             raise ValueError("db_id is required for datasource creation")
         entity_store.save("datasources", db_id, ds_dict)
-        self._incremental_save(entity_store, "datasources", db_id, ds_dict)
         logger.info("Created datasource: base_id=%s db_id=%s", base_id, db_id)
         self._invoke_sync_hook(
             "on_create",
@@ -1472,10 +1332,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             base_id: Base / project identifier.
             db_id: Target database identifier.
         """
-        base_path = self._resolve_base_path(base_id)
-        entity_store = JsonEntityStore(base_path)
+        entity_store = self._entity_store.sub_store(base_id)
         entity_store.delete("datasources", db_id)
-        self._incremental_delete(entity_store, "datasources", db_id)
         logger.info("Deleted datasource: base_id=%s db_id=%s", base_id, db_id)
         self._invoke_sync_hook(
             "on_delete",
@@ -1610,7 +1468,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 for entity_type, entity_code, entity_name in entities:
                     # Wrap each entity in a savepoint so one failure
                     # doesn't roll back previously successful upserts.
-                    sp = writer.session.begin_nested()
+                    sp = writer.session.begin_nested()  # type: ignore[attr-defined]
                     try:
                         term_id = writer.upsert_term(
                             term_code=entity_code,
@@ -1758,7 +1616,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             with create_writer() as writer:
                 for entity_code in entity_codes:
                     try:
-                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])
+                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
                         if not terms:
                             logger.warning(
                                 "_sync_entity_domains: term not found for code=%s",
@@ -1826,7 +1684,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             with create_writer() as writer:
                 for entity_code in entity_codes:
                     try:
-                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])
+                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
                         if not terms:
                             logger.warning(
                                 "_remove_entity_domains: term not found for code=%s",

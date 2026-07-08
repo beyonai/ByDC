@@ -279,7 +279,9 @@ class SceneMixin(DataCloudDataBackendBase):
                     targetObjectName=tgt_name,
                     relationDesc=r.get("relation_desc") or r.get("description"),
                     relationSceneType=r.get("relation_scene_type"),
-                    ownerType=r.get("owner_type", r.get("ownerType", "enterprise")),
+                    ownerType=str(
+                        r.get("owner_type", r.get("ownerType", "enterprise"))
+                    ),
                     userCode=r.get("user_code") or r.get("userCode"),
                 )
             else:
@@ -745,7 +747,9 @@ class SceneMixin(DataCloudDataBackendBase):
                     targetObjectName=tgt_name,
                     relationDesc=r.get("relation_desc") or r.get("description"),
                     relationSceneType=r.get("relation_scene_type"),
-                    ownerType=r.get("owner_type", r.get("ownerType", "enterprise")),
+                    ownerType=str(
+                        r.get("owner_type", r.get("ownerType", "enterprise"))
+                    ),
                     userCode=r.get("user_code") or r.get("userCode"),
                 )
             else:

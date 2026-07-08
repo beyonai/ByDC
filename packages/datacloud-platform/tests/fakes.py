@@ -226,7 +226,13 @@ class FakeOntologyBackend:
         """Return objects referenced by a view."""
         _ = (loader, base_id, view_code)
         return [
-            {"objectCode": "obj1", "objectName": "对象1", "objectDesc": "desc", "ownerType": "enterprise", "userCode": None}
+            {
+                "objectCode": "obj1",
+                "objectName": "对象1",
+                "objectDesc": "desc",
+                "ownerType": "enterprise",
+                "userCode": None,
+            }
         ]
 
     def get_view_detail(

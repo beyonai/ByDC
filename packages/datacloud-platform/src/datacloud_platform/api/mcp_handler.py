@@ -173,7 +173,7 @@ def _unwrap_sdk_payload_text(payload: dict[str, Any]) -> str:
         return text
 
     if isinstance(parsed, dict) and {"code", "message", "data"} <= parsed.keys():
-        return dump_json(parsed["data"])  # type: ignore[no-any-return]
+        return dump_json(parsed["data"])
 
     return text
 
@@ -207,7 +207,7 @@ def _render_tool_call_text(payload: dict[str, Any], *, include_detail: bool) -> 
     except json.JSONDecodeError:
         return text
 
-    return dump_json(_strip_intermediate_fields(parsed))  # type: ignore[no-any-return]
+    return dump_json(_strip_intermediate_fields(parsed))
 
 
 def _build_sdk_envelope_text(data: Any) -> str:
@@ -220,7 +220,7 @@ def _build_sdk_envelope_text(data: Any) -> str:
             code = 500
             message = data.get("overflow_notice") or str(result_type)
 
-    return dump_json({"code": code, "message": message, "data": data})  # type: ignore[no-any-return]
+    return dump_json({"code": code, "message": message, "data": data})
 
 
 def _resolve_tool_input_schema(tool_name: str, loader: Any) -> dict[str, Any]:

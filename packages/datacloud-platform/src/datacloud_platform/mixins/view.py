@@ -57,8 +57,12 @@ class ViewMixin:
         backend = self._ontology_for(base_id)
         loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return backend.get_objects_by_view(
-            loader, base_id, view_code,
-            owner_type=owner_type, user_code=user_code, keyword=keyword,
+            loader,
+            base_id,
+            view_code,
+            owner_type=owner_type,
+            user_code=user_code,
+            keyword=keyword,
         )
 
     def create_view(self: _HasOntologyBackend, base_id: str, view: Any) -> Any:

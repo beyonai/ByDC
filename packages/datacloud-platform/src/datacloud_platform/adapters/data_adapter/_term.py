@@ -33,15 +33,15 @@ class TermBackendMixin(DataCloudDataBackendBase):
         """Multi-strategy term search via datacloud_knowledge provider."""
         from datacloud_knowledge.provider import query_terms  # noqa: PLC0415
 
-        return query_terms(  # type: ignore[no-any-return]
+        return query_terms(  # type: ignore[return-value]
             dataset_ids=dataset_ids,
             keyword=keyword,
             term_name=term_name,
             term_type=term_type,
-            query_type=query_type,
+            query_type=query_type,  # type: ignore[arg-type]
             parent_term_code=parent_term_code,
-            label_filters=label_filters,
-            label_condition=label_condition,
+            label_filters=label_filters,  # type: ignore[arg-type]
+            label_condition=label_condition,  # type: ignore[arg-type]
             term_ids=term_ids,
             top_k=top_k,
             offset=offset,
@@ -55,7 +55,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             get_term_detail as sdk_get_term_detail,
         )
 
-        return sdk_get_term_detail(dataset_id=dataset_id, term_id=term_id)  # type: ignore[no-any-return]
+        return sdk_get_term_detail(dataset_id=dataset_id, term_id=term_id)  # type: ignore[return-value]
 
     def list_terms(
         self,
@@ -71,7 +71,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             list_terms as sdk_list_terms,
         )
 
-        return sdk_list_terms(  # type: ignore[no-any-return]
+        return sdk_list_terms(  # type: ignore[return-value]
             dataset_id=dataset_id,
             term_type=term_type,
             term_type_no_eq=term_type_no_eq,
@@ -94,7 +94,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             import_terms as sdk_import_terms,
         )
 
-        return sdk_import_terms(dataset_id=dataset_id, terms=terms)  # type: ignore[no-any-return]
+        return sdk_import_terms(dataset_id=dataset_id, terms=terms)  # type: ignore[return-value,arg-type]
 
     def update_term(
         self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
@@ -104,7 +104,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             update_term as sdk_update_term,
         )
 
-        sdk_update_term(dataset_id=dataset_id, term_id=term_id, updates=updates)
+        sdk_update_term(dataset_id=dataset_id, term_id=term_id, updates=updates)  # type: ignore[arg-type]
 
     def delete_term(self, *, term_id: str) -> None:
         """Delete a term via datacloud_knowledge writer."""
@@ -166,7 +166,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        return writer.create_term_relation(relation=relation)  # type: ignore[no-any-return]
+        return writer.create_term_relation(relation=relation)
 
     def update_term_relation(
         self, *, relation_id: str, updates: dict[str, Any]
@@ -206,7 +206,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        return writer.create_term_name(name=name)  # type: ignore[no-any-return]
+        return writer.create_term_name(name=name)  # type: ignore[call-arg,return-value]
 
     def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415

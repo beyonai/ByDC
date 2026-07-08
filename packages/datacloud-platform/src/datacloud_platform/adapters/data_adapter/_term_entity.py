@@ -37,7 +37,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        return writer.create_term_knowledge(knowledge=knowledge)  # type: ignore[no-any-return]
+        return writer.create_term_knowledge(knowledge=knowledge)
 
     def update_term_knowledge(
         self, *, knowledge_id: str, updates: dict[str, Any]
@@ -82,7 +82,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        return writer.create_term_library(library=library)  # type: ignore[no-any-return]
+        return writer.create_term_library(library=library)
 
     def update_term_library(self, *, library_id: str, updates: dict[str, Any]) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
@@ -120,7 +120,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        return writer.create_term_type(term_type=term_type)  # type: ignore[no-any-return]
+        return writer.create_term_type(term_type=term_type)
 
     def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
@@ -156,7 +156,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        return writer.create_domain(domain=domain)  # type: ignore[no-any-return]
+        return writer.create_domain(domain=domain)
 
     def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415

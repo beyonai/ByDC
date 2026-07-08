@@ -22,7 +22,7 @@ import sqlite3
 import time
 import traceback
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from datacloud_data_sdk.wrappers import AggWrapper, QueryWrapper
 
@@ -215,7 +215,7 @@ class DebugLoader:
     ) -> tuple[str, list[Any]]:
         q = QueryWrapper()
         q._conditions = [tuple(c) for c in payload.get("conditions", [])]
-        return cast("tuple[str, list[Any]]", q.to_where_sql())  # type: ignore[redundant-cast]
+        return q.to_where_sql()
 
     @staticmethod
     def _payload_to_order(payload: dict[str, Any]) -> str:

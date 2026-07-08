@@ -46,12 +46,16 @@ class SceneServiceMixin:
         # Migration: rename legacy default scene (code="default") to current code
         for scene in scenes:
             if scene.get("scene_code") == "default":
-                scene_id = scene["scene_id"]
-                backend.update_scene(base_id, scene_id, {
-                    "scene_name": SceneServiceMixin.DEFAULT_SCENE_NAME,
-                    "scene_code": SceneServiceMixin.DEFAULT_SCENE_CODE,
-                    "scene_desc": scene.get("scene_desc", ""),
-                })
+                scene_id = str(scene["scene_id"])
+                backend.update_scene(
+                    base_id,
+                    scene_id,
+                    {
+                        "scene_name": SceneServiceMixin.DEFAULT_SCENE_NAME,
+                        "scene_code": SceneServiceMixin.DEFAULT_SCENE_CODE,
+                        "scene_desc": scene.get("scene_desc", ""),
+                    },
+                )
                 logger.info(
                     "_ensure_default_scene: migrated legacy default scene=%s "
                     "(code='default' → '%s', name='%s')",
@@ -70,20 +74,20 @@ class SceneServiceMixin:
                 "scene_desc": "",
             },
         )
-        scene_id: str = (
+        new_scene_id: str = (
             result.get("scene_id", "")
             if isinstance(result, dict)
             else str(getattr(result, "scene_id", ""))
         )
         logger.info(
             "_ensure_default_scene: created default scene=%s for base_id=%s",
-            scene_id,
+            new_scene_id,
             base_id,
         )
 
         # On first creation, import any pre-existing orphans (e.g. startup OWL load)
         self._import_orphans_to_default(base_id)  # type: ignore[attr-defined]
-        return scene_id
+        return new_scene_id
 
     def _get_default_scene_id(self: _HasOntologyBackend, base_id: str) -> str | None:
         """Return default scene's scene_id, or None if it doesn't exist."""
