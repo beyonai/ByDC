@@ -219,6 +219,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             self._normalize_entity_keys(all_relations, _rel_map)  # type: ignore[arg-type]
             self._normalize_entity_keys(all_actions, _act_map)  # type: ignore[arg-type]
 
+            # OntologyLoader uses view["view_id"] as the dict key (line 365/434),
+            # but normalization only sets view_code.  Mirror view_code → view_id
+            # so loader._views keys match get_view_detail() lookups.
+            for v in all_views:
+                if v is not None and "view_id" not in v:
+                    v["view_id"] = v.get("view_code", "")
+
             loader = OntologyLoader()
             loader.load_from_content(
                 {

@@ -438,7 +438,10 @@ def _to_index_entry(data: dict[str, Any], entity_type: str) -> dict[str, Any]:
     name_key = f"{singular}_name"
     camel_code_key = singular + "Code"
     camel_name_key = singular + "Name"
-    code: str = data.get(code_key) or data.get(camel_code_key, "") or ""
+    id_key = f"{singular}_id"  # fallback: some entities use _id instead of _code
+    code: str = (
+        data.get(code_key) or data.get(camel_code_key, "") or data.get(id_key, "") or ""
+    )
     name: str = data.get(name_key) or data.get(camel_name_key, "") or ""
     return {
         "code": code,
