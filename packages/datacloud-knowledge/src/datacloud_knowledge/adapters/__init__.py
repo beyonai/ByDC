@@ -214,6 +214,7 @@ def ensure_schema(
     reset: bool = False,
     seed: bool = True,
     create_vector_extension: bool = False,
+    apply_migrations: bool = False,
 ) -> dict[str, Any]:
     """创建或更新知识库表结构。
 
@@ -223,6 +224,7 @@ def ensure_schema(
         reset: 是否 drop 后重建（破坏性）。
         seed: 是否插入内置种子数据。
         create_vector_extension: 是否创建 pgvector 扩展。
+        apply_migrations: 是否执行增量迁移（存量库升级用，新库不需要）。
 
     Returns:
         dict，字段：status / created / already_existed / errors。
@@ -237,6 +239,7 @@ def ensure_schema(
         reset=reset,
         seed=seed,
         create_vector_extension=create_vector_extension,
+        apply_migrations=apply_migrations,
     )
 
 

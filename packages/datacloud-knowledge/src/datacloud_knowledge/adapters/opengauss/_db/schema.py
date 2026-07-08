@@ -123,11 +123,13 @@ def ensure_schema(
     reset: bool = False,
     seed: bool = True,
     create_vector_extension: bool = False,
+    apply_migrations: bool = False,
 ) -> dict[str, int | str]:
     """Ensure the knowledge schema exists and has the expected tables.
 
     ``reset=True`` executes the destructive ``00_`` DDL file. The default path
-    skips destructive SQL and only applies idempotent DDL, migrations, and seed.
+    skips destructive SQL and only applies idempotent DDL and seed.
+    Migrations are skipped by default (new databases don't need them).
     """
 
     resolved_schema = create_schema(schema=schema, db_url=db_url)
@@ -143,8 +145,12 @@ def ensure_schema(
         if reset
         else _apply_sql_group("ddl", schema=resolved_schema, db_url=db_url, skip_destructive=True)
     )
-    migration_count = _apply_sql_group(
-        "migrations", schema=resolved_schema, db_url=db_url, skip_destructive=False
+    migration_count = (
+        _apply_sql_group(
+            "migrations", schema=resolved_schema, db_url=db_url, skip_destructive=False
+        )
+        if apply_migrations
+        else 0
     )
     seed_count = (
         _apply_sql_group("seed", schema=resolved_schema, db_url=db_url, skip_destructive=False)
