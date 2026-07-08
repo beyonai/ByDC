@@ -154,6 +154,11 @@ def create_app(
     # ── Platform instance ───────────────────────────────────────────────────
     set_platform(platform)
 
+    # ── Deprecation middleware for legacy RESTful routes ─────────────────────
+    from datacloud_platform.api.deprecation import DeprecationMiddleware
+
+    app.add_middleware(DeprecationMiddleware)
+
     # ── Factory routes (require platform instance) ──────────────────────────
     app.include_router(create_ontology_routes(platform))
     app.include_router(create_resource_routes(platform))
@@ -170,6 +175,11 @@ def create_app(
     # ── Factory route (needs platform, now using factory pattern) ───────────
     app.include_router(create_ontology_build_routes(platform))
     app.include_router(create_workspace_routes(platform))
+
+    # ── RPC-like unified router (2026-07-08) ────────────────────────────────
+    from datacloud_platform.api.routers.rpc import create_rpc_router
+
+    app.include_router(create_rpc_router(platform))
 
     # ── MCP mount ───────────────────────────────────────────────────────────
     app.mount("/api/v1/mcp", mcp_asgi)

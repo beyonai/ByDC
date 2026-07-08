@@ -38,10 +38,10 @@ class ByClawSyncAdapter(ResourceSyncHook):
     """
 
     def __init__(self, beyond_token: str | None = None) -> None:
+        from datacloud_platform.constants import DEFAULT_SYSTEM_CODE
+
         self._token: str = beyond_token or os.getenv("BEYOND_TOKEN") or ""
-        self._system_code = os.getenv(
-            "DATACLOUD_DOMAINNAME", "byclaw-datacloud"
-        ).strip()
+        self._system_code = DEFAULT_SYSTEM_CODE
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(5.0))
         self._discovery: Any = None  # DiscoveryClient | False | None
 
