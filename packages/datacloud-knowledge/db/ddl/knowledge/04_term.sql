@@ -10,14 +10,13 @@ CREATE TABLE IF NOT EXISTS term (
     term_tags      JSONB        NOT NULL DEFAULT '{}'::jsonb,
     ext_attrs      JSONB        NOT NULL DEFAULT '{}'::jsonb,
     created_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uq_term_name UNIQUE (term_name)
+    updated_time   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE term IS '术语主表：存储所有术语及其核心属性';
 COMMENT ON COLUMN term.term_id        IS '术语ID，主键';
 COMMENT ON COLUMN term.term_code      IS '术语编码';
-COMMENT ON COLUMN term.term_name      IS '术语标准名称，全局唯一规范名';
+COMMENT ON COLUMN term.term_name      IS '术语标准名称';
 COMMENT ON COLUMN term.desc_summary   IS '术语描述摘要，约100字，用于快速展示；完整知识在 term_knowledge 表';
 COMMENT ON COLUMN term.parent_term_id IS '父术语ID';
 COMMENT ON COLUMN term.domain_ids     IS '所属领域ID数组，支持术语多领域归属';
