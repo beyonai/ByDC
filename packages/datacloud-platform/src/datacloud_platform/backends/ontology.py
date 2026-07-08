@@ -38,6 +38,8 @@ class OntologyBackend(Protocol):
         relations: list[dict[str, Any]],
         actions: list[dict[str, Any]],
         dbsources: list[dict[str, Any]],
+        *,
+        base_id: str = "",
     ) -> dict[str, int]:
         """Batch import ontology content into the backend.
 

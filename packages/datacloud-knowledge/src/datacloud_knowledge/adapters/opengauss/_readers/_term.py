@@ -1721,7 +1721,7 @@ class _TermReader(_ReaderBase):
                 rows = session.execute(
                     text(
                         "SELECT term_id, term_code, term_name, term_type_code, "
-                        "parent_term_id, owl_doc_id, domain_ids "
+                        "parent_term_id, domain_ids "
                         f"FROM term WHERE {where_col} IN :ids"
                     ).bindparams(bindparam("ids", expanding=True)),
                     {"ids": ids},
@@ -1740,7 +1740,6 @@ class _TermReader(_ReaderBase):
                 "term_name": str(r.term_name),
                 "term_type_code": str(r.term_type_code),
                 "parent_term_id": None if r.parent_term_id is None else str(r.parent_term_id),
-                "owl_doc_id": None if r.owl_doc_id is None else str(r.owl_doc_id),
                 "domain_ids": list(r.domain_ids) if r.domain_ids else [],
             }
             for r in rows

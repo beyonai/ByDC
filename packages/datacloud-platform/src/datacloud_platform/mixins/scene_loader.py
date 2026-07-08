@@ -85,7 +85,9 @@ class SceneLoaderMixin:
         # 3. Load the full ontology (fall back to remote scene details if read-only)
         try:
             base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
-            loader: OntologyQueryable = backend.load_ontology(base_path)
+            loader: OntologyQueryable = backend.load_ontology(
+                base_path, base_id=base_id
+            )
             # 4. Build content dict from the loaded ontology filtered to matching codes
             content = _build_content(loader, list(all_obj_codes), list(all_vw_codes))
         except PermissionError:
@@ -130,7 +132,9 @@ class SceneLoaderMixin:
 
         # Try local load first; fall back to remote scene details for read-only backends
         try:
-            loader: OntologyQueryable = backend.load_ontology(base_path)
+            loader: OntologyQueryable = backend.load_ontology(
+                base_path, base_id=base_id
+            )
             content = _build_content(loader, object_codes, vw_codes)
         except PermissionError:
             content = _build_content_from_remote_scenes(

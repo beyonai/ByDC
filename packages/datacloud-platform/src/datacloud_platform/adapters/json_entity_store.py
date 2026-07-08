@@ -129,6 +129,16 @@ class _ScopedEntityStore:
     def sub_store(self, namespace: str) -> _ScopedEntityStore:
         return _ScopedEntityStore(self._parent, default_base_id=namespace)
 
+    def list_all(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+    ) -> list[dict[str, Any]]:
+        return self._parent.list_all(
+            entity_type, base_id=base_id or self._default_base_id
+        )
+
 
 class JsonEntityStore:
     """Sharded JSON-file storage for ontology entities.
@@ -184,6 +194,22 @@ class JsonEntityStore:
             return json.loads(file_path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
         except FileNotFoundError:
             return None
+
+    def list_all(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+    ) -> list[dict[str, Any]]:
+        """Return all entity data dicts, scanning index then reading each shard file."""
+        _ = base_id
+        index = self.load_index(entity_type)
+        result: list[dict[str, Any]] = []
+        for code in index:
+            data = self.get(entity_type, code)
+            if data is not None:
+                result.append(data)
+        return result
 
     def delete(
         self,

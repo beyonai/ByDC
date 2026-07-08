@@ -160,7 +160,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         # Batch sync terms to knowledge DB (single writer, no per-term backfill)
         t_sync = time.monotonic()
         self._batch_sync_entity_terms(objects, views, relations, actions)
-        logger.info("_batch_sync_entity_terms done in %.1fs", time.monotonic() - t_sync)
+        logger.warning(
+            "_batch_sync_entity_terms done in %.1fs", time.monotonic() - t_sync
+        )
 
         logger.info(
             "batch_import_ontology: %s objects=%d views=%d relations=%d actions=%d dbsources=%d",
@@ -193,25 +195,22 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         base_id = base_id or base_path.name
         store = self._entity_store.sub_store(base_id)
 
-        # Build registry-like content from store
-        all_objects = [
-            store.get("objects", code) for code in store.load_index("objects")
-        ]
-        all_objects = [o for o in all_objects if o]
-        all_views = [store.get("views", code) for code in store.load_index("views")]
-        all_views = [v for v in all_views if v]
-        all_relations = [
-            store.get("relations", code) for code in store.load_index("relations")
-        ]
-        all_relations = [r for r in all_relations if r]
-        all_actions = [
-            store.get("actions", code) for code in store.load_index("actions")
-        ]
-        all_actions = [a for a in all_actions if a]
-        all_dbsources = [
-            store.get("datasources", db_id) for db_id in store.load_index("datasources")
-        ]
-        all_dbsources = [d for d in all_dbsources if d]
+        # Build registry-like content from store (single query per entity type)
+        t0 = time.monotonic()
+        all_objects = store.list_all("objects")
+        all_views = store.list_all("views")
+        all_relations = store.list_all("relations")
+        all_actions = store.list_all("actions")
+        all_dbsources = store.list_all("datasources")
+        logger.warning(
+            "loaded entities: objects=%d views=%d relations=%d actions=%d dbsources=%d in %.1fs",
+            len(all_objects),
+            len(all_views),
+            len(all_relations),
+            len(all_actions),
+            len(all_dbsources),
+            time.monotonic() - t0,
+        )
 
         if any([all_objects, all_views, all_relations, all_actions, all_dbsources]):
             # Normalize legacy camelCase keys to snake_case for all entity types.
@@ -221,16 +220,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             _view_map = {"viewCode": "view_code", "viewId": "view_code"}
             _rel_map = {"relationCode": "relation_code"}
             _act_map = {"actionCode": "action_code"}
-            self._normalize_entity_keys(all_objects, _obj_map)  # type: ignore[arg-type]
-            self._normalize_entity_keys(all_views, _view_map)  # type: ignore[arg-type]
-            self._normalize_entity_keys(all_relations, _rel_map)  # type: ignore[arg-type]
-            self._normalize_entity_keys(all_actions, _act_map)  # type: ignore[arg-type]
+            self._normalize_entity_keys(all_objects, _obj_map)
+            self._normalize_entity_keys(all_views, _view_map)
+            self._normalize_entity_keys(all_relations, _rel_map)
+            self._normalize_entity_keys(all_actions, _act_map)
 
             # OntologyLoader uses view["view_id"] as the dict key (line 365/434),
             # but normalization only sets view_code.  Mirror view_code → view_id
             # so loader._views keys match get_view_detail() lookups.
             for v in all_views:
-                if v is not None and "view_id" not in v:
+                if "view_id" not in v:
                     v["view_id"] = v.get("view_code", "")
 
             loader = OntologyLoader()
@@ -247,13 +246,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
         # Fallback: OWL directory exists but store is empty
         if base_path.exists():
-            logger.info(
+            logger.warning(
                 "Store empty for base_id=%s, falling back to parse_owl + batch_import_ontology",
                 base_id,
             )
             t1 = time.monotonic()
             parsed = self.parse_owl(base_path)
-            logger.info(
+            logger.warning(
                 "parse_owl done in %.1fs, objects=%d views=%d relations=%d actions=%d dbsources=%d",
                 time.monotonic() - t1,
                 len(parsed.objects),
@@ -272,7 +271,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 parsed.dbsources,
                 base_id=base_id,
             )
-            logger.info("batch_import_ontology done in %.1fs", time.monotonic() - t2)
+            logger.warning("batch_import_ontology done in %.1fs", time.monotonic() - t2)
             return self.load_ontology(
                 base_path, base_id=base_id
             )  # recurse → store now has data

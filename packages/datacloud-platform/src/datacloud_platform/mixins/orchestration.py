@@ -52,6 +52,7 @@ class OrchestrationMixin:
             parsed.relations,
             parsed.actions,
             parsed.dbsources,
+            base_id=base_id,
         )
 
         # 3.5 Add imported objects/views to the scene's member list

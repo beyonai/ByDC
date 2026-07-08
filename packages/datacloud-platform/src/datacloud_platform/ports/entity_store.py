@@ -149,3 +149,12 @@ class EntityStore(Protocol):
         OpenGaussEntityStore: sub_store("my_base") → WHERE base_id='my_base'
         """
         ...
+
+    def list_all(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+    ) -> list[dict[str, Any]]:
+        """Return all entity data dicts for *entity_type* under *base_id* in one query."""
+        ...

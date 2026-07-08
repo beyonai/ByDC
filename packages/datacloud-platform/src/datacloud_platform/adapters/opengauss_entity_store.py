@@ -273,6 +273,21 @@ class OpenGaussEntityStore:
             row = session.get(model, {code_col: code, "base_id": bid})
             return dict(row.data) if row else None  # type: ignore[attr-defined]
 
+    def list_all(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+    ) -> list[dict[str, Any]]:
+        """Return all entity data dicts for *entity_type* under *base_id* in one query."""
+        bid = base_id or self._default_base_id
+        model = _ENTITY_TABLES[entity_type]
+        from sqlalchemy.orm import Session
+
+        with Session(self._engine) as session:
+            rows = session.query(model.data).filter(model.base_id == bid).all()  # type: ignore[attr-defined]
+            return [dict(r[0]) for r in rows if r[0] is not None]
+
     def delete(
         self,
         entity_type: str,
@@ -399,11 +414,13 @@ class OpenGaussEntityStore:
             # 2. Bulk INSERT new entities via raw cursor (fast, single round-trip)
             new_rows: list[tuple[Any, ...]] = []
             update_rows: list[tuple[Any, ...]] = []
+            seen_new: set[str] = set()
             for code, data in entities:
                 name = self._extract_name(entity_type, data)
                 if code in existing_codes:
                     update_rows.append((name, code, data))
-                else:
+                elif code not in seen_new:
+                    seen_new.add(code)
                     new_rows.append((bid, code, name, data))
 
             conn = session.connection().connection

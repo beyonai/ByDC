@@ -132,7 +132,15 @@ class SceneServiceMixin:
         backend = self._ontology_for(base_id)
         try:
             base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
-            loader = backend.load_ontology(base_path)
+            logger.warning(
+                "_collect_orphans: loading ontology for base_id=%s ...", base_id
+            )
+            loader = backend.load_ontology(base_path, base_id=base_id)
+            logger.warning(
+                "_collect_orphans: ontology loaded, objects=%d views=%s",
+                len(loader._classes),
+                len(loader._views) if loader._views else 0,
+            )
         except (PermissionError, FileNotFoundError):
             logger.debug(
                 "_collect_orphans: cannot load ontology for base_id=%s", base_id
@@ -213,6 +221,7 @@ class SceneServiceMixin:
             parsed.relations,
             parsed.actions,
             parsed.dbsources,
+            base_id=base_id,
         )
 
         self._ensure_default_scene(base_id)  # type: ignore[attr-defined]
