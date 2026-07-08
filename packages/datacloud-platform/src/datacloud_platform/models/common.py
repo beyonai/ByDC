@@ -20,6 +20,14 @@ class ApiResponse[T](BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-def ok(data: object = None, message: str = "ok", **extra: Any) -> ApiResponse[Any]:
-    """Shorthand for success response. Extra kwargs (e.g. totalCount) become top-level fields."""
-    return ApiResponse(code=200, success=True, message=message, data=data, **extra)
+def ok(
+    data: object = None, message: str = "ok", code: int = 200, **extra: Any
+) -> ApiResponse[Any]:
+    """Shorthand for unified API response.
+
+    ``code`` defaults to 200 (success).  Error handlers pass explicit codes
+    (e.g. 400, 404, 500) to signal error responses in the same envelope.
+
+    Extra kwargs (e.g. ``totalCount``) become top-level fields in the response.
+    """
+    return ApiResponse(code=code, success=True, message=message, data=data, **extra)
