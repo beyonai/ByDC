@@ -10,6 +10,7 @@ created idempotently on first access via ``checkfirst=True``.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from typing import Any
@@ -375,7 +376,9 @@ class OpenGaussEntityStore:
         *,
         base_id: str = "",
     ) -> None:
-        """Batch UPSERT in a single transaction (openGauss PG 9.2 compatible)."""
+        """Batch UPSERT — 1 SELECT + bulk INSERT + bulk UPDATE, single transaction."""
+        if not entities:
+            return
         bid = base_id or self._default_base_id
         model = _ENTITY_TABLES[entity_type]
         code_col = _CODE_COLUMNS[entity_type]
@@ -383,10 +386,42 @@ class OpenGaussEntityStore:
 
         from sqlalchemy.orm import Session
 
+        codes = [c for c, _ in entities]
         with Session(self._engine) as session:
+            # 1. Single SELECT to find existing rows
+            existing = (
+                session.query(getattr(model, code_col))
+                .filter(model.base_id == bid, getattr(model, code_col).in_(codes))  # type: ignore[attr-defined]
+                .all()
+            )
+            existing_codes = {row[0] for row in existing}
+
+            # 2. Bulk INSERT new entities via raw cursor (fast, single round-trip)
+            new_rows: list[tuple[Any, ...]] = []
+            update_rows: list[tuple[Any, ...]] = []
             for code, data in entities:
                 name = self._extract_name(entity_type, data)
-                result = session.execute(
+                if code in existing_codes:
+                    update_rows.append((name, code, data))
+                else:
+                    new_rows.append((bid, code, name, data))
+
+            conn = session.connection().connection
+            if new_rows:
+                cur = conn.cursor()
+                cur.executemany(
+                    f"INSERT INTO {model.__tablename__} "
+                    f"(base_id, {code_col}, {name_col}, data) VALUES (%s, %s, %s, %s)",
+                    [
+                        (r[0], r[1], r[2], json.dumps(r[3], ensure_ascii=False))
+                        for r in new_rows
+                    ],
+                )
+
+            # 3. Bulk UPDATE existing entities
+            now = func.now()
+            for name, code, data in update_rows:
+                session.execute(
                     update(model)
                     .where(
                         getattr(model, "base_id") == bid,
@@ -395,15 +430,10 @@ class OpenGaussEntityStore:
                     .values(
                         **{name_col: name, "data": data},
                         version=model.version + 1,  # type: ignore[attr-defined]
-                        updated_at=func.now(),
+                        updated_at=now,
                     )
                 )
-                if result.rowcount == 0:  # type: ignore[attr-defined]
-                    stmt = insert(model).values(
-                        base_id=bid,
-                        **{code_col: code, name_col: name, "data": data},
-                    )
-                    session.execute(stmt)
+
             session.commit()
 
     # ── Internal helpers ────────────────────────────────────────────────
