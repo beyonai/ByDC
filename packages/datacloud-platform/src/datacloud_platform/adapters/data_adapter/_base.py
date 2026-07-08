@@ -43,10 +43,10 @@ def _build_sync_payload(
     owner_type: str = "enterprise",
 ) -> dict[str, Any]:
     """Build a standardized sync payload for ByClaw resource table."""
-    import os
+    from datacloud_platform.constants import DEFAULT_SYSTEM_CODE
 
     return {
-        "systemCode": os.getenv("DATACLOUD_DOMAINNAME", "byclaw-datacloud").strip(),
+        "systemCode": DEFAULT_SYSTEM_CODE,
         "resourceBizType": resource_type,
         "resourceCode": resource_code,
         "resourceName": resource_name,
