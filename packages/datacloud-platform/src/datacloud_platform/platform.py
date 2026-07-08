@@ -115,10 +115,6 @@ class DatacloudPlatform(
     # ── Backend instance cache ──
     _backend_cache: dict[str, Any] = field(default_factory=dict, init=False)
 
-    # ── Ontology loader cache (version-based invalidation) ──
-    _loader_cache: dict[str, Any] = field(default_factory=dict, init=False)
-    """Per-base loader cache: {base_id: (storage_version, loader)}."""
-
     # ── Config params ──
     workspace: str = field(default="")
     library_id: str = field(default="PERSONAL_LIB")
@@ -279,28 +275,26 @@ class DatacloudPlatform(
         base_id: str,
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> OntologyQueryable:
-        """Get an OntologyQueryable with in-memory caching.
+        """Get an OntologyQueryable, priming the OntologyStore index cache first.
 
-        On cache hit returns cached loader instantly.
-        On miss or ``cache_mode=REALTIME``, reloads from the backend.
-        PermissionError from remote backends returns a stub queryable.
+        Falls back to direct ``load_ontology()`` when ``_ontology_store`` is None.
+
+        For remote backends whose ``load_ontology`` raises ``PermissionError``,
+        returns a stub queryable — the remote backend ignores the loader and
+        fetches data via HTTP directly.
         """
-        if cache_mode == CacheMode.STORE:
-            cached = self._loader_cache.get(base_id)
-            if cached is not None:
-                return cached  # type: ignore[no-any-return]
-
         try:
-            loader = self._ontology_for(base_id).load_ontology(
+            return self._ontology_for(base_id).load_ontology(
                 self._base_path_for(base_id), base_id=base_id
             )
         except PermissionError:
-            return types.SimpleNamespace(_classes={}, _relations=[], _views=None)
-        except FileNotFoundError:
-            return types.SimpleNamespace(_classes={}, _relations=[], _views=None)
-
-        self._loader_cache[base_id] = loader
-        return loader
+            # Remote backends don't support load_ontology — return a stub the
+            # backend will ignore (it fetches via HTTP directly).
+            return types.SimpleNamespace(
+                _classes={},
+                _relations=[],
+                _views=None,
+            )
 
     # ── Lifecycle ──
 
