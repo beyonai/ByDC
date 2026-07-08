@@ -76,6 +76,9 @@ def _init_platform() -> DatacloudPlatform:
 
     _register_remote_implementations()
 
+    # ── Register OpenGauss implementations (optional — requires datacloud-knowledge) ──
+    _register_opengauss_if_available(entity_store)
+
     # ── Register presets ────────────────────────────────────────────────
     register_preset(
         "DEFAULT",
@@ -105,3 +108,49 @@ def _init_platform() -> DatacloudPlatform:
     )
 
     return platform
+
+
+def _register_opengauss_if_available(
+    entity_store: JsonEntityStore,  # noqa: ARG001 — forwarded but not used by PG backend
+) -> None:
+    """Register OpenGauss backend implementations and preset.
+
+    Silently skipped when ``datacloud-knowledge`` (optional dependency) is not installed.
+    """
+    try:
+        from datacloud_platform.adapters.opengauss_entity_store import (
+            OpenGaussEntityStore,
+        )  # noqa: PLC0415
+    except ImportError:
+        logger.info(
+            "OpenGauss backend not available (pip install datacloud-platform[opengauss])"
+        )
+        return
+
+    pg_store = OpenGaussEntityStore()
+    register_implementation(
+        "ontology",
+        "opengauss-data",
+        lambda: DataCloudDataBackend(entity_store=pg_store),
+    )
+    register_implementation(
+        "storage",
+        "opengauss-data",
+        lambda: DataCloudDataBackend(entity_store=pg_store),
+    )
+    register_implementation(
+        "term",
+        "opengauss-data",
+        lambda: DataCloudDataBackend(entity_store=pg_store),
+    )
+
+    register_preset(
+        "OPENGAUSS",
+        {
+            "ontology": "opengauss-data",
+            "term": "opengauss-data",
+            "execution": "local-exec",
+            "storage": "opengauss-data",
+        },
+    )
+    logger.info("OpenGauss backend registered (preset: OPENGAUSS)")

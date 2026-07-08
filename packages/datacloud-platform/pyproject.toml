@@ -35,6 +35,9 @@ Homepage = "https://github.com/beyonai/by-datacloud"
 Repository = "https://github.com/beyonai/by-datacloud"
 Issues = "https://github.com/beyonai/by-datacloud/issues"
 
+[project.optional-dependencies]
+opengauss = ["datacloud-knowledge"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
@@ -52,6 +55,7 @@ packages = ["src/datacloud_platform"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/fakes.py" = ["ARG002"]
+"src/datacloud_platform/adapters/opengauss_entity_store.py" = ["F821"]  # optional dep: sqlalchemy
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests"]
