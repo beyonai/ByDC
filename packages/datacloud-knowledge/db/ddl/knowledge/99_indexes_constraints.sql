@@ -110,6 +110,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_term_name_scope
 CREATE UNIQUE INDEX IF NOT EXISTS idx_vocab_word
     ON term_vocabulary(word);
 
+-- term_vocabulary 自动维护触发器：term_name INSERT 时自动去重写入 vocabulary
+CREATE OR REPLACE FUNCTION maintain_term_vocabulary() RETURNS trigger AS $$
+BEGIN
+    INSERT INTO term_vocabulary (word)
+    SELECT NEW.name_text
+    WHERE NOT EXISTS (
+        SELECT 1 FROM term_vocabulary WHERE word = NEW.name_text
+    );
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_term_name_vocab ON term_name;
+CREATE TRIGGER trg_term_name_vocab
+    AFTER INSERT ON term_name
+    FOR EACH ROW
+    EXECUTE PROCEDURE maintain_term_vocabulary();
+
 -- term_name
 CREATE INDEX IF NOT EXISTS idx_tn_search_scope
     ON term_name USING GIN (search_scope);
