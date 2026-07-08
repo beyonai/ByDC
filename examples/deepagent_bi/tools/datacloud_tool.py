@@ -22,10 +22,11 @@ def _get_loader() -> Any:
     if _loader is None:
         from datacloud_platform import get_platform  # noqa: PLC0415
         from datacloud_platform.config import get_settings  # noqa: PLC0415
+        from datacloud_platform.constants import DEFAULT_BASE_ID
         from datacloud_platform.loader_runtime import LoaderRuntimeManager  # noqa: PLC0415
 
         runtime = LoaderRuntimeManager(platform=get_platform(), settings=get_settings())
-        snapshot = runtime.get_loader("default")
+        snapshot = runtime.get_loader(DEFAULT_BASE_ID)
         _loader = snapshot.loader
     return _loader
 

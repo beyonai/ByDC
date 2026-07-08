@@ -24,8 +24,10 @@ logger = logging.getLogger(__name__)
 # 懒加载：测试环境可能不安装，patch 必须在模块级有此名称
 try:
     from datacloud_platform import get_platform
+    from datacloud_platform.constants import DEFAULT_BASE_ID
 except ImportError:  # pragma: no cover
     get_platform = None  # type: ignore[assignment]
+    DEFAULT_BASE_ID = "BYCLAW_DATACLOUD"
 
 try:
     from datacloud_analysis.tools.ontology_tool_loader import OntologyToolLoader
@@ -116,7 +118,7 @@ def _activate_object_with_context(
 ) -> tuple[list[str], str]:
     """权限校验 + 按需构建工具；tool_context 是 RequestToolContext 实例。"""
     # 03C: 从 tool_context.allowed_scope 提取 base_id 和 scene_id
-    base_id = "default"
+    base_id = DEFAULT_BASE_ID
     scope_scene_id = ""
     if tool_context is not None and tool_context.allowed_scope:
         scope_filter = _build_scope_filter(tool_context.allowed_scope)
@@ -305,7 +307,7 @@ def _do_search_ontology(
     search_scope_str = "metadata"
 
     # Extract base_id, scene_ids, and object/view codes from allowed_scope
-    base_id = "default"
+    base_id = DEFAULT_BASE_ID
     scene_ids: list[str] = ["-1"]
     object_codes: list[str] | None = None
     view_codes: list[str] | None = None

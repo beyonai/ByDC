@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 # ── 平台路由 ──────────────────────────────────────────────────────────────────
 from datacloud_platform import get_platform  # noqa: E402
+from datacloud_platform.constants import DEFAULT_BASE_ID  # noqa: E402
 
 # ── 进程级图缓存上限（与 worker.py 原有 LRU 上限对齐） ──────────────────────
 _CACHE_MAX: int = 32
@@ -222,8 +223,8 @@ class OntologyAgentConfig:
     # False 时跳过 KbTermLoader（不连 OpenGauss），适用于 OpenGauss 不可用的环境（如评测 mock 环境）。
     use_kb_term_loader: bool = True
     # base_id 由调用方显式传入，不再依赖模块级 _default_base_id() 隐式推导。
-    # 默认 "default" 与 byclaw-data worker 侧 _runtime_manager.get_loader("default") 对齐。
-    base_id: str = "default"
+    # 默认 DEFAULT_BASE_ID 与 byclaw-data worker 侧 _runtime_manager.get_loader(DEFAULT_BASE_ID) 对齐。
+    base_id: str = DEFAULT_BASE_ID
 
 
 # ── 缓存 key ──────────────────────────────────────────────────────────────────

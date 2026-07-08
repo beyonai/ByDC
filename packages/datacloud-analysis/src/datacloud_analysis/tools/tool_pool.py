@@ -173,8 +173,8 @@ def _init_ext_tool_pool(
     # 如果没有传入 loader，通过平台 API 加载本体（避免直调 SDK OntologyLoader）
     if loader is None:
         try:
-            loader = get_platform().load_ontology("default", resource_path)
-            get_platform().inject_virtual_actions("default", loader)
+            loader = get_platform().load_ontology(_base_id, resource_path)
+            get_platform().inject_virtual_actions(_base_id, loader)
         except Exception:  # noqa: BLE001
             logger.warning(
                 "TOOL_POOL init: failed to create OntologyLoader via platform", exc_info=True
