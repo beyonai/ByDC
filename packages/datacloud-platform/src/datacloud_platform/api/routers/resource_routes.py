@@ -15,6 +15,7 @@ from datacloud_platform.adapters.byclaw_sync import hook_ctx
 
 from datacloud_platform.models.action import Action
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.datasource import Datasource
 from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.relation import Relation
@@ -49,7 +50,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.get("/objects", tags=["Object"])
     def list_objects(
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
         owner_type: str | None = Query(default=None, alias="ownerType"),
@@ -74,7 +75,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/objects/{code}", tags=["Object"])
     def get_object(
         code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get object detail."""
@@ -92,7 +93,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def create_object(
         body: ObjectType,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Create an object (LOCAL only). Auto-added to default scene when no scene specified."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -114,7 +115,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         code: str,
         body: ObjectType,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Update an object (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -134,7 +135,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def delete_object(
         code: str,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Delete an object (LOCAL only). Removes from all scenes before deletion."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -154,7 +155,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.get("/views", tags=["View"])
     def list_views(
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
         owner_type: str | None = Query(default=None, alias="ownerType"),
@@ -179,7 +180,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/views/{code}", tags=["View"])
     def get_view(
         code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get view detail."""
@@ -195,7 +196,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def create_view(
         body: View,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Create a view (LOCAL only). Auto-added to default scene when no scene specified."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -217,7 +218,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         code: str,
         body: View,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Update a view (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -237,7 +238,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def delete_view(
         code: str,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Delete a view (LOCAL only). Removes from all scenes before deletion."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -257,7 +258,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.get("/relations", tags=["Relation"])
     def list_relations(
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
         owner_type: str | None = Query(default=None, alias="ownerType"),
@@ -282,7 +283,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/relations/{code}", tags=["Relation"])
     def get_relation(
         code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get relation detail."""
@@ -300,7 +301,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def create_relation(
         body: Relation,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Create a relation (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -323,7 +324,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         code: str,
         body: Relation,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Update a relation (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -343,7 +344,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def delete_relation(
         code: str,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Delete a relation (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -363,7 +364,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.get("/datasources", tags=["Datasource"])
     def list_datasources(
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
         owner_type: str | None = Query(default=None, alias="ownerType"),
@@ -386,7 +387,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/datasources/{db_id}", tags=["Datasource"])
     def get_datasource(
         db_id: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get datasource detail."""
@@ -404,7 +405,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def create_datasource(
         body: Datasource,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Create a datasource (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -426,7 +427,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     async def delete_datasource(
         db_id: str,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Delete a datasource (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -447,7 +448,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/objects/{object_code}/actions", tags=["Action"])
     def list_actions(
         object_code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
         owner_type: str | None = Query(default=None, alias="ownerType"),
@@ -474,7 +475,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     def get_action(
         object_code: str,
         code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get action detail."""
@@ -495,7 +496,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         object_code: str,
         body: Action,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Create an action on an object (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -519,7 +520,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         code: str,
         body: Action,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Update an action on an object (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -540,7 +541,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
         object_code: str,
         code: str,
         request: Request,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Delete an action from an object (LOCAL only)."""
         beyond_token: str | None = request.headers.get("Beyond-Token")
@@ -557,7 +558,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/objects/{object_code}/subtree", tags=["Object"])
     def get_object_subtree(
         object_code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get an object's subtree — detail + related views, relations, actions."""
@@ -580,7 +581,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/objects/{object_code}/term-bindings", tags=["Object"])
     def get_object_term_bindings(
         object_code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         term_master_type: str | None = Query(default=None),
         property_codes: str | None = Query(default=None, alias="propertyCodes"),
         cache_mode: CacheMode = CacheMode.REALTIME,
@@ -602,7 +603,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/views/{view_code}/term-bindings", tags=["View"])
     def get_view_term_bindings(
         view_code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         term_master_type: str | None = Query(default=None),
         property_codes: str | None = Query(default=None, alias="propertyCodes"),
         cache_mode: CacheMode = CacheMode.REALTIME,
@@ -628,7 +629,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/views/{view_code}/objects", tags=["View"])
     def get_objects_by_view(
         view_code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         owner_type: str | None = Query(default=None, alias="ownerType"),
         user_code: str | None = Query(default=None, alias="userCode"),
         keyword: str | None = Query(default=None),
@@ -655,7 +656,7 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/objects/{object_code}/relations", tags=["Object"])
     def get_relations_by_object(
         object_code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         owner_type: str | None = Query(default=None, alias="ownerType"),
         user_code: str | None = Query(default=None, alias="userCode"),
         cache_mode: CacheMode = CacheMode.REALTIME,

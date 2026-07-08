@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Request
 
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.view import View
 from datacloud_platform.ontology_store import CacheMode
 
@@ -25,7 +26,7 @@ def _list_views(
 ) -> Any:
     return ok(
         data=platform.get_views(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),
             keyword=params.get("keyword"),
@@ -39,7 +40,7 @@ def _get_view(
 ) -> Any:
     code: str = params["code"]
     view = platform.get_view_detail(
-        params.get("base_id", "default"),
+        params.get("base_id", DEFAULT_BASE_ID),
         code,
         cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
@@ -53,7 +54,7 @@ def _create_view(
 ) -> Any:
     return ok(
         data=platform.create_view_with_scene(
-            params.get("base_id", "default"),
+            params.get("base_id", DEFAULT_BASE_ID),
             View(**(params.get("view") or {})),
         ),
         message="created",
@@ -65,7 +66,7 @@ def _update_view(
 ) -> Any:
     code: str = params["code"]
     platform.update_view(
-        params.get("base_id", "default"),
+        params.get("base_id", DEFAULT_BASE_ID),
         code,
         View(**(params.get("view") or {})),
     )
@@ -76,7 +77,7 @@ def _delete_view(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     platform.delete_view_from_all_scenes(
-        params.get("base_id", "default"), params["code"]
+        params.get("base_id", DEFAULT_BASE_ID), params["code"]
     )
     return ok(message="deleted")
 
@@ -86,7 +87,7 @@ def _get_term_bindings(
 ) -> Any:
     return ok(
         data=platform.get_view_property_term_bindings(
-            params.get("base_id", "default"),
+            params.get("base_id", DEFAULT_BASE_ID),
             params["view_code"],
             term_master_type=params.get("term_master_type"),
             property_codes=_parse_csv(params.get("property_codes")),
@@ -100,7 +101,7 @@ def _get_objects(
 ) -> Any:
     return ok(
         data=platform.get_objects_by_view(
-            params.get("base_id", "default"),
+            params.get("base_id", DEFAULT_BASE_ID),
             params["view_code"],
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),

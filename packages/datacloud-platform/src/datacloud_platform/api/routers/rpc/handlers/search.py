@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Request
 
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -25,7 +26,7 @@ def _search_ontology(
 ) -> Any:
     return ok(
         data=platform.search_ontology(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             scene_ids=params.get("sceneIds", ["-1"]),
             keyword=params.get("keyword", ""),
             query_type=params.get("queryType", "vector"),
@@ -47,7 +48,7 @@ def _search_scene(
     scene_ids: list[str] = params["scene_ids"]
     return ok(
         data=platform.search_ontology(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             scene_ids=scene_ids,
             keyword=params.get("keyword", ""),
             query_type=params.get("queryType", "vector"),
@@ -68,7 +69,7 @@ def _search_instances(
 ) -> Any:
     return ok(
         data=platform.search_instances(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             object_code=params.get("objectCode", ""),
             select=params.get("select"),
             where=params.get("where"),
@@ -91,7 +92,7 @@ def _graph_query(
 ) -> Any:
     return ok(
         data=platform.graph_query(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             scene_id=params["scene_id"],
             object_code=params.get("objectCodes", params.get("objectCode", [])),
             match_by=params.get("matchBy", "name"),
@@ -106,7 +107,7 @@ def _graph_shortest_path(
 ) -> Any:
     return ok(
         data=platform.graph_path(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             scene_id=params["scene_id"],
             match_by=params.get("matchBy", "name"),
             start_node=params.get("sourceObjectCode", ""),

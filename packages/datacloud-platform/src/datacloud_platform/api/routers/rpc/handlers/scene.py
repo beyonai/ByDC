@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Request
 
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.scene import (
     SceneCreate,
     SceneMembersRequest,
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 def _list_scenes(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     keyword = params.get("keyword")
     if keyword:
         return ok(
@@ -33,7 +34,7 @@ def _list_scenes(
 def _create_scene(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     result = platform.create_scene(base_id, SceneCreate(**(params.get("scene") or {})))
     return ok(data=result, message="created")
 
@@ -41,7 +42,7 @@ def _create_scene(
 def _get_scene(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     result = platform.get_scene_details(
         base_id,
         params["scene_id"],  # KeyError → 404
@@ -54,7 +55,7 @@ def _get_scene(
 def _update_scene(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     result = platform.update_scene(
         base_id, params["scene_id"], SceneUpdate(**(params.get("updates") or {}))
     )
@@ -65,7 +66,7 @@ def _delete_scene(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     platform.delete_scene_with_migration(
-        params.get("base_id", "default"), params["scene_id"]
+        params.get("base_id", DEFAULT_BASE_ID), params["scene_id"]
     )
     return ok(message="deleted")
 
@@ -73,7 +74,7 @@ def _delete_scene(
 def _add_members(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     scene_id: str = params["scene_id"]
     member = SceneMembersRequest(
         objectCodes=params.get("object_codes", []),
@@ -88,7 +89,7 @@ def _add_members(
 def _remove_members(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     scene_id: str = params["scene_id"]
     for obj_code in params.get("object_codes", []):
         platform.remove_object_from_scene_safe(base_id, scene_id, obj_code)
@@ -100,7 +101,7 @@ def _remove_members(
 def _query_ontologies(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     result = platform.query_ontologies_by_scene(
         base_id,
         params["scene_id"],
@@ -114,7 +115,7 @@ def _query_ontologies(
 def _query_ontologies_by_code(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    base_id = params.get("base_id", "default")
+    base_id = params.get("base_id", DEFAULT_BASE_ID)
     scene_code: str = params["scene_code"]
     cross_scene = scene_code == "-1"
 

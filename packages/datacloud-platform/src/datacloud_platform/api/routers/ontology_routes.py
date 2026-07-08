@@ -18,6 +18,7 @@ from datacloud_platform.base_entry import (
 )
 from datacloud_platform.models.base_entry import OntologyBaseCreate, OntologyBaseUpdate
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.scene import (
     SceneCreate,
     SceneMembersRequest,
@@ -127,7 +128,7 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.get("/scenes", tags=["Scene"])
     def list_scenes_flat(
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         keyword: str | None = Query(default=None, description="模糊查询场景列表"),
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
@@ -147,7 +148,7 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.get("/scenes/{scene_code}/ontologies", tags=["Scene"])
     def query_ontologies_by_scene_flat(
         scene_code: str,
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
         ont_type: str | None = Query(
             default=None, alias="type", description="object|view"
         ),
@@ -195,7 +196,7 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
 
     @router.post("/resync", tags=["Admin"])
     def resync(
-        base_id: str = Query(default="default"),
+        base_id: str = Query(default=DEFAULT_BASE_ID),
     ) -> Any:
         """Admin endpoint: trigger full resync of all resources to ByClaw resource table."""
         try:

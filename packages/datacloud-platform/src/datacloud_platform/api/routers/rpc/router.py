@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from starlette import status
 
 from datacloud_platform.api.deps import extract_beyond_token
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.common import ok
 
 if TYPE_CHECKING:
@@ -189,7 +190,7 @@ def _register_import_routes(router: APIRouter, platform: DatacloudPlatform) -> N
     @router.post("/import/importOwl")
     async def rpc_import_owl(
         file: UploadFile = File(...),  # noqa: B008
-        base_id: str = Form("default"),
+        base_id: str = Form(DEFAULT_BASE_ID),
         _bt: None = Depends(extract_beyond_token),
     ) -> Any:
         try:

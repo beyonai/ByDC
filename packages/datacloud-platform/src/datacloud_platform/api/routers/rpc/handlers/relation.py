@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Request
 
 from datacloud_platform.models.common import ok
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.ontology_store import CacheMode
 
@@ -19,7 +20,7 @@ def _list_relations(
 ) -> Any:
     return ok(
         data=platform.get_relations(
-            base_id=params.get("base_id", "default"),
+            base_id=params.get("base_id", DEFAULT_BASE_ID),
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),
             keyword=params.get("keyword"),
@@ -33,7 +34,7 @@ def _get_relation(
 ) -> Any:
     code: str = params["code"]
     rel = platform.get_relation_detail(
-        params.get("base_id", "default"),
+        params.get("base_id", DEFAULT_BASE_ID),
         code,
         cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
@@ -47,7 +48,7 @@ def _create_relation(
 ) -> Any:
     return ok(
         data=platform.create_relation(
-            params.get("base_id", "default"),
+            params.get("base_id", DEFAULT_BASE_ID),
             Relation(**(params.get("relation") or {})),
         ),
         message="created",
@@ -59,7 +60,7 @@ def _update_relation(
 ) -> Any:
     code: str = params["code"]
     platform.update_relation(
-        params.get("base_id", "default"),
+        params.get("base_id", DEFAULT_BASE_ID),
         code,
         Relation(**(params.get("relation") or {})),
     )
@@ -69,7 +70,7 @@ def _update_relation(
 def _delete_relation(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_relation(params.get("base_id", "default"), params["code"])
+    platform.delete_relation(params.get("base_id", DEFAULT_BASE_ID), params["code"])
     return ok(message="deleted")
 
 
