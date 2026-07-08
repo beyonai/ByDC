@@ -14,7 +14,16 @@ import logging
 import threading
 from typing import Any
 
-from sqlalchemy import BigInteger, Column, DateTime, Engine, String, Text
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Engine,
+    String,
+    Text,
+    insert,
+    update,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.sql import func
@@ -216,34 +225,34 @@ class OpenGaussEntityStore:
         *,
         base_id: str = "",
     ) -> None:
-        """UPSERT (INSERT ... ON CONFLICT DO UPDATE) — no TOCTOU race."""
+        """UPSERT — UPDATE then INSERT if no row matched (openGauss PG 9.2 compatible)."""
         bid = base_id or self._default_base_id
         model = _ENTITY_TABLES[entity_type]
         code_col = _CODE_COLUMNS[entity_type]
         name_col = _NAME_COLUMNS[entity_type]
         name = self._extract_name(entity_type, data)
 
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
         from sqlalchemy.orm import Session
 
-        stmt = (
-            pg_insert(model)
-            .values(
-                base_id=bid,
-                **{code_col: code, name_col: name, "data": data},
-            )
-            .on_conflict_do_update(
-                index_elements=["base_id", code_col],
-                set_={
-                    name_col: name,
-                    "data": data,
-                    "version": model.version + 1,  # type: ignore[attr-defined]
-                    "updated_at": func.now(),
-                },
-            )
-        )
         with Session(self._engine) as session:
-            session.execute(stmt)
+            result = session.execute(
+                update(model)
+                .where(
+                    getattr(model, "base_id") == bid,
+                    getattr(model, code_col) == code,
+                )
+                .values(
+                    **{name_col: name, "data": data},
+                    version=model.version + 1,  # type: ignore[attr-defined]
+                    updated_at=func.now(),
+                )
+            )
+            if result.rowcount == 0:  # type: ignore[attr-defined]
+                stmt = insert(model).values(
+                    base_id=bid,
+                    **{code_col: code, name_col: name, "data": data},
+                )
+                session.execute(stmt)
             session.commit()
 
     def get(
@@ -321,7 +330,6 @@ class OpenGaussEntityStore:
         version counter so that ``storage_version()`` returns a new value.
         """
         bid = base_id or self._default_base_id
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
         from sqlalchemy.orm import Session
 
         with Session(self._engine) as session:
@@ -330,11 +338,7 @@ class OpenGaussEntityStore:
                 base_row.version = _BaseRow.version + 1  # type: ignore[assignment]
                 base_row.updated_at = func.now()  # type: ignore[assignment]
             else:
-                session.execute(
-                    pg_insert(_BaseRow)
-                    .values(base_id=bid, data={})
-                    .on_conflict_do_nothing()
-                )
+                session.execute(insert(_BaseRow).values(base_id=bid, data={}))
             session.commit()
 
     def storage_version(
@@ -371,35 +375,35 @@ class OpenGaussEntityStore:
         *,
         base_id: str = "",
     ) -> None:
-        """Batch UPSERT in a single transaction."""
+        """Batch UPSERT in a single transaction (openGauss PG 9.2 compatible)."""
         bid = base_id or self._default_base_id
         model = _ENTITY_TABLES[entity_type]
         code_col = _CODE_COLUMNS[entity_type]
         name_col = _NAME_COLUMNS[entity_type]
 
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
         from sqlalchemy.orm import Session
 
         with Session(self._engine) as session:
             for code, data in entities:
                 name = self._extract_name(entity_type, data)
-                stmt = (
-                    pg_insert(model)
+                result = session.execute(
+                    update(model)
+                    .where(
+                        getattr(model, "base_id") == bid,
+                        getattr(model, code_col) == code,
+                    )
                     .values(
+                        **{name_col: name, "data": data},
+                        version=model.version + 1,  # type: ignore[attr-defined]
+                        updated_at=func.now(),
+                    )
+                )
+                if result.rowcount == 0:  # type: ignore[attr-defined]
+                    stmt = insert(model).values(
                         base_id=bid,
                         **{code_col: code, name_col: name, "data": data},
                     )
-                    .on_conflict_do_update(
-                        index_elements=["base_id", code_col],
-                        set_={
-                            name_col: name,
-                            "data": data,
-                            "version": model.version + 1,  # type: ignore[attr-defined]
-                            "updated_at": func.now(),
-                        },
-                    )
-                )
-                session.execute(stmt)
+                    session.execute(stmt)
             session.commit()
 
     # ── Internal helpers ────────────────────────────────────────────────
