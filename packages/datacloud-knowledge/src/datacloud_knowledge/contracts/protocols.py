@@ -961,3 +961,34 @@ class TermWriter(Protocol):
     # ── Term ────────────────────────────────────────────────────────
 
     def delete_term(self, *, term_id: str) -> None: ...
+
+    # ── Bulk operations ────────────────────────────────────────────
+
+    def bulk_upsert_terms_no_library(
+        self,
+        *,
+        terms: list[tuple[str, str, str]],
+    ) -> list[str]:
+        """批量 UPSERT term 行（无 library_id 场景）。
+
+        1 次 SELECT 分组 → executemany INSERT 新行 → executemany UPDATE 旧行。
+
+        Args:
+            terms: (term_code, term_name, term_type_code) 元组列表。
+
+        Returns:
+            term_id 列表，与 terms 顺序对应。
+        """
+        ...
+
+    def bulk_create_term_names_no_scope(
+        self,
+        *,
+        items: list[tuple[str, str]],
+    ) -> None:
+        """批量创建 term_name，幂等跳过已存在。
+
+        Args:
+            items: (term_id, name_text) 元组列表。
+        """
+        ...

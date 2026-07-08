@@ -605,6 +605,131 @@ class _TermWriter(_WriterBase):
         else:
             log.debug("upsert_term 向量回填完成: term_id=%s", term_id)
 
+    # ── 批量 UPSERT（单 SQL，替代逐条 upsert_term）────────────────────
+
+    def bulk_upsert_terms_no_library(
+        self,
+        *,
+        terms: list[tuple[str, str, str]],
+        #     (term_code, term_name, term_type_code)
+    ) -> list[str]:
+        """批量 UPSERT term 行（无 library_id 场景）。
+
+        1 次 SELECT 分组 → executemany INSERT 新行 → executemany UPDATE 旧行。
+        """
+        if not terms:
+            return []
+
+        now = self._now()
+        conn = self.session.connection().connection
+
+        codes = [t[0] for t in terms]
+        types_list = [t[2] for t in terms]
+
+        # ── 1. Single SELECT to find existing ──
+        existing_rows = conn.execute(
+            """SELECT term_code, term_type_code, term_id
+               FROM term
+               WHERE term_type_code = ANY(%(types)s)
+                 AND term_code = ANY(%(codes)s)
+                 AND parent_term_id IS NULL""",
+            {"types": types_list, "codes": codes},
+        ).fetchall()
+        existing_map = {(r[0], r[1]): str(r[2]) for r in existing_rows}
+
+        # ── 2. Group new vs existing ──
+        insert_data: list[tuple[str, str, str, str]] = []  # (tid, code, name, type)
+        update_data: list[tuple[str, str, str]] = []  # (name, code, ttype)
+        term_ids: list[str] = []
+
+        for term_code, term_name, term_type_code in terms:
+            key = (term_code, term_type_code)
+            if key in existing_map:
+                tid = existing_map[key]
+                term_ids.append(tid)
+                if term_name:
+                    update_data.append((term_name, term_code, term_type_code))
+            else:
+                tid = self._new_id()
+                term_ids.append(tid)
+                insert_data.append((tid, term_code, term_name, term_type_code))
+
+        # ── 3. Batch INSERT ──
+        if insert_data:
+            cur = conn.cursor()
+            cur.executemany(
+                """INSERT INTO term (
+                       term_id, term_code, term_name, term_type_code,
+                       domain_ids, parent_term_id, term_tags, created_time, updated_time
+                   ) VALUES (%s, %s, %s, %s, %s, NULL, %s, %s, %s)""",
+                [
+                    (tid, code, name, ttype, "{}", "{}", now, now)
+                    for tid, code, name, ttype in insert_data
+                ],
+            )
+
+        # ── 4. Batch UPDATE ──
+        if update_data:
+            cur = conn.cursor()
+            cur.executemany(
+                """UPDATE term SET term_name = %s, updated_time = %s
+                   WHERE term_code = %s AND term_type_code = %s
+                     AND parent_term_id IS NULL""",
+                [(name, now, code, ttype) for name, code, ttype in update_data],
+            )
+
+        return term_ids
+
+    def bulk_create_term_names_no_scope(
+        self,
+        *,
+        items: list[tuple[str, str]],
+        #     (term_id, name_text)
+    ) -> None:
+        """批量创建 term_name，幂等跳过已存在。用 executemany。"""
+        if not items:
+            return
+
+        now = self._now()
+        conn = self.session.connection().connection
+
+        # Check which already exist
+        tids = [i[0] for i in items]
+        names = [i[1] for i in items]
+        existing_rows = conn.execute(
+            """SELECT term_id, name_text FROM term_name
+               WHERE term_id = ANY(%(tids)s)
+                 AND name_text = ANY(%(names)s)
+                 AND search_scope = '{}'::jsonb""",
+            {"tids": tids, "names": names},
+        ).fetchall()
+        existing_set = {(r[0], r[1]) for r in existing_rows}
+
+        new_items: list[tuple[str, str, str, str, object, object]] = []
+        seen: set[tuple[str, str]] = set()
+        for tid, name in items:
+            if (tid, name) not in existing_set and (tid, name) not in seen:
+                seen.add((tid, name))
+                new_items.append((self._new_id(), tid, name, "{}", now, now))
+
+        if new_items:
+            try:
+                cur = conn.cursor()
+                cur.executemany(
+                    """INSERT INTO term_name (
+                           name_id, term_id, name_text, search_scope,
+                           created_time, updated_time
+                       ) VALUES (%s, %s, %s, %s, %s, %s)""",
+                    new_items,
+                )
+            except Exception:
+                # 并发/残存数据导致的偶发唯一约束冲突，忽略
+                log.debug(
+                    "bulk_create_term_names_no_scope: unique violation ignored (already exists)"
+                )
+
+        log.info("bulk_create_term_names_no_scope: %d new / %d total", len(new_items), len(items))
+
     def update_term(
         self,
         *,
