@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -157,7 +158,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
 
         # Batch sync terms to knowledge DB (single writer, no per-term backfill)
+        t_sync = time.monotonic()
         self._batch_sync_entity_terms(objects, views, relations, actions)
+        logger.info("_batch_sync_entity_terms done in %.1fs", time.monotonic() - t_sync)
 
         logger.info(
             "batch_import_ontology: %s objects=%d views=%d relations=%d actions=%d dbsources=%d",
@@ -248,7 +251,18 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 "Store empty for base_id=%s, falling back to parse_owl + batch_import_ontology",
                 base_id,
             )
+            t1 = time.monotonic()
             parsed = self.parse_owl(base_path)
+            logger.info(
+                "parse_owl done in %.1fs, objects=%d views=%d relations=%d actions=%d dbsources=%d",
+                time.monotonic() - t1,
+                len(parsed.objects),
+                len(parsed.views),
+                len(parsed.relations),
+                len(parsed.actions),
+                len(parsed.dbsources),
+            )
+            t2 = time.monotonic()
             self.batch_import_ontology(
                 base_path,
                 parsed.objects,
@@ -258,6 +272,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 parsed.dbsources,
                 base_id=base_id,
             )
+            logger.info("batch_import_ontology done in %.1fs", time.monotonic() - t2)
             return self.load_ontology(
                 base_path, base_id=base_id
             )  # recurse → store now has data
