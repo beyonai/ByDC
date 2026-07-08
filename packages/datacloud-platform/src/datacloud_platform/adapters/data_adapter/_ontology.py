@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -208,6 +207,18 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         all_dbsources = [d for d in all_dbsources if d]
 
         if any([all_objects, all_views, all_relations, all_actions, all_dbsources]):
+            # Normalize legacy camelCase keys to snake_case for all entity types.
+            # Filtered lists contain no None at runtime (see [a for a in ... if a] above),
+            # but mypy cannot narrow through list comprehension reassignment.
+            _obj_map = {"objectCode": "object_code"}
+            _view_map = {"viewCode": "view_code", "viewId": "view_code"}
+            _rel_map = {"relationCode": "relation_code"}
+            _act_map = {"actionCode": "action_code"}
+            self._normalize_entity_keys(all_objects, _obj_map)  # type: ignore[arg-type]
+            self._normalize_entity_keys(all_views, _view_map)  # type: ignore[arg-type]
+            self._normalize_entity_keys(all_relations, _rel_map)  # type: ignore[arg-type]
+            self._normalize_entity_keys(all_actions, _act_map)  # type: ignore[arg-type]
+
             loader = OntologyLoader()
             loader.load_from_content(
                 {
@@ -1345,6 +1356,20 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     # ── Term sync helpers (called by CRUD methods) ─────────────────────────
 
     @staticmethod
+    def _normalize_entity_keys(
+        entities: list[dict[str, Any]], mapping: dict[str, str]
+    ) -> None:
+        """Copy legacy camelCase keys to snake_case for entities that lack them.
+
+        Mutates *entities* in-place — only sets a key when the snake_case key
+        is missing and the camelCase key exists (no overwrite).
+        """
+        for entity in entities:
+            for camel, snake in mapping.items():
+                if snake not in entity and camel in entity:
+                    entity[snake] = entity[camel]
+
+    @staticmethod
     def _extract_fields_from_entity(
         entity_type: str, data: dict[str, Any]
     ) -> list[dict[str, Any]]:
@@ -1405,29 +1430,16 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         relations: list[dict[str, Any]],
         actions: list[dict[str, Any]],
     ) -> None:
-        """Batch-upsert entity terms then backfill vectors in a single batch.
+        """Batch-upsert entity terms with single-SQL bulk INSERT ON CONFLICT.
 
-        1. Opens one writer, upserts all terms with ``backfill_vectors=False``.
-        2. Collects all created/updated term_ids.
-        3. After commit, spawns a daemon thread to run ``backfill_tsvector``
-           and ``backfill_embeddings(term_ids=...)`` — leveraging the
-           embedding model's batch API (``batch_size=50``) instead of N
-           individual calls.
+        1. Collects entity tuples from the input lists (fast, no I/O).
+        2. **Synchronous**: bulk-upsert all terms → bulk-upsert all term_names
+           in a single DB session (one writer, two SQLs).
+        3. **Asynchronous**: spawns a daemon thread for tsvector + embedding
+           backfill.
 
         Failures are logged but do not block the import.
         """
-        try:
-            from datacloud_knowledge.adapters import (  # noqa: PLC0415
-                backfill_embeddings,
-                backfill_tsvector,
-                create_writer,
-            )
-        except ImportError:
-            logger.debug(
-                "_batch_sync_entity_terms skipped (datacloud_knowledge unavailable)"
-            )
-            return
-
         entities: list[tuple[str, str, str]] = []
         for obj in objects:
             code = obj.get("object_code", "")
@@ -1462,32 +1474,32 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             "relation": "relation",
             "action": "ontology_action",
         }
+
+        terms: list[tuple[str, str, str]] = [
+            (code, name, term_type_map[entity_type])
+            for entity_type, code, name in entities
+        ]
         term_ids: list[str] = []
+
+        # ── 1. 同步：单次批量 UPSERT term + term_name ──
         try:
+            from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+
             with create_writer() as writer:
-                for entity_type, entity_code, entity_name in entities:
-                    # Wrap each entity in a savepoint so one failure
-                    # doesn't roll back previously successful upserts.
-                    sp = writer.session.begin_nested()  # type: ignore[attr-defined]
-                    try:
-                        term_id = writer.upsert_term(
-                            term_code=entity_code,
-                            term_name=entity_name,
-                            term_type_code=term_type_map[entity_type],
-                            backfill_vectors=False,
-                        )
-                        if term_id:
-                            term_ids.append(term_id)
-                        sp.commit()
-                    except Exception:
-                        sp.rollback()
-                        logger.exception(
-                            "_batch_sync_entity_terms: type=%s code=%s failed",
-                            entity_type,
-                            entity_code,
-                        )
+                term_ids = writer.bulk_upsert_terms_no_library(terms=terms)
+                if term_ids:
+                    writer.bulk_create_term_names_no_scope(
+                        items=[
+                            (tid, name) for tid, (_, name, _) in zip(term_ids, terms)
+                        ]
+                    )
+        except ImportError:
+            logger.debug(
+                "_batch_sync_entity_terms skipped (datacloud_knowledge unavailable)"
+            )
+            return
         except Exception:
-            logger.exception("_batch_sync_entity_terms: batch upsert failed")
+            logger.exception("_batch_sync_entity_terms: bulk upsert failed")
             return
 
         logger.info("_batch_sync_entity_terms: upserted %d terms", len(term_ids))
@@ -1495,9 +1507,14 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if not term_ids:
             return
 
-        # Defer vector backfill to background thread — batch API call
+        # ── 2. 异步：向量回填 ──
         def _backfill() -> None:
             try:
+                from datacloud_knowledge.adapters import (  # noqa: PLC0415
+                    backfill_embeddings,
+                    backfill_tsvector,
+                )
+
                 backfill_tsvector()
             except Exception:
                 logger.exception("_batch_sync_entity_terms: tsvector backfill failed")
@@ -1505,6 +1522,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 backfill_embeddings(term_ids=term_ids, batch_size=50)
             except Exception:
                 logger.exception("_batch_sync_entity_terms: embeddings backfill failed")
+
+        import threading
 
         threading.Thread(target=_backfill, daemon=True).start()
 
@@ -1521,29 +1540,29 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     ) -> None:
         """Write entity term into knowledge DB via ``create_writer``.
 
-        Calls ``upsert_term`` (with explicit term_code=entity_code) and
-        ``create_term_name`` internally.  tsvector + embedding backfill
-        runs in a daemon thread (best-effort, non-blocking).
-
-        ``domain_ids`` defaults to empty; scene membership is managed by
-        ``_sync_entity_domains`` / ``_remove_entity_domains``.
+        Calls ``upsert_term`` with ``backfill_vectors=False`` — vector
+        backfill runs in a daemon thread after commit (best-effort,
+        non-blocking, failure logged).
         """
         _ = entity_desc, fields
         try:
-            from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
+            from datacloud_knowledge.adapters import (  # noqa: PLC0415
+                backfill_embeddings,
+                create_writer,
+            )
 
             term_type_code = self._TERM_TYPE_MAP.get(entity_type, entity_type)
             domains = list(domain_codes) if domain_codes else []
 
             with create_writer() as writer:
-                writer.upsert_term(
+                term_id = writer.upsert_term(
                     term_code=entity_code,
                     term_name=entity_name,
                     term_type_code=term_type_code,
                     library_id=base_id or None,
                     domain_ids=domains,
                     search_scope={"base": base_id} if base_id else {},
-                    backfill_vectors=True,
+                    backfill_vectors=False,
                 )
             logger.info(
                 "_sync_entity_terms: type=%s term_type=%s code=%s done",
@@ -1551,6 +1570,24 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 term_type_code,
                 entity_code,
             )
+
+            # Defer vector backfill to daemon thread — non-blocking
+            if term_id:
+                import threading
+
+                def _backfill() -> None:
+                    try:
+                        backfill_embeddings(term_ids=[term_id], batch_size=50)
+                    except Exception:
+                        logger.exception(
+                            "_sync_entity_terms: embedding backfill failed "
+                            "type=%s code=%s term_id=%s",
+                            entity_type,
+                            entity_code,
+                            term_id,
+                        )
+
+                threading.Thread(target=_backfill, daemon=True).start()
         except ImportError:
             logger.debug(
                 "_sync_entity_terms skipped (datacloud_knowledge unavailable): "
