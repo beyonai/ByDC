@@ -1,16 +1,6 @@
 -- 系统内置术语类型预置数据
 -- 使用 INSERT ... SELECT WHERE NOT EXISTS 保证幂等，可重复执行，兼容 OpenGauss
 
--- ── 列表术语（type_category = 1）────────────────────────────────────────────────────────────────────────
-INSERT INTO term_type (type_code, type_name, type_desc, type_category, is_builtin)
-SELECT 'employee', '员工', '员工/人员列表术语，用于关联人员维度', 1, TRUE
-WHERE NOT EXISTS (SELECT 1 FROM term_type WHERE type_code = 'employee');
-
--- ── 字典术语（type_category = 2）────────────────────────────────────────────────────────────────────────
-INSERT INTO term_type (type_code, type_name, type_desc, type_category, is_builtin)
-SELECT 'general', '通用', '通用字典/枚举类术语，如状态、类别等', 2, TRUE
-WHERE NOT EXISTS (SELECT 1 FROM term_type WHERE type_code = 'general');
-
 -- ── 本体术语（type_category = 3）────────────────────────────────────────────────────────────────────────
 INSERT INTO term_type (type_code, type_name, type_desc, type_category, is_builtin)
 SELECT 'view', '视图', '本体-视图类型，对应数据分析场景，包含多个对象及其关联关系', 3, TRUE
