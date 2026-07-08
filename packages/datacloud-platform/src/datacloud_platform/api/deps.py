@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from fastapi import Request
+
+from datacloud_platform.adapters.byclaw_sync import hook_ctx
+
 if TYPE_CHECKING:
     from datacloud_platform import DatacloudPlatform
 
@@ -30,3 +34,14 @@ def get_platform() -> DatacloudPlatform:
     if _platform is None:
         raise RuntimeError("Platform not set. Call set_platform() first.")
     return _platform
+
+
+def extract_beyond_token(request: Request) -> None:
+    """FastAPI Depends: extract ``Beyond-Token`` header and inject into hook_ctx.
+
+    Called automatically for every RPC handler via ``Depends()``.
+    Handler code never needs to touch this header directly.
+    """
+    token: str | None = request.headers.get("Beyond-Token")
+    if token:
+        hook_ctx.set({"beyond_token": token})
