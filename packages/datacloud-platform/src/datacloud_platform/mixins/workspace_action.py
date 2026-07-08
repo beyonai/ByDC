@@ -345,6 +345,7 @@ class WorkspaceActionMixin:
         action_code: str,
         params: dict[str, Any] | None = None,
         user_name: str = "",
+        script: str | None = None,
     ) -> dict[str, Any]:
         """在 SQLite 沙箱中调试执行 Action 脚本。
 
@@ -358,6 +359,7 @@ class WorkspaceActionMixin:
             action_code: Action 编码。
             params: 入参 dict。
             user_name: 用户显示名（注入 context.extras["user_name"]）。
+            script: 临时覆盖脚本内容，不传则从工作区文件读取。
         """
         if not entity_code.strip() or not action_code.strip():
             return {"ok": False, "error": "entity_code 和 action_code 不能为空"}
@@ -365,9 +367,13 @@ class WorkspaceActionMixin:
         try:
             wfm = self._get_wfm(user_code, workspace_name)
 
-            # 读取脚本
-            script = wfm.load_action_script(entity_code.strip(), action_code.strip())
-            if script is None:
+            # 读取脚本：优先使用传入的临时脚本，否则从工作区文件读取
+            resolved_script = script.strip() if script and script.strip() else None
+            if resolved_script is None:
+                resolved_script = wfm.load_action_script(
+                    entity_code.strip(), action_code.strip()
+                )
+            if resolved_script is None:
                 return {
                     "ok": False,
                     "error": f"Action 脚本不存在: {entity_code}/{action_code}",
@@ -392,7 +398,7 @@ class WorkspaceActionMixin:
 
             db_path = wfm.debug_db_path
             return await WorkspaceScriptExecutor.execute_debug(
-                script=script,
+                script=resolved_script,
                 params=params or {},
                 db_path=db_path,
                 all_fields=all_fields,

@@ -369,8 +369,8 @@ class WorkspaceScriptExecutor:
 
         # 构建注入命名空间
         extra_namespace: dict[str, Any] = {
-            "Q": QueryWrapper,
-            "A": AggWrapper,
+            "Q": QueryWrapper(),
+            "A": AggWrapper(),
             "params": params,
         }
         for entity_code, fields in all_fields.items():

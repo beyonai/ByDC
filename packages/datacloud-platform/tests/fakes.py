@@ -1333,6 +1333,43 @@ class FakeTermBackend:
         """Record remove call."""
         self._removed.append(entity_code)
 
+    # ── TermSyncHandler ─────────────────────────────────────────────
+
+    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+        """Track term type creation (idempotent)."""
+        if not hasattr(self, "_term_types"):
+            self._term_types: set[str] = set()
+        self._term_types.add(type_code)
+
+    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+        """Track upserted terms and return fake UUIDs."""
+        import uuid
+
+        term_ids: list[str] = []
+        for t in terms:
+            term_code = t.get("term_code", "")
+            term_name = t.get("term_name", "")
+            term_type_code = t.get("term_type_code", "")
+            if term_code and term_name and term_type_code:
+                self._terms[(term_code, term_type_code)] = term_name
+                term_ids.append(str(uuid.uuid4()))
+        return term_ids
+
+    def delete_terms(
+        self,
+        *,
+        term_ids: list[str] | None = None,
+        terms: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """Track deleted terms by removing from _terms dict."""
+        if terms:
+            for t in terms:
+                term_code = t.get("term_code", "")
+                term_type_code = t.get("term_type_code", "")
+                key = (term_code, term_type_code)
+                if key in self._terms:
+                    del self._terms[key]
+
     def get_term(self, term_code: str, term_type_code: str) -> str | None:
         """Look up term name by (code, type_code)."""
         return self._terms.get((term_code, term_type_code))

@@ -238,3 +238,30 @@ class TermBackend(Protocol):
     def remove_terms(self, entity_code: str) -> None:
         """清除对象关联的所有术语。"""
         ...
+
+    # ── TermSyncHandler 协议方法（供 term_sync_worker 注入使用）──────
+
+    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+        """确保术语类型存在（幂等）。"""
+        ...
+
+    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+        """批量 upsert 术语，返回 term_id（UUID）列表。
+
+        terms 每条字段：term_code, term_name, term_desc,
+        term_type_code, library_code, domain_code
+        """
+        ...
+
+    def delete_terms(
+        self,
+        *,
+        term_ids: list[str] | None = None,
+        terms: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """批量删除术语，支持 UUID 列表和业务三元组两种入参，均有值时全部执行。
+
+        term_ids: 数据库 UUID 列表，直接按主键删除。
+        terms:    业务三元组 dict 列表（term_code, term_type_code, library_code）。
+        """
+        ...

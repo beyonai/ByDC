@@ -143,6 +143,7 @@ class ParsedAction:
     action_type: str = "QUERY"
     belong_class: str | None = None
     function_refs: list[str] = field(default_factory=list)
+    object_references: list[str] = field(default_factory=list)
     params: list[dict[str, Any]] = field(default_factory=list)
     request_param_refs: list[str] = field(default_factory=list)
     response_param_refs: list[str] = field(default_factory=list)
@@ -459,6 +460,9 @@ class OwlParser:
         request_method = self._get_predicate_value(g, subject, "request_method") or ""
         script = self._get_predicate_value(g, subject, "script")
 
+        object_refs_str = self._get_predicate_value(g, subject, "object_references") or "[]"
+        object_references = self._parse_loose_json_list(object_refs_str)
+
         request_params = self._get_predicate_values(g, subject, "request_params")
         response_params = self._get_predicate_values(g, subject, "response_params")
 
@@ -468,6 +472,7 @@ class OwlParser:
             description=action_desc,
             action_type=action_type,
             function_refs=function_refs,
+            object_references=object_references,
             request_param_refs=request_params,
             response_param_refs=response_params,
             request_url=request_url,
@@ -988,6 +993,7 @@ class OwlParser:
                             "description": action.description,
                             "action_type": action.action_type,
                             "function_refs": list(action.function_refs),
+                            "object_references": list(action.object_references),
                             "params": params,
                             "script": action.script,
                             "request_url": action.request_url,

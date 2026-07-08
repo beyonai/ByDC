@@ -34,6 +34,7 @@ def build_terms(
     entity_name: str,
     fields: list[dict[str, Any]],
     *,
+    actions: list[dict[str, Any]] | None = None,
     library_code: str = "PERSONAL_LIB",
     domain_codes: tuple[str, ...] = ("PERSONAL_DOMAIN",),
     entity_type: str = "object",
@@ -48,6 +49,7 @@ def build_terms(
         entity_code: 实体编码（唯一）。
         entity_name: 实体中文名称。
         fields: 字段列表，每个字段含 property_code/term_type_code/term_values 等。
+        actions: Action 元数据列表，用于处理 Action 参数的 term_values（内联枚举）。
         library_code: 术语库编码，默认 PERSONAL_LIB。
         domain_codes: 领域编码元组，默认 ("PERSONAL_DOMAIN",)。
         entity_type: "object" 或 "view"。
@@ -84,7 +86,13 @@ def build_terms(
             continue
         property_name: str = field.get("property_name", property_code)
         term_type_code: str = field.get("term_type_code", "")
-        term_values: list[dict[str, str]] = field.get("term_values") or []
+        raw_term_values: list[Any] = field.get("term_values") or []
+        # 兼容两种格式：字符串列表 ["草稿", "已提交"] 或 dict 列表 [{"code": ..., "name": ...}]
+        term_values: list[dict[str, str]] = [
+            v if isinstance(v, dict) else {"code": str(v), "name": str(v)}
+            for v in raw_term_values
+            if v
+        ]
         term_data_type: str = field.get("term_data_type", "LIST_TERM")
 
         # ── 属性术语 (prop) — 所有字段都创建 ──
@@ -113,15 +121,14 @@ def build_terms(
 
         if term_values:
             # ── 内联值术语 + HAS_TERM ──
-            value_type_code = property_code
+            # term_type_code 与 OWL 生成器保持一致：{entity_code}_{field_code}
+            value_type_code = f"{entity_code}_{property_code}"
             type_category = _term_data_type_to_category(term_data_type)
             _register_type(
                 term_types, seen_type_codes, value_type_code, property_name, "", type_category
             )
 
             for entry in term_values:
-                if not isinstance(entry, dict):
-                    continue
                 value_code: str = entry.get("code", "")
                 value_name: str = entry.get("name", value_code)
                 if not value_code:
@@ -165,6 +172,46 @@ def build_terms(
                     cardinality="1:1",
                 )
             )
+
+    # ── Action 参数内联枚举值（term_values 直接写在 param 上，不挂 object field）─
+    for action_meta in actions or []:
+        action_code: str = action_meta.get("action_code", "")
+        if not action_code:
+            continue
+        all_params: list[dict[str, Any]] = action_meta.get("params", [])
+        for param in all_params:
+            param_code: str = param.get("paramCode", "")
+            if not param_code:
+                continue
+            raw_pv: list[Any] = param.get("term_values") or []
+            if not raw_pv:
+                continue
+            param_term_values: list[dict[str, str]] = [
+                v if isinstance(v, dict) else {"code": str(v), "name": str(v)} for v in raw_pv if v
+            ]
+            if not param_term_values:
+                continue
+            # 与 generator.py 保持一致：auto_ttc = {action_code}_{param_code}
+            explicit_ttc: str = param.get("term_type_code", "")
+            value_type_code = explicit_ttc if explicit_ttc else f"{action_code}_{param_code}"
+            param_name: str = param.get("paramName", param_code)
+            _register_type(
+                term_types, seen_type_codes, value_type_code, param_name, "", 2
+            )  # DICT_TERM
+            for entry in param_term_values:
+                value_code = entry.get("code", "")
+                value_name = entry.get("name", value_code)
+                if not value_code:
+                    continue
+                terms.append(
+                    TermDef(
+                        term_code=value_code,
+                        term_name=value_name,
+                        term_type_code=value_type_code,
+                        library_code=library_code,
+                        domain_codes=domain_codes,
+                    )
+                )
 
     if len(terms) <= 1:  # 只有实体术语，无字段
         return {"ok": True, "message": "无字段术语需要入库"}

@@ -1252,35 +1252,6 @@ class Action:
                 csv_manager=csv_manager,
                 threshold=threshold,
             )
-        # All execution paths exhausted — write diagnostics to trace log
-        import json as _json
-        import os as _os
-        import sys as _sys
-        from datetime import UTC as _UTC
-        from datetime import datetime as _datetime
-
-        _diag = {
-            "event_type": "ActionNotConfigured",
-            "timestamp": _datetime.now(_UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-            "action_code": self._action.action_code,
-            "request_url": self._action.request_url,
-            "request_method": self._action.request_method,
-            "function_refs": self._action.function_refs,
-            "has_script": bool(self._action.script),
-            "loader_fn_count": len(self._loader._functions) if self._loader else 0,
-        }
-        _line = _json.dumps(_diag, ensure_ascii=False, default=str) + "\n"
-        print(_line, file=_sys.stderr, end="")
-        _trace_path = _os.environ.get("DATACLOUD_TRACE_LOG_PATH", "logs/query_trace.log")
-        try:
-            from pathlib import Path as _Path
-
-            _p = _Path(_trace_path)
-            _p.parent.mkdir(parents=True, exist_ok=True)
-            with open(_p, "a", encoding="utf-8") as _f:
-                _f.write(_line)
-        except OSError:
-            pass
         raise ActionNotConfiguredError(self._action.action_code)
 
     async def _execute_virtual(

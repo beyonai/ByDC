@@ -500,13 +500,26 @@ class _TermWriter(_WriterBase):
         scope = search_scope or {}
 
         # ── 1. UPSERT term ───────────────────────────────────────────
-        existing = self.session.execute(
-            text(
-                "SELECT term_id, library_id FROM term "
-                "WHERE term_code = :code AND term_type_code = :type AND parent_term_id IS NULL"
-            ),
-            {"code": term_code, "type": term_type_code},
-        ).fetchone()
+        # 有 library_id 时按三元组 (library_id, term_type_code, term_code) 幂等；
+        # 无 library_id 时退回二元组 (term_type_code, term_code)，保持向后兼容。
+        if library_id is not None:
+            existing = self.session.execute(
+                text(
+                    "SELECT term_id FROM term "
+                    "WHERE library_id = :library_id "
+                    "AND term_code = :code AND term_type_code = :type "
+                    "AND parent_term_id IS NULL"
+                ),
+                {"library_id": library_id, "code": term_code, "type": term_type_code},
+            ).fetchone()
+        else:
+            existing = self.session.execute(
+                text(
+                    "SELECT term_id, library_id FROM term "
+                    "WHERE term_code = :code AND term_type_code = :type AND parent_term_id IS NULL"
+                ),
+                {"code": term_code, "type": term_type_code},
+            ).fetchone()
 
         if existing is not None:
             term_id = str(existing[0])
