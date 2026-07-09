@@ -284,6 +284,12 @@ class RemoteOntologyBackend:
         """Remote ontology does not support per-object detail."""
         return None
 
+    def get_object_detail_from_raw(
+        self, raw: dict[str, Any], object_code: str
+    ) -> dict[str, Any] | None:
+        """Remote ontology does not support raw-based detail."""
+        return None
+
     # -- View CRUD (remote, read-only) --
 
     def get_views(self, loader: Any, base_id: str) -> list[Any]:

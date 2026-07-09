@@ -53,6 +53,12 @@ class _NoopOntologyBackend:
         """Return None."""
         return None
 
+    def get_object_detail_from_raw(
+        self, raw: dict[str, Any], object_code: str
+    ) -> dict[str, Any] | None:
+        """Return None — noop backend has no entity data."""
+        return None
+
     # -- View CRUD (no-op) --
 
     def get_views(self, loader: Any, base_id: str) -> list[Any]:
