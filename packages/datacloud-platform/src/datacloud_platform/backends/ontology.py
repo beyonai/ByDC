@@ -91,6 +91,12 @@ class OntologyBackend(Protocol):
         """Get single object detail (full ObjectType with properties and actions)."""
         ...
 
+    def get_object_detail_from_raw(
+        self, raw: dict[str, Any], object_code: str
+    ) -> dict[str, Any] | None:
+        """Get single object detail from raw entity data — no full ontology load."""
+        ...
+
     def get_object_subtree(
         self, loader: Any, base_id: str, object_code: str
     ) -> dict[str, Any]:

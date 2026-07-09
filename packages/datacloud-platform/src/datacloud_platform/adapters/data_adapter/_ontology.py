@@ -370,7 +370,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     def get_object_detail(
         self, loader: OntologyQueryable, object_code: str
     ) -> dict[str, Any] | None:
-        """Get full object detail with properties and actions.
+        """Get full object detail with properties and actions from a loaded ontology.
 
         Args:
             loader: An OntologyQueryable with _classes populated.
@@ -382,6 +382,28 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         cls = loader._classes.get(object_code)
         if cls is None:
             return None
+        return self._build_object_detail(cls)
+
+    def get_object_detail_from_raw(
+        self, raw: dict[str, Any], object_code: str
+    ) -> dict[str, Any] | None:
+        """Get full object detail from a single raw entity dict — no full ontology load.
+
+        Uses OntologyLoader to parse just this one object, then extracts the
+        resulting OntologyClass.
+        """
+        from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
+
+        loader = OntologyLoader()
+        loader.load_from_content({"objects": [raw]})
+        cls = loader._classes.get(object_code)
+        if cls is None:
+            return None
+        return self._build_object_detail(cls)
+
+    @staticmethod
+    def _build_object_detail(cls: Any) -> dict[str, Any]:
+        """Build ObjectType dict from a parsed OntologyClass."""
         obj = ObjectType(
             objectCode=cls.object_code,
             objectName=cls.object_name,
