@@ -113,8 +113,8 @@ class SceneLoaderMixin:
     ) -> OntologyLoader:
         """Load an ontology subset directly from object and view codes.
 
-        1. Load the full ontology once.
-        2. Extract only the matching classes and views into a new loader.
+        1. Bulk-query the entity store when available.
+        2. Fall back to remote scene details for backends without entity store.
 
         Args:
             base_id: Ontology base identifier.
@@ -126,17 +126,33 @@ class SceneLoaderMixin:
             with virtual actions injected.
         """
         backend: OntologyBackend = self._ontology_for(base_id)  # type: ignore[attr-defined]
-        base_path = self._base_path_for(base_id)  # type: ignore[attr-defined]
 
         vw_codes = view_codes if view_codes is not None else []
 
-        # Try local load first; fall back to remote scene details for read-only backends
-        try:
-            loader: OntologyQueryable = backend.load_ontology(
-                base_path, base_id=base_id
+        if hasattr(backend, "_entity_store"):
+            store = backend._entity_store.sub_store(base_id)
+            objs, _ = (
+                store.search(
+                    "objects",
+                    codes=object_codes,
+                    page=1,
+                    page_size=max(len(object_codes), 1),
+                )
+                if object_codes
+                else ([], 0)
             )
-            content = _build_content(loader, object_codes, vw_codes)
-        except PermissionError:
+            vws, _ = (
+                store.search(
+                    "views",
+                    codes=vw_codes,
+                    page=1,
+                    page_size=max(len(vw_codes), 1),
+                )
+                if vw_codes
+                else ([], 0)
+            )
+            content: dict[str, Any] = {"objects": objs, "views": vws}
+        else:
             content = _build_content_from_remote_scenes(
                 backend, base_id, ["-1"], object_codes, vw_codes
             )
@@ -322,7 +338,7 @@ def _build_content_from_remote_scenes(
         if sid == "-1":
             try:
                 onto_result = backend.query_ontologies_by_scene(
-                    None, base_id, sid, page=1, page_size=20
+                    sid, base_id=base_id, page=1, page_size=20
                 )
                 onto_data = onto_result.get("data", {})
                 onto_list: list[dict[str, Any]] = onto_data.get("objects", []) or []
@@ -350,7 +366,7 @@ def _build_content_from_remote_scenes(
 
     for sid in scene_ids_for_loop:
         try:
-            detail = backend.get_scene_details(None, base_id, sid)
+            detail = backend.get_scene_details(sid, base_id=base_id)
         except Exception:
             logger.debug(
                 "get_scene_details failed for base_id=%r scene_id=%r",
