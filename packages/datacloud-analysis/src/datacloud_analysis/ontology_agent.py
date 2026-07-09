@@ -588,10 +588,7 @@ class OntologyAgent:
         _ids = base_ids if base_ids else [self._config.base_id]
         loaders: list[Any] = []
         for bid in _ids:
-            snapshot = runtime.get_loader(
-                bid,
-                object_codes=object_codes,
-                view_codes=view_codes)
+            snapshot = runtime.get_loader(bid, object_codes=object_codes, view_codes=view_codes)
             loaders.append(snapshot.loader)
 
         mounted = list(view_codes or []) + list(object_codes or [])

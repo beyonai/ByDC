@@ -112,7 +112,7 @@ class LoaderRuntimeManager:
     def _build_loader(self, base_id: str) -> OntologyLoader:
         """Build an OntologyLoader from the platform's ontology backend."""
         base_path = self._platform._base_path_for(base_id)
-        return self._platform.load_ontology(base_id, base_path)
+        return self._platform.load_ontology(base_id, base_path)  # type: ignore[return-value]
 
     def _configure_term_loader(self, loader: OntologyLoader) -> None:
         if getattr(loader._config, "term_loader", None) is not None:

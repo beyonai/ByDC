@@ -242,7 +242,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     "dbsources": all_dbsources,
                 }
             )
-            return loader  # type: ignore[no-any-return]
+            return loader  # type: ignore[return-value]
 
         # Fallback: OWL directory exists but store is empty
         if base_path.exists():
@@ -277,7 +277,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             )  # recurse → store now has data
 
         # No OWL directory, return empty loader
-        return OntologyLoader()  # type: ignore[no-any-return]
+        return OntologyLoader()  # type: ignore[return-value]
 
     def load_terms(
         self, _loader: OntologyQueryable, *, library_id: str = "PERSONAL_LIB"
@@ -298,7 +298,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         from datacloud_data_sdk.ontology.term_loader import TermLoader  # noqa: PLC0415
 
         _ = library_id  # consumed by concrete TermLoader subclass
-        return TermLoader()
+        return TermLoader()  # type: ignore[abstract]
 
     def create_table(self, object_code: str, fields: list[dict[str, Any]]) -> None:
         """Create physical table for DYNAMIC_TABLE objects.
