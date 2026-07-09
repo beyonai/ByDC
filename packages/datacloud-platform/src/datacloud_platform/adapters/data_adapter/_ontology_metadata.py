@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from datacloud_platform.backends.ontology import OntologyQueryable
+    pass
 
 from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
 
@@ -20,205 +20,76 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
     def get_object_property_term_bindings(
         self,
-        loader: OntologyQueryable,
         object_codes: list[str],
+        *,
+        base_id: str = "",
     ) -> list[dict[str, Any]]:
-        """Extract terminology binding info for properties of given objects.
-
-        Iterates ``loader._classes[code].fields`` and extracts binding code
-        and name for each property with terminology configuration.
-        """
-        result: list[dict[str, Any]] = []
-        for code in object_codes:
-            cls = loader._classes.get(code)
-            if cls is None:
-                continue
-            for f in cls.fields:
-                term_code: str = getattr(f, "field_code", "") or ""
-                term_name: str = getattr(f, "field_name", "") or ""
-                if not term_code:
-                    continue
-                result.append(
-                    {
-                        "objectCode": code,
-                        "objectName": getattr(cls, "object_name", ""),
-                        "propertyCode": term_code,
-                        "propertyName": term_name,
-                        "dataType": getattr(f, "field_type", ""),
-                        "bindingType": "property",
-                    }
-                )
-        return result
+        """Extract terminology binding info — stub (shadowed by OntologyBackendMixin)."""
+        _ = object_codes, base_id
+        return []
 
     def get_view_property_term_bindings(
         self,
-        loader: OntologyQueryable,
         view_codes: list[str],
+        *,
+        base_id: str = "",
     ) -> list[dict[str, Any]]:
-        """Extract terminology binding info for view property mappings.
-
-        Iterates ``loader._views[code].mappings``, resolves source object
-        and property information via ``loader._classes``.
-        """
-        result: list[dict[str, Any]] = []
-        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
-        for vc in view_codes:
-            view_data = raw_views.get(vc)
-            if view_data is None:
-                continue
-            for m in view_data.get("mappings", []):
-                prop_code = m.get("property_code", "")
-                src_obj_code = m.get("source_object_code", "")
-                src_col_code = m.get("source_object_column_code", "")
-                if not prop_code:
-                    continue
-                src_obj = loader._classes.get(src_obj_code)
-                src_obj_name = src_obj.object_name if src_obj else src_obj_code
-                result.append(
-                    {
-                        "viewCode": vc,
-                        "viewName": view_data.get("view_name", ""),
-                        "propertyCode": prop_code,
-                        "propertyName": m.get("property_name", ""),
-                        "sourceObjectCode": src_obj_code,
-                        "sourceObjectName": src_obj_name,
-                        "sourceColumnCode": src_col_code,
-                        "bindingType": "view_property",
-                    }
-                )
-        return result
+        """Extract terminology binding info for view properties — stub (shadowed by OntologyBackendMixin)."""
+        _ = view_codes, base_id
+        return []
 
     def get_view_included_objects(
         self,
-        loader: OntologyQueryable,
         ontology_code: str,
+        *,
+        base_id: str = "",
     ) -> list[str]:
-        """视图包含的对象 code 列表（OWL metadata，零 DB）。
-
-        在 loader._relations 中查询 HAS_OBJECT / MANY_TO_ONE 关系，
-        找到该视图所包含的底层对象。用于确定 value recall 的跨本体 scope。
-
-        替代 _collect_view_included_objects() 的 SQL 查询:
-          SELECT target.term_code FROM term JOIN term_relation ...
-          WHERE relation_category IN ('HAS_OBJECT','MANY_TO_ONE')
-        """
-        relations = getattr(loader, "_relations", None) or []
-        result: list[str] = []
-        for rel in relations:
-            source = (
-                getattr(rel, "source_object_code", "")
-                or getattr(rel, "source_code", "")
-                or ""
-            )
-            category = getattr(rel, "relation_category", "") or ""
-            if source != ontology_code:
-                continue
-            if category not in ("HAS_OBJECT", "MANY_TO_ONE"):
-                continue
-            target = (
-                getattr(rel, "target_object_code", "")
-                or getattr(rel, "target_code", "")
-                or ""
-            )
-            if target and target not in result:
-                result.append(target)
-        return result
+        """View included object codes — stub (shadowed by OntologyBackendMixin)."""
+        _ = ontology_code, base_id
+        return []
 
     def get_joinkey_related_objects(
         self,
-        loader: OntologyQueryable,
         ontology_code: str,
         field_codes: list[str],
+        *,
+        base_id: str = "",
     ) -> list[str]:
-        """joinkey 关联的对象 code 列表（OWL metadata，零 DB）。
-
-        在 loader._relations 中查询 HAS_OBJECT / MANY_TO_ONE 关系，
-        筛选 ext_attrs.joinkeys.sourceField 匹配已确认字段的关联对象。
-
-        替代 _collect_joinkey_related_objects() 的 SQL 查询。
-        """
-        if not field_codes:
-            return []
-        field_set = frozenset(field_codes)
-        relations = getattr(loader, "_relations", None) or []
-        result: list[str] = []
-        for rel in relations:
-            source = (
-                getattr(rel, "source_object_code", "")
-                or getattr(rel, "source_code", "")
-                or ""
-            )
-            category = getattr(rel, "relation_category", "") or ""
-            if source != ontology_code:
-                continue
-            if category not in ("HAS_OBJECT", "MANY_TO_ONE"):
-                continue
-            ext_attrs = getattr(rel, "ext_attrs", None) or {}
-            jks = ext_attrs.get("joinkeys") or []
-            if not jks:
-                continue
-            for jk in jks:
-                if isinstance(jk, dict) and jk.get("sourceField") in field_set:
-                    target = (
-                        getattr(rel, "target_object_code", "")
-                        or getattr(rel, "target_code", "")
-                        or ""
-                    )
-                    if target and target not in result:
-                        result.append(target)
-                    break
-        return result
+        """Joinkey related objects — stub (shadowed by OntologyBackendMixin)."""
+        _ = ontology_code, field_codes, base_id
+        return []
 
     def resolve_property_name(
         self,
-        loader: OntologyQueryable,
         name_text: str,
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> tuple[str, str] | None:
-        """本体元数据: 单个中文属性名 → (field_code, field_name)。
-
-        遍历 loader._classes[scope_code].fields，
-        匹配 field_name / aliases。纯内存操作，零 DB 开销。
-        """
-        cls = loader._classes.get(scope_code)
-        if cls is None:
-            return None
-        for f in cls.fields:
-            field_name: str = getattr(f, "field_name", "") or ""
-            aliases: list[str] = list(getattr(f, "aliases", []) or [])
-            if name_text == field_name or name_text in aliases:
-                return (getattr(f, "field_code", "") or "", field_name)
+        """Resolve single property name — stub (shadowed by OntologyBackendMixin)."""
+        _ = name_text, scope_code, base_id
         return None
 
     def resolve_property_names(
         self,
-        loader: OntologyQueryable,
         name_texts: list[str],
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> dict[str, tuple[str, str]]:
-        """批量版。只返回成功解析的条目。"""
-        result: dict[str, tuple[str, str]] = {}
-        for name_text in name_texts:
-            resolved = self.resolve_property_name(loader, name_text, scope_code)
-            if resolved is not None:
-                result[name_text] = resolved
-        return result
+        """Batch resolve property names — stub (shadowed by OntologyBackendMixin)."""
+        _ = name_texts, scope_code, base_id
+        return {}
 
     def get_property_aliases(
         self,
-        loader: OntologyQueryable,
         field_code: str,
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> list[str]:
-        """反向: field_code → 所有别名（含 field_name）。"""
-        cls = loader._classes.get(scope_code)
-        if cls is None:
-            return []
-        for f in cls.fields:
-            if (getattr(f, "field_code", "") or "") == field_code:
-                result: list[str] = [getattr(f, "field_name", "") or ""]
-                result.extend(getattr(f, "aliases", []) or [])
-                return result
+        """Get property aliases — stub (shadowed by OntologyBackendMixin)."""
+        _ = field_code, scope_code, base_id
         return []
 
     # ── OntologyBackend: Search & graph (new) ──────────────────────────────
