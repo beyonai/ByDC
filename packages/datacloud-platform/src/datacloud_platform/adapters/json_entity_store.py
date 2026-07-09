@@ -139,6 +139,25 @@ class _ScopedEntityStore:
             entity_type, base_id=base_id or self._default_base_id
         )
 
+    def search(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+        keyword: str | None = None,
+        codes: list[str] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        return self._parent.search(
+            entity_type,
+            base_id=base_id or self._default_base_id,
+            keyword=keyword,
+            codes=codes,
+            page=page,
+            page_size=page_size,
+        )
+
 
 class JsonEntityStore:
     """Sharded JSON-file storage for ontology entities.
@@ -210,6 +229,54 @@ class JsonEntityStore:
             if data is not None:
                 result.append(data)
         return result
+
+    def search(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+        keyword: str | None = None,
+        codes: list[str] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Paginated search with keyword and code-set filtering.
+
+        Loads the lightweight index, filters in Python, sorts by code,
+        slices for pagination, then batch-reads matching entity files.
+        """
+        _ = base_id
+        if codes is not None and len(codes) == 0:
+            return [], 0
+
+        index = self.load_index(entity_type)
+        matching_codes = list(index.keys())
+
+        if codes is not None:
+            codes_set = set(codes)
+            matching_codes = [c for c in matching_codes if c in codes_set]
+
+        if keyword:
+            kw = keyword.lower()
+            matching_codes = [
+                c
+                for c in matching_codes
+                if kw in c.lower() or kw in (index[c].get("name", "") or "").lower()
+            ]
+
+        matching_codes.sort()
+        total = len(matching_codes)
+
+        offset = (page - 1) * page_size
+        page_codes = matching_codes[offset : offset + page_size]
+
+        items: list[dict[str, Any]] = []
+        for code in page_codes:
+            data = self.get(entity_type, code)
+            if data is not None:
+                items.append(data)
+
+        return items, total
 
     def delete(
         self,

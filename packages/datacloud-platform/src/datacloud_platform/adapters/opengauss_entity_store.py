@@ -288,6 +288,53 @@ class OpenGaussEntityStore:
             rows = session.query(model.data).filter(model.base_id == bid).all()  # type: ignore[attr-defined]
             return [dict(r[0]) for r in rows if r[0] is not None]
 
+    def search(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+        keyword: str | None = None,
+        codes: list[str] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Paginated search with keyword and code-set filtering.
+
+        Uses a single SQL query with ``COUNT(*) OVER()`` for total count
+        alongside the data, avoiding a second round-trip.
+        """
+        bid = base_id or self._default_base_id
+        model = _ENTITY_TABLES[entity_type]
+        code_col_name = _CODE_COLUMNS[entity_type]
+        name_col_name = _NAME_COLUMNS[entity_type]
+
+        if codes is not None and len(codes) == 0:
+            return [], 0
+
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+
+        with Session(self._engine) as session:
+            total_col = func.count().over().label("total")
+            stmt = select(model.data, total_col).where(
+                getattr(model, "base_id") == bid,
+            )
+
+            if codes is not None:
+                stmt = stmt.where(getattr(model, code_col_name).in_(codes))
+
+            if keyword:
+                stmt = stmt.where(getattr(model, name_col_name).ilike(f"%{keyword}%"))
+
+            code_attr = getattr(model, code_col_name)
+            stmt = stmt.order_by(code_attr)
+            stmt = stmt.limit(page_size).offset((page - 1) * page_size)
+
+            rows = session.execute(stmt).all()
+            total: int = rows[0][1] if rows else 0
+            items: list[dict[str, Any]] = [dict(r[0]) for r in rows if r[0] is not None]
+            return items, total
+
     def delete(
         self,
         entity_type: str,
