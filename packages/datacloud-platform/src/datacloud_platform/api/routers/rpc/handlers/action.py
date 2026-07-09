@@ -9,7 +9,6 @@ from fastapi import Request
 from datacloud_platform.models.action import Action
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.common import ok
-from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -18,16 +17,14 @@ if TYPE_CHECKING:
 def _list_actions(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    return ok(
-        data=platform.get_actions(
-            base_id=params.get("base_id", DEFAULT_BASE_ID),
-            object_code=params["object_code"],
-            owner_type=params.get("owner_type"),
-            user_code=params.get("user_code"),
-            keyword=params.get("keyword"),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
-        )
+    items, _ = platform.get_actions(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        object_code=params["object_code"],
+        owner_type=params.get("owner_type"),
+        user_code=params.get("user_code"),
+        keyword=params.get("keyword"),
     )
+    return ok(data=items)
 
 
 def _get_action(
@@ -39,7 +36,6 @@ def _get_action(
         params.get("base_id", DEFAULT_BASE_ID),
         object_code,
         code,
-        cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
     if action is None:
         raise KeyError(f"Action '{code}' not found")

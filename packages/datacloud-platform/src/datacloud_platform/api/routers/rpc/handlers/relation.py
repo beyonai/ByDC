@@ -9,7 +9,6 @@ from fastapi import Request
 from datacloud_platform.models.common import ok
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.relation import Relation
-from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -18,15 +17,13 @@ if TYPE_CHECKING:
 def _list_relations(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    return ok(
-        data=platform.get_relations(
-            base_id=params.get("base_id", DEFAULT_BASE_ID),
-            owner_type=params.get("owner_type"),
-            user_code=params.get("user_code"),
-            keyword=params.get("keyword"),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
-        )
+    items, _ = platform.get_relations(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        owner_type=params.get("owner_type"),
+        user_code=params.get("user_code"),
+        keyword=params.get("keyword"),
     )
+    return ok(data=items)
 
 
 def _get_relation(
@@ -36,7 +33,6 @@ def _get_relation(
     rel = platform.get_relation_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
-        cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
     if rel is None:
         raise KeyError(f"Relation '{code}' not found")
