@@ -7,7 +7,6 @@ import warnings
 from typing import Any
 
 from datacloud_platform.backends._contracts import _HasOntologyBackend
-from datacloud_platform.ontology_store import CacheMode
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +19,6 @@ class SceneMixin:
     def list_scenes(
         self: _HasOntologyBackend,
         base_id: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
         """List scene directories under a base."""
         return self._ontology_for(base_id).list_scenes(base_id)
@@ -30,8 +27,6 @@ class SceneMixin:
         self: _HasOntologyBackend,
         base_id: str,
         keyword: str | None,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
         """Query scenes with optional keyword filter."""
         return self._ontology_for(base_id).query_scenes(base_id, keyword)
@@ -40,8 +35,6 @@ class SceneMixin:
         self: _HasOntologyBackend,
         base_id: str,
         keyword: str | None,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> int:
         """Count scenes matching optional keyword filter."""
         return self._ontology_for(base_id).count_scenes(base_id, keyword)
@@ -50,8 +43,6 @@ class SceneMixin:
         self: _HasOntologyBackend,
         base_id: str,
         object_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any]:
         """Return {library_id, scene_id} identifying which scene contains object_code.
 
@@ -68,13 +59,10 @@ class SceneMixin:
         *,
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any]:
         """Get full scene details with optional filtering by view_code or object_code."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_scene_details(
-            loader, base_id, scene_id, view_code=view_code, object_code=object_code
+        return self._ontology_for(base_id).get_scene_details(
+            scene_id, base_id=base_id, view_code=view_code, object_code=object_code
         )
 
     def query_ontologies_by_scene(
@@ -85,13 +73,44 @@ class SceneMixin:
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
+        type: str | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        cross_scene: bool = False,
     ) -> dict[str, Any]:
         """Query ontologies (objects) in a scene with pagination and keyword filter."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.query_ontologies_by_scene(
-            loader, base_id, scene_id, page=page, page_size=page_size, keyword=keyword
+        return self._ontology_for(base_id).query_ontologies_by_scene(
+            scene_id,
+            base_id=base_id,
+            page=page,
+            page_size=page_size,
+            keyword=keyword,
+            type=type,
+            owner_type=owner_type,
+            user_code=user_code,
+            cross_scene=cross_scene,
+        )
+
+    def get_object_subtree(
+        self: _HasOntologyBackend,
+        base_id: str,
+        object_code: str,
+    ) -> dict[str, Any]:
+        """Get an object's subtree — detail + related views, relations, actions."""
+        return self._ontology_for(base_id).get_object_subtree(
+            object_code, base_id=base_id
+        )
+
+    def get_base_details(
+        self: _HasOntologyBackend,
+        *,
+        base_id: str = "",
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Get comprehensive base detail."""
+        return self._ontology_for(base_id).get_base_details(
+            base_id=base_id, view_code=view_code, object_code=object_code
         )
 
     # ── Scene CRUD ──

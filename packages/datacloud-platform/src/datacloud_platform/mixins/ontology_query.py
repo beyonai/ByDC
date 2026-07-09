@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from datacloud_platform.backends._contracts import _HasOntologyBackend
-from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyQueryable
@@ -23,15 +22,10 @@ class OntologyQueryMixin:
         self: _HasOntologyBackend,
         base_id: str,
         base_path: str | Path,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> OntologyQueryable:
-        """Load ontology from a base_path, returning a queryable handle.
-
-        Respects *cache_mode* for OntologyStore index priming before loading.
-        """
+        """Load ontology from a base_path, returning a queryable handle."""
         _ = base_path  # passed for backward API compatibility; internally derived
-        return self._load_ontology_cached(base_id, cache_mode=cache_mode)
+        return self._load_ontology_cached(base_id)
 
     def get_objects(
         self: _HasOntologyBackend,
@@ -40,21 +34,27 @@ class OntologyQueryMixin:
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
-    ) -> list[ObjectSummary]:
-        """Get all ontology object summaries under a base with optional filtering."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_objects(
-            loader, base_id, owner_type=owner_type, user_code=user_code, keyword=keyword
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[ObjectSummary], int]:
+        """Get paginated ontology object summaries under a base with optional filtering.
+
+        Returns:
+            Tuple of (items list, total count).
+        """
+        return self._ontology_for(base_id).get_objects(
+            base_id=base_id,
+            owner_type=owner_type,
+            user_code=user_code,
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
         )
 
     def get_object_detail(
         self: _HasOntologyBackend,
         base_id: str,
         object_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any] | None:
         """Get a single object's full detail (ObjectType with properties and actions).
 
@@ -70,9 +70,8 @@ class OntologyQueryMixin:
                 return backend.get_object_detail_from_raw(raw, object_code)
         except (AttributeError, Exception):
             pass  # entity_store not available → fall through to full load
-        # Fallback: full ontology load
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_object_detail(loader, object_code)
+        # Fallback: full ontology load via backend
+        return backend.get_object_detail(object_code, base_id=base_id)
 
     # ── Property Term Bindings ─────────────────────────────────────
 
@@ -83,17 +82,14 @@ class OntologyQueryMixin:
         *,
         term_master_type: str | None = None,
         property_codes: list[str] | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
         """查询对象下属性绑定的术语类型。
 
         返回只含绑定了 terminology 的属性，未绑定的不出现在结果中。
         """
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_object_property_term_bindings(
-            loader,
+        return self._ontology_for(base_id).get_object_property_term_bindings(
             [object_code],
+            base_id=base_id,
             term_master_type=term_master_type,
             property_codes=property_codes,
         )
@@ -105,18 +101,15 @@ class OntologyQueryMixin:
         *,
         term_master_type: str | None = None,
         property_codes: list[str] | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
         """查询视图下属性绑定的术语类型。
 
         视图属性通过 source_object → source_object_property 穿透到底层
         Object 的 Property.terminology。
         """
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_view_property_term_bindings(
-            loader,
+        return self._ontology_for(base_id).get_view_property_term_bindings(
             [view_code],
+            base_id=base_id,
             term_master_type=term_master_type,
             property_codes=property_codes,
         )
@@ -126,13 +119,10 @@ class OntologyQueryMixin:
         base_id: str,
         name_text: str,
         scope_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> tuple[str, str] | None:
         """本体元数据: 中文属性名 → (field_code, field_name)。"""
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return self._ontology_for(base_id).resolve_property_name(
-            loader, name_text, scope_code
+            name_text, scope_code, base_id=base_id
         )
 
     def resolve_property_names(
@@ -140,13 +130,10 @@ class OntologyQueryMixin:
         base_id: str,
         name_texts: list[str],
         scope_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, tuple[str, str]]:
         """批量: 中文属性名列表 → {name_text: (field_code, field_name)}。"""
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return self._ontology_for(base_id).resolve_property_names(
-            loader, name_texts, scope_code
+            name_texts, scope_code, base_id=base_id
         )
 
     def get_property_aliases(
@@ -154,26 +141,20 @@ class OntologyQueryMixin:
         base_id: str,
         field_code: str,
         scope_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[str]:
         """反向: field_code → 所有别名（含 field_name）。"""
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return self._ontology_for(base_id).get_property_aliases(
-            loader, field_code, scope_code
+            field_code, scope_code, base_id=base_id
         )
 
     def get_view_included_objects(
         self: _HasOntologyBackend,
         base_id: str,
         ontology_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[str]:
         """视图包含的对象 code 列表（OWL metadata，零 DB）。"""
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return self._ontology_for(base_id).get_view_included_objects(
-            loader, ontology_code
+            ontology_code, base_id=base_id
         )
 
     def get_joinkey_related_objects(
@@ -181,13 +162,10 @@ class OntologyQueryMixin:
         base_id: str,
         ontology_code: str,
         field_codes: list[str],
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[str]:
         """joinkey 关联的对象 code 列表（OWL metadata，零 DB）。"""
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return self._ontology_for(base_id).get_joinkey_related_objects(
-            loader, ontology_code, field_codes
+            ontology_code, field_codes, base_id=base_id
         )
 
     # ── Ontology Search & Graph (from KnowledgeBackend → OntologyBackend) ──

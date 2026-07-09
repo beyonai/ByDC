@@ -7,7 +7,6 @@ import warnings
 from typing import Any
 
 from datacloud_platform.backends._contracts import _HasOntologyBackend
-from datacloud_platform.ontology_store import CacheMode
 
 logger = logging.getLogger(__name__)
 
@@ -22,26 +21,30 @@ class ViewMixin:
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
-    ) -> list[dict[str, Any]]:
-        """Get all views under a base with optional filtering."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_views(
-            loader, base_id, owner_type=owner_type, user_code=user_code, keyword=keyword
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get paginated views under a base with optional filtering.
+
+        Returns:
+            Tuple of (items list, total count).
+        """
+        return self._ontology_for(base_id).get_views(
+            base_id=base_id,
+            owner_type=owner_type,
+            user_code=user_code,
+            keyword=keyword,
+            page=page,
+            page_size=page_size,
         )
 
     def get_view_detail(
         self: _HasOntologyBackend,
         base_id: str,
         view_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any] | None:
         """Get single view detail by code."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_view_detail(loader, base_id, view_code)
+        return self._ontology_for(base_id).get_view_detail(view_code, base_id=base_id)
 
     def get_objects_by_view(
         self: _HasOntologyBackend,
@@ -51,15 +54,11 @@ class ViewMixin:
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
         """Get objects (code/name/desc) referenced by a view, with filtering."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_objects_by_view(
-            loader,
-            base_id,
+        return self._ontology_for(base_id).get_objects_by_view(
             view_code,
+            base_id=base_id,
             owner_type=owner_type,
             user_code=user_code,
             keyword=keyword,
