@@ -47,7 +47,7 @@ from datacloud_platform.mixins import (
     WorkspaceActionMixin,
 )
 from datacloud_platform.adapters.byclaw_sync import ByClawSyncAdapter
-from datacloud_platform.ontology_store import CacheMode, OntologyStore
+from datacloud_platform.ontology_store import OntologyStore
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
@@ -273,11 +273,12 @@ class DatacloudPlatform(
     def _load_ontology_cached(
         self,
         base_id: str,
-        cache_mode: CacheMode = CacheMode.REALTIME,
+        **_kwargs: Any,
     ) -> OntologyQueryable:
-        """Get an OntologyQueryable, priming the OntologyStore index cache first.
+        """Get an OntologyQueryable, internal helper.
 
-        Falls back to direct ``load_ontology()`` when ``_ontology_store`` is None.
+        Only used by :class:`ExecutionMixin` (``generate_action_tools``,
+        ``inject_virtual_actions``) and Tier-3 methods.
 
         For remote backends whose ``load_ontology`` raises ``PermissionError``,
         returns a stub queryable — the remote backend ignores the loader and
