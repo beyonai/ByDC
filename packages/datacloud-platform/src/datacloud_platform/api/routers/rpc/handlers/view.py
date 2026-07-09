@@ -9,7 +9,6 @@ from fastapi import Request
 from datacloud_platform.models.common import ok
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.view import View
-from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -24,15 +23,13 @@ def _parse_csv(param: str | None) -> list[str] | None:
 def _list_views(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    return ok(
-        data=platform.get_views(
-            base_id=params.get("base_id", DEFAULT_BASE_ID),
-            owner_type=params.get("owner_type"),
-            user_code=params.get("user_code"),
-            keyword=params.get("keyword"),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
-        )
+    items, _ = platform.get_views(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        owner_type=params.get("owner_type"),
+        user_code=params.get("user_code"),
+        keyword=params.get("keyword"),
     )
+    return ok(data=items)
 
 
 def _get_view(
@@ -42,7 +39,6 @@ def _get_view(
     view = platform.get_view_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
-        cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
     if view is None:
         raise KeyError(f"View '{code}' not found")
@@ -91,7 +87,6 @@ def _get_term_bindings(
             params["view_code"],
             term_master_type=params.get("term_master_type"),
             property_codes=_parse_csv(params.get("property_codes")),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
         )
     )
 
@@ -106,7 +101,6 @@ def _get_objects(
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),
             keyword=params.get("keyword"),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
         )
     )
 

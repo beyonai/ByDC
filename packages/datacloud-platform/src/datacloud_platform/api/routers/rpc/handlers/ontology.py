@@ -74,11 +74,8 @@ def _get_base_detail(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     base_id = params.get("base_id", DEFAULT_BASE_ID)
-    loader = platform._load_ontology_cached(base_id)
-    backend = platform._ontology_for(base_id)
-    result = backend.get_base_details(
-        loader,
-        base_id,
+    result = platform.get_base_details(
+        base_id=base_id,
         view_code=params.get("view_code"),
         object_code=params.get("object_code"),
     )

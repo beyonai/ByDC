@@ -13,7 +13,6 @@ from fastapi import Request
 from datacloud_platform.models.common import ok
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.object_type import ObjectType
-from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -28,15 +27,13 @@ def _parse_csv(param: str | None) -> list[str] | None:
 def _list_objects(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    return ok(
-        data=platform.get_objects(
-            base_id=params.get("base_id", DEFAULT_BASE_ID),
-            owner_type=params.get("owner_type"),
-            user_code=params.get("user_code"),
-            keyword=params.get("keyword"),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
-        )
+    items, _ = platform.get_objects(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        owner_type=params.get("owner_type"),
+        user_code=params.get("user_code"),
+        keyword=params.get("keyword"),
     )
+    return ok(data=items)
 
 
 def _get_object(
@@ -46,7 +43,6 @@ def _get_object(
     obj = platform.get_object_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
-        cache_mode=params.get("cache_mode", CacheMode.REALTIME),
     )
     if obj is None:
         raise KeyError(f"Object '{code}' not found")
@@ -91,12 +87,7 @@ def _get_subtree(
 ) -> Any:
     base_id = params.get("base_id", DEFAULT_BASE_ID)
     code: str = params["object_code"]
-    loader = platform._load_ontology_cached(
-        base_id,
-        cache_mode=params.get("cache_mode", CacheMode.REALTIME),
-    )
-    backend = platform._ontology_for(base_id)
-    result = backend.get_object_subtree(loader, base_id, code)
+    result = platform.get_object_subtree(base_id, code)
     if result["object"] is None:
         raise KeyError(f"Object '{code}' not found")
     return ok(data=result)
@@ -111,7 +102,6 @@ def _get_term_bindings(
             params["object_code"],
             term_master_type=params.get("term_master_type"),
             property_codes=_parse_csv(params.get("property_codes")),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
         )
     )
 
@@ -125,7 +115,6 @@ def _get_relations(
             params["object_code"],
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),
-            cache_mode=params.get("cache_mode", CacheMode.REALTIME),
         )
     )
 

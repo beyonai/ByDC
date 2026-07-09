@@ -119,10 +119,9 @@ def _query_ontologies_by_code(
     scene_code: str = params["scene_code"]
     cross_scene = scene_code == "-1"
 
-    backend = platform._ontology_for(base_id)
     scene_id = ""
     if not cross_scene:
-        scenes = backend.list_scenes(base_id)
+        scenes = platform.list_scenes(base_id)
         for s in scenes:
             if s.get("scene_code") == scene_code:
                 scene_id = s.get("scene_id", "")
@@ -130,11 +129,9 @@ def _query_ontologies_by_code(
         if not scene_id:
             return ok(data={"objects": [], "views": []}, totalCount=0)
 
-    loader = platform._load_ontology_cached(base_id)
-    result = backend.query_ontologies_by_scene(
-        loader=loader,
-        base_id=base_id,
-        scene_id=scene_id,
+    result = platform.query_ontologies_by_scene(
+        base_id,
+        scene_id,
         page=params.get("page", 1),
         page_size=params.get("page_size", 20),
         keyword=params.get("keyword"),
