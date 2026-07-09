@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -11,14 +10,7 @@ if TYPE_CHECKING:
 
 from datacloud_platform.adapters.data_adapter._base import (
     DataCloudDataBackendBase,
-    _normalize_object_codes,
 )
-from datacloud_platform.models.action import Action, ActionParam
-from datacloud_platform.models.datasource import Datasource, DbConnection
-from datacloud_platform.models.object_type import ObjectType
-from datacloud_platform.models.property import Property
-from datacloud_platform.models.relation import Relation
-from datacloud_platform.models.view import View, ViewProperty
 
 logger = logging.getLogger(__name__)
 
@@ -138,169 +130,25 @@ class SceneMixin(DataCloudDataBackendBase):
         )
 
     def extract_objects_detail(
-        self, base_id: str, loader: Any, object_codes: list[str]
+        self, object_codes: list[str], *, base_id: str = ""
     ) -> list[dict[str, Any]]:
-        """Extract ObjectType JSON for each code from loader._classes.
-
-        Args:
-            base_id: Base / project identifier (used as baseId in each object).
-            loader: An OntologyQueryable with _classes populated.
-            object_codes: Object codes to extract detail for.
-
-        Returns:
-            List of ObjectType dicts (by_alias=True), without actions.
-        """
-        objects: list[dict[str, Any]] = []
-        for code in object_codes:
-            cls = loader._classes.get(code)
-            if cls is None:
-                continue
-            obj = ObjectType(
-                objectCode=cls.object_code,
-                objectName=cls.object_name,
-                objectDesc=getattr(cls, "description", None),
-                objectSource=getattr(cls, "source_type", None),
-                conceptType=getattr(cls, "concept_type", None),
-                ownerType=getattr(cls, "owner_type", None)
-                or (getattr(cls, "ext_property", {}) or {}).get(
-                    "owner_type", "enterprise"
-                ),
-                userCode=getattr(cls, "user_code", None)
-                or (getattr(cls, "ext_property", {}) or {}).get("user_code"),
-                baseId=base_id,
-                tableName=getattr(cls, "table_name", None),
-                properties=[
-                    Property(
-                        propertyName=f.field_name,
-                        propertyCode=f.field_code,
-                        dataType=f.field_type,
-                        businessKey=1 if f.is_primary_key else 0,
-                        sourceColumn=getattr(f, "source_column", None),
-                        dbId=getattr(cls, "datasource_alias", None),
-                    )
-                    for f in cls.fields
-                ],
-            )
-            objects.append(obj.model_dump(by_alias=True))
-        return objects
+        """Extract ObjectType JSON for each code — stub (shadowed by OntologyBackendMixin)."""
+        _ = object_codes, base_id
+        return []
 
     def extract_views_detail(
-        self, base_id: str, loader: Any, view_codes: list[str]
+        self, view_codes: list[str], *, base_id: str = ""
     ) -> list[dict[str, Any]]:
-        """Extract View JSON for each code from loader._views.
-
-        Args:
-            base_id: Base / project identifier.
-            loader: An OntologyQueryable with _views populated.
-            view_codes: View codes to extract detail for.
-
-        Returns:
-            List of View dicts (by_alias=True).
-        """
-        _ = base_id
-        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
-        views: list[dict[str, Any]] = []
-        for vc in view_codes:
-            view_data = raw_views.get(vc)
-            if view_data is None:
-                continue
-            raw_objects = view_data.get("objects", [])
-            normalized_codes = _normalize_object_codes(raw_objects)
-            view = View(
-                viewCode=view_data.get("view_id", vc),
-                viewName=view_data.get("view_name", ""),
-                description=view_data.get("description"),
-                objectCodes=normalized_codes,
-                ownerType=view_data.get(
-                    "owner_type", view_data.get("ownerType", "enterprise")
-                ),
-                userCode=view_data.get("user_code", view_data.get("userCode")),
-                properties=[
-                    ViewProperty(
-                        propertyName=m.get("property_name", ""),
-                        propertyCode=m.get("property_code", ""),
-                        sourceObject=m.get("source_object_code", ""),
-                        sourceObjectProperty=m.get("source_object_column_code", ""),
-                    )
-                    for m in view_data.get("mappings", [])
-                ],
-            )
-            views.append(view.model_dump(by_alias=True))
-        return views
+        """Extract View JSON for each code — stub (shadowed by OntologyBackendMixin)."""
+        _ = view_codes, base_id
+        return []
 
     def extract_relations(
-        self, base_id: str, loader: Any, object_codes_set: set[str]
+        self, object_codes_set: set[str], *, base_id: str = ""
     ) -> list[dict[str, Any]]:
-        """Extract bidirectional Relation JSON where both ends are in object_codes_set.
-
-        Args:
-            base_id: Base / project identifier.
-            loader: An OntologyQueryable with _relations and _classes populated.
-            object_codes_set: Only relations where both source and target are in this set
-                are included.
-
-        Returns:
-            List of Relation dicts (by_alias=True).
-        """
-        _ = base_id
-        raw_relations: list[Any] = getattr(loader, "_relations", None) or []
-        relations: list[dict[str, Any]] = []
-        for r in raw_relations:
-            if hasattr(r, "source_class"):
-                src = r.source_class
-                tgt = r.target_class
-            elif isinstance(r, dict):
-                src = r.get("source_class", "")
-                tgt = r.get("target_class", "")
-            else:
-                continue
-            if src not in object_codes_set or tgt not in object_codes_set:
-                continue
-
-            src_name = ""
-            tgt_name = ""
-            src_cls = loader._classes.get(src)
-            if src_cls is not None:
-                src_name = src_cls.object_name
-            tgt_cls = loader._classes.get(tgt)
-            if tgt_cls is not None:
-                tgt_name = tgt_cls.object_name
-
-            if hasattr(r, "relation_code"):
-                rel = Relation(
-                    relationCode=r.relation_code,
-                    relationName=getattr(r, "relation_name", None),
-                    sourceObjectCode=src,
-                    targetObjectCode=tgt,
-                    relationCardinality=getattr(r, "relation_type", None),
-                    sourceObjectName=src_name,
-                    targetObjectName=tgt_name,
-                    relationDesc=getattr(r, "relation_desc", None)
-                    or getattr(r, "description", None),
-                    relationSceneType=getattr(r, "relation_scene_type", None),
-                    ownerType=getattr(r, "owner_type", "enterprise"),
-                    userCode=getattr(r, "user_code", None),
-                )
-            elif isinstance(r, dict):
-                rel = Relation(
-                    relationCode=r.get("relation_code", ""),
-                    relationName=r.get("relation_name"),
-                    sourceObjectCode=src,
-                    targetObjectCode=tgt,
-                    relationCardinality=r.get("relation_type"),
-                    sourceObjectName=src_name,
-                    targetObjectName=tgt_name,
-                    relationDesc=r.get("relation_desc") or r.get("description"),
-                    relationSceneType=r.get("relation_scene_type"),
-                    ownerType=str(
-                        r.get("owner_type", r.get("ownerType", "enterprise"))
-                    ),
-                    userCode=r.get("user_code") or r.get("userCode"),
-                )
-            else:
-                continue
-            relations.append(rel.model_dump(by_alias=True))
-        return relations
+        """Extract bidirectional Relation JSON — stub (shadowed by OntologyBackendMixin)."""
+        _ = object_codes_set, base_id
+        return []
 
     def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
         """Return {library_id, scene_id} identifying which scene contains object_code.
@@ -328,127 +176,21 @@ class SceneMixin(DataCloudDataBackendBase):
 
     def get_scene_details(
         self,
-        loader: Any,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Get scene details with optional filtering by view_code / object_code.
-
-        Filtering rules (aligning with external protocol):
-        - No params: return all member objects + views.
-        - view_code only: return matching views + objects referenced by those views.
-        - object_code only: return matching objects, views = [].
-        - Both: union of the two sets.
-        """
-        member_obj_codes, member_view_codes = self.get_scene_members(base_id, scene_id)
-
-        scenes = self._ensure_scenes_loaded()
-        scene = scenes.get(scene_id)
-        if scene is None:
-            return {
-                "scene": None,
-                "views": [],
-                "objects": [],
-                "actions": [],
-                "relations": [],
-                "dbsources": Datasource(db=[], doc=[], api=[]).model_dump(
-                    by_alias=True
-                ),
-                "version": "v0.1.0",
-            }
-
-        # Determine which objects/views to include based on filter params
-        if view_code and not object_code:
-            target_views = [vc for vc in member_view_codes if vc in view_code]
-            target_objects = member_obj_codes
-        elif object_code and not view_code:
-            target_views = []
-            target_objects = [oc for oc in member_obj_codes if oc in object_code]
-        elif view_code and object_code:
-            target_views = [vc for vc in member_view_codes if vc in view_code]
-            target_objects = list(set(object_code) | set(member_obj_codes))
-        else:
-            target_views = list(member_view_codes)
-            target_objects = list(member_obj_codes)
-
-        target_obj_set = set(target_objects)
-
-        # Use atomic methods for extraction
-        scene_base_id: str = scene.get("base_id", base_id)
-        objects = self.extract_objects_detail(
-            scene_base_id, loader, sorted(target_obj_set)
-        )
-        views = self.extract_views_detail(base_id, loader, target_views)
-        relations = self.extract_relations(base_id, loader, target_obj_set)
-
-        # Extract actions from matching objects
-        actions: list[dict[str, Any]] = []
-        for code in sorted(target_obj_set):
-            cls = loader._classes.get(code)
-            if cls is None:
-                continue
-            for a in cls.actions:
-                act = Action(
-                    actionCode=a.action_code,
-                    actionName=a.action_name,
-                    actionType=a.action_type,
-                    belongObjectCode=a.belong_class,
-                    actionDesc=getattr(a, "description", None),
-                    requestUrl=getattr(a, "request_url", None),
-                    requestMethod=getattr(a, "request_method", None),
-                    ownerType=getattr(a, "owner_type", "enterprise"),
-                    userCode=getattr(a, "user_code", None),
-                    params=[
-                        ActionParam(
-                            paramCode=p.param_code,
-                            paramName=p.param_name,
-                            paramType=getattr(p, "param_type", None),
-                            isRequired=1 if p.required else 0,
-                            direction=getattr(p, "direction", None),
-                            mappingPath=getattr(p, "mapping_path", None),
-                        )
-                        for p in getattr(a, "params", [])
-                    ],
-                )
-                actions.append(act.model_dump(by_alias=True))
-
-        # Build dbsources from object properties' dbId
-        used_db_ids: set[str] = set()
-        for obj_dict in objects:
-            for prop in obj_dict.get("properties", []):
-                db_id = prop.get("dbId")
-                if db_id:
-                    used_db_ids.add(db_id)
-        dbs: list[DbConnection] = []
-        for db_id in sorted(used_db_ids):
-            dbs.append(
-                DbConnection(
-                    dbId=db_id,
-                    dbCode=db_id,
-                    dbType="",
-                    dbParams={},
-                )
-            )
-
-        return {
-            "scene": scene,
-            "views": views,
-            "objects": objects,
-            "actions": actions,
-            "relations": relations,
-            "dbsources": Datasource(db=dbs).model_dump(by_alias=True),
-            "version": "v0.1.0",
-        }
+        """Get scene details — stub (shadowed by OntologyBackendMixin)."""
+        _ = scene_id, base_id, view_code, object_code
+        return {}
 
     def query_ontologies_by_scene(
         self,
-        loader: Any,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
@@ -457,363 +199,40 @@ class SceneMixin(DataCloudDataBackendBase):
         user_code: str | None = None,
         cross_scene: bool = False,
     ) -> dict[str, Any]:
-        """Query ontologies (objects + views) with pagination, type, and owner_type filters.
-
-        Supports cross-scene mode: when scene_id is empty and cross_scene=True,
-        iterates all scenes and collects all member codes.
-        """
-        # 1. Collect member codes (single scene, cross-scene, or all)
-        member_obj_codes: set[str] = set()
-        member_view_codes: set[str] = set()
-        scenes = self._ensure_scenes_loaded()
-        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
-
-        if not scene_id and cross_scene:
-            # Cross-scene: query ALL objects/views in the base (including orphans
-            # without scene membership), not just scene members.
-            member_obj_codes.update(loader._classes.keys())
-            member_view_codes.update(raw_views.keys())
-        else:
-            found = scenes.get(scene_id)
-            if found is None:
-                return {
-                    "data": {"objects": [], "views": []},
-                    "totalCount": 0,
-                    "page": page,
-                    "pageSize": page_size,
-                }
-            member_obj_codes.update(found.get("member_object_codes", []))
-            member_view_codes.update(found.get("member_view_codes", []))
-
-        # 2. Convert member codes to summaries via loader
-        all_objects: list[dict[str, Any]] = []
-        for code in member_obj_codes:
-            cls = loader._classes.get(code)
-            if cls is not None:
-                summary = self._to_summary(cls)
-                summary_dict = dataclasses.asdict(summary)
-
-                # owner_type filter
-                if owner_type and summary.owner_type != owner_type:
-                    continue
-
-                # user_code filter
-                if user_code and summary.user_code != user_code:
-                    continue
-
-                # keyword filter
-                if keyword:
-                    kw = keyword.strip().lower()
-                    if (
-                        kw not in (summary.object_name or "").lower()
-                        and kw not in summary.object_code.lower()
-                        and kw not in (summary.description or "").lower()
-                    ):
-                        continue
-
-                all_objects.append(summary_dict)
-
-        all_views: list[dict[str, Any]] = []
-        for code in member_view_codes:
-            view_data = raw_views.get(code)
-            if view_data is not None:
-                view_sum = self._to_view_summary(view_data, code)
-                summary_dict = dataclasses.asdict(view_sum)
-
-                # owner_type filter
-                if owner_type and view_sum.owner_type != owner_type:
-                    continue
-
-                # user_code filter
-                if user_code and view_sum.user_code != user_code:
-                    continue
-
-                # keyword filter
-                if keyword:
-                    kw = keyword.strip().lower()
-                    if (
-                        kw not in (view_sum.view_name or "").lower()
-                        and kw not in (view_sum.view_code or "").lower()
-                        and kw not in (view_sum.description or "").lower()
-                    ):
-                        continue
-
-                all_views.append(summary_dict)
-
-        # 3. Type filter (all/object/view) — case-insensitive
-        if type:
-            t = type.lower()
-            if t == "object":
-                all_views = []
-            elif t == "view":
-                all_objects = []
-
-        # 4. Pagination
-        total = len(all_objects) + len(all_views)
-        offset = (page - 1) * page_size
-
-        # objects-first ordering: slice objects, then views
-        paged_objects = all_objects[offset : offset + page_size]
-        remaining = page_size - len(paged_objects)
-        paged_views: list[dict[str, Any]] = []
-        if remaining > 0:
-            view_start = max(0, offset - len(all_objects))
-            paged_views = all_views[view_start : view_start + remaining]
-
-        return {
-            "data": {"objects": paged_objects, "views": paged_views},
-            "totalCount": total,
-            "page": page,
-            "pageSize": page_size,
-        }
+        """Query ontologies — stub (shadowed by OntologyBackendMixin)."""
+        _ = (
+            scene_id,
+            base_id,
+            page,
+            page_size,
+            keyword,
+            type,
+            owner_type,
+            user_code,
+            cross_scene,
+        )
+        return {}
 
     def get_base_details(
         self,
-        loader: Any,
-        base_id: str,
         *,
+        base_id: str = "",
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Get comprehensive base-level detail — all objects, views, relations, actions, dbsources.
-
-        Similar to get_scene_details but scoped to the entire base, not a single scene.
-        Supports optional view_code/object_code filtering.
-        """
-        # Collect all object codes from loader
-        all_classes = getattr(loader, "_classes", {}) or {}
-        all_object_codes = list(all_classes.keys())
-
-        # Collect all view codes from loader
-        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
-        all_view_codes = list(raw_views.keys())
-
-        # Filter by view_code / object_code
-        if view_code and not object_code:
-            target_views = [vc for vc in all_view_codes if vc in view_code]
-            target_objects = all_object_codes
-        elif object_code and not view_code:
-            target_views = []
-            target_objects = [oc for oc in all_object_codes if oc in object_code]
-        elif view_code and object_code:
-            target_views = [vc for vc in all_view_codes if vc in view_code]
-            target_objects = list(set(object_code) | set(all_object_codes))
-        else:
-            target_views = list(all_view_codes)
-            target_objects = list(all_object_codes)
-
-        target_obj_set = set(target_objects)
-
-        objects = self.extract_objects_detail(base_id, loader, sorted(target_obj_set))
-        views = self.extract_views_detail(base_id, loader, target_views)
-        relations = self.extract_relations(base_id, loader, target_obj_set)
-
-        # Extract actions from all matching objects
-        actions: list[dict[str, Any]] = []
-        for code in sorted(target_obj_set):
-            cls = all_classes.get(code)
-            if cls is None:
-                continue
-            for a in getattr(cls, "actions", []):
-                act = Action(
-                    actionCode=a.action_code,
-                    actionName=a.action_name,
-                    actionType=a.action_type,
-                    belongObjectCode=a.belong_class,
-                    actionDesc=getattr(a, "description", None),
-                    requestUrl=getattr(a, "request_url", None),
-                    requestMethod=getattr(a, "request_method", None),
-                    ownerType=getattr(a, "owner_type", "enterprise"),
-                    userCode=getattr(a, "user_code", None),
-                    params=[
-                        ActionParam(
-                            paramCode=p.param_code,
-                            paramName=p.param_name,
-                            paramType=getattr(p, "param_type", None),
-                            isRequired=1 if p.required else 0,
-                            direction=getattr(p, "direction", None),
-                            mappingPath=getattr(p, "mapping_path", None),
-                        )
-                        for p in getattr(a, "params", [])
-                    ],
-                )
-                actions.append(act.model_dump(by_alias=True))
-
-        # Build dbsources
-        used_db_ids: set[str] = set()
-        for obj_dict in objects:
-            for prop in obj_dict.get("properties", []):
-                db_id = prop.get("dbId")
-                if db_id:
-                    used_db_ids.add(db_id)
-        dbs: list[DbConnection] = []
-        for db_id in sorted(used_db_ids):
-            dbs.append(DbConnection(dbId=db_id, dbCode=db_id, dbType="", dbParams={}))
-
-        # Collect all scenes under this base
-        scenes_list = self.list_scenes(base_id)
-
-        return {
-            "base": {"baseId": base_id},
-            "scenes": scenes_list,
-            "views": views,
-            "objects": objects,
-            "actions": actions,
-            "relations": relations,
-            "dbsources": Datasource(db=dbs).model_dump(by_alias=True),
-            "version": "v0.1.0",
-        }
+        """Get comprehensive base-level detail — stub (shadowed by OntologyBackendMixin)."""
+        _ = base_id, view_code, object_code
+        return {}
 
     def get_object_subtree(
         self,
-        loader: Any,
-        base_id: str,
         object_code: str,
+        *,
+        base_id: str = "",
     ) -> dict[str, Any]:
-        """Get a single object's full subtree — detail + related views, relations, actions.
-
-        Args:
-            loader: An OntologyQueryable with _classes/_views/_relations populated.
-            base_id: Base identifier.
-            object_code: Target object code.
-
-        Returns:
-            Dict with object, views, relations, actions, dbsources.
-        """
-        all_classes = getattr(loader, "_classes", {}) or {}
-        cls = all_classes.get(object_code)
-        if cls is None:
-            return {
-                "object": None,
-                "views": [],
-                "relations": [],
-                "actions": [],
-                "dbsources": {"db": [], "doc": [], "api": []},
-            }
-
-        # Object detail
-        objects = self.extract_objects_detail(base_id, loader, [object_code])
-
-        # Views that reference this object
-        raw_views: dict[str, dict[str, Any]] = getattr(loader, "_views", None) or {}
-        related_views: list[str] = []
-        for vc, vd in raw_views.items():
-            objs = vd.get("objects", [])
-            for obj_entry in objs:
-                obj_code = (
-                    obj_entry
-                    if isinstance(obj_entry, str)
-                    else obj_entry.get("object_code", "")
-                )
-                if obj_code == object_code:
-                    related_views.append(vc)
-                    break
-        views = self.extract_views_detail(base_id, loader, related_views)
-
-        # Relations involving this object (bidirectional)
-        raw_relations: list[Any] = getattr(loader, "_relations", None) or []
-        relations: list[dict[str, Any]] = []
-        for r in raw_relations:
-            if hasattr(r, "source_class"):
-                src = r.source_class
-                tgt = r.target_class
-            elif isinstance(r, dict):
-                src = r.get("source_class", "")
-                tgt = r.get("target_class", "")
-            else:
-                continue
-            if src != object_code and tgt != object_code:
-                continue
-
-            src_name = ""
-            tgt_name = ""
-            src_cls = all_classes.get(src)
-            if src_cls is not None:
-                src_name = src_cls.object_name
-            tgt_cls = all_classes.get(tgt)
-            if tgt_cls is not None:
-                tgt_name = tgt_cls.object_name
-
-            if hasattr(r, "relation_code"):
-                rel = Relation(
-                    relationCode=r.relation_code,
-                    relationName=getattr(r, "relation_name", None),
-                    sourceObjectCode=src,
-                    targetObjectCode=tgt,
-                    relationCardinality=getattr(r, "relation_type", None),
-                    sourceObjectName=src_name,
-                    targetObjectName=tgt_name,
-                    relationDesc=getattr(r, "relation_desc", None)
-                    or getattr(r, "description", None),
-                    relationSceneType=getattr(r, "relation_scene_type", None),
-                    ownerType=getattr(r, "owner_type", "enterprise"),
-                    userCode=getattr(r, "user_code", None),
-                )
-            elif isinstance(r, dict):
-                rel = Relation(
-                    relationCode=r.get("relation_code", ""),
-                    relationName=r.get("relation_name"),
-                    sourceObjectCode=src,
-                    targetObjectCode=tgt,
-                    relationCardinality=r.get("relation_type"),
-                    sourceObjectName=src_name,
-                    targetObjectName=tgt_name,
-                    relationDesc=r.get("relation_desc") or r.get("description"),
-                    relationSceneType=r.get("relation_scene_type"),
-                    ownerType=str(
-                        r.get("owner_type", r.get("ownerType", "enterprise"))
-                    ),
-                    userCode=r.get("user_code") or r.get("userCode"),
-                )
-            else:
-                continue
-            relations.append(rel.model_dump(by_alias=True))
-
-        # Actions on this object
-        actions: list[dict[str, Any]] = []
-        for a in getattr(cls, "actions", []):
-            act = Action(
-                actionCode=a.action_code,
-                actionName=a.action_name,
-                actionType=a.action_type,
-                belongObjectCode=a.belong_class,
-                actionDesc=getattr(a, "description", None),
-                requestUrl=getattr(a, "request_url", None),
-                requestMethod=getattr(a, "request_method", None),
-                ownerType=getattr(a, "owner_type", "enterprise"),
-                userCode=getattr(a, "user_code", None),
-                params=[
-                    ActionParam(
-                        paramCode=p.param_code,
-                        paramName=p.param_name,
-                        paramType=getattr(p, "param_type", None),
-                        isRequired=1 if p.required else 0,
-                        direction=getattr(p, "direction", None),
-                        mappingPath=getattr(p, "mapping_path", None),
-                    )
-                    for p in getattr(a, "params", [])
-                ],
-            )
-            actions.append(act.model_dump(by_alias=True))
-
-        # Dbsources from object properties
-        used_db_ids: set[str] = set()
-        for obj_dict in objects:
-            for prop in obj_dict.get("properties", []):
-                db_id = prop.get("dbId")
-                if db_id:
-                    used_db_ids.add(db_id)
-        dbs: list[DbConnection] = []
-        for db_id in sorted(used_db_ids):
-            dbs.append(DbConnection(dbId=db_id, dbCode=db_id, dbType="", dbParams={}))
-
-        return {
-            "object": objects[0] if objects else None,
-            "views": views,
-            "relations": relations,
-            "actions": actions,
-            "dbsources": Datasource(db=dbs).model_dump(by_alias=True),
-        }
+        """Get a single object's full subtree — stub (shadowed by OntologyBackendMixin)."""
+        _ = object_code, base_id
+        return {}
 
     # ── Scene CRUD ────────────────────────────────────────────────────────
 
