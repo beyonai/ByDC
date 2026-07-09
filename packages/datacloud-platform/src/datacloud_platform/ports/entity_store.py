@@ -158,3 +158,31 @@ class EntityStore(Protocol):
     ) -> list[dict[str, Any]]:
         """Return all entity data dicts for *entity_type* under *base_id* in one query."""
         ...
+
+    def search(
+        self,
+        entity_type: str,
+        *,
+        base_id: str = "",
+        keyword: str | None = None,
+        codes: list[str] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Paginated search with keyword and code-set filtering.
+
+        Args:
+            entity_type: One of ``objects``, ``views``, ``relations``, ``actions``,
+                ``datasources``.
+            base_id: Per-base namespace isolation.
+            keyword: Optional case-insensitive substring filter on entity name.
+            codes: Optional code whitelist. ``None`` means no filter;
+                ``[]`` means match nothing (empty result).
+            page: 1-based page number.
+            page_size: Maximum items per page.
+
+        Returns:
+            ``(items, total)`` where *items* is the current page of entity data dicts
+            and *total* is the total number of matching entities (before pagination).
+        """
+        ...

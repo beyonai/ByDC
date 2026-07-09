@@ -8,9 +8,9 @@ so mypy can verify that the host provides the expected interface.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from datacloud_platform.ontology_store import CacheMode, OntologyStore
+from datacloud_platform.ontology_store import OntologyStore
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
@@ -24,7 +24,7 @@ class _HasOntologyBackend(Protocol):
 
     def _ontology_for(self, base_id: str) -> OntologyBackend: ...
     def _load_ontology_cached(
-        self, base_id: str, cache_mode: CacheMode = CacheMode.REALTIME
+        self, base_id: str, **_kwargs: Any
     ) -> OntologyQueryable: ...
     @property
     def _ontology_store(self) -> OntologyStore | None: ...

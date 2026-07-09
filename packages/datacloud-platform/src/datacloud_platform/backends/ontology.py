@@ -75,18 +75,19 @@ class OntologyBackend(Protocol):
 
     def get_objects(
         self,
-        loader: OntologyQueryable,
-        base_id: str,
         *,
+        base_id: str = "",
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-    ) -> list[ObjectSummary]:
-        """Get all object summaries under a base."""
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[ObjectSummary], int]:
+        """Get paginated object summaries under a base."""
         ...
 
     def get_object_detail(
-        self, loader: OntologyQueryable, object_code: str
+        self, object_code: str, *, base_id: str = ""
     ) -> dict[str, Any] | None:
         """Get single object detail (full ObjectType with properties and actions)."""
         ...
@@ -98,16 +99,15 @@ class OntologyBackend(Protocol):
         ...
 
     def get_object_subtree(
-        self, loader: Any, base_id: str, object_code: str
+        self, object_code: str, *, base_id: str = ""
     ) -> dict[str, Any]:
         """Get an object's subtree — detail + related views, relations, actions."""
         ...
 
     def get_base_details(
         self,
-        loader: Any,
-        base_id: str,
         *,
+        base_id: str = "",
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -144,10 +144,9 @@ class OntologyBackend(Protocol):
 
     def get_scene_details(
         self,
-        loader: Any,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -163,19 +162,19 @@ class OntologyBackend(Protocol):
         ...
 
     def extract_objects_detail(
-        self, base_id: str, loader: Any, object_codes: list[str]
+        self, object_codes: list[str], *, base_id: str = ""
     ) -> list[dict[str, Any]]:
-        """Extract ObjectType JSON for each code from loader._classes."""
+        """Extract ObjectType JSON for each code from the backend."""
         ...
 
     def extract_views_detail(
-        self, base_id: str, loader: Any, view_codes: list[str]
+        self, view_codes: list[str], *, base_id: str = ""
     ) -> list[dict[str, Any]]:
-        """Extract View JSON for each code from loader._views."""
+        """Extract View JSON for each code from the backend."""
         ...
 
     def extract_relations(
-        self, base_id: str, loader: Any, object_codes_set: set[str]
+        self, object_codes_set: set[str], *, base_id: str = ""
     ) -> list[dict[str, Any]]:
         """Extract bidirectional Relation JSON where both ends are in object_codes_set."""
         ...
@@ -186,10 +185,9 @@ class OntologyBackend(Protocol):
 
     def query_ontologies_by_scene(
         self,
-        loader: Any,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
@@ -263,28 +261,28 @@ class OntologyBackend(Protocol):
 
     def get_views(
         self,
-        loader: Any,
-        base_id: str,
         *,
+        base_id: str = "",
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Get all views under a base from the loaded ontology."""
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get paginated views under a base."""
         ...
 
     def get_view_detail(
-        self, loader: Any, base_id: str, view_code: str
+        self, view_code: str, *, base_id: str = ""
     ) -> dict[str, Any] | None:
-        """Get single view detail by code from the loaded ontology."""
+        """Get single view detail by code."""
         ...
 
     def get_objects_by_view(
         self,
-        loader: Any,
-        base_id: str,
         view_code: str,
         *,
+        base_id: str = "",
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
@@ -308,28 +306,28 @@ class OntologyBackend(Protocol):
 
     def get_relations(
         self,
-        loader: Any,
-        base_id: str,
         *,
+        base_id: str = "",
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Get all relations under a base from the loaded ontology."""
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get paginated relations under a base."""
         ...
 
     def get_relation_detail(
-        self, loader: Any, base_id: str, rel_code: str
+        self, rel_code: str, *, base_id: str = ""
     ) -> dict[str, Any] | None:
-        """Get single relation detail by code from the loaded ontology."""
+        """Get single relation detail by code."""
         ...
 
     def get_relations_by_object(
         self,
-        loader: Any,
-        base_id: str,
         object_code: str,
         *,
+        base_id: str = "",
         owner_type: str | None = None,
         user_code: str | None = None,
     ) -> list[dict[str, Any]]:
@@ -351,15 +349,15 @@ class OntologyBackend(Protocol):
     # -- Datasource CRUD --
 
     def get_datasources(
-        self, loader: Any, base_id: str, *, keyword: str | None = None
-    ) -> list[dict[str, Any]]:
-        """Get all datasources under a base from the loaded ontology."""
+        self, *, base_id: str = "", keyword: str | None = None
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get paginated datasources under a base."""
         ...
 
     def get_datasource_detail(
-        self, loader: Any, base_id: str, db_id: str
+        self, db_id: str, *, base_id: str = ""
     ) -> dict[str, Any] | None:
-        """Get single datasource detail by db_id from the loaded ontology."""
+        """Get single datasource detail by db_id."""
         ...
 
     def create_datasource(self, base_id: str, obj: Any) -> Any:
@@ -374,25 +372,26 @@ class OntologyBackend(Protocol):
 
     def get_actions(
         self,
-        loader: Any,
-        base_id: str,
         object_code: str,
         *,
+        base_id: str = "",
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Get all actions on an object from the loaded ontology."""
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get paginated actions on an object."""
         ...
 
     def get_action_detail(
         self,
-        loader: Any,
-        base_id: str,
         object_code: str,
         action_code: str,
+        *,
+        base_id: str = "",
     ) -> dict[str, Any] | None:
-        """Get single action detail by code from the loaded ontology."""
+        """Get single action detail by code."""
         ...
 
     def create_action(self, base_id: str, object_code: str, obj: Any) -> Any:
@@ -417,9 +416,9 @@ class OntologyBackend(Protocol):
 
     def get_object_property_term_bindings(
         self,
-        loader: Any,
         object_codes: list[str],
         *,
+        base_id: str = "",
         term_master_type: str | None = None,
         property_codes: list[str] | None = None,
     ) -> list[dict[str, Any]]:
@@ -431,9 +430,9 @@ class OntologyBackend(Protocol):
 
     def get_view_property_term_bindings(
         self,
-        loader: Any,
         view_codes: list[str],
         *,
+        base_id: str = "",
         term_master_type: str | None = None,
         property_codes: list[str] | None = None,
     ) -> list[dict[str, Any]]:
@@ -448,14 +447,14 @@ class OntologyBackend(Protocol):
 
     def resolve_property_name(
         self,
-        loader: OntologyQueryable,
         name_text: str,
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> tuple[str, str] | None:
         """本体元数据: 单个中文属性名 → (field_code, field_name)。
 
-        遍历 loader._classes[scope_code].fields，
-        匹配 field_name / aliases。纯内存操作，零 DB 开销。
+        通过后端查询 scope_code 对应的 Object，遍历 fields 匹配 field_name / aliases。
 
         Returns:
             (field_code, field_name) 或 None（未命中）。
@@ -464,9 +463,10 @@ class OntologyBackend(Protocol):
 
     def resolve_property_names(
         self,
-        loader: OntologyQueryable,
         name_texts: list[str],
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> dict[str, tuple[str, str]]:
         """批量版。返回 {name_text: (field_code, field_name)}。
 
@@ -476,27 +476,27 @@ class OntologyBackend(Protocol):
 
     def get_property_aliases(
         self,
-        loader: OntologyQueryable,
         field_code: str,
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> list[str]:
         """反向: field_code → 所有别名列表（含 field_name）。
 
-        遍历 loader._classes[scope_code].fields，
-        找到匹配 field_code 的 OntologyField，返回其 field_name + aliases。
+        通过后端查询 scope_code 对应的 Object，遍历 fields 找到匹配项。
         """
         ...
 
     # ── Scope resolution helpers (used by unified recall) ──────────────────
 
     def get_view_included_objects(
-        self, loader: OntologyQueryable, ontology_code: str
+        self, ontology_code: str, *, base_id: str = ""
     ) -> list[str]:
         """返回 ontology_code 对应视图所包含的子对象代码列表。"""
         ...
 
     def get_joinkey_related_objects(
-        self, loader: OntologyQueryable, ontology_code: str, field_codes: list[str]
+        self, ontology_code: str, field_codes: list[str], *, base_id: str = ""
     ) -> list[str]:
         """返回通过 join key 与指定字段关联的对象代码列表。"""
         ...
