@@ -21,8 +21,9 @@ class _NoopOntologyBackend:
         """Raise PermissionError — no ontology available."""
         raise PermissionError("Ontology not available")
 
-    def load_terms(self, loader: Any, *, library_id: str = "PERSONAL_LIB") -> Any:
+    def load_terms(self, *, base_id: str = "", library_id: str = "PERSONAL_LIB") -> Any:
         """Return None."""
+        _ = base_id
         return None
 
     def batch_import_ontology(
@@ -45,11 +46,21 @@ class _NoopOntologyBackend:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
-    def get_objects(self, loader: Any, base_id: str) -> list[Any]:
+    def get_objects(
+        self,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
         """Return empty list."""
-        return []
+        _ = base_id, owner_type, user_code, keyword
+        return [], 0
 
-    def get_object_detail(self, loader: Any, object_code: str) -> Any | None:
+    def get_object_detail(
+        self, object_code: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
         """Return None."""
         return None
 
@@ -59,123 +70,31 @@ class _NoopOntologyBackend:
         """Return None — noop backend has no entity data."""
         return None
 
-    # -- View CRUD (no-op) --
+    def get_object_subtree(
+        self, object_code: str, *, base_id: str = ""
+    ) -> dict[str, Any]:
+        """Return empty dict."""
+        _ = object_code, base_id
+        return {}
 
-    def get_views(self, loader: Any, base_id: str) -> list[Any]:
-        """Return empty list."""
-        _ = loader
-        _ = base_id
-        return []
-
-    def get_view_detail(self, loader: Any, base_id: str, view_code: str) -> Any | None:
-        """Return None."""
-        _ = loader
-        _ = base_id
-        _ = view_code
-        return None
-
-    def create_view(self, base_id: str, view: Any) -> Any:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def delete_view(self, base_id: str, view_code: str) -> None:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    # -- Relation CRUD (no-op) --
-
-    def get_relations(self, loader: Any, base_id: str) -> list[Any]:
-        """Return empty list."""
-        _ = loader
-        _ = base_id
-        return []
-
-    def get_relation_detail(
-        self, loader: Any, base_id: str, rel_code: str
-    ) -> Any | None:
-        """Return None."""
-        _ = loader
-        _ = base_id
-        _ = rel_code
-        return None
-
-    def create_relation(self, base_id: str, rel: Any) -> Any:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def delete_relation(self, base_id: str, rel_code: str) -> None:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    # -- Action CRUD (no-op) --
-
-    def get_actions(self, loader: Any, base_id: str, object_code: str) -> list[Any]:
-        """Return empty list."""
-        _ = loader
-        _ = base_id
-        _ = object_code
-        return []
-
-    def get_action_detail(
-        self, loader: Any, base_id: str, object_code: str, action_code: str
-    ) -> Any | None:
-        """Return None."""
-        _ = loader
-        _ = base_id
-        _ = object_code
-        _ = action_code
-        return None
-
-    def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def update_action(
+    def get_base_details(
         self,
-        base_id: str,
-        object_code: str,
-        action_code: str,
-        action: Any,
-    ) -> Any:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    # -- Datasource CRUD (no-op) --
-
-    def get_datasources(self, loader: Any, base_id: str) -> list[Any]:
-        """Return empty list."""
-        _ = loader
-        _ = base_id
-        return []
-
-    def get_datasource_detail(
-        self, loader: Any, base_id: str, db_id: str
-    ) -> Any | None:
-        """Return None."""
-        _ = loader
-        _ = base_id
-        _ = db_id
-        return None
-
-    def create_datasource(self, base_id: str, ds: Any) -> Any:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def delete_datasource(self, base_id: str, db_id: str) -> None:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
+        *,
+        base_id: str = "",
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Return empty base details."""
+        _ = base_id, view_code, object_code
+        return {
+            "scene": None,
+            "views": [],
+            "objects": [],
+            "actions": [],
+            "relations": [],
+            "dbsources": [],
+            "version": None,
+        }
 
     # -- Object CRUD (no-op) --
 
@@ -190,41 +109,13 @@ class _NoopOntologyBackend:
     def delete_object(self, base_id: str, object_code: str) -> None:
         """No-op — delete is safe to be idempotent."""
 
-    # -- Scene reverse-lookup queries (no-op) --
-
-    def get_object_scene_count(self, base_id: str, object_code: str) -> int:
-        """Return 0."""
-        _ = base_id
-        _ = object_code
-        return 0
-
-    def get_view_scene_count(self, base_id: str, view_code: str) -> int:
-        """Return 0."""
-        _ = base_id
-        _ = view_code
-        return 0
-
-    def remove_object_from_all_scenes(self, base_id: str, object_code: str) -> int:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def remove_view_from_all_scenes(self, base_id: str, view_code: str) -> int:
-        """Raise PermissionError — write forbidden."""
-        raise PermissionError("Ontology not available")
-
-    def get_scenes_containing_object(self, base_id: str, object_code: str) -> list[str]:
-        """Return empty list."""
-        _ = base_id
-        _ = object_code
-        return []
-
     # -- Scene management (no-op) --
 
-    def list_scenes(self, base_id: str) -> list[Any]:
+    def list_scenes(self, base_id: str) -> list[dict[str, Any]]:
         """Return empty list."""
         return []
 
-    def query_scenes(self, base_id: str, keyword: str | None) -> list[Any]:
+    def query_scenes(self, base_id: str, keyword: str | None) -> list[dict[str, Any]]:
         """Return empty list."""
         return []
 
@@ -232,21 +123,16 @@ class _NoopOntologyBackend:
         """Return 0."""
         return 0
 
-    def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
-        """Return default scope info — no ontology available."""
-        return {"library_id": "PERSONAL_LIB", "scene_id": ""}
-
     def get_scene_details(
         self,
-        loader: object,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return empty scene details."""
-        _ = loader
+        _ = scene_id, base_id, view_code, object_code
         return {
             "scene": None,
             "views": [],
@@ -257,20 +143,63 @@ class _NoopOntologyBackend:
             "version": None,
         }
 
+    def get_scene_members(
+        self, base_id: str, scene_id: str
+    ) -> tuple[list[str], list[str]]:
+        """Return empty members."""
+        _ = base_id, scene_id
+        return [], []
+
+    def extract_objects_detail(
+        self, object_codes: list[str], *, base_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """Return empty list."""
+        _ = object_codes, base_id
+        return []
+
+    def extract_views_detail(
+        self, view_codes: list[str], *, base_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """Return empty list."""
+        _ = view_codes, base_id
+        return []
+
+    def extract_relations(
+        self, object_codes_set: set[str], *, base_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """Return empty list."""
+        _ = object_codes_set, base_id
+        return []
+
+    def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
+        """Return default scope info — no ontology available."""
+        return {"library_id": "PERSONAL_LIB", "scene_id": ""}
+
     def query_ontologies_by_scene(
         self,
-        loader: object,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
-        **kwargs: object,
+        type: str | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        cross_scene: bool = False,
     ) -> dict[str, Any]:
         """Return empty result."""
-        _ = loader
-        _ = kwargs
+        _ = (
+            scene_id,
+            base_id,
+            page,
+            page_size,
+            keyword,
+            type,
+            owner_type,
+            user_code,
+            cross_scene,
+        )
         return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
     # -- Scene CRUD (no-op) --
@@ -307,79 +236,273 @@ class _NoopOntologyBackend:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Ontology not available")
 
+    # -- Scene reverse-lookup queries (no-op) --
+
+    def get_object_scene_count(self, base_id: str, object_code: str) -> int:
+        """Return 0."""
+        _ = base_id
+        _ = object_code
+        return 0
+
+    def get_view_scene_count(self, base_id: str, view_code: str) -> int:
+        """Return 0."""
+        _ = base_id
+        _ = view_code
+        return 0
+
+    def remove_object_from_all_scenes(self, base_id: str, object_code: str) -> int:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def remove_view_from_all_scenes(self, base_id: str, view_code: str) -> int:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def get_scenes_containing_object(self, base_id: str, object_code: str) -> list[str]:
+        """Return empty list."""
+        _ = base_id
+        _ = object_code
+        return []
+
+    # -- View CRUD (no-op) --
+
+    def get_views(
+        self,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Return empty list."""
+        _ = base_id, owner_type, user_code, keyword
+        return [], 0
+
+    def get_view_detail(
+        self, view_code: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
+        """Return None."""
+        _ = view_code, base_id
+        return None
+
+    def get_objects_by_view(
+        self,
+        view_code: str,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return empty list."""
+        _ = view_code, base_id, owner_type, user_code, keyword
+        return []
+
+    def create_view(self, base_id: str, view: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_view(self, base_id: str, view_code: str, view: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_view(self, base_id: str, view_code: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    # -- Relation CRUD (no-op) --
+
+    def get_relations(
+        self,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Return empty list."""
+        _ = base_id, owner_type, user_code, keyword
+        return [], 0
+
+    def get_relation_detail(
+        self, rel_code: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
+        """Return None."""
+        _ = rel_code, base_id
+        return None
+
+    def get_relations_by_object(
+        self,
+        object_code: str,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return empty list."""
+        _ = object_code, base_id, owner_type, user_code
+        return []
+
+    def create_relation(self, base_id: str, rel: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_relation(self, base_id: str, rel_code: str, rel: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_relation(self, base_id: str, rel_code: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    # -- Action CRUD (no-op) --
+
+    def get_actions(
+        self,
+        object_code: str,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Return empty list."""
+        _ = object_code, base_id, owner_type, user_code, keyword
+        return [], 0
+
+    def get_action_detail(
+        self,
+        object_code: str,
+        action_code: str,
+        *,
+        base_id: str = "",
+    ) -> dict[str, Any] | None:
+        """Return None."""
+        _ = object_code, action_code, base_id
+        return None
+
+    def create_action(self, base_id: str, object_code: str, action: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def update_action(
+        self,
+        base_id: str,
+        object_code: str,
+        action_code: str,
+        action: Any,
+    ) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_action(self, base_id: str, object_code: str, action_code: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    # -- Datasource CRUD (no-op) --
+
+    def get_datasources(
+        self, *, base_id: str = "", keyword: str | None = None
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Return empty list."""
+        _ = base_id, keyword
+        return [], 0
+
+    def get_datasource_detail(
+        self, db_id: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
+        """Return None."""
+        _ = db_id, base_id
+        return None
+
+    def create_datasource(self, base_id: str, ds: Any) -> Any:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
+    def delete_datasource(self, base_id: str, db_id: str) -> None:
+        """Raise PermissionError — write forbidden."""
+        raise PermissionError("Ontology not available")
+
     # -- Property term bindings (no-op) --
 
     def get_object_property_term_bindings(
         self,
-        loader: Any,
         object_codes: list[str],
         *,
+        base_id: str = "",
         term_master_type: str | None = None,
         property_codes: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return empty list — no ontology available."""
-        _ = loader
+        _ = object_codes, base_id, term_master_type, property_codes
         return []
 
     def get_view_property_term_bindings(
         self,
-        loader: Any,
         view_codes: list[str],
         *,
+        base_id: str = "",
         term_master_type: str | None = None,
         property_codes: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Return empty list — no ontology available."""
-        _ = loader
+        _ = view_codes, base_id, term_master_type, property_codes
         return []
 
     # -- Property name / alias resolution (no-op) --
 
     def resolve_property_name(
         self,
-        loader: Any,
         name_text: str,
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> tuple[str, str] | None:
         """Return None — no ontology available."""
-        _ = loader
+        _ = name_text, scope_code, base_id
         return None
 
     def resolve_property_names(
         self,
-        loader: Any,
         name_texts: list[str],
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> dict[str, tuple[str, str]]:
         """Return empty dict — no ontology available."""
-        _ = loader
+        _ = name_texts, scope_code, base_id
         return {}
 
     def get_property_aliases(
         self,
-        loader: Any,
         field_code: str,
         scope_code: str,
+        *,
+        base_id: str = "",
     ) -> list[str]:
         """Return empty list — no ontology available."""
-        _ = loader
+        _ = field_code, scope_code, base_id
         return []
 
     def get_view_included_objects(
         self,
-        loader: Any,
         ontology_code: str,
+        *,
+        base_id: str = "",
     ) -> list[str]:
-        _ = loader, ontology_code
+        """Return empty list."""
+        _ = ontology_code, base_id
         return []
 
     def get_joinkey_related_objects(
         self,
-        loader: Any,
         ontology_code: str,
         field_codes: list[str],
+        *,
+        base_id: str = "",
     ) -> list[str]:
-        _ = loader, ontology_code, field_codes
+        """Return empty list."""
+        _ = ontology_code, field_codes, base_id
         return []
 
     # -- Ontology search & graph (no-op) --

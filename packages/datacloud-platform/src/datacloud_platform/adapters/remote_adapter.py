@@ -233,7 +233,31 @@ class RemoteOntologyBackend:
                 self._client.close()
             self._client = None
 
-    # ── OntologyBackend Protocol ────────────────────────────────────────
+    # ── OntologyBackend Protocol ── helpers ─────────────────────────────
+
+    def _find_in_scenes(
+        self,
+        base_id: str,
+        *,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Iterate scenes to find the first scene containing target objects/views."""
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(
+                sid, base_id=base_id, object_code=object_code, view_code=view_code
+            )
+            if object_code and detail.get("objects"):
+                return detail
+            if view_code and detail.get("views"):
+                return detail
+        return {}
+
+    # ── OntologyBackend Protocol ── parse / load ───────────────────────
 
     def parse_owl(self, directory: Any) -> Any:
         """Remote ontology is read-only — OWL parsing is not supported."""
@@ -257,6 +281,8 @@ class RemoteOntologyBackend:
         relations: list[dict[str, Any]],
         actions: list[dict[str, Any]],
         dbsources: list[dict[str, Any]],
+        *,
+        base_id: str = "",
     ) -> dict[str, int]:
         """Remote ontology is read-only — batch import is not supported."""
         raise PermissionError("Remote ontology base is read-only")
@@ -269,19 +295,58 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — DDL is not supported."""
         raise PermissionError("Remote ontology base is read-only")
 
-    def get_objects(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch objects from remote endpoint (no local cache — Platform handles caching)."""
-        _ = loader
+    # ── Object queries ─────────────────────────────────────────────────
+
+    def get_objects(
+        self,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+        page: int = 1,
+        page_size: int = 200,
+        **kw: Any,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query objects via remote OntologySceneController (global search, sceneId=-1).
+
+        Returns:
+            (items, totalCount) tuple.
+        """
+        _ = owner_type, user_code, kw
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/listObjects"
-        response = client.post(url, json={"baseId": base_id}, headers=headers)
+        url = f"{self._source_url}/OntologySceneController/queryOntologies"
+        body: dict[str, Any] = {
+            "sceneId": "-1",
+            "pageIndex": page,
+            "pageSize": page_size,
+        }
+        if keyword:
+            body["queryKeyword"] = keyword
+        response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
-        result: dict[str, Any] = response.json()
-        return cast("list[Any]", result.get("data", {}).get("objects", []))
+        raw = response.json()
+        if isinstance(raw, dict) and raw.get("code") == 200:
+            data = raw.get("data", raw)
+            if isinstance(data, list):
+                items: list[dict[str, Any]] = data
+                return items, raw.get("totalCount", len(items))
+            items = (
+                data.get("records") or data.get("items") or data.get("objects") or []
+            )
+            total: int = raw.get("totalCount", len(items))
+            return items, total
+        return [], 0
 
-    def get_object_detail(self, loader: Any, object_code: str) -> Any | None:
-        """Remote ontology does not support per-object detail."""
+    def get_object_detail(
+        self, object_code: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
+        """Get single object detail by iterating scenes and calling get_scene_details."""
+        detail = self._find_in_scenes(base_id, object_code=[object_code])
+        for obj in detail.get("objects", []) or []:
+            if obj.get("object_code") == object_code:
+                return cast("dict[str, Any]", obj)
         return None
 
     def get_object_detail_from_raw(
@@ -290,26 +355,193 @@ class RemoteOntologyBackend:
         """Remote ontology does not support raw-based detail."""
         return None
 
-    # -- View CRUD (remote, read-only) --
+    def get_object_subtree(
+        self, object_code: str, *, base_id: str = ""
+    ) -> dict[str, Any]:
+        """Get object subtree — detail + related views, relations, actions, dbsources.
 
-    def get_views(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch views from remote endpoint (no local cache — Platform handles caching)."""
-        _ = loader
+        Iterates scenes, calls get_scene_details with object_code filter,
+        returns the full detail dict which already contains objects/views/relations/actions.
+        """
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(
+                sid, base_id=base_id, object_code=[object_code]
+            )
+            if detail.get("objects"):
+                return detail
+        return {
+            "objects": [],
+            "views": [],
+            "relations": [],
+            "actions": [],
+            "dbsources": {"db": [], "doc": [], "api": []},
+        }
+
+    def get_base_details(
+        self,
+        *,
+        base_id: str = "",
+        view_code: list[str] | None = None,
+        object_code: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Get comprehensive base detail — aggregated across all scenes."""
+        scenes = self.list_scenes(base_id)
+        all_objects: list[dict[str, Any]] = []
+        all_views: list[dict[str, Any]] = []
+        all_relations: list[dict[str, Any]] = []
+        all_actions: list[dict[str, Any]] = []
+        all_dbs: list[dict[str, Any]] = []
+        seen_obj: set[str] = set()
+        seen_vw: set[str] = set()
+        seen_rel: set[str] = set()
+        seen_db: set[str] = set()
+
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(
+                sid,
+                base_id=base_id,
+                view_code=view_code,
+                object_code=object_code,
+            )
+            for obj in detail.get("objects", []) or []:
+                oc = obj.get("object_code", "")
+                if oc and oc not in seen_obj:
+                    seen_obj.add(oc)
+                    all_objects.append(obj)
+            for v in detail.get("views", []) or []:
+                vc = v.get("view_code", "") or v.get("view_id", "")
+                if vc and vc not in seen_vw:
+                    seen_vw.add(vc)
+                    all_views.append(v)
+            for r in detail.get("relations", []) or []:
+                rc = r.get("relation_code", "") or r.get("relationCode", "")
+                if rc and rc not in seen_rel:
+                    seen_rel.add(rc)
+                    all_relations.append(r)
+            for a in detail.get("actions", []) or []:
+                all_actions.append(a)
+            dbsources = detail.get("dbsources", {}) or {}
+            for ds in dbsources.get("db", []) or []:
+                db_id = str(ds.get("dbId", ds.get("db_id", "")))
+                if db_id and db_id not in seen_db:
+                    seen_db.add(db_id)
+                    all_dbs.append(ds)
+
+        return {
+            "base": {"baseId": base_id},
+            "scenes": scenes,
+            "views": all_views,
+            "objects": all_objects,
+            "actions": all_actions,
+            "relations": all_relations,
+            "dbsources": {"db": all_dbs, "doc": [], "api": []},
+            "version": "v0.1.0",
+        }
+
+    # -- Object CRUD (remote, read-only) --
+
+    def create_object(self, base_id: str, obj: Any) -> Any:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    def delete_object(self, base_id: str, object_code: str) -> None:
+        """Remote ontology is read-only — write forbidden."""
+        raise PermissionError("Remote ontology base is read-only")
+
+    # -- View queries ───────────────────────────────────────────────────
+
+    def get_views(
+        self,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+        page: int = 1,
+        page_size: int = 200,
+        **kw: Any,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query views via remote OntologySceneController with type=view filter."""
+        _ = owner_type, user_code, kw
         client = self._get_client()
         headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/listViews"
-        response = client.post(url, json={"baseId": base_id}, headers=headers)
+        url = f"{self._source_url}/OntologySceneController/queryOntologies"
+        body: dict[str, Any] = {
+            "sceneId": "-1",
+            "pageIndex": page,
+            "pageSize": page_size,
+            "type": "view",
+        }
+        if keyword:
+            body["queryKeyword"] = keyword
+        response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
-        result: dict[str, Any] = response.json()
-        return cast("list[Any]", result.get("data", {}).get("views", []))
+        raw = response.json()
+        if isinstance(raw, dict) and raw.get("code") == 200:
+            data = raw.get("data", raw)
+            if isinstance(data, list):
+                items: list[dict[str, Any]] = data
+                return items, raw.get("totalCount", len(items))
+            items = data.get("records") or data.get("items") or data.get("views") or []
+            total: int = raw.get("totalCount", len(items))
+            return items, total
+        return [], 0
 
-    def get_view_detail(self, loader: Any, base_id: str, view_code: str) -> Any | None:
-        """Look up view detail from cached views."""
-        _ = loader
-        for v in self.get_views(loader, base_id):
-            if v.get("viewCode") == view_code:
-                return v
+    def get_view_detail(
+        self, view_code: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
+        """Get single view detail by iterating scenes and calling get_scene_details."""
+        detail = self._find_in_scenes(base_id, view_code=[view_code])
+        for v in detail.get("views", []) or []:
+            if v.get("view_code") == view_code or v.get("view_id") == view_code:
+                return cast("dict[str, Any]", v)
         return None
+
+    def get_objects_by_view(
+        self,
+        view_code: str,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get object summaries referenced by a view, with optional filtering."""
+        _ = owner_type, user_code
+        detail = self._find_in_scenes(base_id, view_code=[view_code])
+        obj_codes: set[str] = set()
+        for v in detail.get("views", []) or []:
+            if v.get("view_code") == view_code or v.get("view_id") == view_code:
+                obj_codes.update(v.get("objectCodes", v.get("object_codes", [])) or [])
+        if not obj_codes:
+            return []
+        result: list[dict[str, Any]] = []
+        for obj in detail.get("objects", []) or []:
+            if obj.get("object_code") in obj_codes:
+                result.append(obj)
+        if keyword:
+            kw = keyword.strip().lower()
+            result = [
+                o
+                for o in result
+                if kw in str(o.get("objectName", o.get("object_name", ""))).lower()
+                or kw in str(o.get("objectCode", o.get("object_code", ""))).lower()
+                or kw in str(o.get("objectDesc", o.get("description", ""))).lower()
+            ]
+        return result
+
+    # -- View CRUD (remote, read-only) --
 
     def create_view(self, base_id: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
@@ -323,28 +555,88 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    # -- Relation CRUD (remote, read-only) --
+    # -- Relation queries ───────────────────────────────────────────────
 
-    def get_relations(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch relations from remote endpoint (no local cache — Platform handles caching)."""
-        _ = loader
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/listRelations"
-        response = client.post(url, json={"baseId": base_id}, headers=headers)
-        response.raise_for_status()
-        result: dict[str, Any] = response.json()
-        return cast("list[Any]", result.get("data", {}).get("relations", []))
+    def get_relations(
+        self,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+        page: int = 1,
+        page_size: int = 200,
+        **kw: Any,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get all relations by aggregating scene details across all scenes."""
+        _ = owner_type, user_code, kw
+        all_relations: list[dict[str, Any]] = []
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id)
+            all_relations.extend(detail.get("relations", []) or [])
+        if keyword:
+            kw_lower = keyword.strip().lower()
+            all_relations = [
+                r
+                for r in all_relations
+                if kw_lower
+                in str(r.get("relationName", r.get("relation_name", ""))).lower()
+                or kw_lower
+                in str(r.get("relationCode", r.get("relation_code", ""))).lower()
+                or kw_lower
+                in str(r.get("relationDesc", r.get("description", ""))).lower()
+            ]
+        total = len(all_relations)
+        start = (page - 1) * page_size
+        return all_relations[start : start + page_size], total
 
     def get_relation_detail(
-        self, loader: Any, base_id: str, rel_code: str
-    ) -> Any | None:
-        """Look up relation detail from cached relations."""
-        _ = loader
-        for r in self.get_relations(loader, base_id):
-            if r.get("relationCode") == rel_code:
-                return r
+        self, relation_code: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
+        """Get single relation detail by iterating scenes."""
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id)
+            for r in detail.get("relations", []) or []:
+                if (
+                    r.get("relation_code") == relation_code
+                    or r.get("relationCode") == relation_code
+                ):
+                    return cast("dict[str, Any]", r)
         return None
+
+    def get_relations_by_object(
+        self,
+        object_code: str,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get all relation details involving object_code (source or target)."""
+        _ = owner_type, user_code
+        result: list[dict[str, Any]] = []
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id)
+            for r in detail.get("relations", []) or []:
+                src = r.get("sourceObjectCode", r.get("source_class", ""))
+                tgt = r.get("targetObjectCode", r.get("target_class", ""))
+                if src == object_code or tgt == object_code:
+                    result.append(r)
+        return result
+
+    # -- Relation CRUD (remote, read-only) --
 
     def create_relation(self, base_id: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
@@ -358,32 +650,57 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    # -- Datasource CRUD (remote, read-only) --
+    # -- Datasource queries ─────────────────────────────────────────────
 
-    def get_datasources(self, loader: Any, base_id: str) -> list[Any]:
-        """Fetch datasources from remote endpoint (no local cache — Platform handles caching)."""
-        _ = loader
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/listDatasources"
-        response = client.post(url, json={"baseId": base_id}, headers=headers)
-        response.raise_for_status()
-        result: dict[str, Any] = response.json()
-        return cast("list[Any]", result.get("data", {}).get("dbsources", []))
+    def get_datasources(
+        self,
+        *,
+        base_id: str = "",
+        keyword: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get all datasources by aggregating scene details across all scenes."""
+        seen: set[str] = set()
+        result: list[dict[str, Any]] = []
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id)
+            dbsources = detail.get("dbsources", {}) or {}
+            for ds in dbsources.get("db", []) or []:
+                db_id = str(ds.get("dbId", ds.get("db_id", "")))
+                if db_id and db_id not in seen:
+                    seen.add(db_id)
+                    result.append(ds)
+        if keyword:
+            kw = keyword.strip().lower()
+            result = [
+                ds
+                for ds in result
+                if kw in str(ds.get("dbName", ds.get("db_name", ""))).lower()
+                or kw in str(ds.get("dbId", ds.get("db_id", ""))).lower()
+            ]
+        return result, len(result)
 
     def get_datasource_detail(
-        self, loader: Any, base_id: str, db_id: str
-    ) -> Any | None:
-        """Look up datasource from cached datasources."""
-        _ = loader
-        for ds in self.get_datasources(loader, base_id):
-            db_list = ds.get("db", [])
-            if db_list and isinstance(db_list, list) and db_list:
-                if str(db_list[0].get("dbId", "")) == db_id:
-                    return ds
-            elif str(ds.get("dbId", ds.get("db_id", ""))) == db_id:
-                return ds
+        self, db_id: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None:
+        """Get single datasource detail by iterating scenes."""
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id)
+            dbsources = detail.get("dbsources", {}) or {}
+            db_list = dbsources.get("db", []) or []
+            for ds in db_list:
+                if str(ds.get("dbId", ds.get("db_id", ""))) == db_id:
+                    return cast("dict[str, Any]", ds)
         return None
+
+    # -- Datasource CRUD (remote, read-only) --
 
     def create_datasource(self, base_id: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
@@ -393,36 +710,55 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    # -- Action CRUD (remote, read-only) --
+    # -- Action queries ─────────────────────────────────────────────────
 
-    def get_actions(self, loader: Any, base_id: str, object_code: str) -> list[Any]:
-        """Fetch actions from remote endpoint (no local cache — Platform handles caching)."""
-        _ = loader
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologyEntityController/listActions"
-        response = client.post(
-            url,
-            json={"baseId": base_id, "objectCode": object_code},
-            headers=headers,
-        )
-        response.raise_for_status()
-        result: dict[str, Any] = response.json()
-        return cast("list[Any]", result.get("data", {}).get("actions", []))
+    def get_actions(
+        self,
+        object_code: str,
+        *,
+        base_id: str = "",
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        keyword: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get all actions for an object by searching scene details."""
+        _ = owner_type, user_code
+        detail = self._find_in_scenes(base_id, object_code=[object_code])
+        actions: list[dict[str, Any]] = []
+        for obj in detail.get("objects", []) or []:
+            if obj.get("object_code") == object_code:
+                actions = list(obj.get("actions", []) or [])
+                break
+        if keyword:
+            kw = keyword.strip().lower()
+            actions = [
+                a
+                for a in actions
+                if kw in str(a.get("actionName", a.get("action_name", ""))).lower()
+                or kw in str(a.get("actionCode", a.get("action_code", ""))).lower()
+                or kw in str(a.get("actionDesc", a.get("description", ""))).lower()
+            ]
+        return actions, len(actions)
 
     def get_action_detail(
         self,
-        loader: Any,
-        base_id: str,
         object_code: str,
         action_code: str,
-    ) -> Any | None:
-        """Look up action from cached actions."""
-        _ = loader
-        for a in self.get_actions(loader, base_id, object_code):
-            if a.get("actionCode") == action_code:
-                return a
+        *,
+        base_id: str = "",
+    ) -> dict[str, Any] | None:
+        """Get single action detail by iterating scenes."""
+        detail = self._find_in_scenes(base_id, object_code=[object_code])
+        for obj in detail.get("objects", []) or []:
+            for a in obj.get("actions", []) or []:
+                if (
+                    a.get("action_code") == action_code
+                    or a.get("actionCode") == action_code
+                ):
+                    return cast("dict[str, Any]", a)
         return None
+
+    # -- Action CRUD (remote, read-only) --
 
     def create_action(self, base_id: str, object_code: str, obj: Any) -> Any:
         """Remote ontology is read-only — write forbidden."""
@@ -445,7 +781,7 @@ class RemoteOntologyBackend:
     # -- Scene management (remote, read-only) --
 
     def list_scenes(self, base_id: str) -> list[Any]:
-        """Fetch scenes from remote endpoint (no local cache — Platform handles caching)."""
+        """Fetch scenes from remote endpoint."""
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologySceneController/query"
@@ -464,12 +800,9 @@ class RemoteOntologyBackend:
     def get_scene_members(
         self, base_id: str, scene_id: str
     ) -> tuple[list[str], list[str]]:
-        """Return (object_codes, view_codes) for a remote scene.
-
-        Calls get_scene_details and extracts codes from the response.
-        """
+        """Return (object_codes, view_codes) for a remote scene."""
         try:
-            detail = self.get_scene_details(None, base_id, scene_id)
+            detail = self.get_scene_details(scene_id, base_id=base_id)
         except Exception:
             logger.debug(
                 "get_scene_members: get_scene_details failed base_id=%r scene_id=%r",
@@ -478,7 +811,6 @@ class RemoteOntologyBackend:
                 exc_info=True,
             )
             return [], []
-        # obj_codes = [o.get("objectCode", "") for o in detail.get("objects", []) or []]
         obj_codes = [o.get("object_code", "") for o in detail.get("objects", []) or []]
         vw_codes = [
             v.get("view_code", "") or v.get("view_id", "")
@@ -505,15 +837,13 @@ class RemoteOntologyBackend:
 
     def get_scene_details(
         self,
-        loader: Any,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         view_code: list[str] | None = None,
         object_code: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Fetch scene details from remote endpoint (no local cache — Platform handles caching)."""
-        _ = loader
+        """Fetch scene details from remote endpoint."""
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologyEntityController/sceneDetails"
@@ -552,31 +882,34 @@ class RemoteOntologyBackend:
 
     def query_ontologies_by_scene(
         self,
-        loader: object,
-        base_id: str,
         scene_id: str,
         *,
+        base_id: str = "",
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
-        **kwargs: object,
+        type: str | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        cross_scene: bool = False,
     ) -> dict[str, Any]:
         """Query ontologies by scene with pagination via remote OntologySceneController.
 
         Supports scene_id="-1" for all scenes (global search).
         """
-        _ = loader
-        _ = kwargs
+        _ = owner_type, user_code, cross_scene
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologySceneController/queryOntologies"
         body: dict[str, Any] = {
             "sceneId": scene_id,
-            "page": page,
+            "pageIndex": page,
             "pageSize": page_size,
         }
         if keyword:
-            body["keyword"] = keyword
+            body["queryKeyword"] = keyword
+        if type:
+            body["type"] = type
         response = client.post(url, json=body, headers=headers)
         response.raise_for_status()
         raw = response.json()
@@ -650,26 +983,72 @@ class RemoteOntologyBackend:
         """Remote ontology is read-only — write forbidden."""
         raise PermissionError("Remote ontology base is read-only")
 
-    # -- Object CRUD (remote, read-only) --
+    # -- Atomic ontology methods (scene extraction) ─────────────────────
 
-    def create_object(self, base_id: str, obj: Any) -> Any:
-        """Remote ontology is read-only — write forbidden."""
-        raise PermissionError("Remote ontology base is read-only")
+    def extract_objects_detail(
+        self, object_codes: list[str], *, base_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """Extract ObjectType JSON for each code by querying scene details."""
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(
+                sid, base_id=base_id, object_code=object_codes
+            )
+            for obj in detail.get("objects", []) or []:
+                oc = obj.get("object_code", "")
+                if oc in object_codes and oc not in seen:
+                    seen.add(oc)
+                    result.append(obj)
+        return result
 
-    def update_object(self, base_id: str, object_code: str, obj: Any) -> Any:
-        """Remote ontology is read-only — write forbidden."""
-        raise PermissionError("Remote ontology base is read-only")
+    def extract_views_detail(
+        self, view_codes: list[str], *, base_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """Extract View JSON for each code by querying scene details."""
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id, view_code=view_codes)
+            for v in detail.get("views", []) or []:
+                vc = v.get("view_code", "") or v.get("view_id", "")
+                if vc in view_codes and vc not in seen:
+                    seen.add(vc)
+                    result.append(v)
+        return result
 
-    def delete_object(self, base_id: str, object_code: str) -> None:
-        """Remote ontology is read-only — write forbidden."""
-        raise PermissionError("Remote ontology base is read-only")
+    def extract_relations(
+        self, object_codes_set: set[str], *, base_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """Extract bidirectional relations where both ends are in object_codes_set."""
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id)
+            for r in detail.get("relations", []) or []:
+                src = r.get("sourceObjectCode", r.get("source_class", ""))
+                tgt = r.get("targetObjectCode", r.get("target_class", ""))
+                if src in object_codes_set and tgt in object_codes_set:
+                    rc = r.get("relation_code", "") or r.get("relationCode", "")
+                    if rc and rc not in seen:
+                        seen.add(rc)
+                        result.append(r)
+        return result
 
     def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
-        """Return {library_id, scene_id} identifying which scene contains object_code.
-
-        Queries remote list_scenes and checks scene members for the given object_code.
-        Returns default (library_id="PERSONAL_LIB", scene_id="") when not found.
-        """
+        """Return {library_id, scene_id} identifying which scene contains object_code."""
         try:
             scenes = self.list_scenes(base_id)
         except Exception:
@@ -696,6 +1075,204 @@ class RemoteOntologyBackend:
                     "scene_id": scene_id,
                 }
         return {"library_id": "PERSONAL_LIB", "scene_id": ""}
+
+    # ── Property resolution ───────────────────────────────────────────
+
+    def resolve_property_name(
+        self, name_text: str, scope_code: str, *, base_id: str = ""
+    ) -> tuple[str, str] | None:
+        """Resolve a single Chinese property name → (field_code, field_name).
+
+        Iterates scenes, finds the object matching scope_code, then looks up
+        the property by field_name / aliases in the object's fields.
+        """
+        detail = self._find_in_scenes(base_id, object_code=[scope_code])
+        for obj in detail.get("objects", []) or []:
+            if obj.get("object_code") != scope_code:
+                continue
+            fields = obj.get("fields", obj.get("properties", [])) or []
+            for f in fields:
+                fname = f.get("field_name", f.get("propertyName", ""))
+                fcode = f.get("field_code", f.get("propertyCode", ""))
+                aliases: list[str] = f.get("aliases", []) or []
+                if fname == name_text or name_text in aliases:
+                    return (fcode, fname)
+        return None
+
+    def resolve_property_names(
+        self, name_texts: list[str], scope_code: str, *, base_id: str = ""
+    ) -> dict[str, tuple[str, str]]:
+        """Batch resolve property names → {name_text: (field_code, field_name)}."""
+        result: dict[str, tuple[str, str]] = {}
+        for name in name_texts:
+            resolved = self.resolve_property_name(name, scope_code, base_id=base_id)
+            if resolved is not None:
+                result[name] = resolved
+        return result
+
+    def get_property_aliases(
+        self, field_code: str, scope_code: str, *, base_id: str = ""
+    ) -> list[str]:
+        """Get all aliases (including field_name) for a given field_code."""
+        detail = self._find_in_scenes(base_id, object_code=[scope_code])
+        for obj in detail.get("objects", []) or []:
+            if obj.get("object_code") != scope_code:
+                continue
+            fields = obj.get("fields", obj.get("properties", [])) or []
+            for f in fields:
+                fcode = f.get("field_code", f.get("propertyCode", ""))
+                if fcode == field_code:
+                    fname = f.get("field_name", f.get("propertyName", ""))
+                    aliases: list[str] = list(f.get("aliases", []) or [])
+                    return [fname, *aliases] if fname else aliases
+        return []
+
+    # ── Scope resolution helpers ───────────────────────────────────────
+
+    def get_view_included_objects(
+        self, ontology_code: str, *, base_id: str = ""
+    ) -> list[str]:
+        """Return object codes included in the view identified by ontology_code."""
+        detail = self._find_in_scenes(base_id, view_code=[ontology_code])
+        for v in detail.get("views", []) or []:
+            if v.get("view_code") == ontology_code or v.get("view_id") == ontology_code:
+                return list(v.get("objectCodes", v.get("object_codes", [])) or [])
+        return []
+
+    def get_joinkey_related_objects(
+        self, ontology_code: str, field_codes: list[str], *, base_id: str = ""
+    ) -> list[str]:
+        """Return object codes related to ontology_code via join key fields."""
+        result: set[str] = set()
+        scenes = self.list_scenes(base_id)
+        for s in scenes:
+            sid = str(s.get("sceneId", ""))
+            if not sid:
+                continue
+            detail = self.get_scene_details(sid, base_id=base_id)
+            for r in detail.get("relations", []) or []:
+                src = r.get("sourceObjectCode", r.get("source_class", ""))
+                tgt = r.get("targetObjectCode", r.get("target_class", ""))
+                join_keys = (
+                    r.get("joinKeys")
+                    or r.get("join_keys")
+                    or r.get("mappingFields")
+                    or []
+                )
+                if src == ontology_code or tgt == ontology_code:
+                    for jk in join_keys:
+                        if isinstance(jk, dict):
+                            jk_src = jk.get("sourceField", jk.get("source_column", ""))
+                            jk_tgt = jk.get("targetField", jk.get("target_column", ""))
+                            if jk_src in field_codes or jk_tgt in field_codes:
+                                if src != ontology_code:
+                                    result.add(src)
+                                if tgt != ontology_code:
+                                    result.add(tgt)
+        return list(result)
+
+    # ── Property term bindings ─────────────────────────────────────────
+
+    def get_object_property_term_bindings(
+        self,
+        object_codes: list[str],
+        *,
+        base_id: str = "",
+        term_master_type: str | None = None,
+        property_codes: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Query object-level property term bindings (bulk).
+
+        Returns only properties that have terminology bindings configured.
+        """
+        _ = term_master_type
+        result: list[dict[str, Any]] = []
+        detail = self._find_in_scenes(base_id, object_code=object_codes)
+        for obj in detail.get("objects", []) or []:
+            if obj.get("object_code") not in object_codes:
+                continue
+            fields = obj.get("fields", obj.get("properties", [])) or []
+            for f in fields:
+                fcode = f.get("field_code", f.get("propertyCode", ""))
+                if property_codes and fcode not in property_codes:
+                    continue
+                term = f.get("terminology", f.get("termType"))
+                if term:
+                    result.append(
+                        {
+                            "object_code": obj.get("object_code", ""),
+                            "property_code": fcode,
+                            "property_name": f.get(
+                                "field_name", f.get("propertyName", "")
+                            ),
+                            "term_type": (term if isinstance(term, str) else str(term)),
+                        }
+                    )
+        return result
+
+    def get_view_property_term_bindings(
+        self,
+        view_codes: list[str],
+        *,
+        base_id: str = "",
+        term_master_type: str | None = None,
+        property_codes: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Query view-level property term bindings (bulk).
+
+        View properties reference source_object → source_object_property,
+        and the terminology is resolved from the underlying Object's Property.terminology.
+        """
+        _ = term_master_type
+        result: list[dict[str, Any]] = []
+        detail = self._find_in_scenes(base_id, view_code=view_codes)
+        # Build a lookup: object_code → {property_code → terminology}
+        obj_term_map: dict[str, dict[str, Any]] = {}
+        for obj in detail.get("objects", []) or []:
+            oc = obj.get("object_code", "")
+            if not oc:
+                continue
+            fields = obj.get("fields", obj.get("properties", [])) or []
+            field_map: dict[str, Any] = {}
+            for f in fields:
+                fcode = f.get("field_code", f.get("propertyCode", ""))
+                term = f.get("terminology", f.get("termType"))
+                if term:
+                    field_map[fcode] = term
+            if field_map:
+                obj_term_map[oc] = field_map
+
+        for v in detail.get("views", []) or []:
+            if (
+                v.get("view_code") not in view_codes
+                and v.get("view_id") not in view_codes
+            ):
+                continue
+            mappings = v.get("mappings", v.get("properties", [])) or []
+            for m in mappings:
+                src_obj = m.get("source_object", m.get("sourceObject", ""))
+                src_prop = m.get(
+                    "source_object_property", m.get("sourceObjectProperty", "")
+                )
+                prop_code = m.get("property_code", m.get("propertyCode", ""))
+                if property_codes and prop_code not in property_codes:
+                    continue
+                obj_terms = obj_term_map.get(src_obj, {})
+                term = obj_terms.get(src_prop)
+                if term:
+                    result.append(
+                        {
+                            "view_code": v.get("view_code", "") or v.get("view_id", ""),
+                            "property_code": prop_code,
+                            "property_name": m.get(
+                                "property_name", m.get("propertyName", "")
+                            ),
+                            "source_object": src_obj,
+                            "source_object_property": src_prop,
+                            "term_type": (term if isinstance(term, str) else str(term)),
+                        }
+                    )
+        return result
 
 
 class RemoteTermBackend:
