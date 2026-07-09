@@ -1,7 +1,7 @@
-"""OntologyLoader lazy-load cache manager — multi-base.
+"""OntologyLoader runtime manager — multi-base, scope-aware.
 
-Replaces the file-watching runtime with a simple in-memory cache keyed by base_id.
-Each base's loader is built once via DatacloudPlatform and cached until invalidated.
+Builds loaders on demand via DatacloudPlatform. Supports scoped loading
+by object/view codes through SceneLoaderMixin.
 """
 
 from __future__ import annotations
@@ -45,27 +45,41 @@ class LoaderSnapshot:
 
 
 class LoaderRuntimeManager:
-    """Lazy-load cache manager for OntologyLoader snapshots per base_id.
+    """On-demand loader manager for OntologyLoader snapshots per base_id.
 
-    Builds loaders via :class:`DatacloudPlatform`, caches them in memory,
-    and provides invalidation for use after ontology CRUD operations.
+    Builds loaders via :class:`DatacloudPlatform`. Supports scoped loading
+    via ``object_codes`` / ``view_codes`` parameters.
     """
 
     def __init__(self, *, platform: DatacloudPlatform, settings: Settings) -> None:
         self._platform = platform
         self._settings = settings
-        self._cache: dict[str, LoaderSnapshot] = {}
 
-    def get_loader(self, base_id: str) -> LoaderSnapshot:
-        """Return the cached loader snapshot for *base_id*, building it on first access.
+    def get_loader(
+        self,
+        base_id: str,
+        *,
+        object_codes: list[str] | None = None,
+        view_codes: list[str] | None = None,
+    ) -> LoaderSnapshot:
+        """Return a loader snapshot for *base_id*, building it on demand.
+
+        When *object_codes* or *view_codes* are provided, scoped loading via
+        :meth:`SceneLoaderMixin.load_ontology_from_codes` is used instead of
+        the full-ontology build path.
 
         Raises:
             KeyError: If *base_id* is not registered in the platform.
             PermissionError: If execution is disabled for the base.
         """
-        if base_id in self._cache:
-            return self._cache[base_id]
-        loader = self._build_loader(base_id)
+        if object_codes is not None or view_codes is not None:
+            loader = self._platform.load_ontology_from_codes(
+                base_id,
+                object_codes or [],
+                view_codes=view_codes,
+            )
+        else:
+            loader = self._build_loader(base_id)
         self._configure_term_loader(loader)
         # 虚拟动作注入耗时日志
         import time as _time
@@ -85,28 +99,20 @@ class LoaderRuntimeManager:
             loaded_at=datetime.now(UTC),
             action_routes=build_action_routes(loader),
         )
-        self._cache[base_id] = snapshot
-        logger.info("OntologyLoader cached for base_id=%s", base_id)
+        logger.info("OntologyLoader built for base_id=%s", base_id)
         return snapshot
-
-    def invalidate(self, base_id: str) -> None:
-        """Remove the cached snapshot for *base_id* so the next access rebuilds it."""
-        self._cache.pop(base_id, None)
-        logger.info("OntologyLoader cache invalidated for base_id=%s", base_id)
 
     def status(self) -> dict[str, Any]:
         """Return loader runtime status for diagnostics."""
-        return {
-            "cached_bases": list(self._cache.keys()),
-            "cache_size": len(self._cache),
-        }
+        entries = self._platform._base_registry.list()
+        return {"bases": [e.base_id for e in entries]}
 
     # ── internal builders ──────────────────────────────────────────────────────
 
     def _build_loader(self, base_id: str) -> OntologyLoader:
         """Build an OntologyLoader from the platform's ontology backend."""
         base_path = self._platform._base_path_for(base_id)
-        return self._platform.load_ontology(base_id, base_path)  # type: ignore[return-value]
+        return self._platform.load_ontology(base_id, base_path)
 
     def _configure_term_loader(self, loader: OntologyLoader) -> None:
         if getattr(loader._config, "term_loader", None) is not None:
@@ -254,8 +260,8 @@ async def get_request_loader_snapshot(
 
     runtime = typing.cast(LoaderRuntimeManager, runtime)
 
-    cached_bases: list[str] = runtime.status().get("cached_bases", [])
-    if not cached_bases:
+    bases: list[str] = runtime.status().get("bases", [])
+    if not bases:
         # Try the platform's default base
         platform = runtime._platform
         try:
@@ -271,9 +277,9 @@ async def get_request_loader_snapshot(
             return None
         return snapshot
 
-    # Return the first cached snapshot
+    # Return the first registered base's snapshot
     try:
-        return runtime.get_loader(cached_bases[0])
+        return runtime.get_loader(bases[0])
     except Exception:
         logger.exception("get_request_loader_snapshot: failed to get loader")
         return None
