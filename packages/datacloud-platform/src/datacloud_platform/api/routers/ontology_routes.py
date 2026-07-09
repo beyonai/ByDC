@@ -24,7 +24,6 @@ from datacloud_platform.models.scene import (
     SceneMembersRequest,
     SceneUpdate,
 )
-from datacloud_platform.ontology_store import CacheMode
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -130,18 +129,15 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     def list_scenes_flat(
         base_id: str = Query(default=DEFAULT_BASE_ID),
         keyword: str | None = Query(default=None, description="模糊查询场景列表"),
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List scenes under a base (flat route). base_id defaults to 'default'."""
         try:
             if keyword:
                 return ok(
-                    data=platform.query_scenes(base_id, keyword, cache_mode=cache_mode),
-                    totalCount=platform.count_scenes(
-                        base_id, keyword, cache_mode=cache_mode
-                    ),
+                    data=platform.query_scenes(base_id, keyword),
+                    totalCount=platform.count_scenes(base_id, keyword),
                 )
-            return ok(data=platform.list_scenes(base_id, cache_mode=cache_mode))
+            return ok(data=platform.list_scenes(base_id))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -157,19 +153,17 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
         keyword: str | None = Query(default=None),
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Query ontologies in a scene by scene_code (flat route).
 
         scene_code="-1" queries across all scenes.
         """
         try:
-            backend = platform._ontology_for(base_id)
             # scene_code → scene_id lookup
             scene_id = ""
             cross_scene = scene_code == "-1"
             if not cross_scene:
-                scenes = backend.list_scenes(base_id)
+                scenes = platform.list_scenes(base_id)
                 for s in scenes:
                     if s.get("scene_code") == scene_code:
                         scene_id = s.get("scene_id", "")
@@ -177,11 +171,9 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
                 if not scene_id:
                     return ok(data={"objects": [], "views": []}, totalCount=0)
 
-            loader = platform._load_ontology_cached(base_id, cache_mode=cache_mode)
-            result = backend.query_ontologies_by_scene(
-                loader=loader,
-                base_id=base_id,
-                scene_id=scene_id,
+            result = platform.query_ontologies_by_scene(
+                base_id,
+                scene_id,
                 page=page,
                 page_size=page_size,
                 keyword=keyword,
@@ -216,17 +208,13 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         base_id: str,
         view_code: str | None = Query(default=None, alias="viewCode"),
         object_code: str | None = Query(default=None, alias="objectCode"),
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get comprehensive base detail — all scenes, objects, views, relations,
         actions, dbsources under a base. Supports optional view_code/object_code filtering.
         All resources include ownerType/userCode fields."""
         try:
-            loader = platform._load_ontology_cached(base_id, cache_mode=cache_mode)
-            backend = platform._ontology_for(base_id)
-            result = backend.get_base_details(
-                loader,
-                base_id,
+            result = platform.get_base_details(
+                base_id=base_id,
                 view_code=_parse_csv(view_code),
                 object_code=_parse_csv(object_code),
             )
@@ -242,18 +230,15 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
     def list_scenes(
         base_id: str,
         keyword: str | None = Query(default=None, description="模糊查询场景列表"),
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """List scenes under an ontology base. Supports optional keyword filter."""
         try:
             if keyword:
                 return ok(
-                    data=platform.query_scenes(base_id, keyword, cache_mode=cache_mode),
-                    totalCount=platform.count_scenes(
-                        base_id, keyword, cache_mode=cache_mode
-                    ),
+                    data=platform.query_scenes(base_id, keyword),
+                    totalCount=platform.count_scenes(base_id, keyword),
                 )
-            return ok(data=platform.list_scenes(base_id, cache_mode=cache_mode))
+            return ok(data=platform.list_scenes(base_id))
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -267,7 +252,6 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         object_code: str | None = Query(
             default=None, alias="objectCode", description="逗号分隔"
         ),
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Get scene details with optional associated resource filtering."""
         try:
@@ -276,7 +260,6 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
                 scene_id,
                 view_code=_parse_csv(view_code),
                 object_code=_parse_csv(object_code),
-                cache_mode=cache_mode,
             )
             return ok(data=result)
         except KeyError as e:
@@ -289,7 +272,6 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         page: int = Query(default=1, ge=1),
         page_size: int = Query(default=20, ge=1, le=200, alias="pageSize"),
         keyword: str | None = Query(default=None),
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Query ontologies in a scene."""
         try:
@@ -299,7 +281,6 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
                 page=page,
                 page_size=page_size,
                 keyword=keyword,
-                cache_mode=cache_mode,
             )
             return ok(data=result["data"], totalCount=result["totalCount"])
         except KeyError as e:
