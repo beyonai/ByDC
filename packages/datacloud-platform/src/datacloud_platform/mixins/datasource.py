@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from datacloud_platform.backends._contracts import _HasOntologyBackend
-from datacloud_platform.ontology_store import CacheMode
 
 logger = logging.getLogger(__name__)
 
@@ -19,24 +18,19 @@ class DatasourceMixin:
         base_id: str,
         *,
         keyword: str | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """Get all datasources under a base with optional filtering."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_datasources(loader, base_id, keyword=keyword)
+        return self._ontology_for(base_id).get_datasources(
+            base_id=base_id, keyword=keyword
+        )
 
     def get_datasource_detail(
         self: _HasOntologyBackend,
         base_id: str,
         db_id: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any] | None:
         """Get single datasource detail by db_id."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_datasource_detail(loader, base_id, db_id)
+        return self._ontology_for(base_id).get_datasource_detail(db_id, base_id=base_id)
 
     def create_datasource(self: _HasOntologyBackend, base_id: str, ds: Any) -> Any:
         """Create a datasource. Raises PermissionError on read-only backends."""

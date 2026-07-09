@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from datacloud_platform.backends._contracts import _HasOntologyBackend
-from datacloud_platform.ontology_store import CacheMode
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +21,11 @@ class ActionCRUDMixin:
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-        cache_mode: CacheMode = CacheMode.REALTIME,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """Get all actions on an object with optional filtering."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_actions(
-            loader,
-            base_id,
+        return self._ontology_for(base_id).get_actions(
             object_code,
+            base_id=base_id,
             owner_type=owner_type,
             user_code=user_code,
             keyword=keyword,
@@ -41,13 +36,11 @@ class ActionCRUDMixin:
         base_id: str,
         object_code: str,
         action_code: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any] | None:
         """Get single action detail by code."""
-        backend = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
-        return backend.get_action_detail(loader, base_id, object_code, action_code)
+        return self._ontology_for(base_id).get_action_detail(
+            object_code, action_code, base_id=base_id
+        )
 
     def create_action(
         self: _HasOntologyBackend, base_id: str, object_code: str, action: Any

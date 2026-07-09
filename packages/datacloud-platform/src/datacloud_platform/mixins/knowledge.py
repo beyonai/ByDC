@@ -14,7 +14,6 @@ from datacloud_platform.backends._contracts import (
     _HasOntologyAndTermBackend,
     _HasTermBackend,
 )
-from datacloud_platform.ontology_store import CacheMode
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +185,6 @@ class KnowledgeMixin:
         slots: list[dict[str, Any]],
         *,
         ontology_code: str = "",
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any]:
         """准备澄清流程：6 步编排。
 
@@ -257,10 +255,10 @@ class KnowledgeMixin:
         # 替换 SDK 的 _pre_resolve_terms（内部 create_reader 自管 session）
         # 使用 platform backend 做本体元数据 code/name 映射
         pre = self._pre_resolve_with_backends(  # type: ignore[attr-defined]
-            base_id, main_terms, ontology_code, cache_mode
+            base_id, main_terms, ontology_code
         )
         cc_pre = self._pre_resolve_with_backends(  # type: ignore[attr-defined]
-            base_id, cc_terms, ontology_code, cache_mode
+            base_id, cc_terms, ontology_code
         )
         logger.info(
             "[clarification] Step2 预解析: confirmed=%d unresolved=%d",
@@ -382,7 +380,6 @@ class KnowledgeMixin:
         base_id: str,
         terms: list[Any],
         scope_code: str,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> Any:
         """Step 2 原子: 字段预解析（替换 SDK 的 _pre_resolve_terms）。
 
@@ -404,7 +401,6 @@ class KnowledgeMixin:
         from datacloud_knowledge.contracts.types import ResolvedField
 
         onto = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         term = self._term_for(base_id)
 
         confirmed: dict[str, Any] = {}
@@ -425,7 +421,7 @@ class KnowledgeMixin:
         if field_terms_raw and scope_code:
             try:
                 resolved_by_text = onto.resolve_property_names(
-                    loader, field_terms_raw, scope_code
+                    field_terms_raw, scope_code, base_id=base_id
                 )
                 for t in terms:
                     if t.ktype == "whereValue" or t.parent_raw_text is not None:
@@ -486,7 +482,9 @@ class KnowledgeMixin:
         prop_type_map: dict[str, str] = {}
         if scope_code:
             try:
-                bindings = onto.get_object_property_term_bindings(loader, [scope_code])
+                bindings = onto.get_object_property_term_bindings(
+                    [scope_code], base_id=base_id
+                )
                 for b in bindings:
                     pc = str(b.get("propertyCode", ""))
                     if pc:
@@ -774,7 +772,6 @@ class KnowledgeMixin:
         metadata: Any = None,
         user_id: str | None = None,
         persist_confirmed_synonyms: bool = True,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any]:
         """完成澄清：应用用户选择 → 标准化 → 持久化。
 
@@ -820,7 +817,6 @@ class KnowledgeMixin:
         # ── Step C: 持久化（按领域拆分）──
         persisted_ids: list[str] = []
         if persist_confirmed_synonyms and user_id and needs_clarification and form:
-            loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
             form_data: Any = json.loads(form) if isinstance(form, str) else form
             if isinstance(form_data, list):
                 paradigm_list: list[dict[str, Any]] = form_data
@@ -832,7 +828,7 @@ class KnowledgeMixin:
                 for result_item in paradigm.get("paradigmResult", []):
                     persisted_ids.extend(
                         self._dispatch_persist(  # type: ignore[attr-defined]
-                            base_id, loader, ontology_code, result_item, user_id
+                            base_id, ontology_code, result_item, user_id
                         )
                     )
 
@@ -848,7 +844,6 @@ class KnowledgeMixin:
     def _dispatch_persist(
         self: _HasOntologyAndTermBackend,
         base_id: str,
-        loader: Any,
         ontology_code: str,
         result_item: dict[str, Any],
         user_id: str,
@@ -870,7 +865,6 @@ class KnowledgeMixin:
             if raw_field and choice_field and raw_field != choice_field:
                 nid = self._persist_metadata_alias(  # type: ignore[attr-defined]
                     base_id,
-                    loader,
                     ontology_code,
                     choice_field,
                     raw_field,
@@ -903,14 +897,15 @@ class KnowledgeMixin:
             # 判断 choiceKeyword 是元数据（字段名）还是术语（值）
             onto = self._ontology_for(base_id)
             is_field = (
-                onto.resolve_property_name(loader, choice_keyword, ontology_code)
+                onto.resolve_property_name(
+                    choice_keyword, ontology_code, base_id=base_id
+                )
                 is not None
             )
 
             if is_field:
                 nid = self._persist_metadata_alias(  # type: ignore[attr-defined]
                     base_id,
-                    loader,
                     ontology_code,
                     choice_keyword,
                     keyword,
@@ -936,7 +931,6 @@ class KnowledgeMixin:
     def _persist_metadata_alias(
         self: _HasOntologyAndTermBackend,
         base_id: str,
-        loader: Any,
         scope_code: str,
         standard_name: str,
         alias_name: str,
@@ -950,7 +944,9 @@ class KnowledgeMixin:
         - Step 3: TermBackend.create_term_name() 持久化用户别名到 term_name 表
         """
         onto = self._ontology_for(base_id)
-        resolved = onto.resolve_property_name(loader, standard_name, scope_code)
+        resolved = onto.resolve_property_name(
+            standard_name, scope_code, base_id=base_id
+        )
         if resolved is None:
             return None
 
@@ -1033,13 +1029,12 @@ class KnowledgeMixin:
         field_aliases: dict[str, list[str]],
         *,
         scope_code: str = "",
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, list[tuple[str, str]]]:
         """字段别名解析：两级消歧。
 
         编排说明：
         - 一级（本体元数据）：OntologyBackend.resolve_property_name()
-          从 OWL loader._classes 读取标准 field_name/aliases 映射，零 DB 开销。
+          从 OWL _classes 读取标准 field_name/aliases 映射，零 DB 开销。
         - 二级（用户别名兜底）：TermBackend.search_terms(keyword=term, term_type="prop")
           查询知识 DB 中用户自定义的属性别名。
         - 两级均未命中 → 返回空列表（unresolved）。
@@ -1049,7 +1044,6 @@ class KnowledgeMixin:
         - 用户自定义的别名存储在知识 DB，走 TermBackend 兜底
         """
         onto = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         term = self._term_for(base_id)
 
         result: dict[str, list[tuple[str, str]]] = {}
@@ -1063,7 +1057,9 @@ class KnowledgeMixin:
 
                 # ── 一级：本体元数据（OWL 内存，零 DB）──
                 if scope_code:
-                    pair = onto.resolve_property_name(loader, term_text, scope_code)
+                    pair = onto.resolve_property_name(
+                        term_text, scope_code, base_id=base_id
+                    )
                     if pair is not None:
                         resolved.append(pair)
                         continue
@@ -1145,8 +1141,6 @@ class KnowledgeMixin:
         scope_code: str,
         field_term: str,
         value_term: str,
-        *,
-        cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> list[dict[str, Any]]:
         """属性→术语类型绑定 → 按类型检索术语值。
 
@@ -1161,11 +1155,10 @@ class KnowledgeMixin:
         - value="黄总" → Step 2 在 "list_handler" 类型中检索匹配值
         """
         onto = self._ontology_for(base_id)
-        loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         term = self._term_for(base_id)
 
         # Step 1: 查属性→术语类型绑定（本体元数据，零 DB）
-        bindings = onto.get_object_property_term_bindings(loader, [scope_code])
+        bindings = onto.get_object_property_term_bindings([scope_code], base_id=base_id)
 
         # Step 2: 在每个绑定的术语类型中检索术语值
         results: list[dict[str, Any]] = []
@@ -1278,4 +1271,4 @@ class KnowledgeMixin:
             resolve_object_for_property as sdk_resolve,
         )
 
-        return sdk_resolve(property_code)
+        return sdk_resolve(property_code)  # type: ignore[no-any-return]
