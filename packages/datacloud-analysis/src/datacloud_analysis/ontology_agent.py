@@ -574,12 +574,12 @@ class OntologyAgent:
         view_codes: list[str] | None,
         object_codes: list[str] | None,
         base_ids: list[str] | None = None,
-    ) -> tuple[list[Any], list[str]]:
+    ) -> tuple[list[Any], list[str], list[str]]:
         """通过 LoaderRuntimeManager 获取已配置的 OntologyLoader 快照。
 
         支持多库场景：base_ids 非空时为每个 base_id 构建一个 loader，
         返回列表；为空时退化到 self._config.base_id 单库模式。
-        返回 (loaders, mounted) 其中 loaders 为列表。
+        返回 (loaders, mounted, _ids) 其中 loaders 为列表，_ids 为对应的 base_id 列表。
         """
         from datacloud_platform.config import get_settings  # noqa: PLC0415
         from datacloud_platform.loader_runtime import LoaderRuntimeManager  # noqa: PLC0415
@@ -588,11 +588,14 @@ class OntologyAgent:
         _ids = base_ids if base_ids else [self._config.base_id]
         loaders: list[Any] = []
         for bid in _ids:
-            snapshot = runtime.get_loader(bid)
+            snapshot = runtime.get_loader(
+                bid,
+                object_codes=object_codes,
+                view_codes=view_codes)
             loaders.append(snapshot.loader)
 
         mounted = list(view_codes or []) + list(object_codes or [])
-        return loaders, mounted
+        return loaders, mounted, _ids
 
     def _build_and_compile(
         self,
@@ -613,18 +616,19 @@ class OntologyAgent:
             OntologyToolLoader,
         )
 
-        loaders, mounted = self._build_loader(view_codes, object_codes, base_ids)
+        loaders, mounted, _ids = self._build_loader(view_codes, object_codes, base_ids)
 
         # 多库合并：从每个 loader 构建工具，union 合并
         all_tools: dict[str, Any] = {}
         all_redirect_tools: dict[str, Any] = {}
         primary_loader = loaders[0] if loaders else None
 
-        for loader in loaders:
+        for bid, loader in zip(_ids, loaders, strict=True):
             tool_loader = OntologyToolLoader(
                 mounted_objects=mounted,
                 loader=loader,
                 resource_path=self._config.resource_path,
+                base_id=bid,
             )
             tools = tool_loader.load()
             for k, v in tools.items():

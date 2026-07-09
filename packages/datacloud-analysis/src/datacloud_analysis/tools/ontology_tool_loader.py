@@ -225,7 +225,9 @@ def _make_tool_coroutine(ont_action: Any, loader: Any) -> Any:
     return _execute
 
 
-def _make_object_action_coroutine(obj_code: str, action_code: str, loader: Any) -> Any:
+def _make_object_action_coroutine(
+    obj_code: str, action_code: str, loader: Any, *, base_id: str
+) -> Any:
     """OBJECT 工具执行闭包：通过 ActionExecutor 路由，与 MCP call_tool 对象分支对齐。"""
 
     async def _execute(**kwargs: Any) -> Any:
@@ -241,7 +243,7 @@ def _make_object_action_coroutine(obj_code: str, action_code: str, loader: Any) 
             from datacloud_platform import get_platform  # noqa: PLC0415
 
             return await get_platform().execute_action(
-                _base_id, loader, obj_code, action_code, kwargs
+                base_id, loader, obj_code, action_code, kwargs
             )
         except Exception as exc:  # noqa: BLE001
             logger.error(
@@ -358,6 +360,7 @@ class OntologyToolLoader:
         elif loader is not _LOADER_NOT_PROVIDED:
             # 显式传入 loader（可为 None，保持旧的 skip-on-None 行为）
             self._loader = loader
+            self._base_id = base_id
         else:
             raise ValueError("必须提供 loader")
 
@@ -502,7 +505,7 @@ class OntologyToolLoader:
             input_schema = {**input_schema, "required": required}
 
         # 2. filters：替换为 relaxed 版本（含 catch-all + 原词透传描述）
-        props["filters"] = get_platform().build_filters_schema(_base_id, fields)
+        props["filters"] = get_platform().build_filters_schema(self._base_id or _base_id, fields)
 
         # 2. select：覆写 description，保留 enum 供 LLM 参考
         if "select" in props:
@@ -538,8 +541,8 @@ class OntologyToolLoader:
 
     def _is_view(self, code: str) -> bool:
         """检查 code 是否为 VIEW 类型（在 loader._scenes 中）。"""
-        scenes = getattr(self._loader, "_scenes", {})
-        return code in scenes
+        views = getattr(self._loader, "_views", {})
+        return code in views
 
     def _is_database_object(self, code: str) -> bool:
         """检查对象是否为 DB 类型。"""
@@ -632,7 +635,10 @@ class OntologyToolLoader:
                     metadata={"title": str(schema.get("title") or action.action_name or name)},
                     args_schema=input_schema,
                     coroutine=_make_object_action_coroutine(
-                        obj_code, action.action_code, self._loader
+                        obj_code,
+                        action.action_code,
+                        self._loader,
+                        base_id=self._base_id or _base_id,
                     ),
                 )
         except Exception as exc:  # noqa: BLE001
@@ -649,7 +655,9 @@ class OntologyToolLoader:
         try:
             from langchain_core.tools import StructuredTool  # noqa: PLC0415
 
-            for tool_def in get_platform().generate_action_tools(_base_id, loader, obj_code):
+            for tool_def in get_platform().generate_action_tools(
+                self._base_id or _base_id, loader, obj_code
+            ):
                 name: str = tool_def.get("name", "")
                 if not name:
                     continue
@@ -684,7 +692,10 @@ class OntologyToolLoader:
                         metadata={"title": _display_title},
                         args_schema=input_schema,
                         coroutine=_make_object_action_coroutine(
-                            obj_code, action_code, self._loader
+                            obj_code,
+                            action_code,
+                            self._loader,
+                            base_id=self._base_id or _base_id,
                         ),
                     )
                 except Exception as exc:  # noqa: BLE001
@@ -710,7 +721,9 @@ class OntologyToolLoader:
         try:
             from langchain_core.tools import StructuredTool  # noqa: PLC0415
 
-            tool_defs = get_platform().generate_dynamic_query_tools(_base_id, loader, obj_code)
+            tool_defs = get_platform().generate_dynamic_query_tools(
+                self._base_id or _base_id, loader, obj_code
+            )
             if not tool_defs:
                 logger.debug(
                     "OntologyToolLoader: %s 不是 DB/KB 类型，跳过 query 工具降级生成",
