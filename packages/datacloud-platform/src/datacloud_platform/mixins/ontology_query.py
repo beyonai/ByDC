@@ -56,8 +56,21 @@ class OntologyQueryMixin:
         *,
         cache_mode: CacheMode = CacheMode.REALTIME,
     ) -> dict[str, Any] | None:
-        """Get a single object's full detail (ObjectType with properties and actions)."""
+        """Get a single object's full detail (ObjectType with properties and actions).
+
+        Tries direct entity-store lookup first, falling back to full ontology load
+        for backends without entity-store support.
+        """
         backend = self._ontology_for(base_id)
+        # Direct path: read single object from entity store, parse locally
+        try:
+            store = backend._entity_store.sub_store(base_id)  # type: ignore[attr-defined]
+            raw = store.get("objects", object_code)
+            if raw is not None:
+                return backend.get_object_detail_from_raw(raw, object_code)
+        except (AttributeError, Exception):
+            pass  # entity_store not available → fall through to full load
+        # Fallback: full ontology load
         loader = self._load_ontology_cached(base_id, cache_mode=cache_mode)
         return backend.get_object_detail(loader, object_code)
 
