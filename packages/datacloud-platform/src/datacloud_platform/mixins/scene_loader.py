@@ -355,15 +355,18 @@ def _build_content_from_remote_scenes(
             )
             return None
         data = result.get("data", {}) if isinstance(result, dict) else {}
-        items: list[dict[str, Any]] = data.get("objects", []) or []
+        items: list[dict[str, Any]] = (
+            data.get("objects", []) or data.get("views", []) or []
+        )
         for item in items:
             item_code = (
-                item.get("ontologyCode")
+                item.get("objectCode")
+                or item.get("viewCode")
                 or item.get("code")
                 or item.get("object_code", "")
             )
             if item_code == code:
-                return str(item.get("sceneId") or "")
+                return str(item.get("_sceneId") or item.get("sceneId") or "")
         return None
 
     for code in object_codes:

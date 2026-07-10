@@ -330,7 +330,9 @@ class RemoteOntologyBackend:
         if isinstance(raw, dict) and raw.get("code") == 200:
             data = raw.get("data", raw)
             if isinstance(data, list):
-                items: list[dict[str, Any]] = data
+                items: list[dict[str, Any]] = [
+                    self._normalize_query_ontology_item(item) for item in data
+                ]
                 return items, raw.get("totalCount", len(items))
             items = (
                 data.get("records") or data.get("items") or data.get("objects") or []
@@ -347,38 +349,23 @@ class RemoteOntologyBackend:
         1. queryOntologies with queryKeyword=object_code → verify existence
         2. sceneDetails with objectCode=[object_code] → full detail
         """
-        # Step 1: global search for the object summary
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologySceneController/queryOntologies"
-        body: dict[str, Any] = {
-            "sceneId": "-1",
-            "queryKeyWord": object_code,
-            "queryType": "object",
-            "pageSize": 20,
-            "pageIndex": 1,
-        }
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        raw = response.json()
+        # Step 1: global search for the object summary (all pages)
+        items = self._query_ontologies_all_pages(
+            keyword=object_code, query_type="object"
+        )
 
         found = False
         matched_scene_id = ""
-        if isinstance(raw, dict) and raw.get("code") == 200:
-            data = raw.get("data", [])
-            items: list[dict[str, Any]] = (
-                data if isinstance(data, list) else data.get("records", []) or []
+        for item in items:
+            code = (
+                item.get("ontologyCode")
+                or item.get("code")
+                or item.get("object_code", "")
             )
-            for item in items:
-                code = (
-                    item.get("ontologyCode")
-                    or item.get("code")
-                    or item.get("object_code", "")
-                )
-                if code == object_code:
-                    found = True
-                    matched_scene_id = str(item.get("sceneId", ""))
-                    break
+            if code == object_code:
+                found = True
+                matched_scene_id = str(item.get("sceneId", ""))
+                break
 
         if not found:
             return None
@@ -440,36 +427,21 @@ class RemoteOntologyBackend:
             "dbsources": {"db": [], "doc": [], "api": []},
         }
 
-        # Step 1: global search for the object summary
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologySceneController/queryOntologies"
-        body: dict[str, Any] = {
-            "sceneId": "-1",
-            "queryKeyWord": object_code,
-            "queryType": "object",
-            "pageSize": 20,
-            "pageIndex": 1,
-        }
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        raw = response.json()
+        # Step 1: global search for the object summary (all pages)
+        items = self._query_ontologies_all_pages(
+            keyword=object_code, query_type="object"
+        )
 
         matched_scene_id = ""
-        if isinstance(raw, dict) and raw.get("code") == 200:
-            data = raw.get("data", [])
-            items: list[dict[str, Any]] = (
-                data if isinstance(data, list) else data.get("records", []) or []
+        for item in items:
+            code = (
+                item.get("ontologyCode")
+                or item.get("code")
+                or item.get("object_code", "")
             )
-            for item in items:
-                code = (
-                    item.get("ontologyCode")
-                    or item.get("code")
-                    or item.get("object_code", "")
-                )
-                if code == object_code:
-                    matched_scene_id = str(item.get("sceneId", ""))
-                    break
+            if code == object_code:
+                matched_scene_id = str(item.get("sceneId", ""))
+                break
 
         if not matched_scene_id:
             return empty
@@ -592,7 +564,9 @@ class RemoteOntologyBackend:
         if isinstance(raw, dict) and raw.get("code") == 200:
             data = raw.get("data", raw)
             if isinstance(data, list):
-                items: list[dict[str, Any]] = data
+                items: list[dict[str, Any]] = [
+                    self._normalize_query_view_item(item) for item in data
+                ]
                 return items, raw.get("totalCount", len(items))
             items = data.get("records") or data.get("items") or data.get("views") or []
             total: int = raw.get("totalCount", len(items))
@@ -607,38 +581,21 @@ class RemoteOntologyBackend:
         1. queryOntologies with queryKeyword=view_code, queryType=view → verify existence
         2. sceneDetails with viewCode=[view_code] → full detail
         """
-        # Step 1: global search for the view summary
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologySceneController/queryOntologies"
-        body: dict[str, Any] = {
-            "sceneId": "-1",
-            "queryKeyWord": view_code,
-            "queryType": "view",
-            "pageSize": 20,
-            "pageIndex": 1,
-        }
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        raw = response.json()
+        # Step 1: global search for the view summary (all pages)
+        items = self._query_ontologies_all_pages(keyword=view_code, query_type="view")
 
         found = False
         matched_scene_id = ""
-        if isinstance(raw, dict) and raw.get("code") == 200:
-            data = raw.get("data", [])
-            items: list[dict[str, Any]] = (
-                data if isinstance(data, list) else data.get("records", []) or []
+        for item in items:
+            code = (
+                item.get("ontologyCode")
+                or item.get("code")
+                or item.get("view_code", "")
             )
-            for item in items:
-                code = (
-                    item.get("ontologyCode")
-                    or item.get("code")
-                    or item.get("view_code", "")
-                )
-                if code == view_code:
-                    found = True
-                    matched_scene_id = str(item.get("sceneId", ""))
-                    break
+            if code == view_code:
+                found = True
+                matched_scene_id = str(item.get("sceneId", ""))
+                break
 
         if not found:
             return None
@@ -670,36 +627,19 @@ class RemoteOntologyBackend:
         """
         _ = owner_type, user_code
 
-        # Step 1: global search for the view summary
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologySceneController/queryOntologies"
-        body: dict[str, Any] = {
-            "sceneId": "-1",
-            "queryKeyWord": view_code,
-            "queryType": "view",
-            "pageSize": 20,
-            "pageIndex": 1,
-        }
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        raw = response.json()
+        # Step 1: global search for the view summary (all pages)
+        items = self._query_ontologies_all_pages(keyword=view_code, query_type="view")
 
         matched_scene_id = ""
-        if isinstance(raw, dict) and raw.get("code") == 200:
-            data = raw.get("data", [])
-            items: list[dict[str, Any]] = (
-                data if isinstance(data, list) else data.get("records", []) or []
+        for item in items:
+            code = (
+                item.get("ontologyCode")
+                or item.get("code")
+                or item.get("view_code", "")
             )
-            for item in items:
-                code = (
-                    item.get("ontologyCode")
-                    or item.get("code")
-                    or item.get("view_code", "")
-                )
-                if code == view_code:
-                    matched_scene_id = str(item.get("sceneId", ""))
-                    break
+            if code == view_code:
+                matched_scene_id = str(item.get("sceneId", ""))
+                break
 
         if not matched_scene_id:
             return []
@@ -814,36 +754,21 @@ class RemoteOntologyBackend:
         _ = owner_type, user_code
         result: list[dict[str, Any]] = []
 
-        # Step 1: global search for the object summary to get its sceneId
-        client = self._get_client()
-        headers = self._build_auth_headers()
-        url = f"{self._source_url}/OntologySceneController/queryOntologies"
-        body: dict[str, Any] = {
-            "sceneId": "-1",
-            "queryKeyWord": object_code,
-            "queryType": "object",
-            "pageSize": 20,
-            "pageIndex": 1,
-        }
-        response = client.post(url, json=body, headers=headers)
-        response.raise_for_status()
-        raw = response.json()
+        # Step 1: global search for the object summary (all pages)
+        items = self._query_ontologies_all_pages(
+            keyword=object_code, query_type="object"
+        )
 
         matched_scene_id = ""
-        if isinstance(raw, dict) and raw.get("code") == 200:
-            data = raw.get("data", [])
-            items: list[dict[str, Any]] = (
-                data if isinstance(data, list) else data.get("records", []) or []
+        for item in items:
+            code = (
+                item.get("ontologyCode")
+                or item.get("code")
+                or item.get("object_code", "")
             )
-            for item in items:
-                code = (
-                    item.get("ontologyCode")
-                    or item.get("code")
-                    or item.get("object_code", "")
-                )
-                if code == object_code:
-                    matched_scene_id = str(item.get("sceneId", ""))
-                    break
+            if code == object_code:
+                matched_scene_id = str(item.get("sceneId", ""))
+                break
 
         if not matched_scene_id:
             return result
@@ -1117,7 +1042,7 @@ class RemoteOntologyBackend:
         """Query ontologies by scene with pagination via remote OntologySceneController.
 
         Supports scene_id="-1" for all scenes (global search).
-        Auto-paginates through all pages using totalCount / nextPageToken.
+        Returns a single page — call ``_query_ontologies_all_pages`` to fetch all pages.
         """
         _ = owner_type, user_code, cross_scene
         if cross_scene:
@@ -1125,20 +1050,66 @@ class RemoteOntologyBackend:
         client = self._get_client()
         headers = self._build_auth_headers()
         url = f"{self._source_url}/OntologySceneController/queryOntologies"
+        body: dict[str, Any] = {
+            "sceneId": scene_id,
+            "pageIndex": page,
+            "pageSize": page_size,
+        }
+        if keyword:
+            body["queryKeyWord"] = keyword
+        body["queryType"] = type or "object"
+        response = client.post(url, json=body, headers=headers)
+        response.raise_for_status()
+        raw = response.json()
+        if isinstance(raw, dict) and raw.get("code") == 200:
+            data = raw.get("data", [])
+            if isinstance(data, list):
+                query_type = str(type or "object").lower()
+                if query_type == "view":
+                    views = [self._normalize_query_view_item(item) for item in data]
+                    return {
+                        "data": {"objects": [], "views": views},
+                        "totalCount": raw.get("totalCount", len(data)),
+                    }
+                objects = [self._normalize_query_ontology_item(item) for item in data]
+                return {
+                    "data": {"objects": objects, "views": []},
+                    "totalCount": raw.get("totalCount", len(data)),
+                }
+            return {
+                "data": {"objects": [], "views": []},
+                "totalCount": raw.get("totalCount", 0),
+            }
+        return {"data": {"objects": [], "views": []}, "totalCount": 0}
+
+    def _query_ontologies_all_pages(
+        self,
+        *,
+        keyword: str,
+        query_type: str,
+        page_size: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Fetch ALL pages from queryOntologies (sceneId=-1) for a keyword search.
+
+        Uses totalCount / nextPageToken to auto-paginate until all results are fetched.
+        """
+        _ = self  # method lives on self, unused in body
+        client = self._get_client()
+        headers = self._build_auth_headers()
+        url = f"{self._source_url}/OntologySceneController/queryOntologies"
 
         all_data: list[dict[str, Any]] = []
         total_count = 0
-        page_index = page
+        page_index = 1
 
         while True:
             body: dict[str, Any] = {
-                "sceneId": scene_id,
+                "sceneId": "-1",
                 "pageIndex": page_index,
                 "pageSize": page_size,
+                "queryKeyWord": keyword,
+                "queryType": query_type,
             }
-            if keyword:
-                body["queryKeyWord"] = keyword
-            body["queryType"] = type or "object"
             response = client.post(url, json=body, headers=headers)
             response.raise_for_status()
             raw = response.json()
@@ -1157,9 +1128,34 @@ class RemoteOntologyBackend:
             else:
                 break
 
+        return all_data
+
+    @staticmethod
+    def _normalize_query_ontology_item(raw: dict[str, Any]) -> dict[str, Any]:
+        """Convert remote queryOntologies object item to our object summary format."""
         return {
-            "data": {"objects": all_data, "views": []},
-            "totalCount": total_count or len(all_data),
+            "objectCode": raw.get("ontologyCode", ""),
+            "objectName": raw.get("ontologyName", ""),
+            "objectDesc": raw.get("ontologyDesc") or "",
+            "objectSource": raw.get("ontologySource") or "",
+            "fieldCount": 0,
+            "actionCount": 0,
+            "ownerType": "enterprise",
+            "userCode": None,
+            "sceneId": raw.get("sceneId", ""),
+        }
+
+    @staticmethod
+    def _normalize_query_view_item(raw: dict[str, Any]) -> dict[str, Any]:
+        """Convert remote queryOntologies view item to our view summary format."""
+        return {
+            "viewCode": raw.get("viewCode", ""),
+            "viewName": raw.get("viewName", ""),
+            "description": raw.get("viewDesc") or "",
+            "objectCodes": [],
+            "ownerType": "enterprise",
+            "userCode": None,
+            "_sceneId": raw.get("sceneId") or "",
         }
 
     # -- Scene CRUD (remote, read-only) --
