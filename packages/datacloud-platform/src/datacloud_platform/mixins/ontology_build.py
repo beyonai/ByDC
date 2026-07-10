@@ -153,12 +153,16 @@ class OntologyBuildMixin:
 
         # 3. 构建 ObjectType
         source_config: dict[str, Any] | None = None
+        table_name: str | None = None
         if entity_source == "KNOWLEDGE_BASE":
             source_config = {}
             if state.get("kb_id"):
                 source_config["kb_id"] = state["kb_id"]
             if state.get("kb_directory"):
                 source_config["kb_directory"] = state["kb_directory"]
+        elif entity_source == "DYNAMIC_TABLE":
+            # DYNAMIC_TABLE 的物理表名与 object_code 一致
+            table_name = actual_entity_code
 
         obj = ObjectType(
             objectCode=actual_entity_code,
@@ -169,6 +173,7 @@ class OntologyBuildMixin:
             ownerType="personal" if user_code else "enterprise",
             userCode=user_code or None,
             sourceConfig=source_config,
+            tableName=table_name,
             properties=[
                 Property(
                     propertyCode=f.get("property_code", ""),
