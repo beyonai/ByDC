@@ -342,13 +342,14 @@ def _build_content_from_remote_scenes(
     object_codes: list[str],
     view_codes: list[str],
 ) -> dict[str, Any]:
-    """Build a content dict from remote scene details, filtered by codes.
+    """Build a content dict from remote scene details.
+
+    1. queryOntologies per code → discover sceneId for each object/view
+    2. Merge + deduplicate sceneIds
+    3. sceneDetails per unique sceneId with grouped codes
 
     Used as fallback when ``backend.load_ontology()`` is not available
     (e.g. :class:`RemoteOntologyBackend`).
-
-    Normalizes remote API camelCase fields to the snake_case format expected
-    by :meth:`OntologyLoader.load_from_content`.
     """
     all_objects: list[dict[str, Any]] = []
     all_views: list[dict[str, Any]] = []
@@ -356,67 +357,83 @@ def _build_content_from_remote_scenes(
     obj_code_set = set(object_codes)
     vw_code_set = set(view_codes)
 
-    # Resolve "-1" scene_id: remote sceneDetails doesn't support "-1",
-    # use query_ontologies_by_scene (supports "-1") to discover actual scene IDs.
-    resolved_scene_ids: list[str] = []
-    for sid in scene_ids:
-        if sid == "-1":
-            try:
-                onto_result = backend.query_ontologies_by_scene(
-                    sid, base_id=base_id, page=1, page_size=20
-                )
-                onto_data = onto_result.get("data", {})
-                onto_list: list[dict[str, Any]] = onto_data.get("objects", []) or []
-                discovered: set[str] = set()
-                for o in onto_list:
-                    s = str(o.get("sceneId") or "")
-                    if s and s != "-1":
-                        discovered.add(s)
-                resolved_scene_ids.extend(discovered)
-                logger.debug(
-                    "_build_content_from_remote_scenes: resolved '-1' to %d scene IDs",
-                    len(discovered),
-                )
-            except Exception:
-                logger.debug(
-                    "_build_content_from_remote_scenes: query_ontologies fallback failed for '-1'",
-                    exc_info=True,
-                )
-        else:
-            resolved_scene_ids.append(sid)
-    # Deduplicate
-    scene_ids_for_loop = list(dict.fromkeys(resolved_scene_ids))
-    if not scene_ids_for_loop:
-        scene_ids_for_loop = [sid for sid in scene_ids if sid != "-1"] or ["-1"]
+    # ── Step 1: discover sceneId for each code ──
+    # sceneId → {objects: set, views: set}
+    scene_map: dict[str, dict[str, set[str]]] = {}
 
-    for sid in scene_ids_for_loop:
+    def _resolve_by_code(code: str, query_type: str) -> str | None:
+        """One queryOntologies call per code to find its sceneId."""
         try:
-            detail = backend.get_scene_details(sid, base_id=base_id)
+            result = backend.query_ontologies_by_scene(
+                "-1",
+                base_id=base_id,
+                page=1,
+                page_size=20,
+                keyword=code,
+                type=query_type,
+            )
         except Exception:
             logger.debug(
-                "get_scene_details failed for base_id=%r scene_id=%r",
-                base_id,
+                "_build_content_from_remote_scenes: queryOntologies failed for %s",
+                code,
+                exc_info=True,
+            )
+            return None
+        data = result.get("data", {}) if isinstance(result, dict) else {}
+        items: list[dict[str, Any]] = (
+            data.get("objects", []) or data.get("views", []) or []
+        )
+        for item in items:
+            item_code = (
+                item.get("objectCode")
+                or item.get("viewCode")
+                or item.get("code")
+                or item.get("object_code", "")
+            )
+            if item_code == code:
+                return str(item.get("_sceneId") or item.get("sceneId") or "")
+        return None
+
+    for code in object_codes:
+        sid = _resolve_by_code(code, "object")
+        if sid:
+            scene_map.setdefault(sid, {"objects": set(), "views": set()})
+            scene_map[sid]["objects"].add(code)
+
+    for code in view_codes:
+        sid = _resolve_by_code(code, "view")
+        if sid:
+            scene_map.setdefault(sid, {"objects": set(), "views": set()})
+            scene_map[sid]["views"].add(code)
+
+    # ── Step 2: sceneDetails per unique sceneId ──
+    for sid, codes in scene_map.items():
+        obj_list = list(codes["objects"])
+        vw_list = list(codes["views"])
+        try:
+            detail = backend.get_scene_details(
+                sid,
+                base_id=base_id,
+                object_code=obj_list or None,
+                view_code=vw_list or None,
+            )
+        except Exception:
+            logger.debug(
+                "_build_content_from_remote_scenes: sceneDetails failed for scene %s",
                 sid,
                 exc_info=True,
             )
             continue
-        if not isinstance(detail, dict):
-            continue
 
-        # Adapter layer already normalizes camelCase → snake_case and merges
-        # top-level actions into per-object actions. Mixin just filters.
         for obj in detail.get("objects", []) or []:
             obj_code = str(obj.get("object_code") or "")
-            if obj_code_set and obj_code not in obj_code_set:
-                continue
-
-            all_objects.append(obj)
+            if obj_code in obj_code_set:
+                all_objects.append(obj)
 
         for vw in detail.get("views", []) or []:
             vid = str(vw.get("view_id") or vw.get("view_code") or "")
-            if vw_code_set and vid not in vw_code_set:
-                continue
-            all_views.append(vw)
+            if vid in vw_code_set:
+                all_views.append(vw)
 
     functions = _generate_remote_function_configs(all_objects)
     return {"objects": all_objects, "views": all_views, "functions": functions}
@@ -430,7 +447,7 @@ def _normalize_remote_properties(props: list[dict[str, Any]]) -> list[dict[str, 
             {
                 "field_code": p.get("propertyCode", ""),
                 "field_name": p.get("propertyName", ""),
-                "field_type": p.get("propertyType", "STRING"),
+                "field_type": p.get("propertyType") or p.get("dataType") or "STRING",
                 "description": p.get("propertyDesc") or p.get("description", ""),
                 "is_primary_key": bool(p.get("isPrimaryKey", False)),
                 "db_id": p.get("dbId", ""),

@@ -316,7 +316,7 @@ class OpenGaussEntityStore:
 
         with Session(self._engine) as session:
             total_col = func.count().over().label("total")
-            stmt = select(model.data, total_col).where(
+            stmt = select(model.data, total_col).where(  # type: ignore[attr-defined]
                 getattr(model, "base_id") == bid,
             )
 

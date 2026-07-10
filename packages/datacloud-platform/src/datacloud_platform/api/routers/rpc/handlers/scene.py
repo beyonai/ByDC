@@ -129,13 +129,22 @@ def _query_ontologies_by_code(
         if not scene_id:
             return ok(data={"objects": [], "views": []}, totalCount=0)
 
+    resource_biz_type = params.get("resource_biz_type")
+    if resource_biz_type is not None:
+        resource_biz_type = str(resource_biz_type).lower()
+        if resource_biz_type not in ("object", "view"):
+            raise ValueError(
+                f"Invalid resource_biz_type '{resource_biz_type}': "
+                f"must be 'OBJECT' or 'VIEW' (case-insensitive)"
+            )
+
     result = platform.query_ontologies_by_scene(
         base_id,
         scene_id,
         page=params.get("page", 1),
         page_size=params.get("page_size", 20),
         keyword=params.get("keyword"),
-        type=params.get("ont_type"),
+        type=resource_biz_type,
         owner_type=params.get("owner_type"),
         user_code=params.get("user_code"),
         cross_scene=cross_scene,

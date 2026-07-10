@@ -55,13 +55,13 @@ def generate_snowflake() -> str:
 # Base entry pattern for valid base_id
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_BASE_ID_RE = r"^[a-z][a-z0-9_-]{0,15}$"
+_BASE_ID_RE = r"^[a-zA-Z][a-zA-Z0-9_-]{0,15}$"
 
 
 def validate_base_id(base_id: str) -> bool:
     """Check whether *base_id* matches the allowed pattern.
 
-    Rules: lowercase letter first char, total 1-16 chars, only ``[a-z0-9_-]``.
+    Rules: letter first char (case-insensitive), total 1-16 chars, only ``[a-zA-Z0-9_-]``.
     """
     import re
 

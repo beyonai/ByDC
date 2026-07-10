@@ -1271,4 +1271,4 @@ class KnowledgeMixin:
             resolve_object_for_property as sdk_resolve,
         )
 
-        return sdk_resolve(property_code)  # type: ignore[no-any-return]
+        return sdk_resolve(property_code)
