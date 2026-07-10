@@ -18,6 +18,14 @@ if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
 
 
+def _resolve_code(params: dict[str, Any]) -> str:
+    """Extract code from params, accepting both ``code`` and ``object_code`` keys."""
+    code: str = str(params.get("code") or params.get("object_code") or "")
+    if not code:
+        raise KeyError("code_or_object_code_required")
+    return code
+
+
 def _parse_csv(param: str | None) -> list[str] | None:
     if param is None or not param.strip():
         return None
@@ -39,7 +47,7 @@ def _list_objects(
 def _get_object(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    code: str = params["code"]  # KeyError → 404
+    code: str = _resolve_code(params)
     obj = platform.get_object_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
@@ -64,7 +72,7 @@ def _create_object(
 def _update_object(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    code: str = params["code"]
+    code: str = _resolve_code(params)
     platform.update_object(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
@@ -76,9 +84,8 @@ def _update_object(
 def _delete_object(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_object_from_all_scenes(
-        params.get("base_id", DEFAULT_BASE_ID), params["code"]
-    )
+    code: str = _resolve_code(params)
+    platform.delete_object_from_all_scenes(params.get("base_id", DEFAULT_BASE_ID), code)
     return ok(message="deleted")
 
 
@@ -86,7 +93,7 @@ def _get_subtree(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     base_id = params.get("base_id", DEFAULT_BASE_ID)
-    code: str = params["object_code"]
+    code: str = _resolve_code(params)
     result = platform.get_object_subtree(base_id, code)
     if result["object"] is None:
         raise KeyError(f"Object '{code}' not found")
@@ -99,7 +106,7 @@ def _get_term_bindings(
     return ok(
         data=platform.get_object_property_term_bindings(
             params.get("base_id", DEFAULT_BASE_ID),
-            params["object_code"],
+            _resolve_code(params),
             term_master_type=params.get("term_master_type"),
             property_codes=_parse_csv(params.get("property_codes")),
         )
@@ -112,7 +119,7 @@ def _get_relations(
     return ok(
         data=platform.get_relations_by_object(
             params.get("base_id", DEFAULT_BASE_ID),
-            params["object_code"],
+            _resolve_code(params),
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),
         )
