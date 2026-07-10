@@ -396,10 +396,23 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Uses OntologyLoader to parse just this one object, then extracts the
         resulting OntologyClass.
         """
-        from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
+        from datacloud_data_sdk.ontology.loader import (  # noqa: PLC0415
+            OntologyLoader,
+            _normalize_object_json,
+        )
 
+        # OntologyLoader.load_from_content expects "fields" key, but objects
+        # created via create_object store fields under "properties" (ObjectType alias).
+        # Also normalizes field dicts: create_object stores Property aliases
+        # (propertyCode/propertyName/dataType), but _parse_fields expects snake_case
+        # (field_code/field_name/field_type).
+        normalized = _normalize_object_json(raw)
+        for f in normalized.get("fields", []):
+            f.setdefault("field_code", f.get("propertyCode", ""))
+            f.setdefault("field_name", f.get("propertyName", ""))
+            f.setdefault("field_type", f.get("dataType", ""))
         loader = OntologyLoader()
-        loader.load_from_content({"objects": [raw]})
+        loader.load_from_content({"objects": [normalized]})
         cls = loader._classes.get(object_code)
         if cls is None:
             return None
