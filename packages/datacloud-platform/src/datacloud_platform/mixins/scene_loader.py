@@ -435,7 +435,10 @@ def _build_content_from_remote_scenes(
             if vid in vw_code_set:
                 all_views.append(vw)
 
-    functions = _generate_remote_function_configs(all_objects)
+    functions = _generate_remote_function_configs(
+        all_objects,
+        auth_config=getattr(backend, "_auth_config", None),
+    )
     return {"objects": all_objects, "views": all_views, "functions": functions}
 
 
@@ -503,12 +506,16 @@ def _normalize_remote_params(params: list[dict[str, Any]]) -> list[dict[str, Any
 
 def _generate_remote_function_configs(
     objects: list[dict[str, Any]],
+    auth_config: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Generate minimal OpenAPI function configs from remote action definitions.
 
     For remote actions that have ``request_url`` (but no ``script``), builds
     an OpenAPI 3.0-style function config so that ``Action._execute_api()`` can
     resolve ``servers[0].url`` and ``paths`` without needing a local OWL file.
+
+    If ``auth_config`` is provided, its ``headers`` are injected into each
+    function config so that ``Action._execute_api()`` includes them in requests.
     """
     functions: dict[str, dict[str, Any]] = {}
     action_count = 0
@@ -557,6 +564,11 @@ def _generate_remote_function_configs(
             }
             if server_url:
                 config["servers"] = [{"url": server_url}]
+            # Inject auth headers from base config into function config
+            if auth_config:
+                auth_headers = auth_config.get("headers")
+                if isinstance(auth_headers, dict) and auth_headers:
+                    config["_x_auth_headers"] = dict(auth_headers)
 
             for fn_code in function_refs:
                 functions.setdefault(fn_code, config)
