@@ -360,7 +360,8 @@ class RemoteOntologyBackend:
         matched_scene_id = ""
         for item in items:
             code = (
-                item.get("ontologyCode")
+                item.get("viewCode")
+                or item.get("ontologyCode")
                 or item.get("code")
                 or item.get("object_code", "")
             )
@@ -437,7 +438,8 @@ class RemoteOntologyBackend:
         matched_scene_id = ""
         for item in items:
             code = (
-                item.get("ontologyCode")
+                item.get("viewCode")
+                or item.get("ontologyCode")
                 or item.get("code")
                 or item.get("object_code", "")
             )
@@ -590,7 +592,8 @@ class RemoteOntologyBackend:
         matched_scene_id = ""
         for item in items:
             code = (
-                item.get("ontologyCode")
+                item.get("viewCode")
+                or item.get("ontologyCode")
                 or item.get("code")
                 or item.get("view_code", "")
             )
@@ -635,7 +638,8 @@ class RemoteOntologyBackend:
         matched_scene_id = ""
         for item in items:
             code = (
-                item.get("ontologyCode")
+                item.get("viewCode")
+                or item.get("ontologyCode")
                 or item.get("code")
                 or item.get("view_code", "")
             )
@@ -764,7 +768,8 @@ class RemoteOntologyBackend:
         matched_scene_id = ""
         for item in items:
             code = (
-                item.get("ontologyCode")
+                item.get("viewCode")
+                or item.get("ontologyCode")
                 or item.get("code")
                 or item.get("object_code", "")
             )
