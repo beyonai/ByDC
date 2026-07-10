@@ -179,6 +179,11 @@ class DataCloudDataBackendBase:
         """Invoke sync hook if configured. Never raises."""
         hook = getattr(self, "_sync_hook", None)
         if hook is None:
+            logger.warning(
+                "Sync hook not configured — skipping %s(%s)",
+                method,
+                resource_type,
+            )
             return
         try:
             if method in ("on_create", "on_update"):
