@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 from datacloud_platform.adapters.data_adapter._base import (
     DataCloudDataBackendBase,
+    _normalize_entity,
     _normalize_object_codes,
 )
 from datacloud_platform.models import ObjectSummary, ParsedOwlContent
@@ -396,30 +397,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Uses OntologyLoader to parse just this one object, then extracts the
         resulting OntologyClass.
         """
-        from datacloud_data_sdk.ontology.loader import (  # noqa: PLC0415
-            OntologyLoader,
-            _normalize_object_json,
-        )
+        from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
 
-        # OntologyLoader.load_from_content expects "fields" key, but objects
-        # created via create_object store fields under "properties" (ObjectType alias).
-        # Also normalizes field dicts: create_object stores Property aliases
-        # (propertyCode/propertyName/dataType), but _parse_fields expects snake_case
-        # (field_code/field_name/field_type).
-        normalized = _normalize_object_json(raw)
-        for f in normalized.get("fields", []):
-            f.setdefault("field_code", f.get("propertyCode", ""))
-            f.setdefault("field_name", f.get("propertyName", ""))
-            f.setdefault("field_type", f.get("dataType", ""))
-        # _normalize_object_json defaults source_type to "DB" when neither
-        # source_type nor sourceType key exists.  create_object stores it as
-        # "objectSource" (ObjectType alias), so patch it in.
-        if (
-            "objectSource" in raw
-            and not raw.get("source_type")
-            and not raw.get("sourceType")
-        ):
-            normalized["source_type"] = raw["objectSource"]
+        # Normalize legacy data from create_object (model_dump by_alias camelCase)
+        # and OWL-parsed data into a canonical format the loader understands.
+        from datacloud_platform.adapters.data_adapter._base import _normalize_entity
+
+        normalized = _normalize_entity("object", raw)
         loader = OntologyLoader()
         loader.load_from_content({"objects": [normalized]})
         cls = loader._classes.get(object_code)
@@ -546,6 +530,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if _user_code:
             obj_dict["userCode"] = _user_code
             obj_dict["user_code"] = _user_code
+        # Canonicalize before save — ensures fields/properties, camelCase/snake_case
+        # are consistent regardless of whether obj came from API or OWL.
+        obj_dict = _normalize_entity("object", obj_dict, for_storage=True)
         entity_store.save("objects", code, obj_dict)
         logger.info("Created object: base_id=%s object_code=%s", base_id, code)
         self._sync_entity_terms(
@@ -593,6 +580,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if _user_code:
             obj_dict["userCode"] = _user_code
             obj_dict["user_code"] = _user_code
+        obj_dict = _normalize_entity("object", obj_dict, for_storage=True)
         entity_store.save("objects", object_code, obj_dict)
         logger.info("Updated object: base_id=%s object_code=%s", base_id, object_code)
         # Re-sync terms: delete old → write new (build_terms is upsert-safe)
@@ -825,6 +813,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
         if not code:
             raise ValueError("view_code is required for view creation")
+        view_dict = _normalize_entity("view", view_dict, for_storage=True)
         entity_store.save("views", code, view_dict)
         logger.info("Created view: base_id=%s view_code=%s", base_id, code)
         self._sync_entity_terms(
@@ -861,6 +850,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         view_dict: dict[str, Any] = (
             view if isinstance(view, dict) else view.model_dump(by_alias=True)
         )
+        view_dict = _normalize_entity("view", view_dict, for_storage=True)
         entity_store.save("views", view_code, view_dict)
         logger.info("Updated view: base_id=%s view_code=%s", base_id, view_code)
         self._remove_entity_terms(entity_type="view", entity_code=view_code)
@@ -1064,6 +1054,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         code: str = rel_dict.get("relation_code") or rel_dict.get("relationCode", "")
         if not code:
             raise ValueError("relation_code is required for relation creation")
+        rel_dict = _normalize_entity("relation", rel_dict, for_storage=True)
         entity_store.save("relations", code, rel_dict)
         logger.info("Created relation: base_id=%s relation_code=%s", base_id, code)
         self._sync_entity_terms(
@@ -1101,6 +1092,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         rel_dict: dict[str, Any] = (
             rel if isinstance(rel, dict) else rel.model_dump(by_alias=True)
         )
+        rel_dict = _normalize_entity("relation", rel_dict, for_storage=True)
         entity_store.save("relations", rel_code, rel_dict)
         logger.info("Updated relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
@@ -1271,6 +1263,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             raise ValueError("action_code is required for action creation")
         # Ensure parent object_code is recorded
         action_dict["belongObjectCode"] = object_code
+        action_dict = _normalize_entity("action", action_dict, for_storage=True)
         entity_store.save("actions", code, action_dict)
         logger.info(
             "Created action: base_id=%s object_code=%s action_code=%s",
@@ -1322,6 +1315,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             action if isinstance(action, dict) else action.model_dump(by_alias=True)
         )
         action_dict["belongObjectCode"] = object_code
+        action_dict = _normalize_entity("action", action_dict, for_storage=True)
         entity_store.save("actions", action_code, action_dict)
         logger.info(
             "Updated action: base_id=%s object_code=%s action_code=%s",

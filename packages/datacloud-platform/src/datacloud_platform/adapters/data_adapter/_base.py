@@ -34,6 +34,196 @@ def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
     return codes
 
 
+def _normalize_entity(
+    entity_type: str, data: dict[str, Any], *, for_storage: bool = False
+) -> dict[str, Any]:
+    """Normalize an entity dict from model_dump(by_alias=True) camelCase to canonical format.
+
+    Handles both write-side (for_storage=True — canonicalize before EntityStore.save)
+    and read-side (for_storage=False — normalize legacy data for read paths).
+
+    The canonical format uses snake_case keys that match what OntologyLoader and
+    _raw_to_*_dict read paths expect.  All field-level normalization (ObjectType
+    properties → fields, ViewProperty → mappings, ActionParam isRequired → required)
+    is handled here so downstream code never sees camelCase keys.
+    """
+    result = dict(data)
+
+    if entity_type == "object":
+        result.setdefault("object_code", data.get("objectCode", ""))
+        result.setdefault("object_name", data.get("objectName", ""))
+        result.setdefault(
+            "source_type",
+            data.get("source_type")
+            or data.get("sourceType")
+            or data.get("objectSource", "DB"),
+        )
+        result.setdefault(
+            "description", data.get("description") or data.get("objectDesc", "")
+        )
+        result.setdefault(
+            "concept_type", data.get("concept_type") or data.get("conceptType")
+        )
+        result.setdefault(
+            "datasource_alias",
+            data.get("datasource_alias") or data.get("datasourceAlias"),
+        )
+        result.setdefault("table_name", data.get("table_name") or data.get("tableName"))
+        result.setdefault(
+            "source_config", data.get("source_config") or data.get("sourceConfig")
+        )
+        result.setdefault(
+            "ext_property", data.get("ext_property") or data.get("extProperty", {})
+        )
+        result.setdefault("tags", data.get("tags", []))
+        # properties → fields with field-level normalization
+        raw_props = data.get("properties") or data.get("fields", [])
+        if raw_props and not data.get("fields"):
+            result["fields"] = [
+                {
+                    "field_code": p.get("field_code") or p.get("propertyCode", ""),
+                    "field_name": p.get("field_name") or p.get("propertyName", ""),
+                    "field_type": p.get("field_type") or p.get("dataType", "STRING"),
+                    "data_format": p.get("data_format") or p.get("dataFormat"),
+                    "description": p.get("description") or p.get("propertyDesc", ""),
+                    "is_primary_key": (
+                        bool(p.get("is_primary_key")) or p.get("businessKey", 0) == 1
+                    ),
+                    "required": bool(p.get("required") or p.get("isRequired", False)),
+                    "source_column": p.get("source_column") or p.get("sourceColumn"),
+                }
+                for p in raw_props
+            ]
+        # actions: forward as-is (model_dump key names happen to match)
+        result.setdefault("actions", data.get("actions", []))
+
+    elif entity_type == "view":
+        result.setdefault(
+            "view_code",
+            data.get("view_code")
+            or data.get("viewCode")
+            or data.get("view_id")
+            or data.get("viewId", ""),
+        )
+        result.setdefault(
+            "view_name", data.get("view_name") or data.get("viewName", "")
+        )
+        result.setdefault(
+            "description", data.get("description") or data.get("viewDesc")
+        )
+        # objectCodes → objects
+        raw_codes = data.get("objects") or data.get("objectCodes") or []
+        if raw_codes and not data.get("objects"):
+            result["objects"] = raw_codes
+        # properties → mappings with ViewProperty → mapping normalization
+        raw_view_props = data.get("mappings") or data.get("properties", [])
+        if raw_view_props and not data.get("mappings"):
+            result["mappings"] = [
+                {
+                    "property_name": m.get("property_name")
+                    or m.get("propertyName", ""),
+                    "property_code": m.get("property_code")
+                    or m.get("propertyCode", ""),
+                    "source_object_code": m.get("source_object_code")
+                    or m.get("sourceObject", ""),
+                    "source_object_column_code": m.get("source_object_column_code")
+                    or m.get("sourceObjectProperty", ""),
+                }
+                for m in raw_view_props
+            ]
+        result.setdefault(
+            "owner_type", data.get("owner_type") or data.get("ownerType", "enterprise")
+        )
+        result.setdefault("user_code", data.get("user_code") or data.get("userCode"))
+
+    elif entity_type == "relation":
+        result.setdefault(
+            "relation_code",
+            data.get("relation_code") or data.get("relationCode", ""),
+        )
+        result.setdefault(
+            "relation_name",
+            data.get("relation_name") or data.get("relationName"),
+        )
+        result.setdefault(
+            "relation_cardinality",
+            data.get("relation_cardinality")
+            or data.get("relationCardinality")
+            or data.get("relation_type"),
+        )
+        result.setdefault(
+            "relation_desc",
+            data.get("relation_desc")
+            or data.get("description")
+            or data.get("relationDesc"),
+        )
+        result.setdefault(
+            "relation_scene_type",
+            data.get("relation_scene_type") or data.get("relationSceneType"),
+        )
+        # sourceObjectCode / targetObjectCode → source_class / target_class
+        result.setdefault(
+            "source_class",
+            data.get("source_class") or data.get("sourceObjectCode", ""),
+        )
+        result.setdefault(
+            "target_class",
+            data.get("target_class") or data.get("targetObjectCode", ""),
+        )
+        result.setdefault(
+            "owner_type",
+            str(data.get("owner_type") or data.get("ownerType", "enterprise")),
+        )
+        result.setdefault("user_code", data.get("user_code") or data.get("userCode"))
+
+    elif entity_type == "action":
+        result.setdefault(
+            "action_code", data.get("action_code") or data.get("actionCode", "")
+        )
+        result.setdefault(
+            "action_name", data.get("action_name") or data.get("actionName", "")
+        )
+        result.setdefault(
+            "action_type", data.get("action_type") or data.get("actionType")
+        )
+        result.setdefault(
+            "belong_object_code",
+            data.get("belong_object_code") or data.get("belongObjectCode", ""),
+        )
+        result.setdefault(
+            "action_desc",
+            data.get("action_desc")
+            or data.get("description")
+            or data.get("actionDesc"),
+        )
+        result.setdefault(
+            "request_url", data.get("request_url") or data.get("requestUrl")
+        )
+        result.setdefault(
+            "request_method", data.get("request_method") or data.get("requestMethod")
+        )
+        result.setdefault(
+            "owner_type", data.get("owner_type") or data.get("ownerType", "enterprise")
+        )
+        result.setdefault("user_code", data.get("user_code") or data.get("userCode"))
+        # Normalize params: isRequired → required
+        raw_params = data.get("params", [])
+        if raw_params:
+            result["params"] = [
+                {
+                    **p,
+                    "required": bool(p.get("required") or p.get("isRequired", False)),
+                }
+                for p in raw_params
+            ]
+
+    elif entity_type == "datasource":
+        # Datasource model_dump keys (dbId, dbCode, dbType, dbParams) match read path expectations
+        pass
+
+    return result
+
+
 def _build_sync_payload(
     resource_type: str,
     resource_code: str,
