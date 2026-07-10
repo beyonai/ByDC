@@ -14,6 +14,7 @@ from datacloud_platform.adapters.data_adapter._base import (
     DataCloudDataBackendBase,
     _normalize_entity,
     _normalize_object_codes,
+    _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
 )
 from datacloud_platform.models import ObjectSummary, ParsedOwlContent
 from datacloud_platform.models.action import Action, ActionParam
@@ -24,6 +25,42 @@ from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_default_datasource(loader: Any, objects: list[dict[str, Any]]) -> None:
+    """Register a default SQLite datasource if DYNAMIC_TABLE objects exist but
+    no datasource configs have been loaded.
+
+    The DynamicTableExecutor requires a named datasource registered in
+    DataSourceManager.  Without an OWL file, API-created bases have no
+    datasource configs — this provides a fallback SQLite connector pointing
+    at the same ``personal_object.db`` used by ``create_table``.
+    """
+    has_dynamic = any(
+        (o.get("source_type") or o.get("objectSource") or "").upper() == "DYNAMIC_TABLE"
+        for o in objects
+    )
+    if not has_dynamic:
+        return
+    existing = getattr(loader._config, "datasource_configs", {}) or {}
+    if _DEFAULT_DYNAMIC_DATASOURCE_ALIAS in existing:
+        return
+    try:
+        from datacloud_data_sdk.ddl.table_manager import _db_path  # noqa: PLC0415
+
+        db_path = _db_path()
+    except Exception:
+        logger.warning(
+            "Cannot resolve dynamic-table SQLite path — skipping default datasource"
+        )
+        return
+    # Match the format expected by DataSourceManager._dict_to_config / SQLiteConnector
+    existing[_DEFAULT_DYNAMIC_DATASOURCE_ALIAS] = {
+        "db_type": "SQLITE",
+        "jdbc_url": f"jdbc:sqlite:{db_path}",
+        "ds_name": "Dynamic Table Default",
+    }
+    loader._config.datasource_configs = existing
 
 
 class OntologyBackendMixin(DataCloudDataBackendBase):
@@ -243,6 +280,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     "dbsources": all_dbsources,
                 }
             )
+            # Ensure a default SQLite datasource is registered when DYNAMIC_TABLE
+            # objects exist but no datasource configs were loaded (e.g. API-created bases
+            # without OWL).  The DynamicTableExecutor requires a named datasource even
+            # for SQLite, and source_config.db_type alone is not enough.
+            _ensure_default_datasource(loader, all_objects)
             return loader  # type: ignore[return-value]
 
         # Fallback: OWL directory exists but store is empty

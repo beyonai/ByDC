@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 _STORAGE_DIR_ENV = "DATACLOUD_STORAGE_DIR"
 _DEFAULT_STORAGE_DIR = ".datacloud_results"
 
+# Default datasource alias for DYNAMIC_TABLE objects created without OWL.
+# Must match the alias registered by _ensure_default_datasource in _ontology.py.
+_DEFAULT_DYNAMIC_DATASOURCE_ALIAS = "__dynamic_table__"
+
 
 def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
     """Normalize view ``objects`` entries into a flat list of object codes.
@@ -72,6 +76,11 @@ def _normalize_entity(
         result.setdefault(
             "source_config", data.get("source_config") or data.get("sourceConfig")
         )
+        # DYNAMIC_TABLE objects need a datasource_alias and table_name for the executor.
+        # Legacy objects created before these were required get a default.
+        if str(result.get("source_type", "")).upper() == "DYNAMIC_TABLE":
+            result.setdefault("datasource_alias", _DEFAULT_DYNAMIC_DATASOURCE_ALIAS)
+            result.setdefault("table_name", result.get("object_code", ""))
         result.setdefault(
             "ext_property", data.get("ext_property") or data.get("extProperty", {})
         )

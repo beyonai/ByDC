@@ -154,6 +154,7 @@ class OntologyBuildMixin:
         # 3. 构建 ObjectType
         source_config: dict[str, Any] | None = None
         table_name: str | None = None
+        datasource_alias: str | None = None
         if entity_source == "KNOWLEDGE_BASE":
             source_config = {}
             if state.get("kb_id"):
@@ -163,6 +164,13 @@ class OntologyBuildMixin:
         elif entity_source == "DYNAMIC_TABLE":
             # DYNAMIC_TABLE 的物理表名与 object_code 一致
             table_name = actual_entity_code
+            # 默认使用 SQLite 数据源，executor 通过 source_config 回退
+            source_config = {"db_type": "SQLITE"}
+            from datacloud_platform.adapters.data_adapter._base import (  # noqa: PLC0415
+                _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
+            )
+
+            datasource_alias = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
 
         obj = ObjectType(
             objectCode=actual_entity_code,
@@ -174,6 +182,7 @@ class OntologyBuildMixin:
             userCode=user_code or None,
             sourceConfig=source_config,
             tableName=table_name,
+            datasourceAlias=datasource_alias,  # type: ignore[call-arg]
             properties=[
                 Property(
                     propertyCode=f.get("property_code", ""),
