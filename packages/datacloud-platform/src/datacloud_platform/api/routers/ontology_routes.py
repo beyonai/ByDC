@@ -65,7 +65,7 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
         """Create an ontology base.
 
         - ``baseId`` is optional — a snowflake ID is generated when omitted.
-        - When provided, it must match ``^[a-z][a-z0-9_-]{{0,15}}$``.
+        - When provided, it must match ``^[a-zA-Z][a-zA-Z0-9_-]{{0,15}}$``.
         - Duplicate ``baseId`` returns 409.
         - sourceType is auto-derived: sourceUrl present → REMOTE, else LOCAL.
         """
@@ -75,8 +75,8 @@ def create_ontology_routes(platform: DatacloudPlatform) -> APIRouter:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Invalid baseId '{base_id}': must match "
-                    f"'^[a-z][a-z0-9_-]{{0,15}}$' (lowercase letter first, "
-                    f"1-16 chars, only a-z, 0-9, _, -)",
+                    f"'^[a-zA-Z][a-zA-Z0-9_-]{{0,15}}$' (letter first, "
+                    f"1-16 chars, only a-z, A-Z, 0-9, _, -)",
                 )
             if platform.base_exists(base_id):
                 raise HTTPException(
