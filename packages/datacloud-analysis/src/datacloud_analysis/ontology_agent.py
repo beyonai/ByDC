@@ -940,6 +940,12 @@ class OntologyAgent:
             _thinking_duration_ms += int((_time.monotonic() - _thinking_t_start) * 1000)
 
         final_answer = str(snapshot.values.get("final_answer") or "")
+        logger.warning(
+            "_iter_events: final_answer from snapshot thread_id=%s len=%d preview=%r",
+            thread_id,
+            len(final_answer),
+            final_answer[:200],
+        )
         yield AnswerEvent(content=final_answer)
 
         # 性能汇总事件
