@@ -403,19 +403,34 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         cls = loader._classes.get(object_code)
         if cls is None:
             return None
+        # Inject owner_type/user_code from raw dict top-level keys:
+        # create_object stores them at the root, not in ext_property, and
+        # OntologyLoader does not pass them to OntologyClass.
+        ext: dict[str, Any] = cls.ext_property
+        for key in ("owner_type", "ownerType"):
+            if key in raw and "owner_type" not in ext:
+                ext["owner_type"] = raw[key]
+        for key in ("user_code", "userCode"):
+            if key in raw and "user_code" not in ext:
+                ext["user_code"] = raw[key]
         return self._build_object_detail(cls)
 
     @staticmethod
     def _build_object_detail(cls: Any) -> dict[str, Any]:
         """Build ObjectType dict from a parsed OntologyClass."""
+        ext: dict[str, Any] = getattr(cls, "ext_property", {}) or {}
         obj = ObjectType(
             objectCode=cls.object_code,
             objectName=cls.object_name,
             objectDesc=getattr(cls, "description", None),
             objectSource=getattr(cls, "source_type", None),
             conceptType=getattr(cls, "concept_type", None),
-            ownerType=getattr(cls, "owner_type", "enterprise"),
-            userCode=getattr(cls, "user_code", None),
+            ownerType=(
+                ext.get("owner_type")
+                or getattr(cls, "owner_type", None)
+                or "enterprise"
+            ),
+            userCode=(ext.get("user_code") or getattr(cls, "user_code", None)),
             baseId="",
             properties=[
                 Property(
