@@ -411,6 +411,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             f.setdefault("field_code", f.get("propertyCode", ""))
             f.setdefault("field_name", f.get("propertyName", ""))
             f.setdefault("field_type", f.get("dataType", ""))
+        # _normalize_object_json defaults source_type to "DB" when neither
+        # source_type nor sourceType key exists.  create_object stores it as
+        # "objectSource" (ObjectType alias), so patch it in.
+        if (
+            "objectSource" in raw
+            and not raw.get("source_type")
+            and not raw.get("sourceType")
+        ):
+            normalized["source_type"] = raw["objectSource"]
         loader = OntologyLoader()
         loader.load_from_content({"objects": [normalized]})
         cls = loader._classes.get(object_code)
