@@ -422,7 +422,7 @@ def _normalize_remote_properties(props: list[dict[str, Any]]) -> list[dict[str, 
             {
                 "field_code": p.get("propertyCode", ""),
                 "field_name": p.get("propertyName", ""),
-                "field_type": p.get("propertyType", "STRING"),
+                "field_type": p.get("propertyType") or p.get("dataType") or "STRING",
                 "description": p.get("propertyDesc") or p.get("description", ""),
                 "is_primary_key": bool(p.get("isPrimaryKey", False)),
                 "db_id": p.get("dbId", ""),

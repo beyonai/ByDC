@@ -62,8 +62,8 @@ def _normalize_remote_object(obj: dict[str, Any]) -> None:
     desc = obj.pop("objectDesc", None)
     if desc:
         obj.setdefault("description", desc)
-    # Properties → fields
-    props = obj.pop("properties", None)
+    # Properties → fields (keep properties for API response)
+    props = obj.get("properties")
     if isinstance(props, list):
         fields = []
         for p in props:
@@ -71,7 +71,9 @@ def _normalize_remote_object(obj: dict[str, Any]) -> None:
                 {
                     "field_code": p.get("propertyCode", ""),
                     "field_name": p.get("propertyName", ""),
-                    "field_type": p.get("propertyType", "STRING"),
+                    "field_type": p.get("propertyType")
+                    or p.get("dataType")
+                    or "STRING",
                     "description": p.get("propertyDesc") or p.get("description", ""),
                     "is_primary_key": bool(p.get("isPrimaryKey", False)),
                 }
