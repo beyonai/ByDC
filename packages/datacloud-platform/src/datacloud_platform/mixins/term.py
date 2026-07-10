@@ -285,21 +285,22 @@ class TermMixin(TermSyncHandler):
     # ── TermSyncHandler 实现（固定使用 default 空间，供 term_sync_worker 注入）──
 
     def ensure_term_type(
-        self: _HasTermBackend, *, type_code: str, type_name: str
+        self: _HasTermBackend, *, base_id: str, type_code: str, type_name: str
     ) -> None:
-        self._term_for("default").ensure_term_type(
-            type_code=type_code, type_name=type_name
+        self._term_for(base_id).ensure_term_type(
+            base_id=base_id, type_code=type_code, type_name=type_name
         )
 
     def upsert_terms(
-        self: _HasTermBackend, *, terms: list[dict[str, Any]]
+        self: _HasTermBackend, *, base_id: str, terms: list[dict[str, Any]]
     ) -> list[str]:
-        return self._term_for("default").upsert_terms(terms=terms)
+        return self._term_for(base_id).upsert_terms(base_id=base_id, terms=terms)
 
     def delete_terms(
         self: _HasTermBackend,
         *,
+        base_id: str,
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:
-        self._term_for("default").delete_terms(term_ids=term_ids, terms=terms)
+        self._term_for(base_id).delete_terms(base_id=base_id, term_ids=term_ids, terms=terms)

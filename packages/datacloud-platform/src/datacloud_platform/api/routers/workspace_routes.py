@@ -36,6 +36,8 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from datacloud_platform.adapters.byclaw_sync import hook_ctx
+
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
 
@@ -206,10 +208,14 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
     @router.post("/batch-submit")
     async def workspace_batch_submit(
         body: BatchSubmitRequest,
+        request: Request,
         _user_code: str = Depends(_extract_user_code),
     ) -> Any:
         """批量提交工作区中所有对象和视图。"""
         try:
+            beyond_token: str | None = request.headers.get("Beyond-Token")
+            if beyond_token:
+                hook_ctx.set({"beyond_token": beyond_token})
             return platform.workspace_batch_submit(
                 user_code=_user_code,
                 workspace_name=body.workspace_name,

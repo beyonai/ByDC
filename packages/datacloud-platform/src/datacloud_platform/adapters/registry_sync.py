@@ -18,36 +18,47 @@ logger = logging.getLogger(__name__)
 
 
 def _action_camel_to_owl(a: dict[str, Any]) -> dict[str, Any]:
-    """Convert a camelCase Action dict to OWL snake_case for objects_registry.json."""
-    params: list[dict[str, Any]] = [
-        {
-            "param_code": p.get("paramCode", ""),
-            "param_name": p.get("paramName") or p.get("paramCode", ""),
-            "param_type": p.get("paramType") or "STRING",
-            "required": bool(p.get("isRequired", 0)),
+    """Convert an Action dict to loader-native snake_case format."""
+    params: list[dict[str, Any]] = []
+    for p in a.get("params", []):
+        param_code = p.get("param_code") or p.get("paramCode", "")
+        if not param_code:
+            continue
+        param_entry: dict[str, Any] = {
+            "param_code": param_code,
+            "param_name": p.get("param_name") or p.get("paramName") or param_code,
+            "param_type": p.get("param_type") or p.get("paramType") or "STRING",
+            "required": bool(p.get("required") or p.get("isRequired", 0)),
             "direction": p.get("direction") or "IN",
-            "mapping_path": p.get("mappingPath") or p.get("mapping_path", ""),
-            "data_format": p.get("dataFormat") or p.get("data_format"),
-            "default_value": p.get("defaultValue") or p.get("default_value"),
-            "json_path": p.get("jsonPath") or p.get("json_path", ""),
-            "object_property": p.get("objectProperty") or p.get("object_property"),
-            "object_code": p.get("objectCode") or p.get("object_code"),
+            "mapping_path": p.get("mapping_path") or p.get("mappingPath", ""),
+            "data_format": p.get("data_format") or p.get("dataFormat"),
+            "default_value": p.get("default_value") or p.get("defaultValue"),
+            "json_path": p.get("json_path") or p.get("jsonPath", ""),
+            "object_property": p.get("object_property") or p.get("objectProperty"),
+            "object_code": p.get("object_code") or p.get("objectCode"),
         }
-        for p in a.get("params", [])
-        if p.get("paramCode") or p.get("param_code")
-    ]
+        term_meta = p.get("termMeta") or p.get("term_meta")
+        if isinstance(term_meta, dict):
+            param_entry["termMeta"] = term_meta
+        if p.get("term_values"):
+            param_entry["term_values"] = p["term_values"]
+        if p.get("term_set"):
+            param_entry["term_set"] = p["term_set"]
+        params.append(param_entry)
+
     result: dict[str, Any] = {
-        "action_code": a.get("actionCode") or a.get("action_code", ""),
-        "action_name": a.get("actionName")
-        or a.get("action_name")
+        "action_code": a.get("action_code") or a.get("actionCode", ""),
+        "action_name": a.get("action_name")
+        or a.get("actionName")
+        or a.get("action_code")
         or a.get("actionCode", ""),
-        "action_type": a.get("actionType") or a.get("action_type") or "",
-        "description": a.get("actionDesc") or a.get("description", ""),
-        "belong_class": a.get("belongObjectCode") or a.get("belong_class", ""),
+        "action_type": a.get("action_type") or a.get("actionType") or "",
+        "description": a.get("description") or a.get("actionDesc", ""),
+        "belong_class": a.get("belong_class") or a.get("belongObjectCode", ""),
         "params": params,
         "script": a.get("script"),
-        "request_url": a.get("requestUrl") or a.get("request_url"),
-        "request_method": a.get("requestMethod") or a.get("request_method"),
+        "request_url": a.get("request_url") or a.get("requestUrl"),
+        "request_method": a.get("request_method") or a.get("requestMethod"),
     }
     # carry through object_references and function_refs if present
     obj_refs = a.get("object_references") or a.get("objectReferences")
@@ -60,69 +71,103 @@ def _action_camel_to_owl(a: dict[str, Any]) -> dict[str, Any]:
 
 
 def obj_camel_to_owl(obj_dict: dict[str, Any]) -> dict[str, Any]:
-    """Convert a camelCase ObjectType dict to OWL snake_case for objects_registry.json.
+    """Convert ObjectType/API dict to loader-native snake_case format.
 
-    Preserves actions (with script/params/object_references), term_sync, and
-    ext_property (promoted from sourceConfig when absent) so that
-    OntologyLoader.load_from_content can correctly restore runtime behaviour.
+    The returned payload is what OntologyLoader.load_from_content() consumes:
+    object_code/object_name/source_type/fields/actions/source_config/ext_property.
+    Both API camelCase and loader snake_case inputs are supported.
     """
+    raw_fields = obj_dict.get("fields") or obj_dict.get("properties", [])
     fields: list[dict[str, Any]] = []
-    for p in obj_dict.get("properties", []):
+    for p in raw_fields:
+        field_code = p.get("field_code") or p.get("propertyCode", "")
+        if not field_code:
+            continue
         field_entry: dict[str, Any] = {
-            "field_code": p.get("propertyCode", ""),
-            "field_name": p.get("propertyName", ""),
-            "field_type": p.get("dataType", "STRING"),
-            "description": p.get("propertyDesc") or p.get("description", ""),
-            "required": bool(p.get("isRequired", 0)),
-            "data_format": p.get("dataFormat") or p.get("data_format"),
-            "is_primary_key": p.get("businessKey", 0) == 1,
-            "source_column": p.get("sourceColumn") or p.get("source_column"),
+            "field_code": field_code,
+            "field_name": p.get("field_name") or p.get("propertyName") or field_code,
+            "field_type": p.get("field_type") or p.get("dataType", "STRING"),
+            "description": p.get("description") or p.get("propertyDesc", ""),
+            "required": bool(p.get("required") or p.get("isRequired", 0)),
+            "data_format": p.get("data_format") or p.get("dataFormat"),
+            "is_primary_key": bool(p.get("is_primary_key"))
+            or p.get("businessKey", 0) == 1,
+            "source_column": p.get("source_column") or p.get("sourceColumn"),
         }
-        # Carry termMeta so loader can restore term_type / term_set
-        term_meta = p.get("terminology")
-        if term_meta and isinstance(term_meta, dict):
+        term_meta = p.get("termMeta") or p.get("term_meta") or p.get("terminology")
+        if isinstance(term_meta, dict):
             field_entry["termMeta"] = term_meta
+        if p.get("term_set"):
+            field_entry["term_set"] = p["term_set"]
+        if p.get("term_values"):
+            field_entry["term_values"] = p["term_values"]
+        field_ext_property = p.get("ext_property") or p.get("extProperty")
+        if isinstance(field_ext_property, dict):
+            field_entry["ext_property"] = field_ext_property
+        for extra_key in (
+            "aliases",
+            "physical_mappings",
+            "property_kind",
+            "derived_config",
+            "relation_ref",
+            "resolve_action_code",
+            "resolve_param_binding",
+        ):
+            if extra_key in p:
+                field_entry[extra_key] = p[extra_key]
         fields.append(field_entry)
 
     result: dict[str, Any] = {
-        "object_code": obj_dict.get("objectCode", ""),
-        "object_name": obj_dict.get("objectName", ""),
-        "description": obj_dict.get("objectDesc") or "",
-        "source_type": obj_dict.get("objectSource") or "",
-        "concept_type": obj_dict.get("conceptType") or "",
-        "table_name": obj_dict.get("tableName") or "",
+        "object_code": obj_dict.get("object_code") or obj_dict.get("objectCode", ""),
+        "object_name": obj_dict.get("object_name") or obj_dict.get("objectName", ""),
+        "description": obj_dict.get("description") or obj_dict.get("objectDesc", ""),
+        "source_type": obj_dict.get("source_type")
+        or obj_dict.get("objectSource")
+        or "DB",
+        "concept_type": obj_dict.get("concept_type")
+        or obj_dict.get("conceptType")
+        or "",
+        "table_name": obj_dict.get("table_name") or obj_dict.get("tableName") or "",
         "fields": fields,
         "actions": [
             _action_camel_to_owl(a)
             for a in obj_dict.get("actions", [])
-            if a.get("actionCode") or a.get("action_code")
+            if a.get("action_code") or a.get("actionCode")
         ],
     }
-    # Write source_config so loader can extract datasource_alias for DB objects
     source_config = obj_dict.get("source_config") or obj_dict.get("sourceConfig")
     if isinstance(source_config, dict):
         result["source_config"] = source_config
-    # Promote kb_id/kb_directory from sourceConfig into ext_property
+    datasource_alias = obj_dict.get("datasource_alias") or obj_dict.get(
+        "datasourceAlias"
+    )
+    if datasource_alias:
+        result["datasource_alias"] = datasource_alias
+
     ext_property: dict[str, Any] = dict(
         obj_dict.get("ext_property") or obj_dict.get("extProperty") or {}
     )
-    _owner = obj_dict.get("ownerType")
+    _owner = obj_dict.get("owner_type") or obj_dict.get("ownerType")
     if _owner and _owner != "enterprise":
+        result["owner_type"] = _owner
         ext_property.setdefault("owner_type", _owner)
-    _user = obj_dict.get("userCode")
+    _user = obj_dict.get("user_code") or obj_dict.get("userCode")
     if _user:
+        result["user_code"] = _user
         ext_property.setdefault("user_code", _user)
-    source_config = obj_dict.get("source_config") or obj_dict.get("sourceConfig")
     if isinstance(source_config, dict):
         for kb_key in ("kb_id", "kb_directory", "knCode"):
             if source_config.get(kb_key) and kb_key not in ext_property:
                 ext_property[kb_key] = source_config[kb_key]
     if ext_property:
         result["ext_property"] = ext_property
-    # Carry term_sync (stored as extra field in ObjectType.model_extra)
+
     term_sync = obj_dict.get("term_sync")
     if term_sync:
         result["term_sync"] = term_sync
+    tags = obj_dict.get("tags")
+    if tags:
+        result["tags"] = tags
     return result
 
 

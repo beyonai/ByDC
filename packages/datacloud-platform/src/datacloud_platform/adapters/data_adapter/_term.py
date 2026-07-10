@@ -135,7 +135,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
     # ── TermSyncHandler 协议实现 ────────────────────────────────────────────
     # 供 term_sync_worker 注入使用，不依赖 BulkImportAdapter。
 
-    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+    def ensure_term_type(self, *, base_id: str, type_code: str, type_name: str) -> None:
         """确保术语类型存在（幂等）。实现 TermSyncHandler.ensure_term_type。"""
         try:
             self.create_term_type(  # type: ignore[attr-defined]
@@ -151,7 +151,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
                 "ensure_term_type: type_code=%s already exists or failed", type_code
             )
 
-    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+    def upsert_terms(self, *, base_id: str, terms: list[dict[str, Any]]) -> list[str]:
         """批量 upsert 术语，返回 term_id 列表。实现 TermSyncHandler.upsert_terms。
 
         ``terms`` 每条包含：term_code, term_name, term_desc,
@@ -193,6 +193,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
     def delete_terms(
         self,
         *,
+        base_id: str,
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:

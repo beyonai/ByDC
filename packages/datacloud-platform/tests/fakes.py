@@ -1335,13 +1335,13 @@ class FakeTermBackend:
 
     # ── TermSyncHandler ─────────────────────────────────────────────
 
-    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+    def ensure_term_type(self, *, base_id: str, type_code: str, type_name: str) -> None:
         """Track term type creation (idempotent)."""
         if not hasattr(self, "_term_types"):
             self._term_types: set[str] = set()
         self._term_types.add(type_code)
 
-    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+    def upsert_terms(self, *, base_id: str, terms: list[dict[str, Any]]) -> list[str]:
         """Track upserted terms and return fake UUIDs."""
         import uuid
 
@@ -1358,6 +1358,7 @@ class FakeTermBackend:
     def delete_terms(
         self,
         *,
+        base_id: str,
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:

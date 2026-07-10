@@ -1575,11 +1575,11 @@ class RemoteTermBackend:
 
     # ── TermSyncHandler ─────────────────────────────────────────────
 
-    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+    def ensure_term_type(self, *, base_id: str, type_code: str, type_name: str) -> None:
         """Remote term: sync methods not supported over HTTP adapter."""
         logger.debug("Remote term: ensure_term_type skipped (not supported)")
 
-    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+    def upsert_terms(self, *, base_id: str, terms: list[dict[str, Any]]) -> list[str]:
         """Remote term: sync methods not supported over HTTP adapter."""
         logger.debug("Remote term: upsert_terms skipped (not supported)")
         return []
@@ -1587,6 +1587,7 @@ class RemoteTermBackend:
     def delete_terms(
         self,
         *,
+        base_id: str,
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:

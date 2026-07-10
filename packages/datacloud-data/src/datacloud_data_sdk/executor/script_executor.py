@@ -32,6 +32,7 @@ from typing import Any
 from datacloud_data_sdk.context import get_current_context
 from datacloud_data_sdk.exceptions import ScriptExecutionError
 from datacloud_data_sdk.wrappers import AggWrapper, QueryWrapper
+from datacloud_data_sdk.constants import DEFAULT_BASE_ID
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,7 @@ def _build_production_mapper(object_code: str, entity_cls: type, loader: Any) ->
                 await enqueue_sync(
                     TermSyncEvent(
                         op=op,
+                        base_id=DEFAULT_BASE_ID,
                         object_code=self._object_code,
                         records=records,
                         config=cfg,

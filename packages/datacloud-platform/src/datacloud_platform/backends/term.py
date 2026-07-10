@@ -241,11 +241,11 @@ class TermBackend(Protocol):
 
     # ── TermSyncHandler 协议方法（供 term_sync_worker 注入使用）──────
 
-    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+    def ensure_term_type(self, *, base_id: str, type_code: str, type_name: str) -> None:
         """确保术语类型存在（幂等）。"""
         ...
 
-    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+    def upsert_terms(self, *, base_id: str, terms: list[dict[str, Any]]) -> list[str]:
         """批量 upsert 术语，返回 term_id（UUID）列表。
 
         terms 每条字段：term_code, term_name, term_desc,
@@ -256,6 +256,7 @@ class TermBackend(Protocol):
     def delete_terms(
         self,
         *,
+        base_id: str,
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:

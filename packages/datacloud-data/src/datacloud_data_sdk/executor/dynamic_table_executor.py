@@ -15,6 +15,8 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.plan.term_resolver import TermResolver
 from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
+from datacloud_data_sdk.constants import DEFAULT_BASE_ID
+
 
 logger = logging.getLogger(__name__)
 
@@ -171,6 +173,7 @@ class DynamicTableExecutor:
             await enqueue_sync(
                 TermSyncEvent(
                     op=op,
+                    base_id=DEFAULT_BASE_ID,
                     object_code=object_code,
                     records=records,
                     config=cfg,

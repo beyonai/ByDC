@@ -29,6 +29,7 @@ class TermSyncEvent:
     """
 
     op: str
+    base_id: str
     object_code: str
     records: list[dict[str, Any]]
     config: TermSyncConfig
@@ -44,11 +45,11 @@ class TermSyncHandler(Protocol):
     knowledge 包负责队列/事件定义，写入逻辑由上层通过 TermBackend 实现并注入。
     """
 
-    def ensure_term_type(self, *, type_code: str, type_name: str) -> None:
+    def ensure_term_type(self, *, base_id: str, type_code: str, type_name: str) -> None:
         """确保术语类型存在（幂等）。"""
         ...
 
-    def upsert_terms(self, *, terms: list[dict[str, Any]]) -> list[str]:
+    def upsert_terms(self, *, base_id: str, terms: list[dict[str, Any]]) -> list[str]:
         """批量 upsert 术语，返回数据库 term_id（UUID）列表。
 
         ``terms`` 为 dict 列表，每条字段：
@@ -60,12 +61,14 @@ class TermSyncHandler(Protocol):
     def delete_terms(
         self,
         *,
+        base_id: str,
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:
         """批量删除术语，支持两种入参，均有值时全部执行。
 
         Args:
+            base_id: 库id
             term_ids: 数据库 UUID 列表，直接按主键删除。
             terms:    业务三元组 dict 列表（term_code, term_type_code, library_code），
                       先反查 UUID 再删除。与 upsert_terms 参数结构对称。
@@ -182,8 +185,8 @@ def _apply_sync_event(event: TermSyncEvent, *, handler: TermSyncHandler) -> None
         return
 
     if upsert_list:
-        handler.ensure_term_type(type_code=term_type_code, type_name=term_type_code)
-        upserted_ids = handler.upsert_terms(terms=upsert_list)
+        handler.ensure_term_type(base_id=event.base_id, type_code=term_type_code, type_name=term_type_code)
+        upserted_ids = handler.upsert_terms(base_id=event.base_id, terms=upsert_list)
         logger.debug(
             "术语同步完成: object=%s op=%s upserted=%d",
             event.object_code,
@@ -192,7 +195,7 @@ def _apply_sync_event(event: TermSyncEvent, *, handler: TermSyncHandler) -> None
         )
 
     if delete_list:
-        handler.delete_terms(terms=delete_list)
+        handler.delete_terms(base_id=event.base_id, terms=delete_list)
         logger.debug(
             "术语同步删除: object=%s count=%d",
             event.object_code,

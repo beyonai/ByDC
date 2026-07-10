@@ -141,6 +141,31 @@ class SceneLoaderMixin:
                 if object_codes
                 else ([], 0)
             )
+
+            # Collect object_references from actions and load referenced objects
+            loaded_codes: set[str] = set(object_codes)
+            ref_codes: list[str] = []
+            for obj in objs:
+                for action in obj.get("actions") or []:
+                    for ref in action.get("object_references") or []:
+                        if ref and ref not in loaded_codes:
+                            ref_codes.append(ref)
+                            loaded_codes.add(ref)
+
+            if ref_codes:
+                ref_objs, _ = store.search(
+                    "objects",
+                    codes=ref_codes,
+                    page=1,
+                    page_size=len(ref_codes),
+                )
+                objs = list(objs) + list(ref_objs)
+                logger.debug(
+                    "load_ontology_from_codes: loaded %d referenced objects for base_id=%s",
+                    len(ref_objs),
+                    base_id,
+                )
+
             vws, _ = (
                 store.search(
                     "views",

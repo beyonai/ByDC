@@ -267,13 +267,18 @@ class OntologyWorkspaceMixin:
         # ── 3. 提交对象 ──
         submitted_objects, submitted_views, failed, sdk_files = (
             self._batch_submit_objects(
-                wfm, state, resolved_base_id, only_codes, confirm_drop_columns
+                wfm,
+                state,
+                resolved_base_id,
+                only_codes,
+                confirm_drop_columns,
+                user_code,
             )
         )
 
         # ── 4. 提交视图 ──
         view_submitted, view_failed = self._batch_submit_views(
-            wfm, state, resolved_base_id, only_codes
+            wfm, state, resolved_base_id, only_codes, user_code
         )
         submitted_views.extend(view_submitted)
         failed.extend(view_failed)
@@ -318,6 +323,7 @@ class OntologyWorkspaceMixin:
         base_id: str,
         only_codes: list[str],
         confirm_drop_columns: bool,
+        user_code: str,
     ) -> tuple[list[str], list[str], list[dict[str, Any]], dict[str, str]]:
         """提交对象：DDL → CRUD → 术语 → SDK → 状态更新。"""
         from datacloud_knowledge.ingestion.sdk_generator import generate_mapper_sdk
@@ -326,13 +332,14 @@ class OntologyWorkspaceMixin:
         failed: list[dict[str, Any]] = []
         sdk_files: dict[str, str] = {}
 
+        # 幂等写入 personal_sqlite datasource（所有 DYNAMIC_TABLE 对象公用）
+        self._ensure_personal_sqlite_datasource(base_id, user_code)
+
         for obj_summary in state.get("objects", []):
             entity_code: str = obj_summary["entity_code"]
             if only_codes and entity_code not in only_codes:
                 continue
             obj_status: str = obj_summary.get("status", "draft")
-            if obj_status == "submitted":
-                continue  # 无变更，跳过
 
             try:
                 fields = wfm.load_fields(entity_code)
@@ -355,10 +362,11 @@ class OntologyWorkspaceMixin:
                         *fields,
                     ]
 
-                # DDL
-                self._apply_ddl(
-                    entity_code, fields, obj_status, wfm, confirm_drop_columns
-                )
+                if obj_status != "submitted":
+                    # DDL
+                    self._apply_ddl(
+                        entity_code, fields, obj_status, wfm, confirm_drop_columns
+                    )
 
                 # 加载 Action 元数据（构建 ObjectType 和写术语库都需要）
                 action_codes = wfm._list_action_codes(entity_code)  # noqa: SLF001
@@ -380,10 +388,32 @@ class OntologyWorkspaceMixin:
                     table_name=table_name,
                     actions_meta=actions_meta,
                     term_sync=term_sync_cfg,
+                    user_code=user_code,
                 )
 
                 # CRUD: 创建对象 + 加入场景
-                self.create_object_with_scene(base_id, obj)  # type: ignore[attr-defined]
+                from datacloud_platform.adapters.registry_sync import obj_camel_to_owl
+
+                obj_dict = obj.model_dump(by_alias=True)
+                obj_payload = obj_camel_to_owl(obj_dict)
+                self.create_object_with_scene(base_id, obj_payload)  # type: ignore[attr-defined]
+
+                # 把 actions 写入 ontology_actions 独立表
+                _backend = self._ontology_for(base_id)  # type: ignore[attr-defined]
+                for _action in obj.actions:
+                    action_payload = _action.model_dump(by_alias=True)
+                    action_payload["ownerType"] = "personal"
+                    action_payload["owner_type"] = "personal"
+                    action_payload["userCode"] = user_code
+                    action_payload["user_code"] = user_code
+                    try:
+                        _backend.create_action(base_id, entity_code, action_payload)
+                    except Exception:
+                        logger.exception(
+                            "batch_submit: action %s/%s 写入独立表失败",
+                            entity_code,
+                            _action.action_code,
+                        )
 
                 # 内联 term_values → 写术语库（含 field + action param 枚举）
                 self._write_inline_terms(
@@ -460,6 +490,7 @@ class OntologyWorkspaceMixin:
         table_name: str | None = None,
         actions_meta: list[dict[str, Any]] | None = None,
         term_sync: dict[str, Any] | None = None,
+        user_code: str = "",
     ) -> ObjectType:
         """从工作区字段列表构建 ObjectType 模型。
 
@@ -494,17 +525,23 @@ class OntologyWorkspaceMixin:
             # 与旧版 OWL 一致：source_table_code=entity_code, source_column_code=col.name
             source_col = f.get("source_column") or f.get("sourceColumn") or prop_code
             is_pk = bool(f.get("is_primary_key", False))
-            properties.append(
-                Property(
-                    propertyName=f.get("property_name", prop_code),
-                    propertyCode=prop_code,
-                    propertyDesc=f.get("property_desc", ""),
-                    dataType=f.get("data_type", "STRING"),
-                    terminology=terminology,
-                    sourceColumn=source_col,
-                    businessKey=1 if is_pk else 0,
-                )
+            prop = Property(
+                propertyName=f.get("property_name", prop_code),
+                propertyCode=prop_code,
+                propertyDesc=f.get("property_desc") or f.get("description", ""),
+                dataType=f.get("data_type", "STRING"),
+                isRequired=1 if f.get("is_required") else 0,
+                terminology=terminology,
+                sourceColumn=source_col,
+                businessKey=1 if is_pk else 0,
             )
+            prop_dict = prop.model_dump(by_alias=True)
+            # Preserve raw extras that Property schema doesn't declare
+            if f.get("ext_property"):
+                prop_dict["ext_property"] = f["ext_property"]
+            if f.get("term_values"):
+                prop_dict["term_values"] = f["term_values"]
+            properties.append(Property.model_validate(prop_dict))
 
         actions: list[Action] = [
             Action(
@@ -514,6 +551,8 @@ class OntologyWorkspaceMixin:
                 belongObjectCode=entity_code,
                 actionDesc=a.get("action_desc", ""),
                 script=a.get("script"),
+                ownerType="personal",
+                userCode=user_code or None,
                 params=[
                     ActionParam(
                         paramCode=p.get("paramCode", p.get("param_code", "")),
@@ -549,6 +588,8 @@ class OntologyWorkspaceMixin:
             objectName=entity_name,
             objectDesc=entity_desc,
             objectSource=entity_source,
+            ownerType="personal",
+            userCode=user_code or None,
             baseId=base_id,
             tableName=table_name,
             properties=properties,
@@ -664,6 +705,35 @@ class OntologyWorkspaceMixin:
                 len(term_values),
             )
 
+    # ── 内部：确保 personal_sqlite datasource 已入库 ─────────────────────────
+
+    def _ensure_personal_sqlite_datasource(self, base_id: str, user_code: str) -> None:
+        """幂等写入 personal_sqlite datasource（DYNAMIC_TABLE 所有对象公用）。"""
+        from datacloud_platform.models.datasource import Datasource, DbConnection
+
+        ds = Datasource(
+            db=[
+                DbConnection(
+                    dbId="personal_sqlite",
+                    dbCode="personal_sqlite",
+                    dbType="SQLITE",
+                    dbParams={},
+                )
+            ],
+            ownerType="personal",
+            userCode=user_code or None,
+        )
+        try:
+            backend = self._ontology_for(base_id)  # type: ignore[attr-defined]
+            backend.create_datasource(base_id, ds)
+            logger.info(
+                "batch_submit: personal_sqlite datasource 写入成功 base_id=%s", base_id
+            )
+        except Exception:
+            logger.exception(
+                "batch_submit: personal_sqlite datasource 写入失败 base_id=%s", base_id
+            )
+
     # ── 内部：批量提交视图 ───────────────────────────────────────────────────
 
     def _batch_submit_views(
@@ -672,6 +742,7 @@ class OntologyWorkspaceMixin:
         state: dict[str, Any],
         base_id: str,
         only_codes: list[str],
+        user_code: str,
     ) -> tuple[list[str], list[dict[str, Any]]]:
         """提交视图：View CRUD → Relation 创建。"""
         submitted: list[str] = []
@@ -692,6 +763,8 @@ class OntologyWorkspaceMixin:
                     viewName=vdef.get("view_name", view_code),
                     description=vdef.get("view_desc", ""),
                     objectCodes=vdef.get("object_codes", []),
+                    ownerType="personal",
+                    userCode=user_code or None,
                     properties=[
                         ViewProperty(
                             propertyCode=f.get("property_code", ""),
@@ -719,6 +792,8 @@ class OntologyWorkspaceMixin:
                         relationCardinality=rel.get("relation_type", "MANY_TO_ONE"),
                         sourceObjectCode=rel.get("source_object_code", ""),
                         targetObjectCode=rel.get("target_object_code", ""),
+                        ownerType="personal",
+                        userCode=user_code or None,
                     )
                     try:
                         self.create_relation(base_id, relation)  # type: ignore[attr-defined]

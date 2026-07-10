@@ -23,7 +23,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -247,21 +247,11 @@ class WorkspaceFileManager:
             definition["table_name"] = table_name
         def_file.write_text(json.dumps(definition, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        # fields.json — merge by property_code
+        # fields.json — overwrite
         merged_fields: list[dict[str, Any]] = []
         if fields is not None:
-            existing_map: dict[str, dict[str, Any]] = {}
+            merged_fields = [f for f in fields if f.get("property_code")]
             fields_file = obj_dir / "fields.json"
-            if fields_file.exists():
-                existing_list: list[dict[str, Any]] = json.loads(
-                    fields_file.read_text(encoding="utf-8")
-                )
-                existing_map = {f["property_code"]: f for f in existing_list}
-            for f in fields:
-                code = f.get("property_code", "")
-                if code:
-                    existing_map[code] = {**existing_map.get(code, {}), **f}
-            merged_fields = list(existing_map.values())
             fields_file.write_text(
                 json.dumps(merged_fields, ensure_ascii=False, indent=2), encoding="utf-8"
             )
@@ -315,7 +305,7 @@ class WorkspaceFileManager:
         defn = self._load_definition(entity_code)
         if defn is None:
             return []
-        return cast("list[dict[str, Any]]", defn.get("submitted_fields", []))
+        return defn.get("submitted_fields", [])  # type: ignore[return-value]
 
     def diff_fields(self, entity_code: str, current_fields: list[dict[str, Any]]) -> FieldDiff:
         """对比 submitted_fields 快照与当前字段，返回 FieldDiff。

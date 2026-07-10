@@ -84,7 +84,8 @@ class TermResolver:
             if isinstance(value, (list, tuple)):
                 return [_resolve_single(item) for item in value]
             value_str = str(value)
-            keyword = value_str if term_type == "lookup" else None
+            keyword = value_str
+            # if term_type == "lookup" else None
             return self._term_loader.resolve_value(
                 term_set,
                 value_str,
