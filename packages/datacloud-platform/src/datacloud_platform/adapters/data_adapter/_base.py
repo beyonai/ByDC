@@ -81,6 +81,24 @@ def _normalize_entity(
         if str(result.get("source_type", "")).upper() == "DYNAMIC_TABLE":
             result.setdefault("datasource_alias", _DEFAULT_DYNAMIC_DATASOURCE_ALIAS)
             result.setdefault("table_name", result.get("object_code", ""))
+            # setdefault won't override an existing key (including None), so
+            # explicitly set if the value is still falsy after setdefault.
+            if not result.get("datasource_alias"):
+                result["datasource_alias"] = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
+            if not result.get("table_name"):
+                result["table_name"] = result.get("object_code", "")
+            sc = result.get("source_config")
+            if not isinstance(sc, dict):
+                sc = {}
+                result["source_config"] = sc
+            if not sc.get("alias"):
+                sc["alias"] = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
+            if not sc.get("jdbc_url"):
+                mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+                if mount:
+                        sc["jdbc_url"] = (
+                            f"jdbc:sqlite:{mount}/byclaw-datacloud/personal_object.db"
+                        )
         result.setdefault(
             "ext_property", data.get("ext_property") or data.get("extProperty", {})
         )

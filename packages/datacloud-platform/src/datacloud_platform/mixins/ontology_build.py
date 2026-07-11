@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, cast
 
 from datacloud_platform.backends._contracts import _HasTermBackend
@@ -164,13 +165,22 @@ class OntologyBuildMixin:
         elif entity_source == "DYNAMIC_TABLE":
             # DYNAMIC_TABLE 的物理表名与 object_code 一致
             table_name = actual_entity_code
-            # 默认使用 SQLite 数据源，executor 通过 source_config 回退
-            source_config = {"db_type": "SQLITE"}
             from datacloud_platform.adapters.data_adapter._base import (  # noqa: PLC0415
                 _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
             )
 
             datasource_alias = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
+            # 含 alias 和 jdbc_url 让 _extract_datasource_configs_from_objects 能自动发现
+            # 完整的 SQLite 数据源配置（包括 scoped loader 路径）
+            mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+            source_config: dict[str, Any] = {
+                "db_type": "SQLITE",
+                "alias": _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
+            }
+            if mount:
+                source_config["jdbc_url"] = (
+                    f"jdbc:sqlite:{mount}/byclaw-datacloud/personal_object.db"
+                )
 
         obj = ObjectType(
             objectCode=actual_entity_code,

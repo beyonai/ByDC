@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -36,30 +37,38 @@ def _ensure_default_datasource(loader: Any, objects: list[dict[str, Any]]) -> No
     datasource configs — this provides a fallback SQLite connector pointing
     at the same ``personal_object.db`` used by ``create_table``.
     """
-    has_dynamic = any(
-        (o.get("source_type") or o.get("objectSource") or "").upper() == "DYNAMIC_TABLE"
-        for o in objects
-    )
-    if not has_dynamic:
-        return
     existing = getattr(loader._config, "datasource_configs", {}) or {}
-    if _DEFAULT_DYNAMIC_DATASOURCE_ALIAS in existing:
-        return
-    try:
-        from datacloud_data_sdk.ddl.table_manager import _db_path  # noqa: PLC0415
+    # Always register/overwrite: _extract_datasource_configs_from_objects may
+    # have created a config for this alias without jdbc_url (from source_config),
+    # and the SQLiteConnector requires a valid jdbc_url.
 
-        db_path = _db_path()
-    except Exception:
+    # Resolve the SQLite path.  create_table uses FILE_STORAGE_MINIO_MOUNT_PATH
+    # to locate personal_object.db; we need the same path for consistency.
+    mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+    if not mount:
         logger.warning(
-            "Cannot resolve dynamic-table SQLite path — skipping default datasource"
+            "FILE_STORAGE_MINIO_MOUNT_PATH not set — cannot register default SQLite datasource"
         )
         return
+    db_path = os.path.join(mount, "byclaw-datacloud", "personal_object.db")
+
     # Match the format expected by DataSourceManager._dict_to_config / SQLiteConnector
-    existing[_DEFAULT_DYNAMIC_DATASOURCE_ALIAS] = {
-        "db_type": "SQLITE",
-        "jdbc_url": f"jdbc:sqlite:{db_path}",
-        "ds_name": "Dynamic Table Default",
-    }
+    from datacloud_data_sdk.sql_executor.config_loader import (  # noqa: PLC0415
+        _dict_to_config,
+    )
+
+    # Ensure the parent directory exists (create_table does this too, but
+    # load_ontology may run before any table is created).
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+    existing[_DEFAULT_DYNAMIC_DATASOURCE_ALIAS] = _dict_to_config(
+        _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
+        {
+            "db_type": "SQLITE",
+            "jdbc_url": f"jdbc:sqlite:{db_path}",
+            "ds_name": "Dynamic Table Default",
+        },
+    )
     loader._config.datasource_configs = existing
 
 
@@ -270,6 +279,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 if "view_id" not in v:
                     v["view_id"] = v.get("view_code", "")
 
+            # Patch DYNAMIC_TABLE objects missing datasource_alias so the executor
+            # can find a connector.  Objects created via API (no OWL) don't have
+            # one set, and the default datasource is registered below.
+            for o in all_objects:
+                st = (o.get("source_type") or o.get("objectSource") or "").upper()
+                if st == "DYNAMIC_TABLE" and not o.get("datasource_alias"):
+                    o["datasource_alias"] = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
+                    o.setdefault("table_name", o.get("object_code", ""))
+
             loader = OntologyLoader()
             loader.load_from_content(
                 {
@@ -280,10 +298,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     "dbsources": all_dbsources,
                 }
             )
-            # Ensure a default SQLite datasource is registered when DYNAMIC_TABLE
-            # objects exist but no datasource configs were loaded (e.g. API-created bases
-            # without OWL).  The DynamicTableExecutor requires a named datasource even
-            # for SQLite, and source_config.db_type alone is not enough.
+            # Register the default SQLite datasource so DynamicTableExecutor can
+            # connect.  Must happen after load_from_content so the loader's config
+            # is initialised.
             _ensure_default_datasource(loader, all_objects)
             return loader  # type: ignore[return-value]
 
