@@ -481,7 +481,9 @@ class HookAwareToolNode(ToolNode):
         if _gw_ctx is not None:
             from datacloud_analysis.i18n.prompts import get_ui_text as _get_ui_text  # noqa: PLC0415
             from datacloud_analysis.orchestration.execution.tool_wrapper import (  # noqa: PLC0415
+                _emit_think,
                 _emit_tool_detail,
+                _new_message_id,
             )
 
             _locale = str(((config or {}).get("configurable") or {}).get("locale") or "zh_CN")
@@ -498,11 +500,26 @@ class HookAwareToolNode(ToolNode):
                 params = call_params_map.get(str(msg.tool_call_id or ""), {})
                 _tool_name = msg.name or "tool"
                 _tool_label = _get_tool_display_label(_tool_name, _tools_map)
+                _has_emit_state = callable(getattr(_gw_ctx, "emit_state", None))
+                _tool_msg_id = ""
                 try:
                     async with _gw_ctx.sub_step(_tool_label):
+                        # gateway 不支持 emit_state（如 NoOpExecutionReporter）时，
+                        # 通过 dc_stream_chunk 推送工具名标题
+                        if not _has_emit_state:
+                            _tool_msg_id = _new_message_id(_gw_ctx)
+                            await _emit_think(
+                                _gw_ctx,
+                                _tool_label,
+                                content_type="1002",  # thinkText, 对齐旧静态路径
+                                message_id=_tool_msg_id,
+                            )
                         if params:
                             await _emit_tool_detail(
-                                _gw_ctx, _get_ui_text("tool_input", _locale), params
+                                _gw_ctx,
+                                _get_ui_text("tool_input", _locale),
+                                params,
+                                parent_message_id=_tool_msg_id,
                             )
                         # 将 msg.content（可能是 Python repr 字符串）解析回 dict，
                         # 保证 coerce_stream_chunk_text 走 dump_json 而非原样透传。
@@ -510,7 +527,10 @@ class HookAwareToolNode(ToolNode):
                         _parsed = _try_parse_to_dict(_raw) if _raw else None
                         _tool_out: Any = _parsed if _parsed is not None else _raw
                         await _emit_tool_detail(
-                            _gw_ctx, _get_ui_text("tool_output", _locale), _tool_out
+                            _gw_ctx,
+                            _get_ui_text("tool_output", _locale),
+                            _tool_out,
+                            parent_message_id=_tool_msg_id,
                         )
                 except Exception as detail_exc:  # noqa: BLE001
                     logger.debug(

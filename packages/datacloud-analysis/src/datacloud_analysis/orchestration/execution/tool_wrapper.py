@@ -336,7 +336,11 @@ def _new_message_id(gateway_context: Any) -> str:
             return str(generate_message_id() or "")
         except Exception:
             logger.debug("generate_message_id failed in tool_wrapper", exc_info=True)
-    return ""
+    # NoOpExecutionReporter 或其他无 generate_message_id 的 gateway
+    # 时，生成 UUID 保证前端层级渲染所需的 message_id/parent_message_id
+    import uuid as _uuid_mod
+
+    return f"nop-{_uuid_mod.uuid4().hex[:12]}"
 
 
 def _current_command_metadata(gateway_context: Any) -> dict[str, Any]:
@@ -359,19 +363,29 @@ def _delegate_resume_parent_message_id(gateway_context: Any) -> str:
     return ""
 
 
-async def _emit_think(gateway_context: Any, text: str) -> None:
+async def _emit_think(
+    gateway_context: Any,
+    text: str,
+    *,
+    content_type: str = "",
+    message_id: str = "",
+    parent_message_id: str = "",
+) -> None:
     """在 sub_step 内推送 think_text 内容。"""
+    ct = content_type or _THINK_CONTENT_TYPE
     try:
         from langchain_core.callbacks import adispatch_custom_event  # noqa: PLC0415
 
-        await adispatch_custom_event(
-            "dc_stream_chunk",
-            {
-                "content": coerce_stream_chunk_text(text),
-                "event_type": _THINK_EVENT_TYPE,
-                "content_type": _THINK_CONTENT_TYPE,
-            },
-        )
+        payload: dict[str, Any] = {
+            "content": coerce_stream_chunk_text(text),
+            "event_type": _THINK_EVENT_TYPE,
+            "content_type": ct,
+        }
+        if message_id:
+            payload["message_id"] = message_id
+        if parent_message_id:
+            payload["parent_message_id"] = parent_message_id
+        await adispatch_custom_event("dc_stream_chunk", payload)
     except Exception as exc:
         logger.debug("_emit_think failed: %s", exc)
 
@@ -455,8 +469,36 @@ async def _emit_tool_detail(
         )
         if emitted:
             return
+
+    # gateway 不支持 emit_state（如 NoOpExecutionReporter）时，
+    # 通过 dc_stream_chunk 模拟层级结构：title 用 thinkStatusTitle，
+    # detail 用 jsonBlock，通过 message_id/parent_message_id 建立父子关系
+    _has_emit_state = callable(getattr(gateway_context, "emit_state", None))
+    _title_msg_id = ""
+
     async with gateway_context.sub_step(title):
-        await _emit_child_think(gateway_context, detail)
+        if not _has_emit_state:
+            _title_msg_id = _new_message_id(gateway_context)
+            # 标题：挂载到父节点（工具名或上层步骤）下
+            await _emit_think(
+                gateway_context,
+                title,
+                content_type=_THINK_CONTENT_TYPE,
+                message_id=_title_msg_id,
+                parent_message_id=parent_message_id,
+            )
+            # detail：挂载在标题节点下
+            _child_msg_id = _new_message_id(gateway_context)
+            await _emit_think(
+                gateway_context,
+                coerce_stream_chunk_text(detail),
+                content_type=_THINK_CONTENT_TYPE,
+                message_id=_child_msg_id,
+                parent_message_id=_title_msg_id,
+            )
+        else:
+            # 有真实 gateway 时走原有路径
+            await _emit_child_think(gateway_context, detail)
 
 
 async def _invoke_tool_with_runtime_context(
@@ -881,7 +923,20 @@ async def dispatch_tool(
 
     if gateway_context is not None:
         try:
-            async with gateway_context.sub_step(_tool_display_label(tool_name, tools_map)):
+            _has_emit_state = callable(getattr(gateway_context, "emit_state", None))
+            _tool_label = _tool_display_label(tool_name, tools_map)
+            _tool_msg_id = ""
+            async with gateway_context.sub_step(_tool_label):
+                # gateway 不支持 emit_state（如 NoOpExecutionReporter）时，
+                # 通过 dc_stream_chunk 推送工具名标题（thinkStatusTitle）
+                if not _has_emit_state:
+                    _tool_msg_id = _new_message_id(gateway_context)
+                    await _emit_think(
+                        gateway_context,
+                        _tool_label,
+                        content_type=_THINK_CONTENT_TYPE,
+                        message_id=_tool_msg_id,
+                    )
                 # 执行工具（SDK 内部的 sub_step 自动嵌套在此层下）
                 delegate_parent_scope_factory = getattr(
                     gateway_context,
@@ -902,6 +957,7 @@ async def dispatch_tool(
                             gateway_context,
                             _get_ui_text("tool_input", _locale),
                             ctx.get("tool_params"),
+                            parent_message_id=_tool_msg_id,
                         )
                     except Exception as _emit_exc:
                         logger.debug("emit tool_input failed: %s", _emit_exc)
@@ -912,12 +968,14 @@ async def dispatch_tool(
                         gateway_context,
                         _get_ui_text("tool_error", _locale),
                         f"错误：{err_msg}" if _locale != "en_US" else f"Error: {err_msg}",
+                        parent_message_id=_tool_msg_id,
                     )
                 else:
                     await _emit_tool_detail(
                         gateway_context,
                         _get_ui_text("tool_output", _locale),
                         ctx.get("tool_output"),
+                        parent_message_id=_tool_msg_id,
                     )
         except ToolHookError:
             raise
