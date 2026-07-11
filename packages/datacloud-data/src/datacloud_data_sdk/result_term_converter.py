@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Any
 
 from datacloud_data_sdk.exceptions import TermResolutionError
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -32,6 +29,7 @@ class ResultTermConverter:
 
     def __init__(self, term_loader: Any | None) -> None:
         self._term_loader = term_loader
+        self._not_found: set[tuple[str, str]] = set()
 
     def convert_by_payload(
         self, records: list[dict[str, Any]], payload: Any | None
@@ -153,6 +151,9 @@ class ResultTermConverter:
     def _resolve_label(self, field: TermResultField, value: Any) -> Any:
         if not isinstance(value, str) or self._term_loader is None:
             return value
+        cache_key = (field.term_set, value)
+        if cache_key in self._not_found:
+            return value
         try:
             return self._term_loader.resolve_value(
                 field.term_set,
@@ -164,13 +165,7 @@ class ResultTermConverter:
                 param_name=field.row_key,
             )
         except TermResolutionError:
-            logger.warning(
-                "Failed to convert term code to name: field=%s term_set=%s value=%s",
-                field.row_key,
-                field.term_set,
-                value,
-                exc_info=True,
-            )
+            self._not_found.add(cache_key)
             return value
 
 

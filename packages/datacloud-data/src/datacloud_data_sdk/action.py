@@ -1205,6 +1205,11 @@ class Action:
             )
 
         if self._action.script:
+            logger.info(
+                "[Action.execute] action=%s path=_execute_script script_len=%d",
+                self._action.action_code,
+                len(self._action.script or ""),
+            )
             action_executing_data = self._describe_execution_mode()
             _append_execution_step(
                 execution_steps,
@@ -1230,6 +1235,11 @@ class Action:
                 threshold=_effective_threshold,
             )
         if self._action.function_refs:
+            logger.info(
+                "[Action.execute] action=%s path=_execute_api fn_refs=%s",
+                self._action.action_code,
+                self._action.function_refs[0],
+            )
             action_executing_data = self._describe_execution_mode()
             _append_execution_step(
                 execution_steps,
@@ -1740,6 +1750,11 @@ class Action:
             path_template=path_template,
             path_params=request_parts["path"],
         )
+        # Merge auth headers from function config (injected by remote scene loader)
+        _auth_headers = config.get("_x_auth_headers")
+        if isinstance(_auth_headers, dict):
+            request_parts.setdefault("headers", {})
+            request_parts["headers"] = {**_auth_headers, **request_parts.get("headers", {})}
         headers = self._build_headers(request_parts["headers"])
 
         log_curl(
@@ -1756,6 +1771,15 @@ class Action:
             if request_parts["body"] is not None:
                 request_kwargs["json"] = request_parts["body"]
             resp = await client.request(method, url, **request_kwargs)
+
+        # ── Log remote action response for debugging ──
+        logger.info(
+            "[_execute_api] action=%s url=%s status=%d resp_preview=%r",
+            self._action.action_code,
+            url,
+            resp.status_code,
+            (resp.text or "")[:500],
+        )
 
         # 写入 Langfuse span，支持 BY_008 故障定位：Action API 调用结果
         try:

@@ -35,6 +35,10 @@ class ByClawSyncAdapter(ResourceSyncHook):
 
     Uses asyncio.create_task for fire-and-forget async execution.
     ByClaw API is idempotent on resourceCode — repeated create = update.
+
+    The Java API requires an ONTOLOGY_BASE parent resource to exist before
+    any child resource (SCENE/OBJECT/VIEW/etc.) can be created.  This adapter
+    automatically creates the ONTOLOGY_BASE resource on first use per base.
     """
 
     def __init__(self, beyond_token: str | None = None) -> None:
@@ -44,6 +48,7 @@ class ByClawSyncAdapter(ResourceSyncHook):
         self._system_code = DEFAULT_SYSTEM_CODE
         self._client = httpx.AsyncClient(timeout=httpx.Timeout(5.0))
         self._discovery: Any = None  # DiscoveryClient | False | None
+        self._synced_bases: set[str] = set()  # bases already synced to ByClaw
 
     def _ensure_discovery(self) -> None:
         """Lazy-init the DiscoveryClient.
@@ -97,15 +102,23 @@ class ByClawSyncAdapter(ResourceSyncHook):
             loop = asyncio.get_running_loop()
             loop.create_task(coro)  # type: ignore[arg-type]
         except RuntimeError:
-            logger.debug("No running event loop — sync skipped")
+            logger.warning("No running event loop — ByClaw sync skipped")
 
     def on_create(self, resource_type: str, payload: dict[str, Any]) -> None:
-        """Fire-and-forget create/update sync to ByClaw."""
-        self._fire_and_forget(self._post_async("/v1/ontology/resource/create", payload))
+        """Fire-and-forget create/update sync to ByClaw.
+
+        Ensures the ONTOLOGY_BASE parent resource exists before syncing
+        child resources (SCENE, OBJECT, VIEW, etc.).
+        """
+        self._fire_and_forget(self._sync_with_base(payload))
 
     def on_update(self, resource_type: str, payload: dict[str, Any]) -> None:
-        """Fire-and-forget update sync to ByClaw (idempotent via resourceCode)."""
-        self._fire_and_forget(self._post_async("/v1/ontology/resource/create", payload))
+        """Fire-and-forget update sync to ByClaw (idempotent via resourceCode).
+
+        Ensures the ONTOLOGY_BASE parent resource exists before syncing
+        child resources (SCENE, OBJECT, VIEW, etc.).
+        """
+        self._fire_and_forget(self._sync_with_base(payload))
 
     def on_delete(self, resource_type: str, resource_code: str, base_code: str) -> None:
         """Fire-and-forget delete sync to ByClaw."""
@@ -126,15 +139,72 @@ class ByClawSyncAdapter(ResourceSyncHook):
         logger.info("resync_all called for base_id=%s (not yet implemented)", base_id)
         return {"created": 0, "updated": 0, "deleted": 0}
 
+    async def _sync_with_base(self, payload: dict[str, Any]) -> None:
+        """Ensure ONTOLOGY_BASE parent exists, then sync the child resource.
+
+        The Java API requires an ONTOLOGY_BASE parent resource to exist
+        before any SCENE/OBJECT/VIEW child can be created.  This method
+        creates the base resource first (idempotent), then the child.
+        """
+        resource_code = payload.get("resourceCode", "?")
+        resource_type = payload.get("resourceBizType", "?")
+        await self._ensure_base_async(payload)
+        try:
+            await self._post_async("/v1/ontology/resource/create", payload)
+        except Exception:
+            logger.warning(
+                "ByClaw sync failed: type=%s code=%s",
+                resource_type,
+                resource_code,
+                exc_info=True,
+            )
+
+    async def _ensure_base_async(self, payload: dict[str, Any]) -> None:
+        """Ensure the ONTOLOGY_BASE resource exists in ByClaw for this payload.
+
+        Only creates the base resource once per base_code per adapter lifetime.
+        The ByClaw API is idempotent on resourceCode, so duplicate calls are
+        harmless — the ``_synced_bases`` set is an optimisation, not a
+        correctness requirement.
+        """
+        base_code: str = payload.get("ontologyBaseCode", "")
+        if not base_code or base_code in self._synced_bases:
+            return
+        self._synced_bases.add(base_code)
+        base_payload: dict[str, Any] = {
+            "systemCode": self._system_code,
+            "resourceBizType": "ONTOLOGY_BASE",
+            "resourceCode": base_code,
+            "resourceName": base_code,
+            "resourceDesc": "",
+            "ontologyBaseCode": "",
+            "ownerType": "enterprise",
+        }
+        await self._post_async("/v1/ontology/resource/create", base_payload)
+
     async def _post_async(self, path: str, payload: dict[str, Any]) -> None:
         """Post payload to ByClaw open API via service discovery."""
         ctx = hook_ctx.get()
         beyond_token: str = ctx.get("beyond_token") or self._token
         self._ensure_discovery()
         if not self._discovery:
+            logger.warning(
+                "ByClaw sync skipped (discovery unavailable): %s type=%s code=%s",
+                path,
+                payload.get("resourceBizType", "?"),
+                payload.get("resourceCode", "?"),
+            )
             return
         try:
             base_url = await self._discover()
+            if not base_url:
+                logger.warning(
+                    "ByClaw sync skipped (no service instance): %s type=%s code=%s",
+                    path,
+                    payload.get("resourceBizType", "?"),
+                    payload.get("resourceCode", "?"),
+                )
+                return
             url = f"{base_url}/byaiService/open/api{path}"
             resp = await self._client.post(
                 url,
@@ -147,9 +217,11 @@ class ByClawSyncAdapter(ResourceSyncHook):
             resp.raise_for_status()
         except Exception:
             logger.warning(
-                "ByClaw sync failed: %s resourceCode=%s",
+                "ByClaw sync HTTP error: %s type=%s code=%s",
                 path,
-                payload.get("resourceCode", ""),
+                payload.get("resourceBizType", "?"),
+                payload.get("resourceCode", "?"),
+                exc_info=True,
             )
 
     async def _discover(self) -> str:

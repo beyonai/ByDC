@@ -320,13 +320,16 @@ class OntologyLoader:
                 self._functions[fn_code] = fn_config
 
         for obj in content.get("objects", []):
+            obj_code: str = obj.get("object_code") or obj.get("objectCode") or obj.get("code", "")
+            if not obj_code:
+                continue
             fields = self._parse_fields(obj.get("fields", []))
-            actions = self._parse_actions(obj.get("actions", []), obj["object_code"])
+            actions = self._parse_actions(obj.get("actions", []), obj_code)
             datasource_alias = obj.get("datasource_alias")
             source_config = obj.get("source_config")
             ontology_class = OntologyClass(
-                object_code=obj["object_code"],
-                object_name=obj.get("object_name", obj["object_code"]),
+                object_code=obj_code,
+                object_name=obj.get("object_name", obj_code),
                 description=obj.get("description", ""),
                 source_type=obj.get("source_type", "DB"),
                 datasource_alias=datasource_alias,
@@ -338,7 +341,7 @@ class OntologyLoader:
                 actions=actions,
                 term_sync=self._parse_term_sync(obj),
             )
-            self._classes[obj["object_code"]] = ontology_class
+            self._classes[obj_code] = ontology_class
 
         for rel in content.get("relations", []):
             self._relations.append(
@@ -384,8 +387,11 @@ class OntologyLoader:
                 self._functions[fn["function_code"]] = fn.get("api_schema", {})
 
         for obj in content.get("objects", []):
+            obj_code: str = obj.get("object_code") or obj.get("objectCode") or obj.get("code", "")
+            if not obj_code:
+                continue
             fields = self._parse_fields(obj.get("fields", []))
-            actions = self._parse_actions(obj.get("actions", []), obj["object_code"])
+            actions = self._parse_actions(obj.get("actions", []), obj_code)
             source_config = obj.get("source_config")
             datasource_alias = (
                 source_config.get("alias")
@@ -393,8 +399,8 @@ class OntologyLoader:
                 else None
             ) or obj.get("datasource_alias")
             ontology_class = OntologyClass(
-                object_code=obj["object_code"],
-                object_name=obj.get("object_name", obj["object_code"]),
+                object_code=obj_code,
+                object_name=obj.get("object_name", obj_code),
                 description=obj.get("description", ""),
                 source_type=obj.get("source_type", "DB"),
                 datasource_alias=datasource_alias,
@@ -406,7 +412,7 @@ class OntologyLoader:
                 actions=actions,
                 term_sync=self._parse_term_sync(obj),
             )
-            self._classes[obj["object_code"]] = ontology_class
+            self._classes[obj_code] = ontology_class
 
         for rel in content.get("relations", []):
             self._relations.append(

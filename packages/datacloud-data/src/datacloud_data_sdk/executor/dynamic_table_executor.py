@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from datacloud_data_sdk.constants import DEFAULT_BASE_ID
 from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.executor.query_executor import (
     _build_where,
@@ -15,8 +16,6 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.plan.term_resolver import TermResolver
 from datacloud_data_sdk.result_term_converter import ResultTermConverter
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
-from datacloud_data_sdk.constants import DEFAULT_BASE_ID
-
 
 logger = logging.getLogger(__name__)
 

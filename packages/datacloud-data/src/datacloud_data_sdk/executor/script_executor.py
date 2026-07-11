@@ -29,10 +29,10 @@ import logging
 import traceback
 from typing import Any
 
+from datacloud_data_sdk.constants import DEFAULT_BASE_ID
 from datacloud_data_sdk.context import get_current_context
 from datacloud_data_sdk.exceptions import ScriptExecutionError
 from datacloud_data_sdk.wrappers import AggWrapper, QueryWrapper
-from datacloud_data_sdk.constants import DEFAULT_BASE_ID
 
 logger = logging.getLogger(__name__)
 

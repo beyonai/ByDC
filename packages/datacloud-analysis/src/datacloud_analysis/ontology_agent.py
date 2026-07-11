@@ -48,6 +48,14 @@ class StepEvent(OntologyAgentEvent):
 
     title: str
     detail: str | None = None
+    event_type: str = (
+        ""  # 保留 dc_stream_chunk 的原始 event_type（reasoningLogStart / reasoningLogDelta）
+    )
+    content_type: str = (
+        ""  # dc_stream_chunk 的 content_type（如 "1002" think_text / "2020" jsonBlock）
+    )
+    message_id: str = ""  # dc_stream_chunk 的 message_id，用于前端层级渲染
+    parent_message_id: str = ""  # dc_stream_chunk 的 parent_message_id
 
 
 @dataclass
@@ -887,7 +895,17 @@ class OntologyAgent:
                     data = event.get("data") or {}
                     text = str(data.get("content") or "").strip()
                     if text:
-                        yield StepEvent(title=text)
+                        ev_type = str(data.get("event_type") or "").strip()
+                        ct = str(data.get("content_type") or "").strip()
+                        msg_id = str(data.get("message_id") or "").strip()
+                        p_msg_id = str(data.get("parent_message_id") or "").strip()
+                        yield StepEvent(
+                            title=text,
+                            event_type=ev_type,
+                            content_type=ct,
+                            message_id=msg_id,
+                            parent_message_id=p_msg_id,
+                        )
 
         except Exception as exc:
             logger.exception("ontology_agent: stream error thread_id=%s", thread_id)
@@ -940,6 +958,12 @@ class OntologyAgent:
             _thinking_duration_ms += int((_time.monotonic() - _thinking_t_start) * 1000)
 
         final_answer = str(snapshot.values.get("final_answer") or "")
+        logger.warning(
+            "_iter_events: final_answer from snapshot thread_id=%s len=%d preview=%r",
+            thread_id,
+            len(final_answer),
+            final_answer[:200],
+        )
         yield AnswerEvent(content=final_answer)
 
         # 性能汇总事件

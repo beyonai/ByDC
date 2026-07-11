@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -12,7 +13,9 @@ if TYPE_CHECKING:
 
 from datacloud_platform.adapters.data_adapter._base import (
     DataCloudDataBackendBase,
+    _normalize_entity,
     _normalize_object_codes,
+    _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
 )
 from datacloud_platform.models import ObjectSummary, ParsedOwlContent
 from datacloud_platform.models.action import Action, ActionParam
@@ -23,6 +26,50 @@ from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_default_datasource(loader: Any, objects: list[dict[str, Any]]) -> None:
+    """Register a default SQLite datasource if DYNAMIC_TABLE objects exist but
+    no datasource configs have been loaded.
+
+    The DynamicTableExecutor requires a named datasource registered in
+    DataSourceManager.  Without an OWL file, API-created bases have no
+    datasource configs — this provides a fallback SQLite connector pointing
+    at the same ``personal_object.db`` used by ``create_table``.
+    """
+    existing = getattr(loader._config, "datasource_configs", {}) or {}
+    # Always register/overwrite: _extract_datasource_configs_from_objects may
+    # have created a config for this alias without jdbc_url (from source_config),
+    # and the SQLiteConnector requires a valid jdbc_url.
+
+    # Resolve the SQLite path.  create_table uses FILE_STORAGE_MINIO_MOUNT_PATH
+    # to locate personal_object.db; we need the same path for consistency.
+    mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
+    if not mount:
+        logger.warning(
+            "FILE_STORAGE_MINIO_MOUNT_PATH not set — cannot register default SQLite datasource"
+        )
+        return
+    db_path = os.path.join(mount, "byclaw-datacloud", "personal_object.db")
+
+    # Match the format expected by DataSourceManager._dict_to_config / SQLiteConnector
+    from datacloud_data_sdk.sql_executor.config_loader import (  # noqa: PLC0415
+        _dict_to_config,
+    )
+
+    # Ensure the parent directory exists (create_table does this too, but
+    # load_ontology may run before any table is created).
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+    existing[_DEFAULT_DYNAMIC_DATASOURCE_ALIAS] = _dict_to_config(
+        _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
+        {
+            "db_type": "SQLITE",
+            "jdbc_url": f"jdbc:sqlite:{db_path}",
+            "ds_name": "Dynamic Table Default",
+        },
+    )
+    loader._config.datasource_configs = existing
 
 
 class OntologyBackendMixin(DataCloudDataBackendBase):
@@ -232,6 +279,15 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 if "view_id" not in v:
                     v["view_id"] = v.get("view_code", "")
 
+            # Patch DYNAMIC_TABLE objects missing datasource_alias so the executor
+            # can find a connector.  Objects created via API (no OWL) don't have
+            # one set, and the default datasource is registered below.
+            for o in all_objects:
+                st = (o.get("source_type") or o.get("objectSource") or "").upper()
+                if st == "DYNAMIC_TABLE" and not o.get("datasource_alias"):
+                    o["datasource_alias"] = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
+                    o.setdefault("table_name", o.get("object_code", ""))
+
             loader = OntologyLoader()
             loader.load_from_content(
                 {
@@ -242,6 +298,10 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     "dbsources": all_dbsources,
                 }
             )
+            # Register the default SQLite datasource so DynamicTableExecutor can
+            # connect.  Must happen after load_from_content so the loader's config
+            # is initialised.
+            _ensure_default_datasource(loader, all_objects)
             return loader  # type: ignore[return-value]
 
         # Fallback: OWL directory exists but store is empty
@@ -398,24 +458,44 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         """
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
 
+        # Normalize legacy data from create_object (model_dump by_alias camelCase)
+        # and OWL-parsed data into a canonical format the loader understands.
+        from datacloud_platform.adapters.data_adapter._base import _normalize_entity
+
+        normalized = _normalize_entity("object", raw)
         loader = OntologyLoader()
-        loader.load_from_content({"objects": [raw]})
+        loader.load_from_content({"objects": [normalized]})
         cls = loader._classes.get(object_code)
         if cls is None:
             return None
+        # Inject owner_type/user_code from raw dict top-level keys:
+        # create_object stores them at the root, not in ext_property, and
+        # OntologyLoader does not pass them to OntologyClass.
+        ext: dict[str, Any] = cls.ext_property
+        for key in ("owner_type", "ownerType"):
+            if key in raw and "owner_type" not in ext:
+                ext["owner_type"] = raw[key]
+        for key in ("user_code", "userCode"):
+            if key in raw and "user_code" not in ext:
+                ext["user_code"] = raw[key]
         return self._build_object_detail(cls)
 
     @staticmethod
     def _build_object_detail(cls: Any) -> dict[str, Any]:
         """Build ObjectType dict from a parsed OntologyClass."""
+        ext: dict[str, Any] = getattr(cls, "ext_property", {}) or {}
         obj = ObjectType(
             objectCode=cls.object_code,
             objectName=cls.object_name,
             objectDesc=getattr(cls, "description", None),
             objectSource=getattr(cls, "source_type", None),
             conceptType=getattr(cls, "concept_type", None),
-            ownerType=getattr(cls, "owner_type", "enterprise"),
-            userCode=getattr(cls, "user_code", None),
+            ownerType=(
+                ext.get("owner_type")
+                or getattr(cls, "owner_type", None)
+                or "enterprise"
+            ),
+            userCode=(ext.get("user_code") or getattr(cls, "user_code", None)),
             baseId="",
             properties=[
                 Property(
@@ -509,6 +589,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if _user_code:
             obj_dict["userCode"] = _user_code
             obj_dict["user_code"] = _user_code
+        # Canonicalize before save — ensures fields/properties, camelCase/snake_case
+        # are consistent regardless of whether obj came from API or OWL.
+        obj_dict = _normalize_entity("object", obj_dict, for_storage=True)
         entity_store.save("objects", code, obj_dict)
         logger.info("Created object: base_id=%s object_code=%s", base_id, code)
         self._sync_entity_terms(
@@ -556,6 +639,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if _user_code:
             obj_dict["userCode"] = _user_code
             obj_dict["user_code"] = _user_code
+        obj_dict = _normalize_entity("object", obj_dict, for_storage=True)
         entity_store.save("objects", object_code, obj_dict)
         logger.info("Updated object: base_id=%s object_code=%s", base_id, object_code)
         # Re-sync terms: delete old → write new (build_terms is upsert-safe)
@@ -788,6 +872,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         )
         if not code:
             raise ValueError("view_code is required for view creation")
+        view_dict = _normalize_entity("view", view_dict, for_storage=True)
         entity_store.save("views", code, view_dict)
         logger.info("Created view: base_id=%s view_code=%s", base_id, code)
         self._sync_entity_terms(
@@ -824,6 +909,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         view_dict: dict[str, Any] = (
             view if isinstance(view, dict) else view.model_dump(by_alias=True)
         )
+        view_dict = _normalize_entity("view", view_dict, for_storage=True)
         entity_store.save("views", view_code, view_dict)
         logger.info("Updated view: base_id=%s view_code=%s", base_id, view_code)
         self._remove_entity_terms(entity_type="view", entity_code=view_code)
@@ -1027,6 +1113,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         code: str = rel_dict.get("relation_code") or rel_dict.get("relationCode", "")
         if not code:
             raise ValueError("relation_code is required for relation creation")
+        rel_dict = _normalize_entity("relation", rel_dict, for_storage=True)
         entity_store.save("relations", code, rel_dict)
         logger.info("Created relation: base_id=%s relation_code=%s", base_id, code)
         self._sync_entity_terms(
@@ -1064,6 +1151,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         rel_dict: dict[str, Any] = (
             rel if isinstance(rel, dict) else rel.model_dump(by_alias=True)
         )
+        rel_dict = _normalize_entity("relation", rel_dict, for_storage=True)
         entity_store.save("relations", rel_code, rel_dict)
         logger.info("Updated relation: base_id=%s rel_code=%s", base_id, rel_code)
         self._remove_entity_terms(entity_type="relation", entity_code=rel_code)
@@ -1234,6 +1322,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             raise ValueError("action_code is required for action creation")
         # Ensure parent object_code is recorded
         action_dict["belongObjectCode"] = object_code
+        action_dict = _normalize_entity("action", action_dict, for_storage=True)
         entity_store.save("actions", code, action_dict)
         logger.info(
             "Created action: base_id=%s object_code=%s action_code=%s",
@@ -1285,6 +1374,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             action if isinstance(action, dict) else action.model_dump(by_alias=True)
         )
         action_dict["belongObjectCode"] = object_code
+        action_dict = _normalize_entity("action", action_dict, for_storage=True)
         entity_store.save("actions", action_code, action_dict)
         logger.info(
             "Updated action: base_id=%s object_code=%s action_code=%s",
