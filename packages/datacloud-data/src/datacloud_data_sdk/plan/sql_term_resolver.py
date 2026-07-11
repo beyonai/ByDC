@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from datacloud_data_sdk.exceptions import TermNotFoundError
 from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewPayload
 
 if TYPE_CHECKING:
@@ -244,7 +245,7 @@ def _replace_comparison(
         quote = "'" if str(right).startswith("'") else '"'
         right.value = f"{quote}{resolved}{quote}"  # type: ignore[union-attr]
         return True
-    except ValueError:
+    except (TermNotFoundError, ValueError):
         return False
 
 
@@ -279,7 +280,7 @@ def _replace_in_list(
             quote = "'" if str(t).startswith("'") else '"'
             t.value = f"{quote}{resolved}{quote}"  # type: ignore[union-attr]
             changed = True
-        except ValueError:
+        except (TermNotFoundError, ValueError):
             pass
     return changed
 
