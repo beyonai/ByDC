@@ -524,7 +524,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             resource_code=code,
             resource_name=obj_dict.get("objectName")
             or obj_dict.get("object_name", code),
-            resource_desc=obj_dict.get("objectDesc") or obj_dict.get("object_desc", ""),
+            resource_desc=obj_dict.get("objectDesc") or obj_dict.get("object_desc", "") or obj_dict.get("description", ""),
             base_code=base_id,
             owner_type=obj_dict.get("ownerType")
             or obj_dict.get("owner_type", "enterprise"),
