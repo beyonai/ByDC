@@ -303,4 +303,6 @@ class TermMixin(TermSyncHandler):
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:
-        self._term_for(base_id).delete_terms(base_id=base_id, term_ids=term_ids, terms=terms)
+        self._term_for(base_id).delete_terms(
+            base_id=base_id, term_ids=term_ids, terms=terms
+        )

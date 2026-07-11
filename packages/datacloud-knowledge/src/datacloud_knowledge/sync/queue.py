@@ -185,7 +185,9 @@ def _apply_sync_event(event: TermSyncEvent, *, handler: TermSyncHandler) -> None
         return
 
     if upsert_list:
-        handler.ensure_term_type(base_id=event.base_id, type_code=term_type_code, type_name=term_type_code)
+        handler.ensure_term_type(
+            base_id=event.base_id, type_code=term_type_code, type_name=term_type_code
+        )
         upserted_ids = handler.upsert_terms(base_id=event.base_id, terms=upsert_list)
         logger.debug(
             "术语同步完成: object=%s op=%s upserted=%d",

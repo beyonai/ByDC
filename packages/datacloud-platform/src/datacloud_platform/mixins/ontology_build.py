@@ -173,7 +173,7 @@ class OntologyBuildMixin:
             # 含 alias 和 jdbc_url 让 _extract_datasource_configs_from_objects 能自动发现
             # 完整的 SQLite 数据源配置（包括 scoped loader 路径）
             mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
-            source_config: dict[str, Any] = {
+            source_config = {
                 "db_type": "SQLITE",
                 "alias": _DEFAULT_DYNAMIC_DATASOURCE_ALIAS,
             }

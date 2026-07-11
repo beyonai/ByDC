@@ -96,9 +96,9 @@ def _normalize_entity(
             if not sc.get("jdbc_url"):
                 mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
                 if mount:
-                        sc["jdbc_url"] = (
-                            f"jdbc:sqlite:{mount}/byclaw-datacloud/personal_object.db"
-                        )
+                    sc["jdbc_url"] = (
+                        f"jdbc:sqlite:{mount}/byclaw-datacloud/personal_object.db"
+                    )
         result.setdefault(
             "ext_property", data.get("ext_property") or data.get("extProperty", {})
         )
