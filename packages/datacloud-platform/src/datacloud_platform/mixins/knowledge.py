@@ -1201,7 +1201,8 @@ class KnowledgeMixin:
         sdk_records = tuple(
             SdkScoreUpdateRecord(name_id=r.name_id, success=r.success) for r in records
         )
-        sdk_batch_update(records=sdk_records, writer=create_writer())
+        with create_writer() as writer:
+            sdk_batch_update(records=sdk_records, writer=writer)
 
     # ── Dimension Resolution ─────────────────────────
 

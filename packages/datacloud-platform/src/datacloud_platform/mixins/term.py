@@ -59,10 +59,13 @@ class TermMixin(TermSyncHandler):
         self: _HasTermBackend,
         base_id: str,
         *,
+        library_id: str = "",
         term_id: str,
         updates: dict[str, Any],
     ) -> None:
-        self._term_for(base_id).update_term(term_id=term_id, updates=updates)
+        self._term_for(base_id).update_term(
+            library_id=library_id, term_id=term_id, updates=updates
+        )
 
     def delete_term(self: _HasTermBackend, base_id: str, *, term_id: str) -> None:
         self._term_for(base_id).delete_term(term_id=term_id)
