@@ -232,7 +232,8 @@ def _inject_term_info(item: dict[str, Any], term_loader: Any) -> dict[str, Any]:
     base = {k: v for k, v in item.items() if v is not None}
     term_set = item.get("term_set")
     term_type = item.get("term_type")
-    dataset_id = item.get("dataset_id")
+    dataset_id = item.get("library_id") or item.get("dataset_id")
+    library_id = item.get("library_id") or item.get("dataset_id")
     term_type_code = term_set.split(".")[0] if term_set and "." in term_set else None
 
     if term_type:
@@ -240,7 +241,10 @@ def _inject_term_info(item: dict[str, Any], term_loader: Any) -> dict[str, Any]:
         if term_type == "enum" and term_loader and term_set:
             try:
                 labels = term_loader.get_available_values(
-                    term_set, dataset_id=dataset_id, term_type_code=term_type_code
+                    term_set,
+                    dataset_id=dataset_id,
+                    library_id=library_id,
+                    term_type_code=term_type_code,
                 )
                 if labels:
                     base["term_labels"] = labels
@@ -251,7 +255,10 @@ def _inject_term_info(item: dict[str, Any], term_loader: Any) -> dict[str, Any]:
     elif term_set and term_loader:
         try:
             labels = term_loader.get_available_values(
-                term_set, dataset_id=dataset_id, term_type_code=term_type_code
+                term_set,
+                dataset_id=dataset_id,
+                library_id=library_id,
+                term_type_code=term_type_code,
             )
             if labels:
                 base["term_type"] = "enum"

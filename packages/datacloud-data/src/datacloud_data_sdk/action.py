@@ -670,6 +670,7 @@ class Action:
             term_loader,
             term_set=param.term_set,
             dataset_id=param.dataset_id,
+            library_id=param.library_id,
             term_type_code=term_type_code,
         )
         enum_names = [entry["label"] for entry in entries if entry.get("label")]
@@ -705,6 +706,7 @@ class Action:
         *,
         term_set: str,
         dataset_id: int | None,
+        library_id: int | None = None,
         term_type_code: str | None,
     ) -> list[dict[str, str]]:
         """获取术语条目列表，优先使用条目接口，失败时回退到 label/value。"""
@@ -712,6 +714,7 @@ class Action:
             entries = term_loader.get_entries(
                 term_set,
                 dataset_id=dataset_id,
+                library_id=library_id,
                 term_type_code=term_type_code,
             )
         except Exception:
@@ -736,6 +739,7 @@ class Action:
             labels = term_loader.get_available_values(
                 term_set,
                 dataset_id=dataset_id,
+                library_id=library_id,
                 term_type_code=term_type_code,
             )
         except Exception:
@@ -899,6 +903,7 @@ class Action:
                     term_type=param.term_type,
                     term_field=param.term_field,
                     dataset_id=param.dataset_id,
+                    library_id=param.library_id,
                     raw_value=params[param.param_code],
                     param_name=param.param_name or param.param_code,
                 )
@@ -1593,6 +1598,8 @@ class Action:
                     term_type=getattr(source_field, "term_type", None),
                     term_field=getattr(source_field, "term_field", None),
                     dataset_id=getattr(source_field, "dataset_id", None),
+                    library_id=getattr(source_field, "library_id", None)
+                    or getattr(source_field, "dataset_id", None),
                     physical_mappings=list(getattr(source_field, "physical_mappings", [])),
                     property_kind=getattr(source_field, "property_kind", "physical"),
                     derived_config=getattr(source_field, "derived_config", None),
@@ -1644,6 +1651,7 @@ class Action:
                 term_type=field.term_type,
                 term_field=field.term_field,
                 dataset_id=field.dataset_id,
+                library_id=field.library_id or field.dataset_id,
                 physical_mappings=list(field.physical_mappings),
                 property_kind=field.property_kind,
                 derived_config=field.derived_config,
