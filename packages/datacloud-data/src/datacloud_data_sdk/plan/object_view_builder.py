@@ -62,6 +62,7 @@ class ObjectViewBuilder:
                     term_type=f.term_type,
                     term_field=f.term_field,
                     dataset_id=f.dataset_id,
+                    library_id=f.library_id or f.dataset_id,
                     source_column=_resolve_source_column(f, datasource_alias),
                 )
                 for f in cls.fields
@@ -84,6 +85,7 @@ class ObjectViewBuilder:
                         term_type=p.term_type,
                         term_field=p.term_field,
                         dataset_id=p.dataset_id,
+                        library_id=p.library_id or p.dataset_id,
                     )
                     for p in a.params
                 ]

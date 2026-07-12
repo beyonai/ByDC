@@ -32,6 +32,7 @@ def _to_function_param(p: OntologyActionParam) -> ObjectViewFunctionParam:
         term_type=p.term_type,
         term_field=p.term_field,
         dataset_id=p.dataset_id,
+        library_id=p.library_id or p.dataset_id,
     )
 
 
