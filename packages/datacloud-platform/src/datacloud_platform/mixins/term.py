@@ -27,10 +27,10 @@ class TermMixin(TermSyncHandler):
         return self._term_for(base_id).search_terms(**kwargs)
 
     def get_term_detail(
-        self: _HasTermBackend, base_id: str, *, dataset_id: str, term_id: str
+        self: _HasTermBackend, base_id: str, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
         return self._term_for(base_id).get_term_detail(
-            dataset_id=dataset_id, term_id=term_id
+            library_id=library_id, term_id=term_id
         )
 
     def list_terms(
@@ -47,22 +47,22 @@ class TermMixin(TermSyncHandler):
         self: _HasTermBackend,
         base_id: str,
         *,
-        dataset_id: str,
+        library_id: str,
         terms: list[dict[str, Any]],
+        backfill: bool = False,
     ) -> dict[str, Any]:
-        return self._term_for(base_id).import_terms(dataset_id=dataset_id, terms=terms)
+        return self._term_for(base_id).import_terms(
+            library_id=library_id, terms=terms, backfill=backfill
+        )
 
     def update_term(
         self: _HasTermBackend,
         base_id: str,
         *,
-        dataset_id: str,
         term_id: str,
         updates: dict[str, Any],
     ) -> None:
-        self._term_for(base_id).update_term(
-            dataset_id=dataset_id, term_id=term_id, updates=updates
-        )
+        self._term_for(base_id).update_term(term_id=term_id, updates=updates)
 
     def delete_term(self: _HasTermBackend, base_id: str, *, term_id: str) -> None:
         self._term_for(base_id).delete_term(term_id=term_id)
@@ -76,7 +76,7 @@ class TermMixin(TermSyncHandler):
 
     def list_term_relations(
         self: _HasTermBackend, base_id: str, **kwargs: Any
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, Any]:
         return self._term_for(base_id).list_term_relations(**kwargs)
 
     def get_term_relation(
@@ -196,13 +196,20 @@ class TermMixin(TermSyncHandler):
 
     def list_term_types(
         self: _HasTermBackend, base_id: str, **kwargs: Any
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, Any]:
         return self._term_for(base_id).list_term_types(**kwargs)
 
     def get_term_type(
-        self: _HasTermBackend, base_id: str, *, type_code: str
+        self: _HasTermBackend, base_id: str, *, library_id: str, type_code: str
     ) -> dict[str, Any] | None:
-        return self._term_for(base_id).get_term_type(type_code=type_code)
+        return self._term_for(base_id).get_term_type(
+            library_id=library_id, type_code=type_code
+        )
+
+    def list_term_type_relations(
+        self: _HasTermBackend, base_id: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        return self._term_for(base_id).list_term_type_relations(**kwargs)
 
     def create_term_type(
         self: _HasTermBackend, base_id: str, *, term_type: dict[str, Any]
@@ -210,26 +217,37 @@ class TermMixin(TermSyncHandler):
         return self._term_for(base_id).create_term_type(term_type=term_type)
 
     def update_term_type(
-        self: _HasTermBackend, base_id: str, *, type_code: str, updates: dict[str, Any]
+        self: _HasTermBackend,
+        base_id: str,
+        *,
+        library_id: str,
+        type_code: str,
+        updates: dict[str, Any],
     ) -> None:
-        self._term_for(base_id).update_term_type(type_code=type_code, updates=updates)
+        self._term_for(base_id).update_term_type(
+            library_id=library_id, type_code=type_code, updates=updates
+        )
 
     def delete_term_type(
-        self: _HasTermBackend, base_id: str, *, type_code: str
+        self: _HasTermBackend, base_id: str, *, library_id: str, type_code: str
     ) -> None:
-        self._term_for(base_id).delete_term_type(type_code=type_code)
+        self._term_for(base_id).delete_term_type(
+            library_id=library_id, type_code=type_code
+        )
 
     # ── Domain ─────────────────────────────────────────────────────
 
     def list_domains(
-        self: _HasTermBackend, base_id: str, **kwargs: Any
+        self: _HasTermBackend, base_id: str, *, library_id: str, **kwargs: Any
     ) -> list[dict[str, Any]]:
-        return self._term_for(base_id).list_domains(**kwargs)
+        return self._term_for(base_id).list_domains(library_id=library_id, **kwargs)
 
     def get_domain(
-        self: _HasTermBackend, base_id: str, *, domain_id: str
+        self: _HasTermBackend, base_id: str, *, library_id: str, domain_code: str
     ) -> dict[str, Any] | None:
-        return self._term_for(base_id).get_domain(domain_id=domain_id)
+        return self._term_for(base_id).get_domain(
+            library_id=library_id, domain_code=domain_code
+        )
 
     def create_domain(
         self: _HasTermBackend, base_id: str, *, domain: dict[str, Any]
@@ -237,17 +255,23 @@ class TermMixin(TermSyncHandler):
         return self._term_for(base_id).create_domain(domain=domain)
 
     def update_domain(
-        self: _HasTermBackend, base_id: str, *, domain_id: str, updates: dict[str, Any]
+        self: _HasTermBackend,
+        base_id: str,
+        *,
+        library_id: str,
+        domain_code: str,
+        updates: dict[str, Any],
     ) -> None:
-        self._term_for(base_id).update_domain(domain_id=domain_id, updates=updates)
+        self._term_for(base_id).update_domain(
+            library_id=library_id, domain_code=domain_code, updates=updates
+        )
 
-    def delete_domain(self: _HasTermBackend, base_id: str, *, domain_id: str) -> None:
-        self._term_for(base_id).delete_domain(domain_id=domain_id)
-
-    def list_domain_term_types(
-        self: _HasTermBackend, base_id: str, *, domain_id: str
-    ) -> list[dict[str, Any]]:
-        return self._term_for(base_id).list_domain_term_types(domain_id=domain_id)
+    def delete_domain(
+        self: _HasTermBackend, base_id: str, *, library_id: str, domain_code: str
+    ) -> None:
+        self._term_for(base_id).delete_domain(
+            library_id=library_id, domain_code=domain_code
+        )
 
     # ── Vector ─────────────────────────────────────────────────────
 
@@ -282,7 +306,7 @@ class TermMixin(TermSyncHandler):
     def remove_terms(self: _HasTermBackend, base_id: str, entity_code: str) -> None:
         self._term_for(base_id).remove_terms(entity_code)
 
-    # ── TermSyncHandler 实现（固定使用 default 空间，供 term_sync_worker 注入）──
+    # ── TermSyncHandler 实现 ────────────────────────────────────────
 
     def ensure_term_type(
         self: _HasTermBackend, *, base_id: str, type_code: str, type_name: str

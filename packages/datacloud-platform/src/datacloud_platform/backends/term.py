@@ -1,7 +1,7 @@
 """TermBackend Protocol — 术语库原子能力.
 
-完整对应 docs/api/knowledge 的全部 API 面。
-只做原子操作——不做编排（编排在 KnowledgeMixin）。
+完整对应 term_design.md 的全部接口面。
+只做原子操作——不做编排（编排在 TermMixin）。
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class TermBackend(Protocol):
-    """术语库原子能力协议。"""
+    """术语库原子能力协议（32 方法）。"""
 
     # ── Term ───────────────────────────────────────────────────────
 
@@ -39,58 +39,57 @@ class TermBackend(Protocol):
         ...
 
     def get_term_detail(
-        self, *, dataset_id: str, term_id: str
+        self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
-        """单条术语完整详情（基础属性+名称/别名+父链+关联知识）。
+        """术语完整详情（含 parentChain / names / knowledges / domain / counts）。
 
-        对应: GET /api/v1/knowledge/terms/{termId}
+        对应: POST /api/v1/rpc/term/get
         """
         ...
 
     def list_terms(
         self,
         *,
-        dataset_id: str,
+        library_id: str,
         term_type: str | None = None,
-        term_type_no_eq: str | None = None,
+        domain_code: str | None = None,
+        keyword: str | None = None,
         page_index: int = 1,
-        page_size: int = 50,
+        page_size: int = 20,
     ) -> dict[str, Any]:
-        """分页列出术语（每条含完整详情）。
+        """分页列出术语（keyword + domain_code 过滤，含 domain 翻译）。
 
-        一次请求返回 TermDetail 列表，替代 N 次并发 get_term_detail。
+        对应: POST /api/v1/rpc/term/list
         """
         ...
 
     def create_term(self, *, term: dict[str, Any]) -> dict[str, Any]:
         """创建单条术语。
 
-        对应: POST /api/v1/knowledge/terms
+        对应: POST /api/v1/rpc/term/create
         """
         ...
 
     def import_terms(
-        self, *, dataset_id: str, terms: list[dict[str, Any]]
+        self, *, library_id: str, terms: list[dict[str, Any]], backfill: bool = False
     ) -> dict[str, Any]:
-        """批量导入术语（含同义词、标签、扩展属性）。
+        """批量导入术语（5 阶段：预检→去重→类型→术语→关系）。
 
-        对应: POST /api/v1/knowledge/terms/import
+        对应: POST /api/v1/rpc/term/import
         """
         ...
 
-    def update_term(
-        self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
-    ) -> None:
-        """更新术语（仅更新非空字段，字段级部分更新）。
+    def update_term(self, *, term_id: str, updates: dict[str, Any]) -> None:
+        """更新术语（部分更新）。
 
-        对应: PUT /api/v1/knowledge/terms/{termId}
+        对应: POST /api/v1/rpc/term/update
         """
         ...
 
     def delete_term(self, *, term_id: str) -> None:
-        """删除术语。
+        """删除术语（级联：relation + name + knowledge）。
 
-        对应: DELETE /api/v1/knowledge/terms/{termId}
+        对应: POST /api/v1/rpc/term/delete
         """
         ...
 
@@ -101,10 +100,13 @@ class TermBackend(Protocol):
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
     ) -> dict[str, Any]:
-        """查询术语的关联关系（N 跳进出关系）。
+        """查询术语一跳关系（含 keyword + 分页）。
 
-        对应: GET /api/v1/knowledge/terms/{termId}/relations
+        对应: POST /api/v1/rpc/term/getRelations
         """
         ...
 
@@ -116,7 +118,10 @@ class TermBackend(Protocol):
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
-    ) -> list[dict[str, Any]]: ...
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]: ...
 
     def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None: ...
 
@@ -180,32 +185,74 @@ class TermBackend(Protocol):
     # ── TermType ───────────────────────────────────────────────────
 
     def list_term_types(
-        self, *, type_category: int | None = None
-    ) -> list[dict[str, Any]]: ...
+        self,
+        *,
+        library_id: str,
+        domain_code: str | None = None,
+        type_category: int | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        """术语类型列表（keyword + domain_code + 分页 + term_count）。
 
-    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None: ...
+        对应: POST /api/v1/rpc/termType/list
+        """
+        ...
+
+    def get_term_type(
+        self, *, library_id: str, type_code: str
+    ) -> dict[str, Any] | None:
+        """术语类型详情。
+
+        对应: POST /api/v1/rpc/termType/get
+        """
+        ...
+
+    def list_term_type_relations(
+        self,
+        *,
+        library_id: str,
+        type_code: str,
+        direction: str = "both",
+        relation_category: str | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        """术语类型一跳关系（直接查 term_relation.term_type_code 列）。
+
+        对应: POST /api/v1/rpc/termType/getRelations
+        """
+        ...
 
     def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]: ...
 
-    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None: ...
+    def update_term_type(
+        self, *, library_id: str, type_code: str, updates: dict[str, Any]
+    ) -> None: ...
 
-    def delete_term_type(self, *, type_code: str) -> None: ...
+    def delete_term_type(self, *, library_id: str, type_code: str) -> None: ...
 
     # ── Domain ─────────────────────────────────────────────────────
 
-    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]: ...
+    def list_domains(
+        self, *, library_id: str, parent_id: str | None = None
+    ) -> list[dict[str, Any]]: ...
 
-    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None: ...
+    def get_domain(
+        self, *, library_id: str, domain_code: str
+    ) -> dict[str, Any] | None: ...
 
     def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]: ...
 
-    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None: ...
+    def update_domain(
+        self, *, library_id: str, domain_code: str, updates: dict[str, Any]
+    ) -> None: ...
 
-    def delete_domain(self, *, domain_id: str) -> None: ...
+    def delete_domain(self, *, library_id: str, domain_code: str) -> None: ...
 
-    def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]: ...
-
-    # ── Vector（从 KnowledgeBackend 迁入）──────────────────────────
+    # ── Vector ─────────────────────────────────────────────────────
 
     def embed(self, text: str) -> list[float]:
         """文本 → 向量。"""
@@ -221,7 +268,7 @@ class TermBackend(Protocol):
         """向量相似度搜索。"""
         ...
 
-    # ── Sync（从 KnowledgeBackend 迁入）────────────────────────────
+    # ── Sync ───────────────────────────────────────────────────────
 
     def sync_terms(
         self,
@@ -239,18 +286,14 @@ class TermBackend(Protocol):
         """清除对象关联的所有术语。"""
         ...
 
-    # ── TermSyncHandler 协议方法（供 term_sync_worker 注入使用）──────
+    # ── TermSyncHandler 协议方法 ────────────────────────────────────
 
     def ensure_term_type(self, *, base_id: str, type_code: str, type_name: str) -> None:
         """确保术语类型存在（幂等）。"""
         ...
 
     def upsert_terms(self, *, base_id: str, terms: list[dict[str, Any]]) -> list[str]:
-        """批量 upsert 术语，返回 term_id（UUID）列表。
-
-        terms 每条字段：term_code, term_name, term_desc,
-        term_type_code, library_code, domain_code
-        """
+        """批量 upsert 术语，返回 term_id 列表。"""
         ...
 
     def delete_terms(
@@ -260,9 +303,5 @@ class TermBackend(Protocol):
         term_ids: list[str] | None = None,
         terms: list[dict[str, Any]] | None = None,
     ) -> None:
-        """批量删除术语，支持 UUID 列表和业务三元组两种入参，均有值时全部执行。
-
-        term_ids: 数据库 UUID 列表，直接按主键删除。
-        terms:    业务三元组 dict 列表（term_code, term_type_code, library_code）。
-        """
+        """批量删除术语。"""
         ...

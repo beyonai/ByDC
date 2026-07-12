@@ -1116,7 +1116,7 @@ class KnowledgeMixin:
                     created_ids.append(name_id)
             elif isinstance(value, str) and value.strip():
                 import_result = term.import_terms(
-                    dataset_id="PERSONAL_LIB",
+                    library_id="PERSONAL_LIB",
                     terms=[
                         {
                             "term_name": mention_text,

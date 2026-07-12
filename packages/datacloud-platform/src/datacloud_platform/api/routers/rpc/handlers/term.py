@@ -17,9 +17,7 @@ if TYPE_CHECKING:
 
 
 def _base(params: dict[str, Any]) -> str:
-    """从 params 中提取 base_id，优先使用 system_code（路由层已映射为 base_id），
-    未提供时使用默认值 DEFAULT_BASE_ID。
-    """
+    """从 params 中提取 base_id，未提供时使用默认值 DEFAULT_BASE_ID。"""
     base_id: object = params.get("base_id", DEFAULT_BASE_ID)
     return str(base_id)
 
@@ -89,9 +87,17 @@ LIBRARY_REGISTRY: dict[str, Any] = {
 def _term_type_list(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, Any] = {
+        "library_id": params["library_id"],
+        "page_index": params.get("page_index", 1),
+        "page_size": params.get("page_size", 20),
+    }
+    if params.get("domain_code"):
+        kwargs["domain_code"] = params["domain_code"]
     if params.get("type_category") is not None:
         kwargs["type_category"] = params["type_category"]
+    if params.get("keyword"):
+        kwargs["keyword"] = params["keyword"]
     return ok(data=platform.list_term_types(_base(params), **kwargs))
 
 
@@ -107,19 +113,42 @@ def _term_type_create(
 def _term_type_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
+    library_id: str = params["library_id"]
     code: str = params["code"]
-    tt = platform.get_term_type(_base(params), type_code=code)
+    tt = platform.get_term_type(_base(params), library_id=library_id, type_code=code)
     if tt is None:
         raise KeyError(f"TermType '{code}' not found")
     return ok(data=tt)
 
 
+def _term_type_get_relations(
+    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+) -> Any:
+    """#3 — 术语类型一跳关系 (ADR-006: 直接查 term_relation.term_type_code 列)。"""
+    kwargs: dict[str, Any] = {
+        "library_id": params["library_id"],
+        "type_code": params["type_code"],
+        "direction": params.get("direction", "both"),
+        "page_index": params.get("page_index", 1),
+        "page_size": params.get("page_size", 20),
+    }
+    if params.get("relation_category"):
+        kwargs["relation_category"] = params["relation_category"]
+    if params.get("keyword"):
+        kwargs["keyword"] = params["keyword"]
+    return ok(data=platform.list_term_type_relations(_base(params), **kwargs))
+
+
 def _term_type_update(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
+    library_id: str = params["library_id"]
     code: str = params["code"]
     platform.update_term_type(
-        _base(params), type_code=code, updates=params.get("updates", {})
+        _base(params),
+        library_id=library_id,
+        type_code=code,
+        updates=params.get("updates", {}),
     )
     return ok(data={"typeCode": code})
 
@@ -127,7 +156,11 @@ def _term_type_update(
 def _term_type_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_term_type(_base(params), type_code=params["code"])
+    platform.delete_term_type(
+        _base(params),
+        library_id=params["library_id"],
+        type_code=params["code"],
+    )
     return ok(message="deleted")
 
 
@@ -135,6 +168,7 @@ TYPE_REGISTRY: dict[str, Any] = {
     "list": _term_type_list,
     "create": _term_type_create,
     "get": _term_type_get,
+    "getRelations": _term_type_get_relations,
     "update": _term_type_update,
     "delete": _term_type_delete,
 }
@@ -171,12 +205,18 @@ def _term_list(
 ) -> Any:
     kwargs: dict[str, Any] = {
         "page_index": params.get("page_index", 1),
-        "page_size": params.get("page_size", 50),
+        "page_size": params.get("page_size", 20),
     }
-    if params.get("dataset_id"):
-        kwargs["dataset_id"] = params["dataset_id"]
+    # Support both library_id (new) and dataset_id (deprecated alias)
+    library_id = params.get("library_id") or params.get("dataset_id", "")
+    if library_id:
+        kwargs["library_id"] = library_id
     if params.get("term_type"):
         kwargs["term_type"] = params["term_type"]
+    if params.get("domain_code"):
+        kwargs["domain_code"] = params["domain_code"]
+    if params.get("keyword"):
+        kwargs["keyword"] = params["keyword"]
     return ok(data=platform.list_terms(_base(params), **kwargs))
 
 
@@ -192,11 +232,15 @@ def _term_create(
 def _term_import(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
+    """#7 — 批量导入（5 阶段：预检→去重→类型→术语→关系）。"""
+    library_id = params.get("library_id") or params.get("libraryId") or _base(params)
+    backfill = params.get("backfill", True)
     return ok(
         data=platform.import_terms(
             _base(params),
-            dataset_id=params.get("libraryId", ""),
+            library_id=library_id,
             terms=params.get("terms", []),
+            backfill=backfill,
         ),
         message="imported",
     )
@@ -205,10 +249,12 @@ def _term_import(
 def _term_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
+    """#5 — 术语详情。"""
     term_id: str = params["id"]
+    library_id = params.get("library_id") or params.get("dataset_id", "")
     term = platform.get_term_detail(
         _base(params),
-        dataset_id=params.get("dataset_id", ""),
+        library_id=library_id,
         term_id=term_id,
     )
     if term is None:
@@ -222,7 +268,6 @@ def _term_update(
     term_id: str = params["id"]
     platform.update_term(
         _base(params),
-        dataset_id=params.get("datasetId", ""),
         term_id=term_id,
         updates=params.get("updates", {}),
     )
@@ -232,6 +277,7 @@ def _term_update(
 def _term_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
+    """#8b — 级联删除（relation + name + knowledge）。"""
     platform.delete_term(_base(params), term_id=params["id"])
     return ok(message="deleted")
 
@@ -239,13 +285,18 @@ def _term_delete(
 def _term_get_relations(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
+    """#6 — 术语一跳关系。"""
     kwargs: dict[str, Any] = {
         "term_id": params["id"],
         "direction": params.get("direction", "both"),
         "depth": params.get("depth", 1),
+        "page_index": params.get("page_index", 1),
+        "page_size": params.get("page_size", 20),
     }
     if params.get("relation_category"):
         kwargs["relation_category"] = params["relation_category"]
+    if params.get("keyword"):
+        kwargs["keyword"] = params["keyword"]
     return ok(data=platform.query_term_relations(_base(params), **kwargs))
 
 
@@ -267,13 +318,18 @@ TERM_REGISTRY: dict[str, Any] = {
 def _term_relation_list(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, Any] = {
+        "page_index": params.get("page_index", 1),
+        "page_size": params.get("page_size", 20),
+    }
     if params.get("source_term_id"):
         kwargs["source_term_id"] = params["source_term_id"]
     if params.get("target_term_id"):
         kwargs["target_term_id"] = params["target_term_id"]
     if params.get("relation_category"):
         kwargs["relation_category"] = params["relation_category"]
+    if params.get("keyword"):
+        kwargs["keyword"] = params["keyword"]
     return ok(data=platform.list_term_relations(_base(params), **kwargs))
 
 
@@ -450,7 +506,9 @@ KNOWLEDGE_REGISTRY: dict[str, Any] = {
 def _domain_list(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, Any] = {
+        "library_id": params["library_id"],
+    }
     if params.get("parent_id"):
         kwargs["parent_id"] = params["parent_id"]
     return ok(data=platform.list_domains(_base(params), **kwargs))
@@ -468,36 +526,39 @@ def _domain_create(
 def _domain_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    domain_id: str = params["id"]
-    domain = platform.get_domain(_base(params), domain_id=domain_id)
+    library_id: str = params["library_id"]
+    domain_code: str = params["code"]
+    domain = platform.get_domain(
+        _base(params), library_id=library_id, domain_code=domain_code
+    )
     if domain is None:
-        raise KeyError(f"Domain '{domain_id}' not found")
+        raise KeyError(f"Domain '{domain_code}' not found")
     return ok(data=domain)
 
 
 def _domain_update(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    domain_id: str = params["id"]
+    library_id: str = params["library_id"]
+    domain_code: str = params["code"]
     platform.update_domain(
-        _base(params), domain_id=domain_id, updates=params.get("updates", {})
+        _base(params),
+        library_id=library_id,
+        domain_code=domain_code,
+        updates=params.get("updates", {}),
     )
-    return ok(data={"domainId": domain_id})
+    return ok(data={"domainCode": domain_code})
 
 
 def _domain_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_domain(_base(params), domain_id=params["id"])
-    return ok(message="deleted")
-
-
-def _domain_list_term_types(
-    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
-) -> Any:
-    return ok(
-        data=platform.list_domain_term_types(_base(params), domain_id=params["id"])
+    platform.delete_domain(
+        _base(params),
+        library_id=params["library_id"],
+        domain_code=params["code"],
     )
+    return ok(message="deleted")
 
 
 DOMAIN_REGISTRY: dict[str, Any] = {
@@ -506,5 +567,4 @@ DOMAIN_REGISTRY: dict[str, Any] = {
     "get": _domain_get,
     "update": _domain_update,
     "delete": _domain_delete,
-    "listTermTypes": _domain_list_term_types,
 }

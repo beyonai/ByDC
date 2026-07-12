@@ -409,9 +409,17 @@ class OntologyBuildMixin:
         term = self._term_for(base_id)
 
         # 获取所有 LIST_TERM (category=1) 和 DICT_TERM (category=2) 类型
-        list_types = term.list_term_types(type_category=1)
-        dict_types = term.list_term_types(type_category=2)
-        all_types = list_types + dict_types
+        # list_term_types 现在返回 {data, pageIndex, pageSize, totalCount, totalPages}
+        # 且需要 library_id。使用空 library_id 匹配向后兼容行为（查询所有）
+        list_result = term.list_term_types(
+            library_id="", type_category=1, page_size=500
+        )
+        dict_result = term.list_term_types(
+            library_id="", type_category=2, page_size=500
+        )
+        all_types: list[dict[str, Any]] = list_result.get("data", []) + dict_result.get(
+            "data", []
+        )
 
         # keyword 过滤 type_code
         if keyword:
