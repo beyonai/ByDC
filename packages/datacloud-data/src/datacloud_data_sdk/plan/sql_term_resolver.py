@@ -238,6 +238,7 @@ def _replace_comparison(
             raw,
             term_field=field.term_field,
             dataset_id=field.dataset_id,
+            library_id=field.library_id or field.dataset_id,
             term_type_code=field.term_set.split(".")[0]
             if field.term_set and "." in field.term_set
             else None,
@@ -273,6 +274,7 @@ def _replace_in_list(
                 raw,
                 term_field=field.term_field,
                 dataset_id=field.dataset_id,
+                library_id=field.library_id or field.dataset_id,
                 term_type_code=field.term_set.split(".")[0]
                 if field.term_set and "." in field.term_set
                 else None,

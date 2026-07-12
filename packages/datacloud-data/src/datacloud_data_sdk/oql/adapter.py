@@ -534,6 +534,7 @@ def resolve_term_value(field: Any, raw_value: Any, term_resolver) -> Any:
                     str(v),
                     term_field=field.term_field,
                     dataset_id=field.dataset_id,
+                    library_id=field.library_id or field.dataset_id,
                     term_type_code=field.term_set.split(".")[0]
                     if "." in (field.term_set or "")
                     else None,
@@ -548,6 +549,7 @@ def resolve_term_value(field: Any, raw_value: Any, term_resolver) -> Any:
             str(raw_value),
             term_field=field.term_field,
             dataset_id=field.dataset_id,
+            library_id=field.library_id or field.dataset_id,
             term_type_code=field.term_set.split(".")[0] if "." in (field.term_set or "") else None,
             param_name=field.field_name or field.field_code,
         )

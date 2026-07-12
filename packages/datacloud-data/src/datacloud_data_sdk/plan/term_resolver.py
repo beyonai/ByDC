@@ -71,6 +71,7 @@ class TermResolver:
         term_type: str | None,
         term_field: str | None,
         dataset_id: int | None,
+        library_id: int | None = None,
         raw_value: Any,
         param_name: str,
     ) -> Any:
@@ -91,6 +92,7 @@ class TermResolver:
                 value_str,
                 term_field=term_field,
                 dataset_id=dataset_id,
+                library_id=library_id or dataset_id,
                 term_type_code=term_set.split(".")[0] if "." in term_set else None,
                 keyword=keyword,
                 param_name=param_name,
@@ -141,6 +143,7 @@ class TermResolver:
                                 term_type=p.term_type,
                                 term_field=p.term_field,
                                 dataset_id=p.dataset_id,
+                                library_id=p.library_id or p.dataset_id,
                                 raw_value=v,
                                 param_name=param_name,
                             )
@@ -152,6 +155,7 @@ class TermResolver:
                         term_type=p.term_type,
                         term_field=p.term_field,
                         dataset_id=p.dataset_id,
+                        library_id=p.library_id or p.dataset_id,
                         raw_value=raw,
                         param_name=param_name,
                     )
@@ -196,6 +200,7 @@ class TermResolver:
                                 term_type=p.term_type,
                                 term_field=p.term_field,
                                 dataset_id=p.dataset_id,
+                                library_id=p.library_id or p.dataset_id,
                                 raw_value=v,
                                 param_name=param_name,
                             )
@@ -207,6 +212,7 @@ class TermResolver:
                         term_type=p.term_type,
                         term_field=p.term_field,
                         dataset_id=p.dataset_id,
+                        library_id=p.library_id or p.dataset_id,
                         raw_value=raw,
                         param_name=param_name,
                     )
@@ -236,6 +242,7 @@ class TermResolver:
                 term_type=f.term_type,
                 term_field=f.term_field,
                 dataset_id=f.dataset_id,
+                library_id=f.library_id or f.dataset_id,
             )
             for f in field_specs
         ]
@@ -282,12 +289,14 @@ class TermResolver:
             param_name = getattr(field, "field_name", None) or getattr(
                 field, "property_name", field_code
             )
+            _library_id = getattr(field, "library_id", None) or getattr(field, "dataset_id", None)
             try:
                 resolved_filter["value"] = self._resolve_term_value(
                     term_set=term_set,
                     term_type=getattr(field, "term_type", None),
                     term_field=getattr(field, "term_field", None),
                     dataset_id=getattr(field, "dataset_id", None),
+                    library_id=_library_id,
                     raw_value=value,
                     param_name=param_name,
                 )

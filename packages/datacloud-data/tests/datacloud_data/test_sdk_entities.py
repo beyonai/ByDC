@@ -1090,6 +1090,7 @@ def test_term_resolver_skips_none_and_blank_values_in_nested_arrays() -> None:
         term_type=None,
         term_field="code",
         dataset_id=None,
+        library_id=None,
         raw_value=[["胡永春", ""], [None, "  ", "李四"]],
         param_name="处理人",
     )
