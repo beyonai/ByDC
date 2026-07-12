@@ -596,21 +596,24 @@ class _NoopTermBackend:
         return {"data": [], "totalCount": 0}
 
     def get_term_detail(
-        self, *, dataset_id: str, term_id: str
+        self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
         """Return None."""
+        _ = library_id
         return None
 
     def list_terms(
         self,
         *,
-        dataset_id: str,
+        library_id: str,
         term_type: str | None = None,
-        term_type_no_eq: str | None = None,
+        domain_code: str | None = None,
+        keyword: str | None = None,
         page_index: int = 1,
-        page_size: int = 50,
+        page_size: int = 20,
     ) -> dict[str, Any]:
         """Return empty list."""
+        _ = library_id, domain_code, keyword
         return {
             "data": [],
             "totalCount": 0,
@@ -628,10 +631,9 @@ class _NoopTermBackend:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Term backend not available")
 
-    def update_term(
-        self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
-    ) -> None:
+    def update_term(self, *, library_id: str = "", term_id: str, updates: dict[str, Any]) -> None:
         """Raise PermissionError — write forbidden."""
+        _ = term_id, updates
         raise PermissionError("Term backend not available")
 
     def delete_term(self, *, term_id: str) -> None:
@@ -645,8 +647,12 @@ class _NoopTermBackend:
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
     ) -> dict[str, Any]:
         """Return empty result."""
+        _ = term_id, relation_category, direction, depth, keyword, page_index, page_size
         return {"data": [], "totalCount": 0}
 
     # ── TermRelation ────────────────────────────────────────────────────
@@ -657,8 +663,19 @@ class _NoopTermBackend:
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
-    ) -> list[dict[str, Any]]:
-        return []
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        _ = (
+            source_term_id,
+            target_term_id,
+            relation_category,
+            keyword,
+            page_index,
+            page_size,
+        )
+        return {"data": [], "totalCount": 0}
 
     def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
         return None
@@ -739,28 +756,60 @@ class _NoopTermBackend:
     # ── TermType ────────────────────────────────────────────────────────
 
     def list_term_types(
-        self, *, type_category: int | None = None
-    ) -> list[dict[str, Any]]:
-        return []
+        self,
+        *,
+        library_id: str,
+        domain_code: str | None = None,
+        type_category: int | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        _ = library_id, domain_code, type_category, keyword, page_index, page_size
+        return {"items": [], "total": 0}
 
-    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None:
+    def get_term_type(
+        self, *, library_id: str, type_code: str
+    ) -> dict[str, Any] | None:
+        _ = library_id
         return None
+
+    def list_term_type_relations(
+        self,
+        *,
+        library_id: str,
+        type_code: str,
+        direction: str = "both",
+        relation_category: str | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        return {"items": [], "total": 0}
 
     def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
         raise PermissionError("Term backend not available")
 
-    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
+    def update_term_type(
+        self, *, library_id: str, type_code: str, updates: dict[str, Any]
+    ) -> None:
+        _ = library_id
         raise PermissionError("Term backend not available")
 
-    def delete_term_type(self, *, type_code: str) -> None:
+    def delete_term_type(self, *, library_id: str, type_code: str) -> None:
+        _ = library_id
         raise PermissionError("Term backend not available")
 
     # ── Domain ──────────────────────────────────────────────────────────
 
-    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]:
+    def list_domains(
+        self, *, library_id: str, parent_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        _ = library_id
         return []
 
-    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None:
+    def get_domain(self, *, library_id: str, domain_code: str) -> dict[str, Any] | None:
+        _ = library_id
         return None
 
     def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:

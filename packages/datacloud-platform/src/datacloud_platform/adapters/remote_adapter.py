@@ -1592,22 +1592,25 @@ class RemoteTermBackend:
         return {"data": [], "totalCount": 0}
 
     def get_term_detail(
-        self, *, dataset_id: str, term_id: str
+        self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
         """Remote term detail — not yet implemented."""
+        _ = library_id
         logger.debug("Remote term: get_term_detail not yet implemented")
         return None
 
     def list_terms(
         self,
         *,
-        dataset_id: str,
+        library_id: str,
         term_type: str | None = None,
-        term_type_no_eq: str | None = None,
+        domain_code: str | None = None,
+        keyword: str | None = None,
         page_index: int = 1,
-        page_size: int = 50,
+        page_size: int = 20,
     ) -> dict[str, Any]:
         """Remote term list — not yet implemented."""
+        _ = library_id, domain_code, keyword
         logger.debug("Remote term: list_terms not yet implemented")
         return {
             "data": [],
@@ -1626,10 +1629,9 @@ class RemoteTermBackend:
         """Remote term import — not yet implemented."""
         raise NotImplementedError("Remote term import not yet implemented")
 
-    def update_term(
-        self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
-    ) -> None:
+    def update_term(self, *, library_id: str = "", term_id: str, updates: dict[str, Any]) -> None:
         """Remote term update — not yet implemented."""
+        _ = term_id, updates
         raise NotImplementedError("Remote term update not yet implemented")
 
     def delete_term(self, *, term_id: str) -> None:
@@ -1643,8 +1645,12 @@ class RemoteTermBackend:
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
     ) -> dict[str, Any]:
         """Remote term relations — not yet implemented."""
+        _ = term_id, relation_category, direction, depth, keyword, page_index, page_size
         logger.debug("Remote term: query_term_relations not yet implemented")
         return {"data": [], "totalCount": 0}
 
@@ -1656,8 +1662,19 @@ class RemoteTermBackend:
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
-    ) -> list[dict[str, Any]]:
-        return []
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        _ = (
+            source_term_id,
+            target_term_id,
+            relation_category,
+            keyword,
+            page_index,
+            page_size,
+        )
+        return {"data": [], "totalCount": 0}
 
     def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
         return None
@@ -1738,28 +1755,60 @@ class RemoteTermBackend:
     # ── TermType ────────────────────────────────────────────────────────
 
     def list_term_types(
-        self, *, type_category: int | None = None
-    ) -> list[dict[str, Any]]:
-        return []
+        self,
+        *,
+        library_id: str,
+        domain_code: str | None = None,
+        type_category: int | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        _ = library_id, domain_code, type_category, keyword, page_index, page_size
+        return {"items": [], "total": 0}
 
-    def get_term_type(self, *, type_code: str) -> dict[str, Any] | None:
+    def get_term_type(
+        self, *, library_id: str, type_code: str
+    ) -> dict[str, Any] | None:
+        _ = library_id
         return None
+
+    def list_term_type_relations(
+        self,
+        *,
+        library_id: str,
+        type_code: str,
+        direction: str = "both",
+        relation_category: str | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
+        return {"items": [], "total": 0}
 
     def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError("Remote term type not yet implemented")
 
-    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
+    def update_term_type(
+        self, *, library_id: str, type_code: str, updates: dict[str, Any]
+    ) -> None:
+        _ = library_id
         raise NotImplementedError("Remote term type not yet implemented")
 
-    def delete_term_type(self, *, type_code: str) -> None:
+    def delete_term_type(self, *, library_id: str, type_code: str) -> None:
+        _ = library_id
         raise NotImplementedError("Remote term type not yet implemented")
 
     # ── Domain ──────────────────────────────────────────────────────────
 
-    def list_domains(self, *, parent_id: str | None = None) -> list[dict[str, Any]]:
+    def list_domains(
+        self, *, library_id: str, parent_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        _ = library_id
         return []
 
-    def get_domain(self, *, domain_id: str) -> dict[str, Any] | None:
+    def get_domain(self, *, library_id: str, domain_code: str) -> dict[str, Any] | None:
+        _ = library_id
         return None
 
     def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:
