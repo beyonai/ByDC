@@ -58,7 +58,8 @@ class OntologyField:
         term_set: 术语集名称
         term_type: 术语类型（enum/lookup）
         term_field: 术语字段（code/name）
-        dataset_id: 数据集 ID
+        dataset_id: 数据集 ID（**已弃用** — 请使用 ``library_id``）
+        library_id: 数据集 ID（新名称）
         physical_mappings: 物理映射列表
         property_kind: 属性分类（physical/derived/linked）
         derived_config: 派生字段配置
@@ -87,6 +88,7 @@ class OntologyField:
     term_type: str | None = None
     term_field: str | None = None
     dataset_id: int | None = None
+    library_id: int | None = None
     physical_mappings: list[FieldPhysicalMapping] = field(default_factory=list)
     property_kind: str = "physical"
     derived_config: dict | None = None
@@ -124,7 +126,8 @@ class OntologyActionParam:
         term_set: 术语集名称
         term_type: 术语类型（enum/lookup）
         term_field: 术语字段（code/name）
-        dataset_id: 数据集 ID
+        dataset_id: 数据集 ID（**已弃用** — 请使用 ``library_id``）
+        library_id: 数据集 ID（新名称）
     """
 
     param_code: str
@@ -142,6 +145,7 @@ class OntologyActionParam:
     term_type: str | None = None
     term_field: str | None = None
     dataset_id: int | None = None
+    library_id: int | None = None
 
 
 @dataclass

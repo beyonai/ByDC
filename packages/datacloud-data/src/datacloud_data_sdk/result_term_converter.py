@@ -15,6 +15,7 @@ class TermResultField:
     row_key: str
     term_set: str
     dataset_id: int | None = None
+    library_id: int | None = None
 
     @property
     def term_type_code(self) -> str | None:
@@ -132,6 +133,8 @@ class ResultTermConverter:
                     row_key=row_key,
                     term_set=str(term_set),
                     dataset_id=getattr(field, "dataset_id", None),
+                    library_id=getattr(field, "library_id", None)
+                    or getattr(field, "dataset_id", None),
                 )
         return None
 
@@ -160,6 +163,7 @@ class ResultTermConverter:
                 value,
                 term_field="name",
                 dataset_id=field.dataset_id,
+                library_id=field.library_id or field.dataset_id,
                 term_type_code=field.term_type_code,
                 keyword=value,
                 param_name=field.row_key,

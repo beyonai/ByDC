@@ -21,6 +21,7 @@ def test_ontology_field_has_term_type_and_dataset_id() -> None:
     )
     assert f.term_type == "enum"
     assert f.dataset_id == 12
+    assert f.library_id is None
 
 
 def test_field_has_term_set_and_source_column() -> None:

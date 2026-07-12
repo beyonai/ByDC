@@ -61,7 +61,8 @@ class ObjectViewField:
         term_set: 术语集名称，用于术语解析
         term_type: 术语类型
         term_field: 术语字段（code/name）
-        dataset_id: 数据集 ID
+        dataset_id: 数据集 ID（**已弃用** — 请使用 ``library_id``）
+        library_id: 数据集 ID（新名称）
         source_column: 物理列名，SQL 中必须使用此名称
     """
 
@@ -73,6 +74,7 @@ class ObjectViewField:
     term_type: str | None = None
     term_field: str | None = None
     dataset_id: int | None = None
+    library_id: int | None = None
     source_column: str | None = None
 
 
@@ -94,7 +96,8 @@ class ObjectViewFunctionParam:
         term_set: 术语集名称
         term_type: 术语类型
         term_field: 术语字段（code/name）
-        dataset_id: 数据集 ID
+        dataset_id: 数据集 ID（**已弃用** — 请使用 ``library_id``）
+        library_id: 数据集 ID（新名称）
     """
 
     param_code: str
@@ -108,6 +111,7 @@ class ObjectViewFunctionParam:
     term_type: str | None = None
     term_field: str | None = None
     dataset_id: int | None = None
+    library_id: int | None = None
 
 
 @dataclass
