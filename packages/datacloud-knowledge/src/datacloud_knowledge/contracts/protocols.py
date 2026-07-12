@@ -468,7 +468,8 @@ class TermReader(Protocol):
     def get_term_detail(
         self,
         *,
-        dataset_id: str,
+        dataset_id: str = "",
+        library_id: str = "",
         term_id: str,
     ) -> TermDetail | None:
         """查询单条术语完整详情。
@@ -476,18 +477,23 @@ class TermReader(Protocol):
         映射到 POST /core/term/queryTermDetail。
 
         Args:
-            dataset_id: 术语库 ID。
+            dataset_id: 术语库 ID（**已弃用**，请使用 ``library_id``）。
+            library_id: 术语库 ID（新名称，ADR-002）。
             term_id:    术语 ID。
 
         Returns:
             TermDetail，不存在返回 None。
         """
+
         ...
 
     def list_terms(
         self,
         *,
-        dataset_id: str,
+        dataset_id: str = "",
+        library_id: str = "",
+        domain_code: str | None = None,
+        keyword: str | None = None,
         term_type: str | None = None,
         term_type_no_eq: str | None = None,
         page_index: int = 1,
@@ -839,7 +845,8 @@ class TermWriter(Protocol):
     def import_terms(
         self,
         *,
-        dataset_id: str,
+        dataset_id: str = "",
+        library_id: str = "",
         terms: list[TermCreate],
     ) -> ImportResult:
         """批量新增术语（含同义词、标签、扩展属性）。
@@ -914,9 +921,11 @@ class TermWriter(Protocol):
 
     def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]: ...
 
-    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None: ...
+    def update_domain(
+        self, *, library_id: str, domain_code: str, updates: dict[str, Any]
+    ) -> None: ...
 
-    def delete_domain(self, *, domain_id: str) -> None: ...
+    def delete_domain(self, *, library_id: str, domain_code: str) -> None: ...
 
     # ── TermLibrary ─────────────────────────────────────────────────
 

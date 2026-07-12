@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 字面量类型
@@ -131,7 +131,9 @@ class TermItem:
     term_type: str
     """术语类型编码。"""
     dataset_id: str
-    """术语库 ID。"""
+    """术语库 ID。**已弃用** — 请使用 ``library_id``（ADR-002）。"""
+    library_id: str = ""
+    """术语库 ID（新名称，ADR-002）。当未显式设置时，从 ``dataset_id`` 回退。"""
     parent_term_code: str = ""
     """父术语编码。"""
     desc: str = ""
@@ -166,6 +168,10 @@ class TermDetail(TermItem):
     对应 ``POST /core/term/queryTermDetail`` 或 ``POST /core/terms/pageList`` 响应。
     ``term_type_name`` 是术语类型的翻译名称（如 "员工姓名"），
     区别于 ``term_type`` 的类型编码（如 "userName"）。
+
+    .. versionchanged:: 0.3.0
+        新增 domain, parent_chain, names, knowledges, children_count,
+        relation_count, term_tags 字段（term API 重构）。
     """
 
     parent_term_name: str = ""
@@ -176,6 +182,23 @@ class TermDetail(TermItem):
     """同义词列表（已 split）。"""
     term_type_name: str = ""
     """术语类型翻译名称。"""
+
+    # ── term API 重构新增字段 ─────────────────────────────────────
+
+    domain: list[dict[str, str]] = field(default_factory=list)
+    """所属领域列表 [{code, name}, ...]（term_domain 表翻译）。"""
+    parent_chain: list[dict[str, str]] = field(default_factory=list)
+    """父术语链 [{termId, termCode, termName}, ...]，从直接父级到根。"""
+    names: list[dict[str, Any]] = field(default_factory=list)
+    """术语别名列表 [{name_id, name_text, search_scope}, ...]（term_name 表）。"""
+    knowledges: list[dict[str, Any]] = field(default_factory=list)
+    """关联知识列表（term_knowledge 表）。"""
+    children_count: int = 0
+    """直接子术语数。"""
+    relation_count: int = 0
+    """关联关系总数（作为 source 或 target）。"""
+    term_tags: dict[str, Any] = field(default_factory=dict)
+    """术语标签属性（JSONB 原文）。"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,12 +213,16 @@ class QueryResult:
 
 @dataclass(frozen=True, slots=True)
 class ImportResult:
-    """批量新增结果。"""
+    """批量导入结果。"""
 
     created: int
     """成功创建数。"""
-    term_ids: list[str]
-    """新创建的 term_id 列表。"""
+    updated: int = 0
+    """更新数（已有术语被覆盖）。"""
+    skipped: int = 0
+    """跳过数（空名称或异常跳过）。"""
+    term_ids: list[str] = field(default_factory=list)
+    """创建或更新的 term_id 列表。"""
     errors: list[str] = field(default_factory=list)
     """错误信息列表。"""
 
