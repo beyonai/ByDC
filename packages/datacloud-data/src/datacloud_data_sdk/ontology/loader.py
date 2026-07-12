@@ -714,14 +714,15 @@ class OntologyLoader:
     @staticmethod
     def _parse_term_meta(
         raw: dict[str, Any],
-    ) -> tuple[str | None, str | None, str | None, int | None]:
-        """从 termMeta 或 term_set 解析，返回 (term_set, term_type, term_field, dataset_id)。"""
+    ) -> tuple[str | None, str | None, str | None, int | None, int | None]:
+        """从 termMeta 或 term_set 解析，返回 (term_set, term_type, term_field, dataset_id, library_id)。"""
         tm = raw.get("termMeta") or raw.get("term_meta")
         if tm and isinstance(tm, dict):
             tc = tm.get("termTypeCode") or tm.get("term_type_code")
             tf = tm.get("termField") or tm.get("term_field")
             tmt = tm.get("termMasterType") or tm.get("term_master_type")
             ds = tm.get("datasetId") or tm.get("dataset_id")
+            ls = tm.get("libraryId") or tm.get("library_id")
             term_set = f"{tc}.{tf}" if tc and tf else None
             term_type = "enum" if tmt == "dict" else ("lookup" if tmt == "list" else None)
             term_field = tf
@@ -729,11 +730,15 @@ class OntologyLoader:
                 dataset_id = int(ds) if ds is not None else None
             except (TypeError, ValueError):
                 dataset_id = None
-            return (term_set, term_type, term_field, dataset_id)
-        return (raw.get("term_set"), None, None, None)
+            try:
+                library_id = int(ls) if ls is not None else None
+            except (TypeError, ValueError):
+                library_id = None
+            return (term_set, term_type, term_field, dataset_id, library_id)
+        return (raw.get("term_set"), None, None, None, None)
 
     def _parse_action_param(self, p: dict[str, Any]) -> OntologyActionParam:
-        ts, tt, tf, did = self._parse_term_meta(p)
+        ts, tt, tf, did, lid = self._parse_term_meta(p)
         term_set = ts if ts is not None else p.get("term_set")
         param_code = p.get("param_code") or p.get("paramCode", "")
         param_name = p.get("param_name") or p.get("paramName", param_code)
@@ -759,6 +764,7 @@ class OntologyLoader:
             term_type=tt,
             term_field=tf,
             dataset_id=did,
+            library_id=lid,
         )
 
     def _parse_fields(self, raw_fields: list[dict[str, Any]]) -> list[OntologyField]:
@@ -766,7 +772,7 @@ class OntologyLoader:
 
         result = []
         for f in raw_fields:
-            ts, tt, tf, did = self._parse_term_meta(f)
+            ts, tt, tf, did, lid = self._parse_term_meta(f)
             term_set = ts if ts is not None else f.get("term_set")
             ont_field = OntologyField(
                 field_code=f["field_code"],
@@ -782,6 +788,7 @@ class OntologyLoader:
                 term_type=tt,
                 term_field=tf,
                 dataset_id=did,
+                library_id=lid,
                 physical_mappings=[
                     FieldPhysicalMapping(**m) for m in f.get("physical_mappings", [])
                 ],

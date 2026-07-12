@@ -261,6 +261,7 @@ def test_load_from_content_parses_term_meta_in_fields_and_params() -> None:
                         "field_type": "STRING",
                         "termMeta": {
                             "datasetId": 100,
+                            "libraryId": 100,
                             "termMasterType": "dict",
                             "termTypeCode": "dept",
                             "termField": "code",
@@ -279,6 +280,7 @@ def test_load_from_content_parses_term_meta_in_fields_and_params() -> None:
                                 "param_type": "STRING",
                                 "termMeta": {
                                     "datasetId": 200,
+                                    "libraryId": 200,
                                     "termMasterType": "list",
                                     "termTypeCode": "user",
                                     "termField": "code",
@@ -299,11 +301,13 @@ def test_load_from_content_parses_term_meta_in_fields_and_params() -> None:
     assert f.term_set == "dept.code"
     assert f.term_type == "enum"
     assert f.dataset_id == 100
+    assert f.library_id == 100
     # param: list -> lookup, term_set = user.code
     p = cls.actions[0].params[0]
     assert p.term_set == "user.code"
     assert p.term_type == "lookup"
     assert p.dataset_id == 200
+    assert p.library_id == 200
 
 
 def test_parse_action_requires_action_type() -> None:
