@@ -881,6 +881,7 @@ class HttpTermAdapter:
         *,
         dataset_id: str,
         terms: list[TermCreate],
+        backfill: bool = False,
     ) -> ImportResult:
         """批量新增术语。映射到 POST /file/importMultipleTerm。"""
         ds_id = dataset_id or self._default_dataset_id
@@ -895,6 +896,8 @@ class HttpTermAdapter:
         result: dict[str, Any] = data.get("resultObject", data)
         return ImportResult(
             created=result.get("created", len(terms)),
+            updated=result.get("updated", 0),
+            skipped=result.get("skipped", 0),
             term_ids=result.get("termIds", []),
             errors=result.get("errors", []),
         )
