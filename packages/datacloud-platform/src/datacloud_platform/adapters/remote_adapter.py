@@ -1629,7 +1629,9 @@ class RemoteTermBackend:
         """Remote term import — not yet implemented."""
         raise NotImplementedError("Remote term import not yet implemented")
 
-    def update_term(self, *, library_id: str = "", term_id: str, updates: dict[str, Any]) -> None:
+    def update_term(
+        self, *, library_id: str = "", term_id: str, updates: dict[str, Any]
+    ) -> None:
         """Remote term update — not yet implemented."""
         _ = term_id, updates
         raise NotImplementedError("Remote term update not yet implemented")

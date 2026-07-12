@@ -90,7 +90,9 @@ def _term_type_list(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     kwargs: dict[str, Any] = {
-        "library_id": params.get("library_id") or params.get("libraryId") or _base(params),
+        "library_id": params.get("library_id")
+        or params.get("libraryId")
+        or _base(params),
         "page_index": params.get("page_index", 1),
         "page_size": params.get("page_size", 20),
     }
@@ -117,7 +119,9 @@ def _term_type_create(
 def _term_type_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    library_id: str = params.get("library_id") or params.get("libraryId") or _base(params)
+    library_id: str = (
+        params.get("library_id") or params.get("libraryId") or _base(params)
+    )
     code: str = params.get("code", "")
     tt = platform.get_term_type(_base(params), library_id=library_id, type_code=code)
     if tt is None:
@@ -130,7 +134,9 @@ def _term_type_get_relations(
 ) -> Any:
     """#3 — 术语类型一跳关系 (ADR-006: 直接查 term_relation.term_type_code 列)。"""
     kwargs: dict[str, Any] = {
-        "library_id": params.get("library_id") or params.get("libraryId") or _base(params),
+        "library_id": params.get("library_id")
+        or params.get("libraryId")
+        or _base(params),
         "type_code": params.get("type_code", ""),
         "direction": params.get("direction", "both"),
         "page_index": params.get("page_index", 1),
@@ -146,7 +152,9 @@ def _term_type_get_relations(
 def _term_type_update(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    library_id: str = params.get("library_id") or params.get("libraryId") or _base(params)
+    library_id: str = (
+        params.get("library_id") or params.get("libraryId") or _base(params)
+    )
     code: str = params.get("code", "")
     platform.update_term_type(
         _base(params),
@@ -515,7 +523,9 @@ def _domain_list(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     kwargs: dict[str, Any] = {
-        "library_id": params.get("library_id") or params.get("libraryId") or _base(params),
+        "library_id": params.get("library_id")
+        or params.get("libraryId")
+        or _base(params),
     }
     if params.get("parent_id"):
         kwargs["parent_id"] = params["parent_id"]
@@ -534,7 +544,9 @@ def _domain_create(
 def _domain_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    library_id: str = params.get("library_id") or params.get("libraryId") or _base(params)
+    library_id: str = (
+        params.get("library_id") or params.get("libraryId") or _base(params)
+    )
     domain_code: str = params.get("code", "")
     domain = platform.get_domain(
         _base(params), library_id=library_id, domain_code=domain_code
@@ -547,7 +559,9 @@ def _domain_get(
 def _domain_update(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    library_id: str = params.get("library_id") or params.get("libraryId") or _base(params)
+    library_id: str = (
+        params.get("library_id") or params.get("libraryId") or _base(params)
+    )
     domain_code: str = params.get("code", "")
     platform.update_domain(
         _base(params),

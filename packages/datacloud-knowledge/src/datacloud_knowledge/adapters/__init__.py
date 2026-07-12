@@ -70,9 +70,9 @@ def _register_opengauss() -> None:
     from datacloud_knowledge.adapters.opengauss.reader import PostgresTermReader
     from datacloud_knowledge.adapters.opengauss.writer import PostgresTermWriter
 
-    _reader_registry.setdefault("opengauss", PostgresTermReader)
+    _reader_registry.setdefault("opengauss", PostgresTermReader)  # type: ignore[arg-type]
     _engine_registry.setdefault("opengauss", PostgresSearchEngine)
-    _writer_registry.setdefault("opengauss", PostgresTermWriter)
+    _writer_registry.setdefault("opengauss", PostgresTermWriter)  # type: ignore[arg-type]
 
 
 def _resolve_backend(backend: str | None = None) -> str:

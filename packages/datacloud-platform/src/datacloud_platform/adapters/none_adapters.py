@@ -631,7 +631,9 @@ class _NoopTermBackend:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Term backend not available")
 
-    def update_term(self, *, library_id: str = "", term_id: str, updates: dict[str, Any]) -> None:
+    def update_term(
+        self, *, library_id: str = "", term_id: str, updates: dict[str, Any]
+    ) -> None:
         """Raise PermissionError — write forbidden."""
         _ = term_id, updates
         raise PermissionError("Term backend not available")

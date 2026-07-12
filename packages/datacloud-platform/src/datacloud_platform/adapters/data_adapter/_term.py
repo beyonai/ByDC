@@ -325,7 +325,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
-            return writer.create_term_relation(relation=relation)  # type: ignore[no-any-return]
+            return writer.create_term_relation(relation=relation)
 
     def update_term_relation(
         self, *, relation_id: str, updates: dict[str, Any]
@@ -365,7 +365,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
-            return writer.create_term_name(name=name)  # type: ignore[no-any-return]
+            return writer.create_term_name_wrapper(name=name)
 
     def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
