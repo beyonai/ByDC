@@ -51,38 +51,33 @@ class TermBackendMixin(DataCloudDataBackendBase):
         )
 
     def get_term_detail(
-        self, *, dataset_id: str = "", library_id: str = "", term_id: str
+        self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
         """Get single term detail via datacloud_knowledge provider."""
         from datacloud_knowledge.provider import (  # noqa: PLC0415
             get_term_detail as sdk_get_term_detail,
         )
 
-        effective_library_id = library_id or dataset_id
-        return sdk_get_term_detail(dataset_id=effective_library_id, term_id=term_id)  # type: ignore[return-value]
+        return sdk_get_term_detail(dataset_id=library_id, term_id=term_id)  # type: ignore[return-value]
 
     def list_terms(
         self,
         *,
-        dataset_id: str = "",
-        library_id: str = "",
+        library_id: str,
         term_type: str | None = None,
-        term_type_no_eq: str | None = None,
         domain_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
-        page_size: int = 50,
+        page_size: int = 20,
     ) -> dict[str, Any]:
         """Paginated term listing via datacloud_knowledge provider."""
         from datacloud_knowledge.provider import (  # noqa: PLC0415
             list_terms as sdk_list_terms,
         )
 
-        effective_library_id = library_id or dataset_id
         return sdk_list_terms(  # type: ignore[return-value]
-            dataset_id=effective_library_id,
+            dataset_id=library_id,
             term_type=term_type,
-            term_type_no_eq=term_type_no_eq,
             domain_code=domain_code,
             keyword=keyword,
             page_index=page_index,
@@ -99,14 +94,13 @@ class TermBackendMixin(DataCloudDataBackendBase):
         - parentTermCode / parent_term_code
         ``dataset_id`` 优先从 dict 中取，缺省时使用 ``""``（provider 层有 fallback）。
         """
-        dataset_id = term.get("datasetId") or term.get("dataset_id") or "default_term"
-        return self.import_terms(dataset_id=dataset_id, terms=[term])
+        library_id = term.get("datasetId") or term.get("dataset_id") or "default_term"
+        return self.import_terms(library_id=library_id, terms=[term])
 
     def import_terms(
         self,
         *,
-        dataset_id: str = "",
-        library_id: str = "",
+        library_id: str,
         terms: list[dict[str, Any]],
         backfill: bool = False,
     ) -> dict[str, Any]:
@@ -119,10 +113,9 @@ class TermBackendMixin(DataCloudDataBackendBase):
             import_terms as sdk_import_terms,
         )
 
-        effective_library_id = library_id or dataset_id
         term_creates = [_dict_to_term_create(t) for t in terms]
         result = sdk_import_terms(
-            dataset_id=effective_library_id, terms=term_creates, backfill=backfill
+            dataset_id=library_id, terms=term_creates, backfill=backfill
         )
         return {
             "created": result.created,
@@ -133,14 +126,21 @@ class TermBackendMixin(DataCloudDataBackendBase):
         }
 
     def update_term(
-        self, *, dataset_id: str, term_id: str, updates: dict[str, Any]
+        self, *, library_id: str = "", term_id: str, updates: dict[str, Any]
     ) -> None:
         """Update a term via datacloud_knowledge provider."""
+        from datacloud_knowledge.contracts.term_provider_types import (  # noqa: PLC0415
+            TermUpdate,
+        )
         from datacloud_knowledge.provider import (  # noqa: PLC0415
             update_term as sdk_update_term,
         )
 
-        sdk_update_term(dataset_id=dataset_id, term_id=term_id, updates=updates)  # type: ignore[arg-type]
+        sdk_update_term(
+            dataset_id=library_id,
+            term_id=term_id,
+            updates=TermUpdate(**{k: v for k, v in updates.items() if v is not None}),
+        )
 
     def delete_term(self, *, term_id: str) -> None:
         """Delete a term via datacloud_knowledge writer."""
@@ -295,17 +295,23 @@ class TermBackendMixin(DataCloudDataBackendBase):
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
-    ) -> list[dict[str, Any]]:
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
         reader = self._get_knowledge_reader()
         try:
             return reader.list_term_relations(  # type: ignore[no-any-return]
                 source_term_id=source_term_id,
                 target_term_id=target_term_id,
                 relation_category=relation_category,
+                keyword=keyword,
+                page_index=page_index,
+                page_size=page_size,
             )
         except Exception:
             logger.exception("list_term_relations failed")
-            return []
+            return {"data": [], "totalCount": 0}
 
     def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
         reader = self._get_knowledge_reader()
@@ -318,22 +324,22 @@ class TermBackendMixin(DataCloudDataBackendBase):
     def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
-        writer = create_writer()
-        return writer.create_term_relation(relation=relation)
+        with create_writer() as writer:
+            return writer.create_term_relation(relation=relation)  # type: ignore[no-any-return]
 
     def update_term_relation(
         self, *, relation_id: str, updates: dict[str, Any]
     ) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
-        writer = create_writer()
-        writer.update_term_relation(relation_id=relation_id, updates=updates)
+        with create_writer() as writer:
+            writer.update_term_relation(relation_id=relation_id, updates=updates)
 
     def delete_term_relation(self, *, relation_id: str) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
-        writer = create_writer()
-        writer.delete_term_relation(relation_id=relation_id)
+        with create_writer() as writer:
+            writer.delete_term_relation(relation_id=relation_id)
 
     # ── TermName ────────────────────────────────────────────────────────
 
@@ -358,20 +364,20 @@ class TermBackendMixin(DataCloudDataBackendBase):
     def create_term_name(self, *, name: dict[str, Any]) -> dict[str, Any]:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
-        writer = create_writer()
-        return writer.create_term_name(name=name)  # type: ignore[call-arg,return-value]
+        with create_writer() as writer:
+            return writer.create_term_name(name=name)  # type: ignore[no-any-return]
 
     def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
-        writer = create_writer()
-        writer.update_term_name(name_id=name_id, updates=updates)
+        with create_writer() as writer:
+            writer.update_term_name(name_id=name_id, updates=updates)
 
     def delete_term_name(self, *, name_id: str) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
-        writer = create_writer()
-        writer.delete_term_name(name_id=name_id)
+        with create_writer() as writer:
+            writer.delete_term_name(name_id=name_id)
 
 
 # ── 模块级辅助函数 ──────────────────────────────────────────────────────────────

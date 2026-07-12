@@ -79,7 +79,9 @@ class TermBackend(Protocol):
         """
         ...
 
-    def update_term(self, *, term_id: str, updates: dict[str, Any]) -> None:
+    def update_term(
+        self, *, library_id: str = "", term_id: str, updates: dict[str, Any]
+    ) -> None:
         """更新术语（部分更新）。
 
         对应: POST /api/v1/rpc/term/update
