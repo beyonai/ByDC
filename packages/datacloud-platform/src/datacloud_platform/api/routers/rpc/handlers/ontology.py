@@ -54,7 +54,10 @@ def _create_base(
 def _delete_base(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_base(params["base_id"])  # KeyError → 404
+    base_id = params.get("base_id", "")
+    if not base_id:
+        raise KeyError("base_id")
+    platform.delete_base(base_id)
     return ok(message="deleted")
 
 
@@ -63,8 +66,11 @@ def _update_base(
 ) -> Any:
     from datacloud_platform.models.base_entry import OntologyBaseUpdate
 
+    base_id = params.get("base_id", "")
+    if not base_id:
+        raise KeyError("base_id")
     result = platform.update_base(
-        params["base_id"],  # KeyError → 404
+        base_id,
         OntologyBaseUpdate(**(params.get("updates") or {})),
     )
     return ok(data=result, message="updated")
