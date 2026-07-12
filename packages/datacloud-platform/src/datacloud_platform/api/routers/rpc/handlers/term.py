@@ -9,14 +9,19 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.common import ok
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
 
 
-def _base(platform: DatacloudPlatform) -> str:
-    return platform._default_base_id()
+def _base(params: dict[str, Any]) -> str:
+    """从 params 中提取 base_id，优先使用 system_code（路由层已映射为 base_id），
+    未提供时使用默认值 DEFAULT_BASE_ID。
+    """
+    base_id: object = params.get("base_id", DEFAULT_BASE_ID)
+    return str(base_id)
 
 
 # ── termLibrary ──────────────────────────────────────────────────────────────
@@ -30,14 +35,14 @@ def _term_library_list(
         kwargs["library_code"] = params["library_code"]
     if params.get("library_name"):
         kwargs["library_name"] = params["library_name"]
-    return ok(data=platform.list_term_libraries(_base(platform), **kwargs))
+    return ok(data=platform.list_term_libraries(_base(params), **kwargs))
 
 
 def _term_library_create(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     return ok(
-        data=platform.create_term_library(_base(platform), library=params["library"]),
+        data=platform.create_term_library(_base(params), library=params["library"]),
         message="created",
     )
 
@@ -46,7 +51,7 @@ def _term_library_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     lib_id: str = params["id"]
-    lib = platform.get_term_library(_base(platform), library_id=lib_id)
+    lib = platform.get_term_library(_base(params), library_id=lib_id)
     if lib is None:
         raise KeyError(f"TermLibrary '{lib_id}' not found")
     return ok(data=lib)
@@ -57,7 +62,7 @@ def _term_library_update(
 ) -> Any:
     lib_id: str = params["id"]
     platform.update_term_library(
-        _base(platform), library_id=lib_id, updates=params.get("updates", {})
+        _base(params), library_id=lib_id, updates=params.get("updates", {})
     )
     return ok(data={"libraryId": lib_id})
 
@@ -65,7 +70,7 @@ def _term_library_update(
 def _term_library_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_term_library(_base(platform), library_id=params["id"])
+    platform.delete_term_library(_base(params), library_id=params["id"])
     return ok(message="deleted")
 
 
@@ -87,14 +92,14 @@ def _term_type_list(
     kwargs: dict[str, Any] = {}
     if params.get("type_category") is not None:
         kwargs["type_category"] = params["type_category"]
-    return ok(data=platform.list_term_types(_base(platform), **kwargs))
+    return ok(data=platform.list_term_types(_base(params), **kwargs))
 
 
 def _term_type_create(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     return ok(
-        data=platform.create_term_type(_base(platform), term_type=params["term_type"]),
+        data=platform.create_term_type(_base(params), term_type=params["term_type"]),
         message="created",
     )
 
@@ -103,7 +108,7 @@ def _term_type_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     code: str = params["code"]
-    tt = platform.get_term_type(_base(platform), type_code=code)
+    tt = platform.get_term_type(_base(params), type_code=code)
     if tt is None:
         raise KeyError(f"TermType '{code}' not found")
     return ok(data=tt)
@@ -114,7 +119,7 @@ def _term_type_update(
 ) -> Any:
     code: str = params["code"]
     platform.update_term_type(
-        _base(platform), type_code=code, updates=params.get("updates", {})
+        _base(params), type_code=code, updates=params.get("updates", {})
     )
     return ok(data={"typeCode": code})
 
@@ -122,7 +127,7 @@ def _term_type_update(
 def _term_type_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_term_type(_base(platform), type_code=params["code"])
+    platform.delete_term_type(_base(params), type_code=params["code"])
     return ok(message="deleted")
 
 
@@ -158,7 +163,7 @@ def _term_search(
     for camel, snake in field_map.items():
         if camel in params:
             search_kwargs[snake] = params[camel]
-    return ok(data=platform.search_terms(_base(platform), **search_kwargs))
+    return ok(data=platform.search_terms(_base(params), **search_kwargs))
 
 
 def _term_list(
@@ -172,14 +177,14 @@ def _term_list(
         kwargs["dataset_id"] = params["dataset_id"]
     if params.get("term_type"):
         kwargs["term_type"] = params["term_type"]
-    return ok(data=platform.list_terms(_base(platform), **kwargs))
+    return ok(data=platform.list_terms(_base(params), **kwargs))
 
 
 def _term_create(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     return ok(
-        data=platform.create_term(_base(platform), term=params["term"]),
+        data=platform.create_term(_base(params), term=params["term"]),
         message="created",
     )
 
@@ -189,7 +194,7 @@ def _term_import(
 ) -> Any:
     return ok(
         data=platform.import_terms(
-            _base(platform),
+            _base(params),
             dataset_id=params.get("libraryId", ""),
             terms=params.get("terms", []),
         ),
@@ -202,7 +207,7 @@ def _term_get(
 ) -> Any:
     term_id: str = params["id"]
     term = platform.get_term_detail(
-        _base(platform),
+        _base(params),
         dataset_id=params.get("dataset_id", ""),
         term_id=term_id,
     )
@@ -216,7 +221,7 @@ def _term_update(
 ) -> Any:
     term_id: str = params["id"]
     platform.update_term(
-        _base(platform),
+        _base(params),
         dataset_id=params.get("datasetId", ""),
         term_id=term_id,
         updates=params.get("updates", {}),
@@ -227,7 +232,7 @@ def _term_update(
 def _term_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_term(_base(platform), term_id=params["id"])
+    platform.delete_term(_base(params), term_id=params["id"])
     return ok(message="deleted")
 
 
@@ -241,7 +246,7 @@ def _term_get_relations(
     }
     if params.get("relation_category"):
         kwargs["relation_category"] = params["relation_category"]
-    return ok(data=platform.query_term_relations(_base(platform), **kwargs))
+    return ok(data=platform.query_term_relations(_base(params), **kwargs))
 
 
 TERM_REGISTRY: dict[str, Any] = {
@@ -269,16 +274,14 @@ def _term_relation_list(
         kwargs["target_term_id"] = params["target_term_id"]
     if params.get("relation_category"):
         kwargs["relation_category"] = params["relation_category"]
-    return ok(data=platform.list_term_relations(_base(platform), **kwargs))
+    return ok(data=platform.list_term_relations(_base(params), **kwargs))
 
 
 def _term_relation_create(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     return ok(
-        data=platform.create_term_relation(
-            _base(platform), relation=params["relation"]
-        ),
+        data=platform.create_term_relation(_base(params), relation=params["relation"]),
         message="created",
     )
 
@@ -287,7 +290,7 @@ def _term_relation_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     rel_id: str = params["id"]
-    rel = platform.get_term_relation(_base(platform), relation_id=rel_id)
+    rel = platform.get_term_relation(_base(params), relation_id=rel_id)
     if rel is None:
         raise KeyError(f"TermRelation '{rel_id}' not found")
     return ok(data=rel)
@@ -298,7 +301,7 @@ def _term_relation_update(
 ) -> Any:
     rel_id: str = params["id"]
     platform.update_term_relation(
-        _base(platform), relation_id=rel_id, updates=params.get("updates", {})
+        _base(params), relation_id=rel_id, updates=params.get("updates", {})
     )
     return ok(data={"relationId": rel_id})
 
@@ -306,7 +309,7 @@ def _term_relation_update(
 def _term_relation_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_term_relation(_base(platform), relation_id=params["id"])
+    platform.delete_term_relation(_base(params), relation_id=params["id"])
     return ok(message="deleted")
 
 
@@ -330,14 +333,14 @@ def _term_name_list(
         kwargs["term_id"] = params["term_id"]
     if params.get("name_text"):
         kwargs["name_text"] = params["name_text"]
-    return ok(data=platform.list_term_names(_base(platform), **kwargs))
+    return ok(data=platform.list_term_names(_base(params), **kwargs))
 
 
 def _term_name_create(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     return ok(
-        data=platform.create_term_name(_base(platform), name=params["name"]),
+        data=platform.create_term_name(_base(params), name=params["name"]),
         message="created",
     )
 
@@ -346,7 +349,7 @@ def _term_name_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     name_id: str = params["id"]
-    name = platform.get_term_name(_base(platform), name_id=name_id)
+    name = platform.get_term_name(_base(params), name_id=name_id)
     if name is None:
         raise KeyError(f"TermName '{name_id}' not found")
     return ok(data=name)
@@ -357,7 +360,7 @@ def _term_name_update(
 ) -> Any:
     name_id: str = params["id"]
     platform.update_term_name(
-        _base(platform), name_id=name_id, updates=params.get("updates", {})
+        _base(params), name_id=name_id, updates=params.get("updates", {})
     )
     return ok(data={"nameId": name_id})
 
@@ -365,7 +368,7 @@ def _term_name_update(
 def _term_name_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_term_name(_base(platform), name_id=params["id"])
+    platform.delete_term_name(_base(params), name_id=params["id"])
     return ok(message="deleted")
 
 
@@ -389,7 +392,7 @@ def _term_knowledge_list(
         kwargs["term_id"] = params["term_id"]
     if params.get("ext_system"):
         kwargs["ext_system"] = params["ext_system"]
-    return ok(data=platform.list_term_knowledges(_base(platform), **kwargs))
+    return ok(data=platform.list_term_knowledges(_base(params), **kwargs))
 
 
 def _term_knowledge_create(
@@ -397,7 +400,7 @@ def _term_knowledge_create(
 ) -> Any:
     return ok(
         data=platform.create_term_knowledge(
-            _base(platform), knowledge=params["knowledge"]
+            _base(params), knowledge=params["knowledge"]
         ),
         message="created",
     )
@@ -407,7 +410,7 @@ def _term_knowledge_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     knowledge_id: str = params["id"]
-    knowledge = platform.get_term_knowledge(_base(platform), knowledge_id=knowledge_id)
+    knowledge = platform.get_term_knowledge(_base(params), knowledge_id=knowledge_id)
     if knowledge is None:
         raise KeyError(f"TermKnowledge '{knowledge_id}' not found")
     return ok(data=knowledge)
@@ -418,7 +421,7 @@ def _term_knowledge_update(
 ) -> Any:
     knowledge_id: str = params["id"]
     platform.update_term_knowledge(
-        _base(platform),
+        _base(params),
         knowledge_id=knowledge_id,
         updates=params.get("updates", {}),
     )
@@ -428,7 +431,7 @@ def _term_knowledge_update(
 def _term_knowledge_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_term_knowledge(_base(platform), knowledge_id=params["id"])
+    platform.delete_term_knowledge(_base(params), knowledge_id=params["id"])
     return ok(message="deleted")
 
 
@@ -450,14 +453,14 @@ def _domain_list(
     kwargs: dict[str, Any] = {}
     if params.get("parent_id"):
         kwargs["parent_id"] = params["parent_id"]
-    return ok(data=platform.list_domains(_base(platform), **kwargs))
+    return ok(data=platform.list_domains(_base(params), **kwargs))
 
 
 def _domain_create(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     return ok(
-        data=platform.create_domain(_base(platform), domain=params["domain"]),
+        data=platform.create_domain(_base(params), domain=params["domain"]),
         message="created",
     )
 
@@ -466,7 +469,7 @@ def _domain_get(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     domain_id: str = params["id"]
-    domain = platform.get_domain(_base(platform), domain_id=domain_id)
+    domain = platform.get_domain(_base(params), domain_id=domain_id)
     if domain is None:
         raise KeyError(f"Domain '{domain_id}' not found")
     return ok(data=domain)
@@ -477,7 +480,7 @@ def _domain_update(
 ) -> Any:
     domain_id: str = params["id"]
     platform.update_domain(
-        _base(platform), domain_id=domain_id, updates=params.get("updates", {})
+        _base(params), domain_id=domain_id, updates=params.get("updates", {})
     )
     return ok(data={"domainId": domain_id})
 
@@ -485,7 +488,7 @@ def _domain_update(
 def _domain_delete(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_domain(_base(platform), domain_id=params["id"])
+    platform.delete_domain(_base(params), domain_id=params["id"])
     return ok(message="deleted")
 
 
@@ -493,7 +496,7 @@ def _domain_list_term_types(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     return ok(
-        data=platform.list_domain_term_types(_base(platform), domain_id=params["id"])
+        data=platform.list_domain_term_types(_base(params), domain_id=params["id"])
     )
 
 
