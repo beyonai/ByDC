@@ -33,8 +33,10 @@ class TermRelation(Base):
     __tablename__ = "term_relation"
 
     relation_id: Mapped[str] = mapped_column(String(1000), primary_key=True)
-    source_term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
-    target_term_id: Mapped[str] = mapped_column(String(1000), nullable=False)
+    source_term_id: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    source_term_type_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_term_id: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    target_term_type_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     relation_name: Mapped[str] = mapped_column(String(255), nullable=False)
     relation_category: Mapped[str] = mapped_column(String(16), nullable=False)
     cardinality: Mapped[str | None] = mapped_column(String(8), nullable=True)
@@ -47,11 +49,19 @@ class TermType(Base):
     __tablename__ = "term_type"
 
     type_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    type_code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    type_code: Mapped[str] = mapped_column(String(32), nullable=False)
     type_name: Mapped[str] = mapped_column(String(255), nullable=False)
     type_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
     type_category: Mapped[int] = mapped_column(nullable=False)
     is_builtin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    library_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    domain_ids: Mapped[list[str]] = mapped_column(ARRAY(String(64)), nullable=False, default=list)
+    created_time: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
+    updated_time: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
 
 
 class TermName(Base):
@@ -106,6 +116,21 @@ class DomainLibrary(Base):
 
     domain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     library_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+
+
+class TermDomain(Base):
+    """术语领域表 — 替换 domain + domain_library + domain_term_type 三表。"""
+
+    __tablename__ = "term_domain"
+
+    domain_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    domain_code: Mapped[str] = mapped_column(String(64), nullable=False)
+    domain_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    parent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    library_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    domain_desc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class DomainTermType(Base):
