@@ -16,6 +16,7 @@ class _TermLoader:
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str = "",
         limit: int = 20,
@@ -24,6 +25,7 @@ class _TermLoader:
         self.last_page_args = {
             "term_set": term_set,
             "dataset_id": dataset_id,
+            "library_id": library_id,
             "term_type_code": term_type_code,
             "keyword": keyword,
             "limit": limit,
@@ -65,6 +67,7 @@ def test_term_options_endpoint_returns_paginated_options() -> None:
     assert term_loader.last_page_args == {
         "term_set": "status.code",
         "dataset_id": 100,
+        "library_id": None,
         "term_type_code": "status",
         "keyword": "启",
         "limit": 2,

@@ -34,6 +34,7 @@ class TermLoader(ABC):
         term_set: str,
         value: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str | None = None,
         param_name: str | None = None,
@@ -47,6 +48,7 @@ class TermLoader(ABC):
         value: str,
         term_field: str | None = None,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str | None = None,
         param_name: str | None = None,
@@ -58,6 +60,7 @@ class TermLoader(ABC):
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str = "",
     ) -> list[str]:
@@ -68,6 +71,7 @@ class TermLoader(ABC):
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
     ) -> list[str]:
         """返回术语集的所有 code 值。"""
@@ -77,6 +81,7 @@ class TermLoader(ABC):
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str = "",
     ) -> list[dict[str, str]]:
@@ -86,6 +91,7 @@ class TermLoader(ABC):
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str = "",
         limit: int = 20,
@@ -96,7 +102,7 @@ class TermLoader(ABC):
         默认实现兼容旧 TermLoader：先读取 get_entries() 再做内存分页。
         支持数据库分页的实现应覆盖此方法，将 limit/offset 下推到底层查询。
         """
-        entries = self.get_entries(term_set, dataset_id, term_type_code, keyword)
+        entries = self.get_entries(term_set, dataset_id, library_id, term_type_code, keyword)
         return entries[offset : offset + limit], len(entries)
 
     @classmethod
@@ -177,6 +183,7 @@ class KbTermLoader(TermLoader):
         term_set: str,
         value: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str | None = None,
         param_name: str | None = None,
@@ -207,7 +214,9 @@ class KbTermLoader(TermLoader):
             return matches[0]["code"]
         if len(matches) > 1:
             raise TermAmbiguousError(term_set, value, matches, param_name)
-        available_entries = self.get_entries(term_set, dataset_id, term_type_code, keyword or "")
+        available_entries = self.get_entries(
+            term_set, dataset_id=dataset_id, term_type_code=term_type_code, keyword=keyword or ""
+        )
         raise TermNotFoundError(term_set, value, None, param_name, available_entries)
 
     def resolve_value(
@@ -216,6 +225,7 @@ class KbTermLoader(TermLoader):
         value: str,
         term_field: str | None = None,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str | None = None,
         param_name: str | None = None,
@@ -258,12 +268,20 @@ class KbTermLoader(TermLoader):
                 term_set, dataset_id, term_type_code, keyword or ""
             )
             raise TermNotFoundError(term_set, value, None, param_name, available_entries)
-        return self.resolve_code(term_set, value, dataset_id, term_type_code, keyword, param_name)
+        return self.resolve_code(
+            term_set,
+            value,
+            dataset_id=dataset_id,
+            term_type_code=term_type_code,
+            keyword=keyword,
+            param_name=param_name,
+        )
 
     def get_available_values(
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str = "",
     ) -> list[str]:
@@ -279,6 +297,7 @@ class KbTermLoader(TermLoader):
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
     ) -> list[str]:
         """返回术语集的所有 code 值。"""
@@ -293,6 +312,7 @@ class KbTermLoader(TermLoader):
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str = "",
     ) -> list[dict[str, str]]:
@@ -300,6 +320,7 @@ class KbTermLoader(TermLoader):
         entries, _total = self.get_entries_page(
             term_set,
             dataset_id=dataset_id,
+            library_id=library_id,
             term_type_code=term_type_code,
             keyword=keyword,
             limit=100,
@@ -311,6 +332,7 @@ class KbTermLoader(TermLoader):
         self,
         term_set: str,
         dataset_id: int | None = None,
+        library_id: int | None = None,
         term_type_code: str | None = None,
         keyword: str = "",
         limit: int = 20,
