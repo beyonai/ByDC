@@ -35,7 +35,7 @@ def _list_views(
 def _get_view(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    code: str = params["code"]
+    code: str = params.get("code", "")
     view = platform.get_view_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
@@ -60,7 +60,7 @@ def _create_view(
 def _update_view(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    code: str = params["code"]
+    code: str = params.get("code", "")
     platform.update_view(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
@@ -73,7 +73,7 @@ def _delete_view(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     platform.delete_view_from_all_scenes(
-        params.get("base_id", DEFAULT_BASE_ID), params["code"]
+        params.get("base_id", DEFAULT_BASE_ID), params.get("code", "")
     )
     return ok(message="deleted")
 
@@ -84,7 +84,7 @@ def _get_term_bindings(
     return ok(
         data=platform.get_view_property_term_bindings(
             params.get("base_id", DEFAULT_BASE_ID),
-            params["view_code"],
+            params.get("view_code", ""),
             term_master_type=params.get("term_master_type"),
             property_codes=_parse_csv(params.get("property_codes")),
         )
@@ -97,7 +97,7 @@ def _get_objects(
     return ok(
         data=platform.get_objects_by_view(
             params.get("base_id", DEFAULT_BASE_ID),
-            params["view_code"],
+            params.get("view_code", ""),
             owner_type=params.get("owner_type"),
             user_code=params.get("user_code"),
             keyword=params.get("keyword"),

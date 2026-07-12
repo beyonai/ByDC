@@ -20,7 +20,7 @@ def _workspace_init(
 ) -> Any:
     return platform.workspace_init(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
+        workspace_name=params.get("workspace_name", ""),
         workspace_desc=params.get("workspace_desc", ""),
     )
 
@@ -36,7 +36,7 @@ def _workspace_get(
 ) -> Any:
     return platform.workspace_get(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
+        workspace_name=params.get("workspace_name", ""),
     )
 
 
@@ -45,7 +45,7 @@ def _workspace_delete(
 ) -> Any:
     return platform.workspace_delete(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
+        workspace_name=params.get("workspace_name", ""),
     )
 
 
@@ -54,7 +54,7 @@ def _workspace_batch_submit(
 ) -> Any:
     return platform.workspace_batch_submit(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
+        workspace_name=params.get("workspace_name", ""),
         only=params.get("only") or None,
         confirm_drop_columns=params.get("confirm_drop_columns", False),
     )
@@ -68,7 +68,7 @@ def _collect_object(
         return platform.collect_object_to_workspace(
             user_code=params.get("user_code", ""),
             workspace_name=ws_name,
-            entity_code=params["entity_code"],
+            entity_code=params.get("entity_code", ""),
             entity_name=params.get("entity_name", ""),
             entity_desc=params.get("entity_desc", ""),
             fields=params.get("fields"),
@@ -76,7 +76,7 @@ def _collect_object(
         )
     return platform.collect_object_info(
         user_code=params.get("user_code", ""),
-        entity_code=params["entity_code"],
+        entity_code=params.get("entity_code", ""),
         entity_name=params.get("entity_name", ""),
         entity_desc=params.get("entity_desc", ""),
         fields=params.get("fields"),
@@ -91,11 +91,11 @@ def _delete_object(
         return platform.delete_workspace_object(
             user_code=params.get("user_code", ""),
             workspace_name=ws_name,
-            entity_code=params["entity_code"],
+            entity_code=params.get("entity_code", ""),
         )
     return platform.delete_build_object(
         user_code=params.get("user_code", ""),
-        entity_code=params["entity_code"],
+        entity_code=params.get("entity_code", ""),
     )
 
 
@@ -104,7 +104,7 @@ def _list_objects(
 ) -> Any:
     return platform.list_workspace_objects(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
+        workspace_name=params.get("workspace_name", ""),
     )
 
 
@@ -113,8 +113,8 @@ def _get_object(
 ) -> Any:
     return platform.get_workspace_object(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
     )
 
 
@@ -123,8 +123,8 @@ def _get_object_fields(
 ) -> Any:
     return platform.get_workspace_object_fields(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
     )
 
 
@@ -136,7 +136,7 @@ def _collect_view(
         return platform.collect_view_to_workspace(
             user_code=params.get("user_code", ""),
             workspace_name=ws_name,
-            view_code=params["view_code"],
+            view_code=params.get("view_code", ""),
             view_name=params.get("view_name", ""),
             view_desc=params.get("view_desc", ""),
             object_codes=params.get("object_codes"),
@@ -145,7 +145,7 @@ def _collect_view(
         )
     return platform.collect_view_info(
         user_code=params.get("user_code", ""),
-        view_code=params["view_code"],
+        view_code=params.get("view_code", ""),
         view_name=params.get("view_name", ""),
         view_desc=params.get("view_desc", ""),
         object_codes=params.get("object_codes"),
@@ -162,11 +162,11 @@ def _delete_view(
         return platform.delete_workspace_view(
             user_code=params.get("user_code", ""),
             workspace_name=ws_name,
-            view_code=params["view_code"],
+            view_code=params.get("view_code", ""),
         )
     return platform.delete_build_view(
         user_code=params.get("user_code", ""),
-        view_code=params["view_code"],
+        view_code=params.get("view_code", ""),
     )
 
 
@@ -175,7 +175,7 @@ def _list_views(
 ) -> Any:
     return platform.list_workspace_views(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
+        workspace_name=params.get("workspace_name", ""),
     )
 
 
@@ -184,8 +184,8 @@ def _get_view(
 ) -> Any:
     return platform.get_workspace_view(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        view_code=params["view_code"],
+        workspace_name=params.get("workspace_name", ""),
+        view_code=params.get("view_code", ""),
     )
 
 
@@ -194,11 +194,11 @@ def _collect_action(
 ) -> Any:
     return platform.collect_action(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
-        action_code=params["action_code"],
-        action_name=params["action_name"],
-        script=params["script"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
+        action_code=params.get("action_code", ""),
+        action_name=params.get("action_name", ""),
+        script=params.get("script", ""),
         params=params.get("action_params") or [],
         action_desc=params.get("action_desc", ""),
         action_type=params.get("action_type", "OPERATION"),
@@ -212,9 +212,9 @@ def _delete_action(
 ) -> Any:
     return platform.delete_workspace_action(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
-        action_code=params["action_code"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
+        action_code=params.get("action_code", ""),
     )
 
 
@@ -223,9 +223,9 @@ async def _run_action(
 ) -> Any:
     return await platform.run_action_debug(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
-        action_code=params["action_code"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
+        action_code=params.get("action_code", ""),
         params=params.get("action_params") or {},
     )
 
@@ -235,8 +235,8 @@ def _list_actions(
 ) -> Any:
     return platform.list_workspace_actions(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
     )
 
 
@@ -245,17 +245,17 @@ def _get_action(
 ) -> Any:
     return platform.get_workspace_action(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
-        action_code=params["action_code"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
+        action_code=params.get("action_code", ""),
     )
 
 
 def _get_sdk(platform: DatacloudPlatform, params: dict[str, Any], _req: Request) -> Any:
     return platform.get_workspace_sdk(
         user_code=params.get("user_code", ""),
-        workspace_name=params["workspace_name"],
-        entity_code=params["entity_code"],
+        workspace_name=params.get("workspace_name", ""),
+        entity_code=params.get("entity_code", ""),
     )
 
 

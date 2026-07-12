@@ -45,7 +45,7 @@ def _get_scene(
     base_id = params.get("base_id", DEFAULT_BASE_ID)
     result = platform.get_scene_details(
         base_id,
-        params["scene_id"],  # KeyError → 404
+        params.get("scene_id", ""),  # KeyError → 404
         view_code=params.get("view_code"),
         object_code=params.get("object_code"),
     )
@@ -57,7 +57,9 @@ def _update_scene(
 ) -> Any:
     base_id = params.get("base_id", DEFAULT_BASE_ID)
     result = platform.update_scene(
-        base_id, params["scene_id"], SceneUpdate(**(params.get("updates") or {}))
+        base_id,
+        params.get("scene_id", ""),
+        SceneUpdate(**(params.get("updates") or {})),
     )
     return ok(data=result, message="updated")
 
@@ -66,7 +68,7 @@ def _delete_scene(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     platform.delete_scene_with_migration(
-        params.get("base_id", DEFAULT_BASE_ID), params["scene_id"]
+        params.get("base_id", DEFAULT_BASE_ID), params.get("scene_id", "")
     )
     return ok(message="deleted")
 
@@ -75,7 +77,7 @@ def _add_members(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     base_id = params.get("base_id", DEFAULT_BASE_ID)
-    scene_id: str = params["scene_id"]
+    scene_id: str = params.get("scene_id", "")
     member = SceneMembersRequest(
         objectCodes=params.get("object_codes", []),
         viewCodes=params.get("view_codes", []),
@@ -90,7 +92,7 @@ def _remove_members(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     base_id = params.get("base_id", DEFAULT_BASE_ID)
-    scene_id: str = params["scene_id"]
+    scene_id: str = params.get("scene_id", "")
     for obj_code in params.get("object_codes", []):
         platform.remove_object_from_scene_safe(base_id, scene_id, obj_code)
     for vw_code in params.get("view_codes", []):
@@ -104,7 +106,7 @@ def _query_ontologies(
     base_id = params.get("base_id", DEFAULT_BASE_ID)
     result = platform.query_ontologies_by_scene(
         base_id,
-        params["scene_id"],
+        params.get("scene_id", ""),
         page=params.get("page", 1),
         page_size=params.get("page_size", 20),
         keyword=params.get("keyword"),
@@ -116,7 +118,7 @@ def _query_ontologies_by_code(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
     base_id = params.get("base_id", DEFAULT_BASE_ID)
-    scene_code: str = params["scene_code"]
+    scene_code: str = params.get("scene_code", "")
     cross_scene = scene_code == "-1"
 
     scene_id = ""
