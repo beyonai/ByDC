@@ -158,17 +158,21 @@ class TermEntityMixin(DataCloudDataBackendBase):
         writer = create_writer()
         return writer.create_domain(domain=domain)
 
-    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
+    def update_domain(
+        self, *, library_id: str, domain_code: str, updates: dict[str, Any]
+    ) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        writer.update_domain(domain_id=domain_id, updates=updates)
+        writer.update_domain(
+            library_id=library_id, domain_code=domain_code, updates=updates
+        )
 
-    def delete_domain(self, *, domain_id: str) -> None:
+    def delete_domain(self, *, library_id: str, domain_code: str) -> None:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         writer = create_writer()
-        writer.delete_domain(domain_id=domain_id)
+        writer.delete_domain(library_id=library_id, domain_code=domain_code)
 
     def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]:
         reader = self._get_knowledge_reader()

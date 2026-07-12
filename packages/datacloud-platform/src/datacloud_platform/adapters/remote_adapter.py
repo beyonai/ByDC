@@ -1621,7 +1621,7 @@ class RemoteTermBackend:
         raise NotImplementedError("Remote term creation not yet implemented")
 
     def import_terms(
-        self, *, dataset_id: str, terms: list[dict[str, Any]]
+        self, *, library_id: str, terms: list[dict[str, Any]], backfill: bool = False
     ) -> dict[str, Any]:
         """Remote term import — not yet implemented."""
         raise NotImplementedError("Remote term import not yet implemented")
@@ -1765,10 +1765,12 @@ class RemoteTermBackend:
     def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:
         raise NotImplementedError("Remote domain not yet implemented")
 
-    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
+    def update_domain(
+        self, *, library_id: str, domain_code: str, updates: dict[str, Any]
+    ) -> None:
         raise NotImplementedError("Remote domain not yet implemented")
 
-    def delete_domain(self, *, domain_id: str) -> None:
+    def delete_domain(self, *, library_id: str, domain_code: str) -> None:
         raise NotImplementedError("Remote domain not yet implemented")
 
     def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]:

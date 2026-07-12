@@ -51,21 +51,25 @@ class TermBackendMixin(DataCloudDataBackendBase):
         )
 
     def get_term_detail(
-        self, *, dataset_id: str, term_id: str
+        self, *, dataset_id: str = "", library_id: str = "", term_id: str
     ) -> dict[str, Any] | None:
         """Get single term detail via datacloud_knowledge provider."""
         from datacloud_knowledge.provider import (  # noqa: PLC0415
             get_term_detail as sdk_get_term_detail,
         )
 
-        return sdk_get_term_detail(dataset_id=dataset_id, term_id=term_id)  # type: ignore[return-value]
+        effective_library_id = library_id or dataset_id
+        return sdk_get_term_detail(dataset_id=effective_library_id, term_id=term_id)  # type: ignore[return-value]
 
     def list_terms(
         self,
         *,
-        dataset_id: str,
+        dataset_id: str = "",
+        library_id: str = "",
         term_type: str | None = None,
         term_type_no_eq: str | None = None,
+        domain_code: str | None = None,
+        keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 50,
     ) -> dict[str, Any]:
@@ -74,10 +78,13 @@ class TermBackendMixin(DataCloudDataBackendBase):
             list_terms as sdk_list_terms,
         )
 
+        effective_library_id = library_id or dataset_id
         return sdk_list_terms(  # type: ignore[return-value]
-            dataset_id=dataset_id,
+            dataset_id=effective_library_id,
             term_type=term_type,
             term_type_no_eq=term_type_no_eq,
+            domain_code=domain_code,
+            keyword=keyword,
             page_index=page_index,
             page_size=page_size,
         )
@@ -96,7 +103,12 @@ class TermBackendMixin(DataCloudDataBackendBase):
         return self.import_terms(dataset_id=dataset_id, terms=[term])
 
     def import_terms(
-        self, *, dataset_id: str, terms: list[dict[str, Any]]
+        self,
+        *,
+        dataset_id: str = "",
+        library_id: str = "",
+        terms: list[dict[str, Any]],
+        backfill: bool = False,
     ) -> dict[str, Any]:
         """Batch import terms via datacloud_knowledge provider.
 
@@ -107,10 +119,15 @@ class TermBackendMixin(DataCloudDataBackendBase):
             import_terms as sdk_import_terms,
         )
 
+        effective_library_id = library_id or dataset_id
         term_creates = [_dict_to_term_create(t) for t in terms]
-        result = sdk_import_terms(dataset_id=dataset_id, terms=term_creates)
+        result = sdk_import_terms(
+            dataset_id=effective_library_id, terms=term_creates, backfill=backfill
+        )
         return {
             "created": result.created,
+            "updated": result.updated,
+            "skipped": result.skipped,
             "term_ids": result.term_ids,
             "errors": result.errors,
         }
@@ -129,8 +146,8 @@ class TermBackendMixin(DataCloudDataBackendBase):
         """Delete a term via datacloud_knowledge writer."""
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
-        writer = create_writer()
-        writer.delete_term(term_id=term_id)
+        with create_writer() as writer:
+            writer.delete_term(term_id=term_id)
 
     # ── TermSyncHandler 协议实现 ────────────────────────────────────────────
     # 供 term_sync_worker 注入使用，不依赖 BulkImportAdapter。
@@ -250,6 +267,9 @@ class TermBackendMixin(DataCloudDataBackendBase):
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
     ) -> dict[str, Any]:
         """Query term relations via knowledge reader."""
         reader = self._get_knowledge_reader()
@@ -259,6 +279,9 @@ class TermBackendMixin(DataCloudDataBackendBase):
                 relation_category=relation_category,
                 direction=direction,
                 depth=depth,
+                keyword=keyword,
+                page_index=page_index,
+                page_size=page_size,
             )
         except Exception:
             logger.exception("query_term_relations failed term_id=%s", term_id)

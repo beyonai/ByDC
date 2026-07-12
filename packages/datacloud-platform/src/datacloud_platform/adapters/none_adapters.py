@@ -623,7 +623,7 @@ class _NoopTermBackend:
         raise PermissionError("Term backend not available")
 
     def import_terms(
-        self, *, dataset_id: str, terms: list[dict[str, Any]]
+        self, *, library_id: str, terms: list[dict[str, Any]], backfill: bool = False
     ) -> dict[str, Any]:
         """Raise PermissionError — write forbidden."""
         raise PermissionError("Term backend not available")
@@ -766,10 +766,12 @@ class _NoopTermBackend:
     def create_domain(self, *, domain: dict[str, Any]) -> dict[str, Any]:
         raise PermissionError("Term backend not available")
 
-    def update_domain(self, *, domain_id: str, updates: dict[str, Any]) -> None:
+    def update_domain(
+        self, *, library_id: str, domain_code: str, updates: dict[str, Any]
+    ) -> None:
         raise PermissionError("Term backend not available")
 
-    def delete_domain(self, *, domain_id: str) -> None:
+    def delete_domain(self, *, library_id: str, domain_code: str) -> None:
         raise PermissionError("Term backend not available")
 
     def list_domain_term_types(self, *, domain_id: str) -> list[dict[str, Any]]:
