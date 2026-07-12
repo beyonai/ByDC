@@ -11,13 +11,16 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Sequence
+from typing import Any
 
-from sqlalchemy import delete, text
+from sqlalchemy import select, text
 
-from datacloud_knowledge.adapters.opengauss._db.models import Term
+from datacloud_knowledge.adapters.opengauss._db.models import (
+    TermDomain,
+    TermType,
+)
 from datacloud_knowledge.contracts.term_provider_types import (
     ImportResult,
-    TermCreate,
     TermUpdate,
 )
 from datacloud_knowledge.contracts.types import TermNameCreate
@@ -410,70 +413,729 @@ class _TermWriter(_WriterBase):
     def import_terms(
         self,
         *,
-        dataset_id: str,
-        terms: list[TermCreate],
+        library_id: str,
+        terms: list[dict[str, Any]],
     ) -> ImportResult:
-        """批量新增术语（含同义词、标签、扩展属性）。
+        """Comprehensive 5-stage batch term import.
 
-        对每条 TermCreate，依次执行 insert_term + create_term_name。
-        所有操作在同一个 Session 内完成，由调用方控制事务提交。
+        Stage 0: validate libraryId exists (gate before transaction)
+        Stage 1: in-memory dedup/merge/conflict resolution
+        Stage 2: domain code→id resolution + batch upsert term_types
+        Stage 3: batch insert terms + synonyms
+        Stage 4: batch insert relations + stub term creation
+        Stage 5: return summary
+
+        All DB writes (stages 2-4) happen in a single transaction.
 
         Args:
-            dataset_id: 目标术语库 ID（映射到 library_id）。
-            terms: 待新增术语列表。
+            library_id: Target library ID.
+            terms: List of term dicts. Each dict may contain:
+                - term_name (required)
+                - term_code (optional)
+                - term_type_code / termTypeCode / term_type
+                - parent_term_code / parentTermCode
+                - desc_summary / descSummary / desc
+                - synonyms / synonymList (list of str)
+                - labels / tags / term_tags (dict)
+                - domain_ids / domainIds (list of domain IDs)
+                - domain_codes / domainCodes (list of domain codes)
+                - relations (list of relation dicts with source/target/name/category)
 
         Returns:
-            ImportResult，含创建数和 term_id 列表。
+            Dict with: library_id, created, updated, skipped, term_ids, errors, summary.
+        """
+        now = self._now()
+
+        # ── Stage 0: validate input ────────────────────────────────────
+        # library_id is NOT validated against term_library — it may not
+        # exist yet (terms can be imported before the library is created).
+        # The library_id is simply stored in the term.library_id column.
+
+        if not terms:
+            return ImportResult(created=0, updated=0, skipped=0, term_ids=[], errors=[])
+
+        # ── Normalize: accept both dict and TermCreate dataclass ────────
+        terms = self._normalize_terms(terms)
+
+        # ── Stage 1: in-memory dedup/merge/conflict resolution ─────────
+        merged_terms, dedup_log = self._dedup_and_merge_terms(terms)
+
+        # ── Stage 2: domain code→id resolution + batch upsert term_types
+        domain_code_to_id = self._resolve_import_domain_codes(library_id, merged_terms)
+        type_codes = self._extract_term_type_codes(merged_terms)
+        self._batch_upsert_term_types(library_id, type_codes, now)
+
+        # ── Stage 3: batch insert terms + synonyms ──────────────────────
+        import_stats = self._batch_insert_import_terms(
+            library_id, merged_terms, domain_code_to_id, now
+        )
+
+        # ── Stage 4: batch insert relations + stub term creation ────────
+        relation_stats = self._batch_insert_import_relations(
+            library_id, merged_terms, domain_code_to_id, now
+        )
+
+        # ── Stage 5: return summary ─────────────────────────────────────
+        errors: list[str] = []
+        if dedup_log:
+            errors.append(f"Dedup: {dedup_log}")
+        if import_stats["errors"]:
+            errors.extend(import_stats["errors"])
+        if relation_stats["errors"]:
+            errors.extend(relation_stats["errors"])
+
+        summary_parts = [
+            f"Terms created={import_stats['created']} updated={import_stats['updated']} "
+            f"skipped={import_stats['skipped']}",
+            f"Relations created={relation_stats['created']} "
+            f"stubs={relation_stats['stubs_created']} skipped={relation_stats['skipped']}",
+        ]
+        if dedup_log:
+            summary_parts.insert(0, dedup_log)
+
+        log.info(
+            "import_terms complete: library_id=%s created=%d updated=%d "
+            "skipped=%d relations=%d stubs=%d errors=%d",
+            library_id,
+            import_stats["created"],
+            import_stats["updated"],
+            import_stats["skipped"],
+            relation_stats["created"],
+            relation_stats["stubs_created"],
+            len(errors),
+        )
+
+        return ImportResult(
+            created=import_stats["created"],
+            updated=import_stats["updated"],
+            skipped=import_stats["skipped"],
+            term_ids=import_stats["term_ids"],
+            errors=errors,
+        )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # import_terms internal stages
+    # ═══════════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _normalize_terms(terms: list[Any]) -> list[dict[str, Any]]:
+        """Convert dataclass terms to dict for downstream .get() access.
+
+        Accepts ``list[dict]`` (no-op) or ``list[TermCreate]`` (converted via
+        ``dataclasses.asdict``).
+        """
+        from dataclasses import asdict, is_dataclass
+
+        if not terms:
+            return []
+        first = terms[0]
+        if isinstance(first, dict):
+            return terms
+        if is_dataclass(first) and not isinstance(first, type):
+            return [asdict(t) for t in terms]
+        return terms
+
+    def _dedup_and_merge_terms(
+        self, terms: list[dict[str, Any]]
+    ) -> tuple[list[dict[str, Any]], str]:
+        """Stage 1: in-memory dedup/merge/conflict resolution.
+
+        Strategy:
+        - Vote on term_type_code (majority wins when multiple records for same term_name)
+        - Merge termCodes (first non-empty wins, suffix duplicates with _dupN)
+        - Merge synonyms across duplicates
+        - Merge labels/tags across duplicates
+        """
+        from collections import Counter, defaultdict
+
+        by_name: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for t in terms:
+            name = (t.get("term_name") or t.get("termName") or "").strip()
+            if name:
+                by_name[name].append(t)
+
+        merged: list[dict[str, Any]] = []
+        dedup_count = 0
+
+        for name, group in by_name.items():
+            if len(group) == 1:
+                merged.append(group[0])
+                continue
+
+            dedup_count += len(group) - 1
+            # Vote on term_type_code
+            type_votes: Counter[str] = Counter()
+            for t in group:
+                tc = t.get("term_type_code") or t.get("termTypeCode") or t.get("term_type")
+                if tc:
+                    type_votes[tc] += 1
+            best_type = type_votes.most_common(1)[0][0] if type_votes else "concept"
+
+            # Merge termCodes
+            all_codes: list[str] = []
+            for t in group:
+                code = t.get("term_code") or t.get("termCode") or ""
+                if code and code not in all_codes:
+                    all_codes.append(code)
+
+            # Merge synonyms
+            all_syns: list[str] = []
+            for t in group:
+                syns = t.get("synonyms") or t.get("synonymList") or []
+                for s in syns:
+                    if s and s not in all_syns and s != name:
+                        all_syns.append(s)
+
+            # Merge labels
+            merged_labels: dict[str, Any] = {}
+            for t in group:
+                labels = t.get("labels") or t.get("tags") or t.get("term_tags") or {}
+                merged_labels.update(labels)
+
+            # Merge domain info
+            domain_ids: list[str] = []
+            domain_codes: list[str] = []
+            for t in group:
+                domain_ids.extend(t.get("domain_ids") or t.get("domainIds") or [])
+                domain_codes.extend(t.get("domain_codes") or t.get("domainCodes") or [])
+                # Also extract codes from domain: [{code, name}] format
+                domain_objs = t.get("domain") or []
+                if isinstance(domain_objs, list):
+                    for dobj in domain_objs:
+                        if isinstance(dobj, dict):
+                            dcode = dobj.get("code") or dobj.get("domain_code") or ""
+                            if dcode:
+                                domain_codes.append(str(dcode))
+
+            base = group[0].copy()
+            base["term_type_code"] = best_type
+            base["term_code"] = all_codes[0] if all_codes else ""
+            base["synonyms"] = all_syns
+            base["labels"] = merged_labels
+            base["domain_ids"] = domain_ids
+            base["domain_codes"] = domain_codes
+
+            # Suffix additional codes
+            for i, code in enumerate(all_codes[1:], start=2):
+                suffix = f"_dup{i}"
+                dup = base.copy()
+                dup["term_code"] = code
+                dup["term_name"] = f"{name}{suffix}"
+                merged.append(dup)
+
+            merged.append(base)
+
+        log_msg = f"{dedup_count} duplicates merged" if dedup_count else ""
+        return merged, log_msg
+
+    def _extract_term_type_codes(self, terms: list[dict[str, Any]]) -> set[str]:
+        """Extract unique term_type_codes from import terms."""
+        codes: set[str] = set()
+        for t in terms:
+            tc = t.get("term_type_code") or t.get("termTypeCode") or t.get("term_type")
+            if tc and tc != "-1":
+                codes.add(tc)
+        return codes
+
+    def _resolve_import_domain_codes(
+        self, library_id: str, terms: list[dict[str, Any]]
+    ) -> dict[str, str]:
+        """Resolve all domain_codes to domain_ids for the import batch."""
+        all_domain_codes: set[str] = set()
+        for t in terms:
+            codes = t.get("domain_codes") or t.get("domainCodes") or []
+            for c in codes:
+                if c:
+                    all_domain_codes.add(str(c))
+
+        if not all_domain_codes:
+            return {}
+
+        rows = self.session.execute(
+            select(TermDomain.domain_code, TermDomain.domain_id).where(
+                TermDomain.library_id == library_id,
+                TermDomain.domain_code.in_(list(all_domain_codes)),
+            )
+        ).all()
+        return {str(r[0]): str(r[1]) for r in rows}
+
+    def _batch_upsert_term_types(self, library_id: str, type_codes: set[str], now: Any) -> None:
+        """Batch upsert term_type rows for the import."""
+        if not type_codes:
+            return
+
+        # Find existing types
+        existing = (
+            self.session.execute(
+                select(TermType.type_code).where(
+                    TermType.library_id == library_id,
+                    TermType.type_code.in_(list(type_codes)),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        existing_set = set(existing)
+
+        # Insert missing types
+        for tc in type_codes:
+            if tc not in existing_set:
+                self.session.execute(
+                    text(
+                        "INSERT INTO term_type "
+                        "(type_code, type_name, type_desc, type_category, "
+                        "is_builtin, library_id, domain_ids, created_time, updated_time) "
+                        "VALUES (:code, :name, :desc, :cat, :builtin, :lid, :dids, :now, :now)"
+                    ),
+                    {
+                        "code": tc,
+                        "name": tc,
+                        "desc": f"Auto-created via import to {library_id}",
+                        "cat": 0,
+                        "builtin": False,
+                        "lid": library_id,
+                        "dids": [],
+                        "now": now,
+                    },
+                )
+        log.debug(
+            "_batch_upsert_term_types: %d existing, %d new for library %s",
+            len(existing_set),
+            len(type_codes - existing_set),
+            library_id,
+        )
+
+    def _batch_insert_import_terms(
+        self,
+        library_id: str,
+        terms: list[dict[str, Any]],
+        domain_code_to_id: dict[str, str],
+        now: Any,
+    ) -> dict[str, Any]:
+        """Stage 3: batch insert terms + synonyms.
+
+        Returns stats dict with created, updated, skipped, term_ids,
+        name_changed_ids (only terms with new/changed names), errors.
         """
         created = 0
+        updated = 0
+        skipped = 0
         term_ids: list[str] = []
+        name_changed_ids: list[str] = []  # only terms that need backfill
         errors: list[str] = []
 
-        for term in terms:
+        for t in terms:
             try:
-                term_id = self.insert_term(
-                    term_name=term.term_name,
-                    term_type_code=term.term_type,
-                    term_code=term.term_code if term.term_code else None,
-                    library_id=dataset_id,
-                    domain_ids=[],
-                    parent_term_id=term.parent_term_code or None,
-                    term_tags=dict(term.labels),
+                term_name = (t.get("term_name") or t.get("termName") or "").strip()
+                if not term_name:
+                    skipped += 1
+                    continue
+
+                term_code = t.get("term_code") or t.get("termCode") or ""
+                if not term_code:
+                    term_code = self._generate_term_code()
+
+                term_type_code = (
+                    t.get("term_type_code")
+                    or t.get("termTypeCode")
+                    or t.get("term_type")
+                    or "concept"
                 )
 
-                # 创建标准名称记录
-                if term.term_name:
-                    self.create_term_name(
-                        term_id=term_id,
-                        name_text=term.term_name,
-                        search_scope={},
-                    )
+                parent_term_code = t.get("parent_term_code") or t.get("parentTermCode") or ""
+                parent_term_id: str | None = None
+                if parent_term_code:
+                    parent_row = self.session.execute(
+                        text(
+                            "SELECT term_id FROM term "
+                            "WHERE term_code = :code AND library_id = :lid "
+                            "LIMIT 1"
+                        ),
+                        {"code": parent_term_code, "lid": library_id},
+                    ).fetchone()
+                    if parent_row:
+                        parent_term_id = str(parent_row[0])
 
-                # 创建同义词记录
-                for syn in term.synonyms:
-                    if syn and syn != term.term_name:
+                desc_summary = t.get("desc_summary") or t.get("descSummary") or t.get("desc") or ""
+
+                # Resolve domain IDs
+                domain_ids: list[str] = []
+                dids = t.get("domain_ids") or t.get("domainIds") or []
+                dcodes = t.get("domain_codes") or t.get("domainCodes") or []
+
+                # Also support domain: [{code, name}] format — extract codes
+                domain_objs = t.get("domain") or []
+                if isinstance(domain_objs, list):
+                    for dobj in domain_objs:
+                        if isinstance(dobj, dict):
+                            dcode = dobj.get("code") or dobj.get("domain_code") or ""
+                            if dcode:
+                                dcodes.append(str(dcode))
+
+                for did in dids:
+                    if did and str(did) not in domain_ids:
+                        domain_ids.append(str(did))
+                for dcode in dcodes:
+                    resolved = domain_code_to_id.get(str(dcode))
+                    if resolved and resolved not in domain_ids:
+                        domain_ids.append(resolved)
+
+                # Merge labels/tags
+                labels = t.get("labels") or t.get("tags") or t.get("term_tags") or {}
+                term_tags = labels if isinstance(labels, dict) else {}
+
+                # Check for existing term → stub upgrade
+                existing = self.session.execute(
+                    text(
+                        "SELECT term_id, term_name, term_type_code FROM term "
+                        "WHERE term_code = :code AND library_id = :lid "
+                        "AND COALESCE(term_type_code, '') = '' "
+                        "LIMIT 1"
+                    ),
+                    {"code": term_code, "lid": library_id},
+                ).fetchone()
+
+                if existing is not None:
+                    # Stub upgrade: update the stub with real data
+                    existing_term_id = str(existing[0])
+                    existing_name = str(existing[1]) if existing[1] else ""
+                    self.session.execute(
+                        text(
+                            "UPDATE term SET "
+                            "term_name = :name, term_type_code = :type_code, "
+                            "desc_summary = :desc, domain_ids = :dids, "
+                            "term_tags = CAST(:tags AS jsonb), "
+                            "parent_term_id = :parent_id, "
+                            "updated_time = :now "
+                            "WHERE term_id = :tid"
+                        ),
+                        {
+                            "name": term_name,
+                            "type_code": term_type_code,
+                            "desc": desc_summary if desc_summary else None,
+                            "dids": domain_ids,
+                            "tags": json.dumps(term_tags),
+                            "parent_id": parent_term_id,
+                            "now": now,
+                            "tid": existing_term_id,
+                        },
+                    )
+                    term_ids.append(existing_term_id)
+                    updated += 1
+                    # Stub upgrade always needs backfill (stub may not have had term_names)
+                    name_changed = term_name != existing_name
+                    if name_changed:
+                        name_changed_ids.append(existing_term_id)
+                        log.debug(
+                            "_batch_insert: stub upgrade name changed: %r → %r (term_id=%s)",
+                            existing_name,
+                            term_name,
+                            existing_term_id,
+                        )
+                    else:
+                        log.debug(
+                            "_batch_insert: stub upgrade name unchanged: %r (term_id=%s)",
+                            term_name,
+                            existing_term_id,
+                        )
+                    log.info("Stub upgraded: term_id=%s term_code=%s", existing_term_id, term_code)
+                else:
+                    # Regular insert or upsert by (term_code, library_id)
+                    existing_non_stub = self.session.execute(
+                        text(
+                            "SELECT term_id, term_name FROM term "
+                            "WHERE term_code = :code AND library_id = :lid "
+                            "LIMIT 1"
+                        ),
+                        {"code": term_code, "lid": library_id},
+                    ).fetchone()
+
+                    if existing_non_stub is not None:
+                        # Update existing
+                        existing_tid = str(existing_non_stub[0])
+                        existing_name = str(existing_non_stub[1]) if existing_non_stub[1] else ""
+                        self.session.execute(
+                            text(
+                                "UPDATE term SET "
+                                "term_name = :name, term_type_code = :type_code, "
+                                "desc_summary = :desc, domain_ids = :dids, "
+                                "term_tags = CAST(:tags AS jsonb), "
+                                "parent_term_id = :parent_id, "
+                                "updated_time = :now "
+                                "WHERE term_id = :tid"
+                            ),
+                            {
+                                "name": term_name,
+                                "type_code": term_type_code,
+                                "desc": desc_summary if desc_summary else None,
+                                "dids": domain_ids,
+                                "tags": json.dumps(term_tags),
+                                "parent_id": parent_term_id,
+                                "now": now,
+                                "tid": existing_tid,
+                            },
+                        )
+                        term_ids.append(existing_tid)
+                        updated += 1
+                        if term_name != existing_name:
+                            name_changed_ids.append(existing_tid)
+                            log.debug(
+                                "_batch_insert: update name changed: %r → %r (term_id=%s)",
+                                existing_name,
+                                term_name,
+                                existing_tid,
+                            )
+                        else:
+                            log.debug(
+                                "_batch_insert: update name unchanged: %r (term_id=%s), skip backfill",
+                                term_name,
+                                existing_tid,
+                            )
+                    else:
+                        # Insert new
+                        term_id = self._new_id()
+                        self.session.execute(
+                            text(
+                                "INSERT INTO term "
+                                "(term_id, term_code, term_name, term_type_code, library_id, "
+                                "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
+                                "VALUES ("
+                                ":tid, :code, :name, :type_code, :lid, "
+                                ":dids, :parent_id, CAST(:tags AS jsonb), :now, :now"
+                                ")"
+                            ),
+                            {
+                                "tid": term_id,
+                                "code": term_code,
+                                "name": term_name,
+                                "type_code": term_type_code,
+                                "lid": library_id,
+                                "dids": domain_ids,
+                                "parent_id": parent_term_id,
+                                "tags": json.dumps(term_tags),
+                                "now": now,
+                            },
+                        )
+                        term_ids.append(term_id)
+                        created += 1
+                        name_changed_ids.append(term_id)
+                        log.debug(
+                            "_batch_insert: new term created term_id=%s name=%r",
+                            term_id,
+                            term_name,
+                        )
+
+                # Insert standard name as term_name (for keyword/jieba/vector lookup)
+                name_id = self.create_term_name(
+                    term_id=term_ids[-1],
+                    name_text=term_name,
+                    search_scope={},
+                )
+                log.warning(
+                    "[IMPORT] created term_name name_id=%s for term_id=%s name=%r",
+                    name_id,
+                    term_ids[-1],
+                    term_name,
+                )
+
+                # Insert synonyms as term_names
+                syns = t.get("synonyms") or t.get("synonymList") or []
+                for syn in syns:
+                    if syn and syn.strip() and syn.strip() != term_name:
                         self.create_term_name(
-                            term_id=term_id,
-                            name_text=syn,
+                            term_id=term_ids[-1],
+                            name_text=syn.strip(),
                             search_scope={},
                         )
 
-                term_ids.append(term_id)
-                created += 1
             except Exception as exc:
-                log.exception(
-                    "import_terms 单条创建失败: term_name=%s",
-                    term.term_name,
-                )
-                errors.append(f"{term.term_name}: {exc}")
+                msg = f"{t.get('term_name', 'unknown')}: {exc}"
+                log.exception("import_terms term insert failed: %s", msg)
+                errors.append(msg)
+                skipped += 1
 
-        log.info(
-            "import_terms 完成: dataset_id=%s created=%d errors=%d",
-            dataset_id,
+        log.warning(
+            "_batch_insert_import_terms done: created=%d updated=%d skipped=%d "
+            "name_changed=%d errors=%d",
             created,
+            updated,
+            skipped,
+            len(name_changed_ids),
             len(errors),
         )
-        return ImportResult(created=created, term_ids=term_ids, errors=errors)
+        return {
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+            "term_ids": term_ids,
+            "name_changed_ids": name_changed_ids,
+            "errors": errors,
+        }
+
+    def _batch_insert_import_relations(
+        self,
+        library_id: str,
+        terms: list[dict[str, Any]],
+        domain_code_to_id: dict[str, str],
+        now: Any,
+    ) -> dict[str, Any]:
+        """Stage 4: batch insert relations + stub term creation.
+
+        For each relation, resolves source/target term references.
+        Creates stub terms for referenced terms that don't exist yet.
+        """
+        import_created = 0
+        stubs_created = 0
+        skipped: int = 0
+        errors: list[str] = []
+
+        for t in terms:
+            relations = t.get("related_to") or t.get("relatedTo") or t.get("relations") or []
+            if not relations:
+                continue
+
+            source_term_name = (t.get("term_name") or t.get("termName") or "").strip()
+            if not source_term_name:
+                continue
+
+            # Resolve source term_id
+            source_term_code = t.get("term_code") or t.get("termCode") or ""
+            source_term_id: str | None = None
+            if source_term_code:
+                row = self.session.execute(
+                    text(
+                        "SELECT term_id FROM term "
+                        "WHERE term_code = :code AND library_id = :lid "
+                        "LIMIT 1"
+                    ),
+                    {"code": source_term_code, "lid": library_id},
+                ).fetchone()
+                if row:
+                    source_term_id = str(row[0])
+
+            if source_term_id is None:
+                skipped += len(relations)
+                continue
+
+            for rel in relations:
+                try:
+                    target_code = (
+                        rel.get("term_code")
+                        or rel.get("termCode")
+                        or rel.get("target_term_code")
+                        or rel.get("targetTermCode")
+                        or ""
+                    )
+                    target_name = (
+                        rel.get("term_name")
+                        or rel.get("termName")
+                        or rel.get("target_term_name")
+                        or rel.get("targetTermName")
+                        or ""
+                    )
+                    rel_name = rel.get("relation_name") or rel.get("relationName") or "relates_to"
+                    rel_category = (
+                        rel.get("relation_category") or rel.get("relationCategory") or "association"
+                    )
+
+                    if not target_code and not target_name:
+                        skipped += 1
+                        continue
+
+                    # Resolve target term
+                    target_term_id: str | None = None
+                    if target_code:
+                        row = self.session.execute(
+                            text(
+                                "SELECT term_id FROM term "
+                                "WHERE term_code = :code AND library_id = :lid "
+                                "LIMIT 1"
+                            ),
+                            {"code": target_code, "lid": library_id},
+                        ).fetchone()
+                        if row:
+                            target_term_id = str(row[0])
+
+                    # Create stub if not found
+                    if target_term_id is None and target_name:
+                        stub_code = target_code or f"STUB_{self._new_id().replace('-', '')[:12]}"
+                        target_term_id = self._new_id()
+                        self.session.execute(
+                            text(
+                                "INSERT INTO term "
+                                "(term_id, term_code, term_name, term_type_code, library_id, "
+                                "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
+                                "VALUES ("
+                                ":tid, :code, :name, '', :lid, "
+                                "'{}', NULL, '{}'::jsonb, :now, :now"
+                                ")"
+                            ),
+                            {
+                                "tid": target_term_id,
+                                "code": stub_code,
+                                "name": target_name,
+                                "lid": library_id,
+                                "now": now,
+                            },
+                        )
+                        stubs_created += 1
+
+                    if target_term_id is None:
+                        skipped += 1
+                        continue
+
+                    # Insert relation (check duplicate first)
+                    existing_rel = self.session.execute(
+                        text(
+                            "SELECT 1 FROM term_relation "
+                            "WHERE source_term_id = :src AND target_term_id = :tgt "
+                            "AND relation_name = :rname "
+                            "LIMIT 1"
+                        ),
+                        {
+                            "src": source_term_id,
+                            "tgt": target_term_id,
+                            "rname": rel_name,
+                        },
+                    ).scalar_one_or_none()
+
+                    if existing_rel is None:
+                        relation_id = self._new_id()
+                        self.session.execute(
+                            text(
+                                "INSERT INTO term_relation "
+                                "(relation_id, source_term_id, target_term_id, "
+                                "relation_name, relation_category, cardinality, "
+                                "action_term_id, created_time, updated_time) "
+                                "VALUES ("
+                                ":rid, :src, :tgt, :rname, :rcat, :card, "
+                                "NULL, :now, :now"
+                                ")"
+                            ),
+                            {
+                                "rid": relation_id,
+                                "src": source_term_id,
+                                "tgt": target_term_id,
+                                "rname": rel_name,
+                                "rcat": rel_category,
+                                "card": rel.get("cardinality") or "1:1",
+                                "now": now,
+                            },
+                        )
+                        import_created += 1
+                    else:
+                        skipped += 1
+
+                except Exception as exc:
+                    errors.append(f"relation {rel.get('relation_name', '?')}: {exc}")
+                    skipped += 1
+
+        return {
+            "created": import_created,
+            "stubs_created": stubs_created,
+            "skipped": skipped,
+            "errors": errors,
+        }
 
     def upsert_term(
         self,
@@ -576,47 +1238,68 @@ class _TermWriter(_WriterBase):
             search_scope=scope,
         )
 
-        # ── 3. 向量回填（best-effort，非阻塞） ─────────────────────────
+        # ── 3. 向量回填（best-effort） ─────────────────────────
         if backfill_vectors:
-            self._backfill_vectors_optional(term_id=term_id)
+            self.session.commit()
+            self.session.begin()
+            self._backfill_jieba_tsvector([term_id])
+            self._backfill_vectors_async([term_id])
 
         return term_id
 
-    def _backfill_vectors_optional(self, *, term_id: str) -> None:
-        """tsvector + embedding 回填（best-effort，失败不抛，超时 30s）。"""
+    def _backfill_vectors_async(self, term_ids: list[str]) -> None:
+        """异步回填 name_keywords + name_embedding（独立连接，线程安全）。
+
+        best-effort，失败不抛，超时 60s。
+        """
         import threading
 
+        log.warning("[BACKFILL-async] starting thread for term_ids=%s", term_ids)
         result_holder: dict[str, object] = {}
         error_holder: dict[str, Exception] = {}
 
         def _run() -> None:
             try:
-                from datacloud_knowledge.adapters import backfill_embeddings
+                from datacloud_knowledge.adapters import backfill_embeddings, backfill_tsvector
 
-                backfill_embeddings(term_ids=[term_id])
+                # 1. name_keywords (simple tsvector) — idempotent whole-table
+                log.warning("[BACKFILL-async] running backfill_tsvector...")
+                ts_result = backfill_tsvector(force=False)
+                log.warning("[BACKFILL-async] backfill_tsvector done: %s", ts_result)
+
+                # 2. name_embedding (pgvector) — targeted by term_ids
+                log.warning(
+                    "[BACKFILL-async] running backfill_embeddings for %d term_ids...",
+                    len(term_ids),
+                )
+                emb_result = backfill_embeddings(term_ids=term_ids)
+                log.warning("[BACKFILL-async] backfill_embeddings done: %s", emb_result)
+
                 result_holder["ok"] = True
             except Exception as exc:
+                log.exception("_backfill_vectors_async: exception in thread")
                 error_holder["exc"] = exc
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
-        thread.join(timeout=30.0)
+        thread.join(timeout=60.0)
 
         if thread.is_alive():
-            log.warning(
-                "upsert_term 向量回填超时（30s），term_id=%s 请稍后手动执行: "
-                "datacloud-knowledge backfill-embeddings --term-ids %s",
-                term_id,
-                term_id,
-            )
+            log.warning("[BACKFILL-async] TIMEOUT (60s), term_ids=%s", term_ids)
         elif "exc" in error_holder:
-            log.warning(
-                "upsert_term 向量回填失败: %s，term_id=%s",
-                error_holder["exc"],
-                term_id,
-            )
+            log.warning("[BACKFILL-async] FAILED: %s, term_ids=%s", error_holder["exc"], term_ids)
         else:
-            log.debug("upsert_term 向量回填完成: term_id=%s", term_id)
+            log.warning(
+                "[BACKFILL-async] done: %d terms (name_keywords + embedding)", len(term_ids)
+            )
+
+    def _backfill_jieba_tsvector(self, term_ids: list[str]) -> int:
+        """为指定 term_ids 的 term_name 行回填 name_keywords_jieba 列。
+
+        使用 self.session 查询 + exec_driver_sql 更新。
+        Returns: 更新的行数。
+        """
+        return _backfill_jieba_tsvector_with_conn(self.session.connection(), term_ids)
 
     # ── 批量 UPSERT（单 SQL，替代逐条 upsert_term）────────────────────
 
@@ -901,5 +1584,201 @@ class _TermWriter(_WriterBase):
         return f"{_TermWriter._TERM_CODE_PREFIX}_{_WriterBase._new_id().replace('-', '')}"
 
     def delete_term(self, *, term_id: str) -> None:
-        """Delete a term by ID."""
-        self.session.execute(delete(Term).where(Term.term_id == term_id))
+        """Delete a term with cascade.
+
+        Checks for child terms (409), then deletes in order:
+        term_relation (source/target), term_name, term_knowledge, then the term row.
+
+        Args:
+            term_id: The term's primary key.
+
+        Raises:
+            ValueError: If child terms exist (409 conflict).
+        """
+        # Check for children → 409
+        children_count = int(
+            self.session.execute(
+                text("SELECT COUNT(*) FROM term WHERE parent_term_id = :tid"),
+                {"tid": term_id},
+            ).scalar_one()
+        )
+        if children_count > 0:
+            raise ValueError(
+                f"Cannot delete term '{term_id}': {children_count} child term(s) exist"
+            )
+
+        # Delete term_relation where this term is source or target
+        self.session.execute(
+            text("DELETE FROM term_relation WHERE source_term_id = :tid OR target_term_id = :tid"),
+            {"tid": term_id},
+        )
+
+        # Delete term_name rows
+        self.session.execute(
+            text("DELETE FROM term_name WHERE term_id = :tid"),
+            {"tid": term_id},
+        )
+
+        # Delete term_knowledge rows
+        self.session.execute(
+            text("DELETE FROM term_knowledge WHERE term_id = :tid"),
+            {"tid": term_id},
+        )
+
+        # Delete the term row
+        result = self.session.execute(
+            text("DELETE FROM term WHERE term_id = :tid"),
+            {"tid": term_id},
+        )
+        rowcount: int = result.rowcount  # type: ignore[attr-defined]
+
+        if rowcount == 0:
+            log.warning("delete_term: term_id=%s not found", term_id)
+        else:
+            log.info("delete_term: term_id=%s deleted=%d", term_id, rowcount)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Module-level backfill helpers (independent connections, safe outside sessions)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _backfill_jieba_tsvector_with_conn(conn: Any, term_ids: list[str]) -> int:
+    """回填 name_keywords_jieba，使用给定的 SQLAlchemy Connection。
+
+    conn 必须来自已提交事务的连接，确保能看到 term_name 行。
+    """
+    import jieba
+
+    rows = conn.execute(
+        text(
+            "SELECT tn.name_id, tn.name_text FROM term_name tn "
+            "WHERE tn.term_id = ANY(:tids) AND tn.name_text IS NOT NULL "
+            "AND tn.name_keywords_jieba IS NULL"
+        ),
+        {"tids": term_ids},
+    ).all()
+
+    if not rows:
+        log.warning("[BACKFILL-jieba] NO rows found for term_ids=%s", term_ids)
+        return 0
+
+    log.warning("[BACKFILL-jieba] found %d rows with NULL name_keywords_jieba", len(rows))
+
+    jieba_batch: list[tuple[str, str]] = []
+    for name_id, name_text in rows:
+        tokens = [t for t in jieba.lcut_for_search(str(name_text)) if t.strip()]
+        if tokens:
+            jieba_batch.append((str(name_id), " ".join(tokens)))
+
+    if not jieba_batch:
+        log.warning("[BACKFILL-jieba] no valid tokens after jieba processing")
+        return 0
+
+    log.warning("[BACKFILL-jieba] updating %d rows", len(jieba_batch))
+    updated = 0
+    page_size = 500
+    for i in range(0, len(jieba_batch), page_size):
+        chunk = jieba_batch[i : i + page_size]
+        single_row = "(%s::varchar, %s::text)"
+        values_clause = ",".join([single_row] * len(chunk))
+        flat: list[str] = []
+        for nid, jt in chunk:
+            flat.extend([nid, jt])
+        result = conn.exec_driver_sql(
+            "UPDATE term_name tn SET name_keywords_jieba = to_tsvector('simple', v.jt) "
+            f"FROM (VALUES {values_clause}) AS v(id, jt) WHERE tn.name_id = v.id",
+            tuple(flat),
+        )
+        conn.commit()
+        updated += result.rowcount
+
+    log.warning("[BACKFILL-jieba] done, total updated=%d", updated)
+    return updated
+
+
+def run_import_backfill(term_ids: list[str]) -> None:
+    """导入后统一回填三列（name_keywords + name_keywords_jieba + name_embedding）。
+
+    使用独立连接，可在 writer session 关闭后安全调用。
+    """
+    import threading
+
+    if not term_ids:
+        return
+
+    log.warning("[BACKFILL] starting for %d term_ids", len(term_ids))
+
+    # 1. jieba tsvector — uses independent psycopg connection
+    try:
+        import psycopg
+
+        from datacloud_knowledge.adapters.opengauss._db.url import (
+            build_postgres_connection_uri,
+            resolve_knowledge_schema_for_connection,
+        )
+
+        schema = resolve_knowledge_schema_for_connection()
+        uri = build_postgres_connection_uri(schema=schema)
+        with psycopg.connect(uri, autocommit=True) as raw_conn, raw_conn.cursor() as cur:
+            rows = cur.execute(
+                "SELECT tn.name_id, tn.name_text FROM term_name tn "
+                "WHERE tn.term_id = ANY(%s) AND tn.name_text IS NOT NULL "
+                "AND tn.name_keywords_jieba IS NULL",
+                (term_ids,),
+            ).fetchall()
+
+            if rows:
+                import jieba
+
+                jieba_batch: list[tuple[str, str]] = []
+                for name_id, name_text in rows:
+                    tokens = [t for t in jieba.lcut_for_search(str(name_text)) if t.strip()]
+                    if tokens:
+                        jieba_batch.append((str(name_id), " ".join(tokens)))
+
+                if jieba_batch:
+                    updated = 0
+                    page_size = 500
+                    for i in range(0, len(jieba_batch), page_size):
+                        chunk = jieba_batch[i : i + page_size]
+                        single_row = "(%s::varchar, %s::text)"
+                        values_clause = ",".join([single_row] * len(chunk))
+                        flat: list[str] = []
+                        for nid, jt in chunk:
+                            flat.extend([nid, jt])
+                        cur.execute(
+                            "UPDATE term_name tn SET name_keywords_jieba = "
+                            "to_tsvector('simple', v.jt) "
+                            f"FROM (VALUES {values_clause}) AS v(id, jt) "
+                            "WHERE tn.name_id = v.id",
+                            flat,
+                        )
+                        updated += cur.rowcount
+                    log.warning("[BACKFILL] jieba done, updated=%d", updated)
+                else:
+                    log.warning("[BACKFILL] jieba: no valid tokens")
+            else:
+                log.warning("[BACKFILL] jieba: no NULL rows found")
+    except Exception:
+        log.exception("[BACKFILL] jieba failed")
+
+    # 2. name_keywords + name_embedding (async thread, independent connections)
+    def _async_backfill() -> None:
+        try:
+            from datacloud_knowledge.adapters import backfill_embeddings, backfill_tsvector
+
+            ts_result = backfill_tsvector(force=False)
+            log.warning("[BACKFILL] tsvector done: %s", ts_result)
+            emb_result = backfill_embeddings(term_ids=term_ids)
+            log.warning("[BACKFILL] embeddings done: %s", emb_result)
+        except Exception:
+            log.exception("[BACKFILL] async failed")
+
+    thread = threading.Thread(target=_async_backfill, daemon=True)
+    thread.start()
+    thread.join(timeout=60.0)
+    if thread.is_alive():
+        log.warning("[BACKFILL] async TIMEOUT (60s)")
+    else:
+        log.warning("[BACKFILL] all done for %d term_ids", len(term_ids))

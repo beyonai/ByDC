@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy import delete, update
 
-from datacloud_knowledge.adapters.opengauss._db.models import TermLibrary
+from datacloud_knowledge.adapters.opengauss._db.models import TermDomain, TermLibrary
 
 from ._base import _WriterBase
 
@@ -58,6 +58,9 @@ class _LibraryWriter(_WriterBase):
         logger.info("Updated term library: id=%s", library_id)
 
     def delete_term_library(self, *, library_id: str) -> None:
-        """Delete a term library."""
+        """Delete a term library and cascade-delete its term_domain rows."""
+        # Cascade: delete term_domain rows under this library first
+        self.session.execute(delete(TermDomain).where(TermDomain.library_id == library_id))
+        # Then delete the library itself
         self.session.execute(delete(TermLibrary).where(TermLibrary.library_id == library_id))
-        logger.info("Deleted term library: id=%s", library_id)
+        logger.info("Deleted term library (with domains): id=%s", library_id)
