@@ -18,7 +18,13 @@ from sqlalchemy import and_, bindparam, cast, func, literal, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
 from sqlalchemy.orm import aliased
 
-from datacloud_knowledge.adapters.opengauss._db.models import Term, TermName, TermRelation
+from datacloud_knowledge.adapters.opengauss._db.models import (
+    Term,
+    TermDomain,
+    TermKnowledge,
+    TermName,
+    TermRelation,
+)
 from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
 from datacloud_knowledge.contracts.term_provider_types import (
     LabelCondition,
@@ -2057,14 +2063,19 @@ class _TermReader(_ReaderBase):
     def get_term_detail(
         self,
         *,
-        dataset_id: str,
+        library_id: str,
         term_id: str,
     ) -> TermDetail | None:
-        """查询单条术语完整详情（OpenGauss 实现）。
+        """查询单条术语完整详情（OpenGauss 实现 — term API 重构版）。
 
-        从 term 表查询完整字段，补充 term_name 和 term_knowledge 的关联信息。
+        从 term 表查询完整字段，补充：
+        - parentChain: 递归上行 parent_term_id 到根节点
+        - names: term_name 表的所有别名（name_id, name_text, search_scope）
+        - knowledges: term_knowledge 表的所有知识条目
+        - childrenCount: 直接子术语数
+        - relationCount: 作为 source 或 target 的关系总数
+        - domain: domain_ids[] 转换为 [{code, name}]
         """
-        _ = dataset_id  # OpenGauss 不按 dataset_id 过滤
         try:
             with self._get_session() as session:
                 row = session.execute(
@@ -2077,6 +2088,7 @@ class _TermReader(_ReaderBase):
                         Term.parent_term_id,
                         Term.desc_summary,
                         Term.term_tags,
+                        Term.domain_ids,
                         Term.created_time,
                         Term.updated_time,
                     ).where(Term.term_id == term_id)
@@ -2085,41 +2097,131 @@ class _TermReader(_ReaderBase):
                 if row is None:
                     return None
 
-                # 查询父术语名称
-                parent_term_id = str(row[5]) if row[5] else ""
-                parent_term_name = ""
-                if parent_term_id:
+                # ── parentChain: recursively walk parent_term_id up to root ──
+                # Guard against cycles and unreasonable depth (max 50 levels)
+                _max_parent_chain_depth = 50
+                parent_chain: list[dict[str, str]] = []
+                visited_ids: set[str] = {term_id}
+                current_parent_id = str(row[5]) if row[5] else None
+                depth = 0
+                while current_parent_id and depth < _max_parent_chain_depth:
+                    if current_parent_id in visited_ids:
+                        logger.warning(
+                            "Cycle detected in parent chain for term_id=%s at depth=%d",
+                            term_id,
+                            depth,
+                        )
+                        break
+                    visited_ids.add(current_parent_id)
                     parent_row = session.execute(
-                        select(Term.term_name).where(Term.term_id == parent_term_id)
-                    ).scalar_one_or_none()
-                    if parent_row:
-                        parent_term_name = str(parent_row)
-
-                # 查询同义词列表（TermName 表）
-                synonym_rows = session.execute(
-                    select(TermName.name_text).where(
-                        TermName.term_id == term_id,
-                        TermName.name_text != str(row[2]),
+                        select(
+                            Term.term_id,
+                            Term.term_code,
+                            Term.term_name,
+                            Term.parent_term_id,
+                        ).where(Term.term_id == current_parent_id)
+                    ).one_or_none()
+                    if parent_row is None:
+                        break
+                    parent_chain.append(
+                        {
+                            "termId": str(parent_row[0]),
+                            "termCode": str(parent_row[1]),
+                            "termName": str(parent_row[2]),
+                        }
                     )
+                    current_parent_id = str(parent_row[3]) if parent_row[3] else None
+                    depth += 1
+
+                if depth >= _max_parent_chain_depth:
+                    logger.warning(
+                        "Parent chain exceeded max depth for term_id=%s, truncated at %d",
+                        term_id,
+                        _max_parent_chain_depth,
+                    )
+
+                # ── names: query term_name table ──
+                name_rows = session.execute(
+                    select(
+                        TermName.name_id,
+                        TermName.name_text,
+                        TermName.search_scope,
+                    ).where(TermName.term_id == term_id)
                 ).all()
-                synonym_list = [str(s[0]) for s in synonym_rows]
+                names = [
+                    {
+                        "name_id": str(n[0]),
+                        "name_text": str(n[1]),
+                        "search_scope": n[2] if isinstance(n[2], dict) else {},
+                    }
+                    for n in name_rows
+                ]
 
-                # 查询标签信息（term_tags JSONB）
-                tags: dict[str, str] = {}
-                raw_tags = row[7]
-                if isinstance(raw_tags, dict):
-                    tags = {str(k): str(v) for k, v in raw_tags.items()}
-
-                # 查询术语类型名称
-                term_type_name = ""
-                type_row = session.execute(
-                    select(Term.term_name).where(
-                        Term.term_code == str(row[3]),
-                        Term.term_type_code == "prop",
+                # ── knowledges: query term_knowledge table ──
+                knowledge_rows = session.execute(
+                    select(
+                        TermKnowledge.knowledge_id,
+                        TermKnowledge.desc_summary,
+                        TermKnowledge.desc,
+                        TermKnowledge.ext_system,
+                        TermKnowledge.ext_kb_id,
+                        TermKnowledge.ext_doc_id,
+                        TermKnowledge.sort_order,
+                        TermKnowledge.created_time,
+                        TermKnowledge.updated_time,
                     )
-                ).scalar_one_or_none()
-                if type_row:
-                    term_type_name = str(type_row)
+                    .where(TermKnowledge.term_id == term_id)
+                    .order_by(TermKnowledge.sort_order)
+                ).all()
+                knowledges = [
+                    {
+                        "knowledge_id": str(k[0]),
+                        "desc_summary": str(k[1]) if k[1] else None,
+                        "desc": str(k[2]) if k[2] else None,
+                        "ext_system": str(k[3]) if k[3] else None,
+                        "ext_kb_id": str(k[4]) if k[4] else None,
+                        "ext_doc_id": str(k[5]) if k[5] else None,
+                        "sort_order": int(k[6]) if k[6] is not None else 0,
+                        "created_time": k[7].isoformat() if k[7] is not None else None,
+                        "updated_time": k[8].isoformat() if k[8] is not None else None,
+                    }
+                    for k in knowledge_rows
+                ]
+
+                # ── childrenCount: COUNT(*) WHERE parent_term_id = :id ──
+                children_count = int(
+                    session.execute(
+                        select(func.count()).select_from(Term).where(Term.parent_term_id == term_id)
+                    ).scalar_one()
+                )
+
+                # ── relationCount: COUNT(*) WHERE source_term_id or target_term_id = :id ──
+                relation_count = int(
+                    session.execute(
+                        select(func.count())
+                        .select_from(TermRelation)
+                        .where(
+                            or_(
+                                TermRelation.source_term_id == term_id,
+                                TermRelation.target_term_id == term_id,
+                            )
+                        )
+                    ).scalar_one()
+                )
+
+                # ── domain translation: resolve domain_ids[] to [{code, name}] ──
+                domain_ids: list[str] = list(row[8]) if row[8] else []
+                domain_list: list[dict[str, str]] = []
+                if domain_ids:
+                    domain_rows = session.execute(
+                        select(
+                            TermDomain.domain_id,
+                            TermDomain.domain_code,
+                            TermDomain.domain_name,
+                        ).where(TermDomain.domain_id.in_(domain_ids))
+                    ).all()
+                    domain_list = [{"code": str(d[1]), "name": str(d[2])} for d in domain_rows]
+
         except Exception:
             logger.exception("get_term_detail failed: term_id=%s", term_id)
             raise
@@ -2130,54 +2232,86 @@ class _TermReader(_ReaderBase):
             term_name=str(row[2]),
             term_type=str(row[3]),
             dataset_id=str(row[4]) if row[4] else "",
-            parent_term_code=parent_term_id,
+            library_id=str(row[4]) if row[4] else "",
+            parent_term_code=str(row[5]) if row[5] else "",
             desc=str(row[6]) if row[6] else "",
-            labels=tags,
-            synonyms="|".join(synonym_list),
-            ext_attrs={},
-            created_time=0,
-            updated_time=0,
-            parent_term_name=parent_term_name,
-            label_info=[],
-            synonym_list=synonym_list,
-            term_type_name=term_type_name,
+            term_tags=row[7] if isinstance(row[7], dict) else {},
+            domain=domain_list,
+            parent_chain=parent_chain,
+            names=names,
+            knowledges=knowledges,
+            children_count=children_count,
+            relation_count=relation_count,
+            created_time=self._datetime_to_epoch(row[9]),
+            updated_time=self._datetime_to_epoch(row[10]),
         )
 
     def list_terms(
         self,
         *,
-        dataset_id: str,
+        library_id: str,
         term_type: str | None = None,
         term_type_no_eq: str | None = None,
+        domain_code: str | None = None,
+        keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 50,
-    ) -> QueryResult:
-        """分页列出术语（每条含完整详情）。
+    ) -> dict[str, Any]:
+        """分页列出术语（term API 重构版）。
 
-        OpenGauss 实现：按 term_type 和 library_id 分页查询，
-        返回 TermDetail 列表（含 parent_name/synonyms/labels）。
+        OpenGauss 实现：按 term_type、library_id、domain_code、keyword 分页查询，
+        返回 term dict 列表（含 domain 翻译）。
         """
-        _ = dataset_id  # OpenGauss 不按 dataset_id 过滤
+        # Resolve domain_code → domain_id if provided
+        domain_id: str | None = None
+        if domain_code:
+            domain_id = self._resolve_domain_code(library_id, domain_code)
+            if domain_id is None:
+                return {
+                    "data": [],
+                    "pageIndex": page_index,
+                    "pageSize": page_size,
+                    "totalCount": 0,
+                    "totalPages": 0,
+                }
+
         try:
             with self._get_session() as session:
-                filters: list[Any] = []
+                filters: list[Any] = [Term.library_id == library_id]
                 if term_type:
                     canonical = self._normalize_type_code(term_type)
                     filters.append(Term.term_type_code == canonical)
                 if term_type_no_eq:
                     canonical_no_eq = self._normalize_type_code(term_type_no_eq)
                     filters.append(Term.term_type_code != canonical_no_eq)
+                if domain_id is not None:
+                    filters.append(text("term.domain_ids @> ARRAY[:domain_id]::varchar[]"))
+                if keyword and keyword.strip():
+                    filters.append(text("(term.term_name ILIKE :kw OR term.term_code ILIKE :kw)"))
 
                 where_clause = and_(*filters) if filters else text("1=1")
 
+                params: dict[str, Any] = {}
+                if domain_id is not None:
+                    params["domain_id"] = domain_id
+                if keyword and keyword.strip():
+                    params["kw"] = f"%{keyword.strip()}%"
+
                 total = int(
                     session.execute(
-                        select(func.count()).select_from(Term).where(where_clause)
+                        select(func.count()).select_from(Term).where(where_clause),
+                        params,
                     ).scalar_one()
                 )
 
                 if total == 0:
-                    return QueryResult(total=0, items=[])
+                    return {
+                        "data": [],
+                        "pageIndex": page_index,
+                        "pageSize": page_size,
+                        "totalCount": 0,
+                        "totalPages": 0,
+                    }
 
                 offset = (page_index - 1) * page_size
                 rows = session.execute(
@@ -2190,78 +2324,61 @@ class _TermReader(_ReaderBase):
                         Term.parent_term_id,
                         Term.desc_summary,
                         Term.term_tags,
+                        Term.domain_ids,
                         Term.created_time,
                         Term.updated_time,
                     )
                     .where(where_clause)
                     .limit(page_size)
                     .offset(offset)
-                    .order_by(Term.updated_time.desc())
+                    .order_by(Term.updated_time.desc()),
+                    params,
                 ).all()
 
-                # 批量查询父术语名称（优化：一次查询而非 N 次）
-                parent_ids = [str(r[5]) for r in rows if r[5] is not None]
-                parent_name_map: dict[str, str] = {}
-                if parent_ids:
-                    parent_rows = session.execute(
-                        select(Term.term_id, Term.term_name).where(Term.term_id.in_(parent_ids))
-                    ).all()
-                    parent_name_map = {str(pr[0]): str(pr[1]) for pr in parent_rows}
-
-                # 查询所有同义词（批量）
-                all_term_ids = [str(r[0]) for r in rows]
-                synonym_rows = session.execute(
-                    select(TermName.term_id, TermName.name_text).where(
-                        TermName.term_id.in_(all_term_ids)
-                    )
-                ).all()
-                synonym_map: dict[str, list[str]] = {tid: [] for tid in all_term_ids}
-                for sr in synonym_rows:
-                    synonym_map.setdefault(str(sr[0]), []).append(str(sr[1]))
+                # ── Batch resolve domain translation ──
+                all_domain_ids: set[str] = set()
+                for r_ in rows:
+                    if r_[8]:
+                        all_domain_ids.update(r_[8])
+                domain_map = self._batch_resolve_domain_codes(library_id, all_domain_ids)
 
         except Exception:
             logger.exception(
-                "list_terms failed: term_type=%s",
+                "list_terms failed: library_id=%s term_type=%s keyword=%s",
+                library_id,
                 term_type,
+                keyword,
             )
             raise
 
-        items: list[TermDetail] = []
+        data: list[dict[str, Any]] = []
         for row in rows:
-            tid = str(row[0])
-            tags: dict[str, str] = {}
-            raw_tags = row[7]
-            if isinstance(raw_tags, dict):
-                tags = {str(k): str(v) for k, v in raw_tags.items()}
+            domain_ids_for_row: list[str] = list(row[8]) if row[8] else []
+            domain_translated = self._build_domain_list(domain_ids_for_row, domain_map)
 
-            parent_tid = str(row[5]) if row[5] else ""
-            all_syns = synonym_map.get(tid, [])
-            # 过滤掉与 term_name 重复的同义词
-            term_name_text = str(row[2])
-            unique_syns = [s for s in all_syns if s != term_name_text]
-
-            items.append(
-                TermDetail(
-                    term_id=tid,
-                    term_code=str(row[1]),
-                    term_name=term_name_text,
-                    term_type=str(row[3]),
-                    dataset_id=str(row[4]) if row[4] else "",
-                    parent_term_code=parent_tid,
-                    desc=str(row[6]) if row[6] else "",
-                    labels=tags,
-                    synonyms="|".join(unique_syns),
-                    ext_attrs={},
-                    created_time=0,
-                    updated_time=0,
-                    parent_term_name=parent_name_map.get(parent_tid, ""),
-                    label_info=[],
-                    synonym_list=unique_syns,
-                    term_type_name="",
-                )
+            data.append(
+                {
+                    "term_id": str(row[0]),
+                    "term_code": str(row[1]),
+                    "term_name": str(row[2]),
+                    "term_type_code": str(row[3]),
+                    "library_id": str(row[4]) if row[4] else None,
+                    "parent_term_id": str(row[5]) if row[5] else None,
+                    "desc_summary": str(row[6]) if row[6] else None,
+                    "term_tags": row[7] if isinstance(row[7], dict) else {},
+                    "domain": domain_translated,
+                    "created_time": row[9].isoformat() if row[9] is not None else None,
+                    "updated_time": row[10].isoformat() if row[10] is not None else None,
+                }
             )
 
-        return QueryResult(total=total, items=list(items))
+        return {
+            "data": data,
+            "pageIndex": page_index,
+            "pageSize": page_size,
+            "totalCount": total,
+            "totalPages": (total + page_size - 1) // page_size if page_size > 0 else 0,
+        }
 
     def delete_scope(self, scope: str) -> dict[str, Any]:
         """删除指定 scope 下的所有术语数据（术语 + 名称 + 关系 + 知识）。
@@ -2682,10 +2799,32 @@ class _TermReader(_ReaderBase):
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
     ) -> dict[str, Any]:
-        """Query term relations via recursive or direct lookup."""
+        """Query term relations via recursive or direct lookup with pagination.
+
+        Args:
+            term_id: Core term ID.
+            relation_category: Optional relation category filter.
+            direction: "outgoing", "incoming", or "both" (default).
+            depth: Recursion depth (1 = direct only).
+            keyword: Optional keyword, searches relation_name (ILIKE).
+            page_index: 1-based page number (default 1).
+            page_size: Items per page (default 20, max 100).
+
+        Returns:
+            Dict with ``data``, ``pageIndex``, ``pageSize``, ``totalCount``, ``totalPages``.
+            Each relation includes source/target term names.
+        """
+        page_size = min(page_size, 100)
+        offset = (page_index - 1) * page_size
+
         with self._get_session() as session:
             filters: list[Any] = []
+            params: dict[str, Any] = {}
+
             if direction == "outgoing":
                 filters.append(TermRelation.source_term_id == term_id)
             elif direction == "incoming":
@@ -2699,19 +2838,80 @@ class _TermReader(_ReaderBase):
                 )
             if relation_category:
                 filters.append(TermRelation.relation_category == relation_category)
+            if keyword and keyword.strip():
+                filters.append(text("term_relation.relation_name ILIKE :kw"))
+                params["kw"] = f"%{keyword.strip()}%"
 
-            rows = session.execute(select(TermRelation).where(*filters).limit(500)).scalars().all()
+            where_clause = and_(*filters) if filters else text("1=1")
+
+            total = int(
+                session.execute(
+                    select(func.count()).select_from(TermRelation).where(where_clause),
+                    params,
+                ).scalar_one()
+            )
+
+            if total == 0:
+                return {
+                    "data": [],
+                    "pageIndex": page_index,
+                    "pageSize": page_size,
+                    "totalCount": 0,
+                    "totalPages": 0,
+                }
+
+            rows = session.execute(
+                select(
+                    TermRelation.relation_id,
+                    TermRelation.source_term_id,
+                    TermRelation.target_term_id,
+                    TermRelation.relation_name,
+                    TermRelation.relation_category,
+                    TermRelation.cardinality,
+                    TermRelation.action_term_id,
+                    TermRelation.created_time,
+                    TermRelation.updated_time,
+                )
+                .where(where_clause)
+                .order_by(TermRelation.relation_name)
+                .limit(page_size)
+                .offset(offset),
+                params,
+            ).all()
+
+            # Collect all term_ids for batch name resolution
+            term_ids: set[str] = set()
+            for r_ in rows:
+                if r_[1]:
+                    term_ids.add(str(r_[1]))
+                if r_[2]:
+                    term_ids.add(str(r_[2]))
+
+            term_name_map = self._batch_get_term_names(session, term_ids)
 
         data = [
             {
-                "relation_id": r.relation_id,
-                "source_term_id": r.source_term_id,
-                "target_term_id": r.target_term_id,
-                "relation_name": r.relation_name,
-                "relation_category": r.relation_category,
-                "cardinality": r.cardinality,
-                "action_term_id": r.action_term_id,
+                "relation_id": str(r[0]),
+                "source_term_id": str(r[1]) if r[1] else None,
+                "target_term_id": str(r[2]) if r[2] else None,
+                "relation_name": str(r[3]),
+                "relation_category": str(r[4]),
+                "cardinality": str(r[5]) if r[5] else None,
+                "action_term_id": str(r[6]) if r[6] else None,
+                "source_term_name": term_name_map.get(str(r[1])) if r[1] else None,
+                "target_term_name": term_name_map.get(str(r[2])) if r[2] else None,
+                "created_time": r[7].isoformat() if r[7] is not None else None,
+                "updated_time": r[8].isoformat() if r[8] is not None else None,
             }
             for r in rows
         ]
-        return {"data": data, "totalCount": len(data)}
+
+        return {
+            "data": data,
+            "pageIndex": page_index,
+            "pageSize": page_size,
+            "totalCount": total,
+            "totalPages": (total + page_size - 1) // page_size if page_size > 0 else 0,
+        }
+
+    # ── end of _TermReader ────────────────────────────────────────────
