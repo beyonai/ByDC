@@ -108,7 +108,10 @@ class FakeTermReader:
     def list_terms(
         self,
         *,
-        dataset_id: str,
+        dataset_id: str = "",
+        library_id: str = "",
+        domain_code: str | None = None,
+        keyword: str | None = None,
         term_type: str | None = None,
         term_type_no_eq: str | None = None,
         page_index: int = 1,
@@ -116,10 +119,11 @@ class FakeTermReader:
     ) -> QueryResult:
         """分页列出术语（返回 TermDetail 含完整详情）。
 
-        按 dataset_id 和 term_type 过滤，支持 term_type_no_eq 排除。
+        按 dataset_id/library_id 和 term_type 过滤，支持 term_type_no_eq 排除。
         返回的 items 为 TermDetail 列表。
         """
-        items = [t for t in self._terms.values() if t.dataset_id == dataset_id]
+        effective_library_id = library_id or dataset_id
+        items = [t for t in self._terms.values() if t.dataset_id == effective_library_id]
         if term_type:
             items = [t for t in items if t.term_type == term_type]
         if term_type_no_eq:
@@ -129,17 +133,20 @@ class FakeTermReader:
         paged = items[start : start + page_size]
         return QueryResult(total=total, items=list(paged))
 
-    def get_term_detail(self, *, dataset_id: str, term_id: str) -> TermDetail | None:
+    def get_term_detail(
+        self, *, dataset_id: str = "", library_id: str = "", term_id: str
+    ) -> TermDetail | None:
         """查询单条术语完整详情。
 
         Args:
-            dataset_id: 术语库 ID（Fake 中暂不校验，仅用于接口兼容）。
+            dataset_id: 术语库 ID（**已弃用**，Fake 中暂不校验）。
+            library_id: 术语库 ID（新名称）。
             term_id: 术语 ID。
 
         Returns:
             TermDetail，不存在返回 None。
         """
-        _ = dataset_id  # Fake 不校验 dataset_id 归属
+        _ = (dataset_id, library_id)  # Fake 不校验
         return self._terms.get(term_id)
 
     # ── 现有 TermReader 方法空实现（保持协议兼容）─────────────────────
@@ -334,17 +341,20 @@ class FakeTermWriter:
 
     # ── TermWriter 新增方法实现 ────────────────────────────────────────
 
-    def import_terms(self, *, dataset_id: str, terms: list[TermCreate]) -> ImportResult:
+    def import_terms(
+        self, *, dataset_id: str = "", library_id: str = "", terms: list[TermCreate]
+    ) -> ImportResult:
         """批量新增术语（内存记录）。
 
         Args:
-            dataset_id: 目标术语库 ID。
+            dataset_id: 目标术语库 ID（**已弃用**，请使用 ``library_id``）。
+            library_id: 目标术语库 ID（新名称）。
             terms: 待新增术语列表。
 
         Returns:
             ImportResult，含创建数和 term_id 列表。
         """
-        _ = dataset_id  # Fake 不校验 dataset_id
+        _ = (dataset_id, library_id)  # Fake 不校验
         self._imported.extend(terms)
 
         if self._import_results is not None:
