@@ -33,12 +33,10 @@ from datacloud_platform.api.routers.ontology_build_routes import (
     create_ontology_build_routes,
 )
 from datacloud_platform.api.routers.workspace_routes import create_workspace_routes
-from datacloud_platform.api.routers.ontology_routes import create_ontology_routes
 from datacloud_platform.api.routers.query_routes import router as query_router
 from datacloud_platform.api.routers.resource_routes import create_resource_routes
 from datacloud_platform.api.routers.search_routes import create_search_routes
 from datacloud_platform.api.routers.skills_routes import router as skills_router
-from datacloud_platform.api.routers.term_routes import create_term_routes
 from datacloud_platform.api.routers.terms_routes import router as terms_router
 from datacloud_platform.config import get_settings
 
@@ -160,11 +158,9 @@ def create_app(
     app.add_middleware(DeprecationMiddleware)
 
     # ── Factory routes (require platform instance) ──────────────────────────
-    app.include_router(create_ontology_routes(platform))
     app.include_router(create_resource_routes(platform))
     app.include_router(create_search_routes(platform))
     app.include_router(create_import_routes(platform))
-    app.include_router(create_term_routes(platform))
 
     # ── Simple routes (no platform dependency) ──────────────────────────────
     app.include_router(query_router, prefix="/api/v1")
