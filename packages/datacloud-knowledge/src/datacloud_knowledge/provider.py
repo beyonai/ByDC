@@ -390,7 +390,8 @@ def query_terms(
 
 def get_term_detail(
     *,
-    dataset_id: str,
+    dataset_id: str = "",
+    library_id: str = "",
     term_id: str,
 ) -> TermDetail | None:
     """查询单条术语完整详情。
@@ -399,19 +400,24 @@ def get_term_detail(
     典型用途：术语详情页、编辑前回显。
 
     Args:
-        dataset_id: 术语库 ID。
+        dataset_id: 术语库 ID（**已弃用**，请使用 ``library_id``）。
+        library_id: 术语库 ID（新名称，ADR-002）。
         term_id:    术语 ID。
 
     Returns:
         TermDetail，不存在返回 None。
     """
+    effective_library_id = library_id or dataset_id
     reader = create_reader()
-    return reader.get_term_detail(dataset_id=dataset_id, term_id=term_id)
+    return reader.get_term_detail(library_id=effective_library_id, term_id=term_id)
 
 
 def list_terms(
     *,
-    dataset_id: str,
+    dataset_id: str = "",
+    library_id: str = "",
+    domain_code: str | None = None,
+    keyword: str | None = None,
     term_type: str | None = None,
     term_type_no_eq: str | None = None,
     page_index: int = 1,
@@ -423,7 +429,10 @@ def list_terms(
     替代 N 次并发 get_term_detail。典型用途：加载某类型全量术语、构建 name index。
 
     Args:
-        dataset_id:      术语库 ID。
+        dataset_id:      术语库 ID（**已弃用**，请使用 ``library_id``）。
+        library_id:      术语库 ID（新名称，ADR-002）。
+        domain_code:     领域编码过滤（可选）。
+        keyword:          关键词搜索（可选）。
         term_type:       术语类型编码。None = 不限。
         term_type_no_eq: 排除的术语类型编码。传 "-1" 表示排除术语类型本身。
         page_index:      页码（从 1 开始）。
@@ -432,11 +441,14 @@ def list_terms(
     Returns:
         QueryResult，其中 items 为 TermDetail 列表。
     """
+    effective_library_id = library_id or dataset_id
     reader = create_reader()
     return reader.list_terms(
-        dataset_id=dataset_id,
+        library_id=effective_library_id,
         term_type=term_type,
         term_type_no_eq=term_type_no_eq,
+        domain_code=domain_code,
+        keyword=keyword,
         page_index=page_index,
         page_size=page_size,
     )
@@ -444,22 +456,36 @@ def list_terms(
 
 def import_terms(
     *,
-    dataset_id: str,
+    dataset_id: str = "",
+    library_id: str = "",
     terms: list[TermCreate],
+    backfill: bool = False,
 ) -> ImportResult:
     """批量新增术语（含同义词、标签、扩展属性）。
 
     典型用途：批量导入术语数据、知识包导入。
 
     Args:
-        dataset_id: 目标术语库 ID。
+        dataset_id: 目标术语库 ID（**已弃用**，请使用 ``library_id``）。
+        library_id: 目标术语库 ID（新名称，ADR-002）。
         terms:      待新增术语列表。
+        backfill:   导入后是否回填 tsvector 和 embedding 向量。默认 False。
 
     Returns:
-        ImportResult，含创建数、term_id 列表和错误信息。
+        ImportResult，含创建数、更新数、跳过数、term_id 列表和错误信息。
     """
+    effective_library_id = library_id or dataset_id
     with create_writer() as writer:
-        return writer.import_terms(dataset_id=dataset_id, terms=terms)
+        result = writer.import_terms(library_id=effective_library_id, terms=terms)
+
+    if backfill and result.term_ids:
+        from datacloud_knowledge.adapters.opengauss._writers._term import (
+            run_import_backfill,
+        )
+
+        run_import_backfill(result.term_ids)
+
+    return result
 
 
 def update_term(
