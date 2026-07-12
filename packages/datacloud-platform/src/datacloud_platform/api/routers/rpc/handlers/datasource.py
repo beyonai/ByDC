@@ -27,7 +27,7 @@ def _list_datasources(
 def _get_datasource(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    db_id: str = params["db_id"]
+    db_id: str = params.get("db_id", "")
     ds = platform.get_datasource_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         db_id,
@@ -52,7 +52,9 @@ def _create_datasource(
 def _delete_datasource(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_datasource(params.get("base_id", DEFAULT_BASE_ID), params["db_id"])
+    platform.delete_datasource(
+        params.get("base_id", DEFAULT_BASE_ID), params.get("db_id", "")
+    )
     return ok(message="deleted")
 
 

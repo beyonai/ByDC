@@ -45,7 +45,7 @@ def _search_ontology(
 def _search_scene(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    scene_ids: list[str] = params["scene_ids"]
+    scene_ids: list[str] = params.get("scene_ids", [])
     return ok(
         data=platform.search_ontology(
             base_id=params.get("base_id", DEFAULT_BASE_ID),
@@ -93,7 +93,7 @@ def _graph_query(
     return ok(
         data=platform.graph_query(
             base_id=params.get("base_id", DEFAULT_BASE_ID),
-            scene_id=params["scene_id"],
+            scene_id=params.get("scene_id", ""),
             object_code=params.get("objectCodes", params.get("objectCode", [])),
             match_by=params.get("matchBy", "name"),
             values=params.get("values"),
@@ -108,7 +108,7 @@ def _graph_shortest_path(
     return ok(
         data=platform.graph_path(
             base_id=params.get("base_id", DEFAULT_BASE_ID),
-            scene_id=params["scene_id"],
+            scene_id=params.get("scene_id", ""),
             match_by=params.get("matchBy", "name"),
             start_node=params.get("sourceObjectCode", ""),
             end_node=params.get("targetObjectCode", ""),

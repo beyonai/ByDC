@@ -29,7 +29,7 @@ def _list_relations(
 def _get_relation(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    code: str = params["code"]
+    code: str = params.get("code", "")
     rel = platform.get_relation_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
@@ -54,7 +54,7 @@ def _create_relation(
 def _update_relation(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    code: str = params["code"]
+    code: str = params.get("code", "")
     platform.update_relation(
         params.get("base_id", DEFAULT_BASE_ID),
         code,
@@ -66,7 +66,9 @@ def _update_relation(
 def _delete_relation(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    platform.delete_relation(params.get("base_id", DEFAULT_BASE_ID), params["code"])
+    platform.delete_relation(
+        params.get("base_id", DEFAULT_BASE_ID), params.get("code", "")
+    )
     return ok(message="deleted")
 
 

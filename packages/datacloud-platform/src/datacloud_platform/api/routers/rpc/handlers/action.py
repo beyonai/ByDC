@@ -19,7 +19,7 @@ def _list_actions(
 ) -> Any:
     items, _ = platform.get_actions(
         base_id=params.get("base_id", DEFAULT_BASE_ID),
-        object_code=params["object_code"],
+        object_code=params.get("object_code", ""),
         owner_type=params.get("owner_type"),
         user_code=params.get("user_code"),
         keyword=params.get("keyword"),
@@ -30,8 +30,8 @@ def _list_actions(
 def _get_action(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    object_code: str = params["object_code"]
-    code: str = params["code"]
+    object_code: str = params.get("object_code", "")
+    code: str = params.get("code", "")
     action = platform.get_action_detail(
         params.get("base_id", DEFAULT_BASE_ID),
         object_code,
@@ -48,7 +48,7 @@ def _create_action(
     return ok(
         data=platform.create_action(
             params.get("base_id", DEFAULT_BASE_ID),
-            params["object_code"],
+            params.get("object_code", ""),
             Action(**(params.get("action") or {})),
         ),
         message="created",
@@ -58,8 +58,8 @@ def _create_action(
 def _update_action(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    object_code: str = params["object_code"]
-    code: str = params["code"]
+    object_code: str = params.get("object_code", "")
+    code: str = params.get("code", "")
     platform.update_action(
         params.get("base_id", DEFAULT_BASE_ID),
         object_code,
@@ -74,8 +74,8 @@ def _delete_action(
 ) -> Any:
     platform.delete_action(
         params.get("base_id", DEFAULT_BASE_ID),
-        params["object_code"],
-        params["code"],
+        params.get("object_code", ""),
+        params.get("code", ""),
     )
     return ok(message="deleted")
 
