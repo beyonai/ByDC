@@ -78,6 +78,8 @@ class TermCreate:
     """百应拓展字段。"""
     synonyms: list[str] = field(default_factory=list)
     """同义词列表 → synonymList。"""
+    relations: list[dict[str, str]] = field(default_factory=list)
+    """关系列表。每条含 term_name / term_code / relation_name / relation_category / cardinality。"""
 
 
 @dataclass(frozen=True, slots=True)
