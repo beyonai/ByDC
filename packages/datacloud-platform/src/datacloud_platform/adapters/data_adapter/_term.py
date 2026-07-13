@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
-
-if TYPE_CHECKING:
-    from datacloud_knowledge.contracts.term_provider_types import TermCreate
+from datacloud_knowledge.adapters import create_reader, create_writer
+from datacloud_knowledge.contracts.term_provider_types import (
+    LabelCondition,
+    LabelFilter,
+    QueryResult,
+    QueryType,
+    TermCreate,
+    TermUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,26 +31,45 @@ class TermBackendMixin(DataCloudDataBackendBase):
         keyword: str | None = None,
         term_name: str | None = None,
         term_type: str | None = None,
-        query_type: str = "fulltext",
+        query_type: QueryType = "fulltext",
         parent_term_code: str | None = None,
-        label_filters: list[dict[str, Any]] | None = None,
-        label_condition: str = "and",
+        label_filters: list[LabelFilter] | None = None,
+        label_condition: LabelCondition = "and",
         term_ids: list[str] | None = None,
         top_k: int = 20,
         offset: int = 0,
-    ) -> dict[str, Any]:
-        """Multi-strategy term search via datacloud_knowledge provider."""
-        from datacloud_knowledge.provider import query_terms  # noqa: PLC0415
+    ) -> QueryResult:
+        """检索术语。
 
-        return query_terms(  # type: ignore[return-value]
+        支持按关键词、术语名称、类型、标签等多维度检索，返回分页结果。
+        典型用途：术语搜索、候选列表加载。
+
+        Args:
+            dataset_ids:      术语库 ID 列表。None/空 = 不限制。
+            keyword:          检索关键词（模糊匹配 term_name/term_code）。
+            term_name:        术语名称精确匹配。与 keyword 互斥。
+            term_type:        术语类型编码。None = 不限制类型。
+            query_type:       检索策略（fulltext/exact/embedding/mixed）。
+            parent_term_code: 父术语编码过滤。None = 不限制。
+            label_filters:    标签过滤条件列表。
+            label_condition:  多标签组合方式（and/or）。
+            term_ids:         按 ID 列表精确查询。传入时忽略 keyword/query_type。
+            top_k:            返回条数（1..200）。
+            offset:           分页偏移（>=0）。
+
+        Returns:
+            QueryResult，包含 total 和 items（TermItem 列表）。
+        """
+        reader = create_reader()
+        return reader.query_terms(
             dataset_ids=dataset_ids,
             keyword=keyword,
             term_name=term_name,
             term_type=term_type,
-            query_type=query_type,  # type: ignore[arg-type]
+            query_type=query_type,
             parent_term_code=parent_term_code,
-            label_filters=label_filters,  # type: ignore[arg-type]
-            label_condition=label_condition,  # type: ignore[arg-type]
+            label_filters=label_filters,
+            label_condition=label_condition,
             term_ids=term_ids,
             top_k=top_k,
             offset=offset,
@@ -129,9 +154,6 @@ class TermBackendMixin(DataCloudDataBackendBase):
         self, *, library_id: str = "", term_id: str, updates: dict[str, Any]
     ) -> None:
         """Update a term via datacloud_knowledge provider."""
-        from datacloud_knowledge.contracts.term_provider_types import (  # noqa: PLC0415
-            TermUpdate,
-        )
         from datacloud_knowledge.provider import (  # noqa: PLC0415
             update_term as sdk_update_term,
         )
@@ -144,7 +166,6 @@ class TermBackendMixin(DataCloudDataBackendBase):
 
     def delete_term(self, *, term_id: str) -> None:
         """Delete a term via datacloud_knowledge writer."""
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
             writer.delete_term(term_id=term_id)
@@ -176,7 +197,6 @@ class TermBackendMixin(DataCloudDataBackendBase):
         使用 writer.upsert_term 实现真正的 INSERT-or-UPDATE 语义，
         避免 import_terms（纯 INSERT）在 update 事件时静默失败。
         """
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         if not terms:
             return []
@@ -221,7 +241,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             terms:    业务三元组 dict 列表（term_code, term_type_code, library_code），
                       先通过 reader.get_term_by_ids 反查 UUID 再删除。
         """
-        from datacloud_knowledge.adapters import create_reader, create_writer  # noqa: PLC0415
+        from datacloud_knowledge.adapters import create_reader  # noqa: PLC0415
 
         ids_to_delete: list[str] = list(term_ids) if term_ids else []
 
@@ -322,7 +342,6 @@ class TermBackendMixin(DataCloudDataBackendBase):
             return None
 
     def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
             return writer.create_term_relation(relation=relation)
@@ -330,13 +349,11 @@ class TermBackendMixin(DataCloudDataBackendBase):
     def update_term_relation(
         self, *, relation_id: str, updates: dict[str, Any]
     ) -> None:
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
             writer.update_term_relation(relation_id=relation_id, updates=updates)
 
     def delete_term_relation(self, *, relation_id: str) -> None:
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
             writer.delete_term_relation(relation_id=relation_id)
@@ -362,19 +379,16 @@ class TermBackendMixin(DataCloudDataBackendBase):
             return None
 
     def create_term_name(self, *, name: dict[str, Any]) -> dict[str, Any]:
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
             return writer.create_term_name_wrapper(name=name)
 
     def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
             writer.update_term_name(name_id=name_id, updates=updates)
 
     def delete_term_name(self, *, name_id: str) -> None:
-        from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
             writer.delete_term_name(name_id=name_id)
@@ -395,6 +409,10 @@ def _dict_to_term_create(term: dict[str, Any]) -> "TermCreate":
     """
     from datacloud_knowledge.contracts.term_provider_types import TermCreate  # noqa: PLC0415
 
+    relations = (
+        term.get("relations") or term.get("relatedTo") or term.get("related_to", [])
+    )
+
     return TermCreate(
         term_name=term.get("termName") or term.get("term_name", ""),
         term_code=term.get("termCode") or term.get("term_code", ""),
@@ -406,4 +424,5 @@ def _dict_to_term_create(term: dict[str, Any]) -> "TermCreate":
         labels=term.get("labels", {}),
         ext_attrs=term.get("extAttrs") or term.get("ext_attrs", {}),
         synonyms=term.get("synonyms", []),
+        relations=relations,
     )
