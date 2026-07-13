@@ -503,6 +503,20 @@ class OntologyBackend(Protocol):
 
     # ── 本体搜索 & 图查询（从 KnowledgeBackend 迁入）─────────────
 
+    def resolve_scope_term_codes(
+        self,
+        base_id: str,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+    ) -> list[str] | None:
+        """预解析 object_code / view_code 对应的属性码 + 自身 code 合集。
+
+        供批量调用场景：调用方预解析一次，后续多次 search_ontology
+        通过 ``pre_resolved_term_codes`` 传入，避免重复查询。
+        返回 None 表示所有请求的 code 均无效。
+        """
+        ...
+
     def search_ontology(
         self,
         base_id: str,
@@ -515,6 +529,7 @@ class OntologyBackend(Protocol):
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
+        pre_resolved_term_codes: list[str] | None = None,
         limit: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:

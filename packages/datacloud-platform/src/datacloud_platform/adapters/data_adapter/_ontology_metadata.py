@@ -98,9 +98,72 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         "object": "object",
         "action": "ontology_action",
         "view": "view",
-        "property": "property",
+        "property": "prop",
         "dimension": "dimension",
     }
+
+    def resolve_scope_term_codes(
+        self,
+        base_id: str,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+    ) -> list[str] | None:
+        """Resolve property codes for object/view codes, with existence check.
+
+        Returns a union of object_codes, view_codes, and their resolved property
+        codes.  Returns ``None`` when all requested codes are invalid (not found).
+        The caller can pass the result to :meth:`search_ontology` as
+        ``pre_resolved_term_codes`` to skip repeated resolution in a batch loop.
+        """
+        store = self._entity_store.sub_store(base_id)
+        valid_object_codes: list[str] = []
+        if object_code:
+            for oc in object_code:
+                if store.get("objects", oc) is None:
+                    logger.warning(
+                        "resolve_scope_term_codes: object_code=%r not found in base_id=%s",
+                        oc,
+                        base_id,
+                    )
+                else:
+                    valid_object_codes.append(oc)
+        valid_view_codes: list[str] = []
+        if view_code:
+            for vc in view_code:
+                if store.get("views", vc) is None:
+                    logger.warning(
+                        "resolve_scope_term_codes: view_code=%r not found in base_id=%s",
+                        vc,
+                        base_id,
+                    )
+                else:
+                    valid_view_codes.append(vc)
+
+        if (
+            (object_code or view_code)
+            and not valid_object_codes
+            and not valid_view_codes
+        ):
+            return None
+
+        resolved: set[str] = set(valid_object_codes) | set(valid_view_codes)
+        if valid_object_codes:
+            bindings = self.get_object_property_term_bindings(
+                valid_object_codes, base_id=base_id
+            )
+            for b in bindings:
+                pc = b.get("propertyCode", "")
+                if pc:
+                    resolved.add(pc)
+        if valid_view_codes:
+            bindings = self.get_view_property_term_bindings(
+                valid_view_codes, base_id=base_id
+            )
+            for b in bindings:
+                pc = b.get("propertyCode", "")
+                if pc:
+                    resolved.add(pc)
+        return list(resolved) if resolved else None
 
     def search_ontology(
         self,
@@ -114,6 +177,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
+        pre_resolved_term_codes: list[str] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Unified vector search across metadata and instance terms.
@@ -130,6 +194,23 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                 "instances": [],
                 "totalCount": {"metadata": 0, "instances": 0},
             }
+
+        # ── Resolve term_codes (skip when caller provides pre-resolved codes) ──
+        if pre_resolved_term_codes is not None:
+            term_codes_for_search: list[str] | None = (
+                pre_resolved_term_codes if pre_resolved_term_codes else None
+            )
+        else:
+            resolved = self.resolve_scope_term_codes(
+                base_id, object_code=object_code, view_code=view_code
+            )
+            if resolved is None and (object_code or view_code):
+                return {
+                    "metadata": [],
+                    "instances": [],
+                    "totalCount": {"metadata": 0, "instances": 0},
+                }
+            term_codes_for_search = resolved
 
         svc = self._get_embedding()
         vec = svc.get_text_embedding(keyword)
@@ -154,7 +235,6 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         else:
             metadata_types = _ALL_METADATA_TYPES
 
-        view_code_set: set[str] | None = set(view_code) if view_code else None
         property_code_set: set[str] | None = (
             set(property_code) if property_code else None
         )
@@ -165,14 +245,12 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             metadata_hits = engine.search_terms_by_embedding(
                 vector=vec,
                 term_types=metadata_types,
-                term_codes=object_code,
+                term_codes=term_codes_for_search,
                 limit=limit,
             )
             for hit in metadata_hits:
                 term_code = str(hit.get("term_code", ""))
                 term_type = str(hit.get("term_type_code", ""))
-                if view_code_set is not None and term_code not in view_code_set:
-                    continue
                 if property_code_set is not None and term_code not in property_code_set:
                     continue
                 entry: dict[str, Any] = {

@@ -507,6 +507,16 @@ class _NoopOntologyBackend:
 
     # -- Ontology search & graph (no-op) --
 
+    def resolve_scope_term_codes(
+        self,
+        base_id: str,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+    ) -> list[str] | None:
+        """No-op."""
+        _ = base_id, object_code, view_code
+        return None
+
     def search_ontology(
         self,
         base_id: str,
@@ -519,6 +529,7 @@ class _NoopOntologyBackend:
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
+        pre_resolved_term_codes: list[str] | None = None,
         limit: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:

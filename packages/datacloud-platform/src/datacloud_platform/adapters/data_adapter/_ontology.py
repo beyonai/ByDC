@@ -2447,6 +2447,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             name = obj.get("object_name", "")
             if code and name:
                 entities.append(("object", code, name))
+            # Collect object property terms (fields)
+            for field in obj.get("fields", []):
+                prop_code = field.get("field_code", field.get("fieldCode", "")) or ""
+                prop_name = field.get("field_name", field.get("fieldName", "")) or ""
+                if prop_code and prop_name:
+                    entities.append(("prop", prop_code, prop_name))
         for view in views:
             code = (
                 view.get("view_code", view.get("viewCode", view.get("view_id", "")))
@@ -2455,6 +2461,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             name = view.get("view_name", "")
             if code and name:
                 entities.append(("view", code, name))
+            # Collect view property terms (mappings)
+            for mapping in view.get("mappings", []):
+                prop_code = mapping.get("property_code", "") or ""
+                prop_name = mapping.get("property_name", "") or ""
+                if prop_code and prop_name:
+                    entities.append(("prop", prop_code, prop_name))
         for rel in relations:
             code = rel.get("relation_code", rel.get("relationCode", "")) or ""
             name = rel.get("relation_name", "")
@@ -2474,6 +2486,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             "view": "view",
             "relation": "relation",
             "action": "ontology_action",
+            "prop": "prop",
         }
 
         terms: list[tuple[str, str, str]] = [
