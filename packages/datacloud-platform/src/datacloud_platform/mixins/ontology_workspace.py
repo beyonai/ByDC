@@ -833,7 +833,9 @@ class OntologyWorkspaceMixin:
             drop_table(entity_code.strip(), user_code)
 
             # 从场景移除并删除 ontology 元数据
-            self.delete_object_from_all_scenes(base_id, entity_code.strip())  # type: ignore[attr-defined]
+            self.delete_object_from_all_scenes(  # type: ignore[attr-defined]
+                base_id, entity_code.strip()
+            )
 
             # 删工作区文件
             wfm = self._get_wfm(user_code, workspace_name)
@@ -863,7 +865,9 @@ class OntologyWorkspaceMixin:
         base_id: str = self._default_base_id()  # type: ignore[attr-defined]
 
         try:
-            self.delete_view_from_all_scenes(base_id, view_code.strip())  # type: ignore[attr-defined]
+            self.delete_view_from_all_scenes(  # type: ignore[attr-defined]
+                base_id, view_code.strip()
+            )
 
             wfm = self._get_wfm(user_code, workspace_name)
             wfm.delete_view(view_code.strip())

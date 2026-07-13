@@ -458,10 +458,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         """
         from datacloud_data_sdk.ontology.loader import OntologyLoader  # noqa: PLC0415
 
-        # Normalize legacy data from create_object (model_dump by_alias camelCase)
-        # and OWL-parsed data into a canonical format the loader understands.
-        from datacloud_platform.adapters.data_adapter._base import _normalize_entity
-
+        # Normalize legacy camelCase data (model_dump by_alias) and OWL data
+        # into the canonical snake_case format that OntologyLoader expects.
         normalized = _normalize_entity("object", raw)
         loader = OntologyLoader()
         loader.load_from_content({"objects": [normalized]})
@@ -501,7 +499,10 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 Property(
                     propertyName=f.field_name,
                     propertyCode=f.field_code,
+                    propertyDesc=getattr(f, "description", None) or None,
                     dataType=f.field_type,
+                    dataFormat=getattr(f, "data_format", None),
+                    isRequired=1 if getattr(f, "required", False) else 0,
                     businessKey=1 if f.is_primary_key else 0,
                     sourceColumn=getattr(f, "source_column", None),
                     dbId=getattr(cls, "datasource_alias", None),
@@ -607,7 +608,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             resource_code=code,
             resource_name=obj_dict.get("objectName")
             or obj_dict.get("object_name", code),
-            resource_desc=obj_dict.get("objectDesc") or obj_dict.get("object_desc", "") or obj_dict.get("description", ""),
+            resource_desc=(
+                obj_dict.get("objectDesc")
+                or obj_dict.get("object_desc", "")
+                or obj_dict.get("description", "")
+            ),
             base_code=base_id,
             owner_type=obj_dict.get("ownerType")
             or obj_dict.get("owner_type", "enterprise"),
