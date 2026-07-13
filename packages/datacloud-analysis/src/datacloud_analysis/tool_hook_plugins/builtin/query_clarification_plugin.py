@@ -305,7 +305,7 @@ def _resolve_via_aliases(
     )
     try:
         result = resolve_field_aliases(
-            terms=field_terms,
+            field_terms=field_terms,
             scope_code=scope_code,
             user_id=user_id,
             resolve_values=bool(value_terms),
