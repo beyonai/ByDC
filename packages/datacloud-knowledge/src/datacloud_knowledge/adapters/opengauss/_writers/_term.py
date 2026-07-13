@@ -58,6 +58,7 @@ class _TermWriter(_WriterBase):
         domain_ids: list[str],
         parent_term_id: str | None = None,
         term_tags: dict[str, object] | None = None,
+        ext_attrs: dict[str, object] | None = None,
         user_id: str | None = None,
     ) -> str:
         """原子插入术语记录（不含知识和别名）。
@@ -70,6 +71,7 @@ class _TermWriter(_WriterBase):
             domain_ids: 所属领域 ID 列表。
             parent_term_id: 父术语 ID（可选）。
             term_tags: 术语标签属性（JSONB，可选）。
+            ext_attrs: 自定义扩展属性（JSONB，可选）。
             user_id: 创建用户 ID（可选，当前仅用于日志）。
 
         Returns:
@@ -83,10 +85,11 @@ class _TermWriter(_WriterBase):
             text(
                 "INSERT INTO term "
                 "(term_id, term_code, term_name, term_type_code, library_id, "
-                "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
+                "domain_ids, parent_term_id, term_tags, ext_attrs, created_time, updated_time) "
                 "VALUES ("
                 ":term_id, :term_code, :term_name, :term_type_code, :library_id, "
-                ":domain_ids, :parent_term_id, CAST(:term_tags AS jsonb), :now, :now"
+                ":domain_ids, :parent_term_id, CAST(:term_tags AS jsonb), "
+                "CAST(:ext_attrs AS jsonb), :now, :now"
                 ")"
             ),
             {
@@ -98,6 +101,7 @@ class _TermWriter(_WriterBase):
                 "domain_ids": domain_ids,
                 "parent_term_id": parent_term_id,
                 "term_tags": json.dumps(term_tags) if term_tags else "{}",
+                "ext_attrs": json.dumps(ext_attrs) if ext_attrs else "{}",
                 "now": now,
             },
         )
@@ -592,6 +596,13 @@ class _TermWriter(_WriterBase):
                 labels = t.get("labels") or t.get("tags") or t.get("term_tags") or {}
                 merged_labels.update(labels)
 
+            # Merge ext_attrs
+            merged_ext_attrs: dict[str, Any] = {}
+            for t in group:
+                ext_a = t.get("ext_attrs") or t.get("extAttrs") or {}
+                if isinstance(ext_a, dict):
+                    merged_ext_attrs.update(ext_a)
+
             # Merge domain info
             domain_ids: list[str] = []
             domain_codes: list[str] = []
@@ -612,6 +623,7 @@ class _TermWriter(_WriterBase):
             base["term_code"] = all_codes[0] if all_codes else ""
             base["synonyms"] = all_syns
             base["labels"] = merged_labels
+            base["ext_attrs"] = merged_ext_attrs
             base["domain_ids"] = domain_ids
             base["domain_codes"] = domain_codes
 
@@ -783,6 +795,9 @@ class _TermWriter(_WriterBase):
                 # Merge labels/tags
                 labels = t.get("labels") or t.get("tags") or t.get("term_tags") or {}
                 term_tags = labels if isinstance(labels, dict) else {}
+                # Merge ext_attrs
+                ext_attrs = t.get("ext_attrs") or t.get("extAttrs") or {}
+                ext_attrs = ext_attrs if isinstance(ext_attrs, dict) else {}
 
                 # Check for existing term → stub upgrade
                 existing = self.session.execute(
@@ -805,6 +820,7 @@ class _TermWriter(_WriterBase):
                             "term_name = :name, term_type_code = :type_code, "
                             "desc_summary = :desc, domain_ids = :dids, "
                             "term_tags = CAST(:tags AS jsonb), "
+                            "ext_attrs = CAST(:ext_attrs AS jsonb), "
                             "parent_term_id = :parent_id, "
                             "updated_time = :now "
                             "WHERE term_id = :tid"
@@ -815,6 +831,7 @@ class _TermWriter(_WriterBase):
                             "desc": desc_summary if desc_summary else None,
                             "dids": domain_ids,
                             "tags": json.dumps(term_tags),
+                            "ext_attrs": json.dumps(ext_attrs),
                             "parent_id": parent_term_id,
                             "now": now,
                             "tid": existing_term_id,
@@ -860,6 +877,7 @@ class _TermWriter(_WriterBase):
                                 "term_name = :name, term_type_code = :type_code, "
                                 "desc_summary = :desc, domain_ids = :dids, "
                                 "term_tags = CAST(:tags AS jsonb), "
+                                "ext_attrs = CAST(:ext_attrs AS jsonb), "
                                 "parent_term_id = :parent_id, "
                                 "updated_time = :now "
                                 "WHERE term_id = :tid"
@@ -870,6 +888,7 @@ class _TermWriter(_WriterBase):
                                 "desc": desc_summary if desc_summary else None,
                                 "dids": domain_ids,
                                 "tags": json.dumps(term_tags),
+                                "ext_attrs": json.dumps(ext_attrs),
                                 "parent_id": parent_term_id,
                                 "now": now,
                                 "tid": existing_tid,
@@ -898,10 +917,12 @@ class _TermWriter(_WriterBase):
                             text(
                                 "INSERT INTO term "
                                 "(term_id, term_code, term_name, term_type_code, library_id, "
-                                "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
+                                "domain_ids, parent_term_id, term_tags, ext_attrs, "
+                                "created_time, updated_time) "
                                 "VALUES ("
                                 ":tid, :code, :name, :type_code, :lid, "
-                                ":dids, :parent_id, CAST(:tags AS jsonb), :now, :now"
+                                ":dids, :parent_id, CAST(:tags AS jsonb), "
+                                "CAST(:ext_attrs AS jsonb), :now, :now"
                                 ")"
                             ),
                             {
@@ -913,6 +934,7 @@ class _TermWriter(_WriterBase):
                                 "dids": domain_ids,
                                 "parent_id": parent_term_id,
                                 "tags": json.dumps(term_tags),
+                                "ext_attrs": json.dumps(ext_attrs),
                                 "now": now,
                             },
                         )
@@ -1065,10 +1087,11 @@ class _TermWriter(_WriterBase):
                             text(
                                 "INSERT INTO term "
                                 "(term_id, term_code, term_name, term_type_code, library_id, "
-                                "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
+                                "domain_ids, parent_term_id, term_tags, ext_attrs, "
+                                "created_time, updated_time) "
                                 "VALUES ("
                                 ":tid, :code, :name, :type_code, :lid, "
-                                "'{}', NULL, '{}'::jsonb, :now, :now"
+                                "'{}', NULL, '{}'::jsonb, '{}'::jsonb, :now, :now"
                                 ")"
                             ),
                             {

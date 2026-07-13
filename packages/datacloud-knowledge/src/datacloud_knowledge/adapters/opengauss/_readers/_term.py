@@ -2019,6 +2019,7 @@ class _TermReader(_ReaderBase):
                         Term.parent_term_id,
                         Term.desc_summary,
                         Term.term_tags,
+                        Term.ext_attrs,
                         Term.created_time,
                         Term.updated_time,
                     )
@@ -2041,6 +2042,10 @@ class _TermReader(_ReaderBase):
             raw_tags = row[7]
             if isinstance(raw_tags, dict):
                 tags = {str(k): str(v) for k, v in raw_tags.items()}
+            ext_attrs: dict[str, str] = {}
+            raw_ext_attrs = row[8]
+            if isinstance(raw_ext_attrs, dict):
+                ext_attrs = {str(k): str(v) for k, v in raw_ext_attrs.items()}
 
             items.append(
                 ProviderTermItem(
@@ -2053,7 +2058,7 @@ class _TermReader(_ReaderBase):
                     desc=str(row[6]) if row[6] else "",
                     labels=tags,
                     synonyms="",
-                    ext_attrs={},
+                    ext_attrs=ext_attrs,
                     created_time=0,
                     updated_time=0,
                 )
@@ -2088,6 +2093,7 @@ class _TermReader(_ReaderBase):
                         Term.parent_term_id,
                         Term.desc_summary,
                         Term.term_tags,
+                        Term.ext_attrs,
                         Term.domain_ids,
                         Term.created_time,
                         Term.updated_time,
@@ -2210,7 +2216,7 @@ class _TermReader(_ReaderBase):
                 )
 
                 # ── domain translation: resolve domain_ids[] to [{code, name}] ──
-                domain_ids: list[str] = list(row[8]) if row[8] else []
+                domain_ids: list[str] = list(row[9]) if row[9] else []
                 domain_list: list[dict[str, str]] = []
                 if domain_ids:
                     domain_rows = session.execute(
@@ -2236,14 +2242,15 @@ class _TermReader(_ReaderBase):
             parent_term_code=str(row[5]) if row[5] else "",
             desc=str(row[6]) if row[6] else "",
             term_tags=row[7] if isinstance(row[7], dict) else {},
+            ext_attrs=row[8] if isinstance(row[8], dict) else {},
             domain=domain_list,
             parent_chain=parent_chain,
             names=names,
             knowledges=knowledges,
             children_count=children_count,
             relation_count=relation_count,
-            created_time=self._datetime_to_epoch(row[9]),
-            updated_time=self._datetime_to_epoch(row[10]),
+            created_time=self._datetime_to_epoch(row[10]),
+            updated_time=self._datetime_to_epoch(row[11]),
         )
 
     def list_terms(
@@ -2324,6 +2331,7 @@ class _TermReader(_ReaderBase):
                         Term.parent_term_id,
                         Term.desc_summary,
                         Term.term_tags,
+                        Term.ext_attrs,
                         Term.domain_ids,
                         Term.created_time,
                         Term.updated_time,
@@ -2338,8 +2346,8 @@ class _TermReader(_ReaderBase):
                 # ── Batch resolve domain translation ──
                 all_domain_ids: set[str] = set()
                 for r_ in rows:
-                    if r_[8]:
-                        all_domain_ids.update(r_[8])
+                    if r_[9]:
+                        all_domain_ids.update(r_[9])
                 domain_map = self._batch_resolve_domain_codes(library_id, all_domain_ids)
 
         except Exception:
@@ -2353,7 +2361,7 @@ class _TermReader(_ReaderBase):
 
         data: list[dict[str, Any]] = []
         for row in rows:
-            domain_ids_for_row: list[str] = list(row[8]) if row[8] else []
+            domain_ids_for_row: list[str] = list(row[9]) if row[9] else []
             domain_translated = self._build_domain_list(domain_ids_for_row, domain_map)
 
             data.append(
@@ -2366,9 +2374,10 @@ class _TermReader(_ReaderBase):
                     "parent_term_id": str(row[5]) if row[5] else None,
                     "desc_summary": str(row[6]) if row[6] else None,
                     "term_tags": row[7] if isinstance(row[7], dict) else {},
+                    "ext_attrs": row[8] if isinstance(row[8], dict) else {},
                     "domain": domain_translated,
-                    "created_time": row[9].isoformat() if row[9] is not None else None,
-                    "updated_time": row[10].isoformat() if row[10] is not None else None,
+                    "created_time": row[10].isoformat() if row[10] is not None else None,
+                    "updated_time": row[11].isoformat() if row[11] is not None else None,
                 }
             )
 

@@ -25,6 +25,7 @@ class Term(Base):
     term_type_code: Mapped[str] = mapped_column(String(32), nullable=False)
     library_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     term_tags: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    ext_attrs: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
