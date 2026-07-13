@@ -1059,6 +1059,7 @@ class _TermWriter(_WriterBase):
                     # Create stub if not found
                     if target_term_id is None and target_name:
                         stub_code = target_code or f"STUB_{self._new_id().replace('-', '')[:12]}"
+                        stub_type = rel.get("term_type_code") or rel.get("termTypeCode") or "_stub"
                         target_term_id = self._new_id()
                         self.session.execute(
                             text(
@@ -1066,7 +1067,7 @@ class _TermWriter(_WriterBase):
                                 "(term_id, term_code, term_name, term_type_code, library_id, "
                                 "domain_ids, parent_term_id, term_tags, created_time, updated_time) "
                                 "VALUES ("
-                                ":tid, :code, :name, '', :lid, "
+                                ":tid, :code, :name, :type_code, :lid, "
                                 "'{}', NULL, '{}'::jsonb, :now, :now"
                                 ")"
                             ),
@@ -1074,6 +1075,7 @@ class _TermWriter(_WriterBase):
                                 "tid": target_term_id,
                                 "code": stub_code,
                                 "name": target_name,
+                                "type_code": stub_type,
                                 "lid": library_id,
                                 "now": now,
                             },
@@ -1106,10 +1108,10 @@ class _TermWriter(_WriterBase):
                                 "INSERT INTO term_relation "
                                 "(relation_id, source_term_id, target_term_id, "
                                 "relation_name, relation_category, cardinality, "
-                                "action_term_id, created_time, updated_time) "
+                                "created_time, updated_time) "
                                 "VALUES ("
                                 ":rid, :src, :tgt, :rname, :rcat, :card, "
-                                "NULL, :now, :now"
+                                ":now, :now"
                                 ")"
                             ),
                             {

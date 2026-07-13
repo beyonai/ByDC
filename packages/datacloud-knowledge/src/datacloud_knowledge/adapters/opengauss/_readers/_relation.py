@@ -89,7 +89,6 @@ class _RelationReader(_ReaderBase):
                         TermRelation.relation_name,
                         TermRelation.relation_category,
                         TermRelation.cardinality,
-                        TermRelation.action_term_id,
                         TermRelation.created_time,
                         TermRelation.updated_time,
                     )
@@ -130,9 +129,8 @@ class _RelationReader(_ReaderBase):
                 "relation_name": str(row[5]),
                 "relation_category": str(row[6]),
                 "cardinality": str(row[7]) if row[7] else None,
-                "action_term_id": str(row[8]) if row[8] else None,
-                "created_time": self._format_time(row[9]),
-                "updated_time": self._format_time(row[10]),
+                "created_time": self._format_time(row[8]),
+                "updated_time": self._format_time(row[9]),
                 "source_term_name": term_name_map.get(str(row[1])) if row[1] else None,
                 "target_term_name": term_name_map.get(str(row[3])) if row[3] else None,
             }
@@ -168,7 +166,6 @@ class _RelationReader(_ReaderBase):
                         TermRelation.relation_name,
                         TermRelation.relation_category,
                         TermRelation.cardinality,
-                        TermRelation.action_term_id,
                         TermRelation.created_time,
                         TermRelation.updated_time,
                     ).where(TermRelation.relation_id == relation_id)
@@ -189,9 +186,8 @@ class _RelationReader(_ReaderBase):
             "relation_name": str(row[5]),
             "relation_category": str(row[6]),
             "cardinality": str(row[7]) if row[7] else None,
-            "action_term_id": str(row[8]) if row[8] else None,
-            "created_time": self._format_time(row[9]),
-            "updated_time": self._format_time(row[10]),
+            "created_time": self._format_time(row[8]),
+            "updated_time": self._format_time(row[9]),
         }
 
     def list_term_type_relations(

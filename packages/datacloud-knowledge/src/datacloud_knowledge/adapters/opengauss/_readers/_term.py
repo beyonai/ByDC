@@ -2868,7 +2868,6 @@ class _TermReader(_ReaderBase):
                     TermRelation.relation_name,
                     TermRelation.relation_category,
                     TermRelation.cardinality,
-                    TermRelation.action_term_id,
                     TermRelation.created_time,
                     TermRelation.updated_time,
                 )
@@ -2897,11 +2896,10 @@ class _TermReader(_ReaderBase):
                 "relation_name": str(r[3]),
                 "relation_category": str(r[4]),
                 "cardinality": str(r[5]) if r[5] else None,
-                "action_term_id": str(r[6]) if r[6] else None,
                 "source_term_name": term_name_map.get(str(r[1])) if r[1] else None,
                 "target_term_name": term_name_map.get(str(r[2])) if r[2] else None,
-                "created_time": r[7].isoformat() if r[7] is not None else None,
-                "updated_time": r[8].isoformat() if r[8] is not None else None,
+                "created_time": r[6].isoformat() if r[6] is not None else None,
+                "updated_time": r[7].isoformat() if r[7] is not None else None,
             }
             for r in rows
         ]
