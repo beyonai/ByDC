@@ -31,16 +31,39 @@ _TYPE_MAP: dict[str, str] = {
 
 
 def _init_discovery_redis() -> None:
-    """全局初始化服务发现 Redis（幂等）。"""
+    """全局初始化服务发现 Redis（幂等）。
+
+    集群模式：优先读 DATACLOUD_GATEWAY_REDIS_CLUSTER_HOST，再 fallback REDIS_CLUSTER_HOST。
+    单机模式：优先读 DATACLOUD_GATEWAY_REDIS_* 系列，再 fallback REDIS_* 系列。
+    """
+    from by_framework.common.config import RedisConfig
     from by_framework.common.redis_client import init_redis
 
-    init_redis(
-        host=os.getenv("REDIS_HOST", "localhost"),
-        port=int(os.getenv("REDIS_PORT", "6379")),
-        db=int(os.getenv("REDIS_DATABASE", "0")),
-        password=os.getenv("REDIS_PASSWORD") or None,
-        username=os.getenv("REDIS_USERNAME") or None,
+    cluster_hosts = (
+        os.getenv("DATACLOUD_GATEWAY_REDIS_CLUSTER_HOST", "").strip()
+        or os.getenv("REDIS_CLUSTER_HOST", "").strip()
     )
+    if cluster_hosts:
+        nodes = [
+            (host, int(port) if port else 6379)
+            for node in cluster_hosts.split(",")
+            if node.strip()
+            for host, _, port in (node.strip().rpartition(":"),)
+        ]
+        redis_config = RedisConfig(
+            mode="cluster",
+            cluster_nodes=nodes,
+            password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD", "")),
+        )
+    else:
+        redis_config = RedisConfig(
+            host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")),
+            port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379"))),
+            db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DATABASE", os.getenv("REDIS_DATABASE", "0"))),
+            password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD", "")),
+            username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")) or None,
+        )
+    init_redis(config=redis_config)
 
 
 def _execute_sql(sql: str, user_code: str) -> dict[str, Any]:

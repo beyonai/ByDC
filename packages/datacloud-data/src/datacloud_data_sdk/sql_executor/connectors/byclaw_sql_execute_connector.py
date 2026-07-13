@@ -69,6 +69,7 @@ class ByclawSqlExecuteConnector(BaseSourceConnector):
         service_name = self._resolve_service_name(user_code)
 
         try:
+            from by_framework.common.config import RedisConfig
             from by_framework.common.redis_client import init_redis
             from by_framework.core.discovery import DiscoveryClient
             from by_framework.util.discovery_http_client import DiscoveryHttpClient
@@ -78,13 +79,16 @@ class ByclawSqlExecuteConnector(BaseSourceConnector):
                 "BYCLAW_SQL_EXECUTE service discovery requires by_framework dependency"
             ) from exc
 
-        init_redis(
+        redis_config = RedisConfig(
             host=self._redis_config.host,
             port=self._redis_config.port,
             db=self._redis_config.database,
-            password=self._redis_config.password,
+            password=self._redis_config.password or "",
             username=self._redis_config.username,
+            mode="cluster" if self._redis_config.is_cluster else "standalone",
+            cluster_nodes=self._redis_config.cluster_nodes if self._redis_config.is_cluster else None,
         )
+        init_redis(config=redis_config)
         discovery_client = DiscoveryClient(cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:

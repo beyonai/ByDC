@@ -127,14 +127,33 @@ def load_embedding_model_from_redis() -> bool:
         return False
 
     try:
-        client = _redis.Redis(
-            host=os.environ.get("REDIS_HOST", "localhost"),
-            port=int(os.environ.get("REDIS_PORT", "6379")),
-            db=int(os.environ.get("REDIS_DATABASE", "0")),
-            password=os.environ.get("REDIS_PASSWORD") or None,
-            username=os.environ.get("REDIS_USERNAME") or None,
-            decode_responses=True,
+        cluster_hosts = (
+            os.environ.get("DATACLOUD_GATEWAY_REDIS_CLUSTER_HOST", "").strip()
+            or os.environ.get("REDIS_CLUSTER_HOST", "").strip()
         )
+        if cluster_hosts:
+            from redis.cluster import ClusterNode, RedisCluster
+
+            nodes = [
+                ClusterNode(host, int(port) if port else 6379)
+                for node in cluster_hosts.split(",")
+                if node.strip()
+                for host, _, port in (node.strip().rpartition(":"),)
+            ]
+            client = RedisCluster(
+                startup_nodes=nodes,
+                password=os.environ.get("REDIS_PASSWORD") or None,
+                decode_responses=True,
+            )
+        else:
+            client = _redis.Redis(
+                host=os.environ.get("REDIS_HOST", "localhost"),
+                port=int(os.environ.get("REDIS_PORT", "6379")),
+                db=int(os.environ.get("REDIS_DATABASE", "0")),
+                password=os.environ.get("REDIS_PASSWORD") or None,
+                username=os.environ.get("REDIS_USERNAME") or None,
+                decode_responses=True,
+            )
 
         raw = client.hget("byai:aimodel:typelist", "EMBEDDING")
         if not raw:

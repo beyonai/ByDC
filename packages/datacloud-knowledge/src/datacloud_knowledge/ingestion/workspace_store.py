@@ -51,14 +51,33 @@ class RedisWorkspaceStore(WorkspaceStore):
     def __init__(self) -> None:
         import redis
 
-        self._client: redis.Redis[str] = redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            db=int(os.getenv("REDIS_DATABASE", "0")),
-            password=os.getenv("REDIS_PASSWORD") or None,
-            username=os.getenv("REDIS_USERNAME") or None,
-            decode_responses=True,
+        cluster_hosts = (
+            os.getenv("DATACLOUD_GATEWAY_REDIS_CLUSTER_HOST", "").strip()
+            or os.getenv("REDIS_CLUSTER_HOST", "").strip()
         )
+        if cluster_hosts:
+            from redis.cluster import ClusterNode, RedisCluster
+
+            nodes = [
+                ClusterNode(host, int(port) if port else 6379)
+                for node in cluster_hosts.split(",")
+                if node.strip()
+                for host, _, port in (node.strip().rpartition(":"),)
+            ]
+            self._client: redis.Redis[str] = RedisCluster(  # type: ignore[assignment]
+                startup_nodes=nodes,
+                password=os.getenv("REDIS_PASSWORD") or None,
+                decode_responses=True,
+            )
+        else:
+            self._client = redis.Redis(
+                host=os.getenv("REDIS_HOST", "localhost"),
+                port=int(os.getenv("REDIS_PORT", "6379")),
+                db=int(os.getenv("REDIS_DATABASE", "0")),
+                password=os.getenv("REDIS_PASSWORD") or None,
+                username=os.getenv("REDIS_USERNAME") or None,
+                decode_responses=True,
+            )
 
     def _full_key(self, key: str) -> str:
         return f"{self._KEY_PREFIX}{key}"
