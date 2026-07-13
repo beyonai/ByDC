@@ -21,7 +21,13 @@ class SceneMixin(DataCloudDataBackendBase):
     # ── Scene management ──────────────────────────────────────────────────
 
     def _ensure_scenes_loaded(self) -> dict[str, dict[str, Any]]:
-        """Load scenes index, invalidating cache on mtime change (cross-process safe)."""
+        """Load scenes index, invalidating cache on mtime change (cross-process safe).
+
+        On first load, migrates legacy index entries that lack ``base_id`` and
+        ``scene_code`` fields (written by the old ``_save_scenes``).  The
+        full scene data is read from the ``EntityStore`` to backfill these
+        fields, then the updated index is persisted.
+        """
         if self._entity_store is None:
             self._scenes = {}
             return self._scenes
@@ -32,6 +38,29 @@ class SceneMixin(DataCloudDataBackendBase):
             self._scenes = dict(self._entity_store.load_index("scenes"))
             self._scenes_version = current_version
             self._reverse_index_built = False
+
+            # Migrate legacy index entries (missing base_id / scene_code).
+            # Also normalise field names so downstream code that expects
+            # ``scene_id`` / ``scene_name`` doesn't crash on index-loaded
+            # dicts that use ``code`` / ``name``.
+            need_migration = self._scenes and not all(
+                "base_id" in s for s in self._scenes.values()
+            )
+            if need_migration:
+                migrated = 0
+                for sid, scene in list(self._scenes.items()):
+                    if "base_id" in scene and "scene_code" in scene:
+                        continue
+                    full = self._load_full_scene(sid)
+                    if full is None:
+                        continue
+                    scene["base_id"] = full.get("base_id", "")
+                    scene["scene_code"] = full.get("scene_code", "")
+                    scene.setdefault("scene_id", scene.get("code", sid))
+                    scene.setdefault("scene_name", scene.get("name", ""))
+                    migrated += 1
+                if migrated:
+                    self._save_scenes()
         except Exception:
             logger.warning("Failed to load scenes index", exc_info=True)
             self._scenes = {}
@@ -54,19 +83,29 @@ class SceneMixin(DataCloudDataBackendBase):
     def _save_scenes(self) -> None:
         """Persist in-memory scenes to EntityStore index atomically.
 
-        Normalizes entries to the ``{code, name, shard, field_count}``
+        Normalizes entries to the ``{code, name, shard, field_count, base_id, scene_code}``
         index format required by ``load_index``.
+
+        ``base_id`` and ``scene_code`` are included in the index so that
+        ``list_scenes(base_id)`` and ``_ensure_default_scene`` survive
+        a process restart without requiring a full-scene load.
+
+        Handles both full-scene dicts (``scene_id``/``scene_name``, from
+        ``create_scene``) and index-loaded dicts (``code``/``name``, from
+        ``load_index``) via fallback reads.
         """
         if self._scenes is None or self._entity_store is None:
             return
         normalized: dict[str, dict[str, Any]] = {}
         for sid, scene in self._scenes.items():
             normalized[sid] = {
-                "code": scene.get("scene_id", sid),
-                "name": scene.get("scene_name", ""),
+                "code": scene.get("scene_id") or scene.get("code", sid),
+                "name": scene.get("scene_name") or scene.get("name", ""),
                 "shard": str(sid)[:2].lower(),
                 "field_count": len(scene.get("member_object_codes", []))
                 + len(scene.get("member_view_codes", [])),
+                "base_id": scene.get("base_id", ""),
+                "scene_code": scene.get("scene_code", ""),
             }
         self._entity_store.save_index("scenes", normalized)
         logger.info("Saved %d scenes to EntityStore", len(normalized))
@@ -107,10 +146,28 @@ class SceneMixin(DataCloudDataBackendBase):
 
     # ── Atomic ontology methods (used by get_scene_details) ──────────────
 
+    def _load_full_scene(self, scene_id: str) -> dict[str, Any] | None:
+        """Load full scene data from EntityStore (includes member lists)."""
+        if self._entity_store is None:
+            return None
+        try:
+            return self._entity_store.get("scenes", scene_id)
+        except Exception:
+            logger.warning(
+                "Failed to load full scene %s from EntityStore", scene_id, exc_info=True
+            )
+            return None
+
     def get_scene_members(
         self, base_id: str, scene_id: str
     ) -> tuple[list[str], list[str]]:
         """Return (object_codes, view_codes) for a scene — pure metadata query.
+
+        On a cold start the in-memory index only has summary fields
+        (``code``, ``name``, ``shard``, ``field_count``, ``base_id``,
+        ``scene_code``).  When member data is missing we load the full
+        scene from the ``EntityStore``, merge it into the in-memory dict,
+        and then return the members.  Subsequent calls use the cached copy.
 
         Args:
             base_id: Base / project identifier.
@@ -124,10 +181,26 @@ class SceneMixin(DataCloudDataBackendBase):
         scene = scenes.get(scene_id)
         if scene is None:
             return ([], [])
-        return (
-            list(scene.get("member_object_codes", [])),
-            list(scene.get("member_view_codes", [])),
-        )
+
+        # Fast path: member data already loaded (in-process create/update/add_members)
+        if "member_object_codes" in scene or "member_view_codes" in scene:
+            return (
+                list(scene.get("member_object_codes", [])),
+                list(scene.get("member_view_codes", [])),
+            )
+
+        # Cold-start path: index lacks member data → load full scene from store
+        full = self._load_full_scene(scene_id)
+        if full is not None:
+            # Merge into in-memory dict so subsequent calls hit the fast path.
+            # The full scene carries all fields (base_id, scene_code, members, etc.).
+            scenes[scene_id] = full
+            return (
+                list(full.get("member_object_codes", [])),
+                list(full.get("member_view_codes", [])),
+            )
+
+        return ([], [])
 
     def extract_objects_detail(
         self, object_codes: list[str], *, base_id: str = ""

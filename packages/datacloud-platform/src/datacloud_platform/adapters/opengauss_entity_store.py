@@ -360,7 +360,12 @@ class OpenGaussEntityStore:
         *,
         base_id: str = "",
     ) -> dict[str, dict[str, Any]]:
-        """Return backend-independent index: ``{code: {code, name}}``."""
+        """Return backend-independent index: ``{code: {code, name, base_id, ...}}``.
+
+        For ``scenes`` the ``scene_code`` field is extracted from the JSONB
+        ``data`` column so that ``_ensure_default_scene`` can locate the
+        default scene across process restarts.
+        """
         bid = base_id or self._default_base_id
         model = _ENTITY_TABLES[entity_type]
         code_col = _CODE_COLUMNS[entity_type]
@@ -372,10 +377,26 @@ class OpenGaussEntityStore:
         with Session(self._engine) as session:
             stmt = select(model).where(model.base_id == bid)  # type: ignore[attr-defined]
             rows = session.execute(stmt).scalars().all()
+
+        if entity_type == "scenes":
+            return {
+                getattr(r, code_col): {
+                    "code": getattr(r, code_col),
+                    "name": getattr(r, name_col) or getattr(r, code_col),
+                    "scene_id": getattr(
+                        r, code_col
+                    ),  # alias for callers that use scene_id
+                    "scene_name": getattr(r, name_col) or getattr(r, code_col),
+                    "base_id": r.base_id,  # type: ignore[attr-defined]
+                    "scene_code": (r.data or {}).get("scene_code", ""),  # type: ignore[attr-defined]
+                }
+                for r in rows
+            }
         return {
             getattr(r, code_col): {
                 "code": getattr(r, code_col),
                 "name": getattr(r, name_col) or getattr(r, code_col),
+                "base_id": r.base_id,  # type: ignore[attr-defined]
             }
             for r in rows
         }
