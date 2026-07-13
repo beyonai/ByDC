@@ -207,7 +207,9 @@ def _term_search(
         "offset": "offset",
     }
     for camel, snake in field_map.items():
-        if camel in params:
+        if snake in params:
+            search_kwargs[snake] = params[snake]
+        elif camel in params:
             search_kwargs[snake] = params[camel]
     return ok(data=platform.search_terms(_base(params), **search_kwargs))
 

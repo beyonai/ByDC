@@ -9,11 +9,13 @@ from __future__ import annotations
 import json
 import logging
 from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
 
 from datacloud_platform.backends._contracts import (
     _HasOntologyAndTermBackend,
     _HasTermBackend,
 )
+from datacloud_knowledge.contracts.types import FieldResolutionResult, ClarificationMode
 
 logger = logging.getLogger(__name__)
 
@@ -182,9 +184,11 @@ class KnowledgeMixin:
         self: _HasOntologyAndTermBackend,
         base_id: str,
         query: str,
-        slots: list[dict[str, Any]],
+        ontology_code: str,
+        structured_input: Mapping[str, Any],
+        mode: ClarificationMode,
         *,
-        ontology_code: str = "",
+        language: str = "zh_CN",
     ) -> dict[str, Any]:
         """准备澄清流程：6 步编排。
 
@@ -197,7 +201,10 @@ class KnowledgeMixin:
         Pipeline:
           Step 1: 术语提取 → extract_terms_query（纯函数）
           Step 2: 字段预解析 → _pre_resolve_with_backends（OntologyBackend + TermBackend）
-          Step 3: 知识召回 → unified_recall（SDK，TODO: session 管理待平台化）
+          Step 3: 定向召回（按领域拆分）──
+            定范围: OntologyBackend (OWL metadata，零 DB)
+            select/whereKey → search_ontology(metadata) 搜本体元数据
+            whereValue → search_terms(keyword, term_type) 搜术语实例
           Step 4a: LLM 主结构确认（SDK LLM 调用）
           Step 4b: LLM 条件确认（SDK LLM 调用）
           Step 5: 结果合并（SDK 纯函数）
@@ -232,13 +239,11 @@ class KnowledgeMixin:
             ClarificationNoCandidatesError,
         )
 
-        structured_input: dict[str, Any] = (
-            {"slots": slots} if slots else {"query": query}
-        )
+        struct_input_dict: dict[str, Any] = dict(structured_input)
 
         # ── Step 1: 术语提取（纯函数，无 DB 调用）──
-        main_terms = extract_terms_query(structured_input)
-        complex_conditions: list[str] = structured_input.get("complex_conditions", [])
+        main_terms = extract_terms_query(struct_input_dict)
+        complex_conditions: list[str] = struct_input_dict.get("complex_conditions", [])
         cc_terms = (
             extract_terms_complex_conditions(complex_conditions)
             if complex_conditions
@@ -304,7 +309,9 @@ class KnowledgeMixin:
             raise ClarificationNoCandidatesError(empty_terms)
 
         # ── Step 4a: LLM 主结构确认 ──
-        pre_resolved_input = build_pre_resolved_input(structured_input, pre, main_terms)
+        pre_resolved_input = build_pre_resolved_input(
+            struct_input_dict, pre, main_terms
+        )
         main_context, term_registry = format_main_confirm_context(
             pre_resolved_input,
             main_terms,
@@ -352,7 +359,7 @@ class KnowledgeMixin:
             main_result,
             cc_results,
             term_registry,
-            structured_input,
+            struct_input_dict,
             main_terms,
             recall_map=recall_map,
         )
@@ -364,7 +371,7 @@ class KnowledgeMixin:
             recall_map,
             language="zh_CN",
             complex_conditions=complex_conditions,
-            original_structured=structured_input,
+            original_structured=struct_input_dict,
         )
         form_payload = serialize_paradigm_payload(paradigm_list)
         knowledge_payload = serialize_knowledge_meta(meta)
@@ -622,40 +629,56 @@ class KnowledgeMixin:
         result: dict[str, list[dict[str, Any]]] = {}
 
         # ── 搜本体元数据（select/whereKey 等）──
-        seen_field: set[str] = set()
-        for t in field_terms:
-            key = f"{t.ktype}:{t.raw_text}"
-            if key in seen_field:
-                continue
-            seen_field.add(key)
+        # Pre-resolve property codes for scope_code once (avoids N repeated lookups)
+        resolved_codes = onto.resolve_scope_term_codes(
+            base_id,
+            object_code=[scope_code],
+            view_code=[scope_code],
+        )
+        if resolved_codes is None:
+            # scope_code not found — fill empty results for all field_terms
+            for t in field_terms:
+                key = f"{t.ktype}:{t.raw_text}"
+                result.setdefault(key, [])
+        else:
+            seen_field: set[str] = set()
+            for t in field_terms:
+                key = f"{t.ktype}:{t.raw_text}"
+                if key in seen_field:
+                    continue
+                seen_field.add(key)
 
-            try:
-                sr = onto.search_ontology(
-                    base_id,
-                    [scope_code],
-                    keyword=t.raw_text,
-                    search_scope="metadata",
-                    limit=top_k,
-                )
-                metadata_hits: list[dict[str, Any]] = sr.get("metadata", [])
-                field_candidates: list[dict[str, Any]] = []
-                for hit in metadata_hits:
-                    field_candidates.append(
-                        {
-                            "term_id": hit.get("termCode", hit.get("objectCode", "")),
-                            "term_name": hit.get("nameText", ""),
-                            "term_type_code": hit.get("termType", ""),
-                            "match_type": "ontology_metadata",
-                            "confidence": hit.get("score", 0),
-                            "score": hit.get("score", 0),
-                        }
+                try:
+                    sr = onto.search_ontology(
+                        base_id,
+                        scene_ids=[],
+                        keyword=t.raw_text,
+                        search_scope="metadata",
+                        ontology_type=["property"],
+                        pre_resolved_term_codes=resolved_codes,
+                        limit=top_k,
                     )
-                result[key] = field_candidates[:top_k]
-            except Exception:
-                result[key] = []
-                logger.debug(
-                    "[recall] ontology search failed for %s", key, exc_info=True
-                )
+                    metadata_hits: list[dict[str, Any]] = sr.get("metadata", [])
+                    field_candidates: list[dict[str, Any]] = []
+                    for hit in metadata_hits:
+                        field_candidates.append(
+                            {
+                                "term_id": hit.get(
+                                    "termCode", hit.get("objectCode", "")
+                                ),
+                                "term_name": hit.get("nameText", ""),
+                                "term_type_code": hit.get("termType", ""),
+                                "match_type": "ontology_metadata",
+                                "confidence": hit.get("score", 0),
+                                "score": hit.get("score", 0),
+                            }
+                        )
+                    result[key] = field_candidates[:top_k]
+                except Exception:
+                    result[key] = []
+                    logger.debug(
+                        "[recall] ontology search failed for %s", key, exc_info=True
+                    )
 
         # ── 搜术语实例（whereValue）──
         seen_value: set[str] = set()
@@ -1026,10 +1049,14 @@ class KnowledgeMixin:
     def resolve_field_aliases(
         self: _HasOntologyAndTermBackend,
         base_id: str,
-        field_aliases: dict[str, list[str]],
+        field_terms: list[str],
+        value_terms: list[str],
+        scope_code: str,
         *,
-        scope_code: str = "",
-    ) -> dict[str, list[tuple[str, str]]]:
+        resolve_values: bool = False,
+        user_id: str | None = None,
+        language: str = "zh_CN",
+    ) -> FieldResolutionResult:
         """字段别名解析：两级消歧。
 
         编排说明：
@@ -1046,41 +1073,40 @@ class KnowledgeMixin:
         onto = self._ontology_for(base_id)
         term = self._term_for(base_id)
 
-        result: dict[str, list[tuple[str, str]]] = {}
-        for field_name, aliases_list in field_aliases.items():
-            all_terms = [field_name] + aliases_list
-            resolved: list[tuple[str, str]] = []
+        resolved: dict[str, str] = {}
 
-            for term_text in all_terms:
-                if not term_text.strip():
+        for term_text in field_terms:
+            if not term_text.strip():
+                continue
+
+            # ── 一级：本体元数据（OWL 内存，零 DB）──
+            if scope_code:
+                pair = onto.resolve_property_name(
+                    term_text, scope_code, base_id=base_id
+                )
+                if pair is not None:
+                    resolved[term_text] = pair[0]
                     continue
 
-                # ── 一级：本体元数据（OWL 内存，零 DB）──
-                if scope_code:
-                    pair = onto.resolve_property_name(
-                        term_text, scope_code, base_id=base_id
-                    )
-                    if pair is not None:
-                        resolved.append(pair)
-                        continue
+            # ── 二级：用户别名兜底（知识 DB）──
+            search_result: Any = term.search_terms(
+                dataset_ids=[base_id],
+                keyword=term_text,
+                term_type="prop",
+                query_type="fulltext",
+                top_k=5,
+            )
 
-                # ── 二级：用户别名兜底（知识 DB）──
-                search_result = term.search_terms(
-                    keyword=term_text,
-                    term_type="prop",
-                    query_type="fulltext",
-                    top_k=5,
-                )
-                items: list[dict[str, Any]] = search_result.get("items", [])
-                for item in items:
-                    code = item.get("term_code", "")
-                    name = item.get("term_name", "")
-                    if code and code not in {r[0] for r in resolved}:
-                        resolved.append((str(code), str(name)))
+            for item in search_result.items:
+                code = str(getattr(item, "term_code", ""))
+                name = str(getattr(item, "term_name", ""))
+                if name == term_text:
+                    resolved[term_text] = str(code)
 
-            result[field_name] = resolved
-
-        return result
+        return FieldResolutionResult(
+            resolved=resolved,
+            unresolved=list(set(field_terms + value_terms) - set(resolved)),
+        )
 
     # ── Clarification Results ────────────────────────
 
