@@ -6,7 +6,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyQueryable
@@ -2651,9 +2651,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     ) -> None:
         """Called by add_scene_members — merges scene_id into term.domain_ids.
 
-        Reads the existing term by ``term_code = entity_code``, merges
-        ``scene_id`` into its domain_ids set, and writes the merged list
-        back via ``update_term``.  Existing scene IDs are preserved.
+        Batch-reads all existing terms by ``term_code = entity_code`` in one
+        DB query, then merges ``scene_id`` into each term's domain_ids set
+        and writes back via ``update_term``.  Existing scene IDs are preserved.
         """
         if not entity_codes:
             return
@@ -2664,20 +2664,32 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             )
 
             reader = create_reader()
+            # Batch-read all terms in a single DB query (was O(N) per-entity).
+            terms_batch = reader.get_terms_batch_raw(term_codes=entity_codes)  # type: ignore[attr-defined]
+            term_map: dict[str, dict[str, object]] = {
+                str(t["term_code"]): t for t in terms_batch if t.get("term_code")
+            }
+
+            missing = [c for c in entity_codes if c not in term_map]
+            if missing:
+                logger.warning(
+                    "_sync_entity_domains: %d terms not found (e.g. %s)",
+                    len(missing),
+                    ", ".join(missing[:5]),
+                )
+
+            if not term_map:
+                return
+
             with create_writer() as writer:
-                for entity_code in entity_codes:
+                for entity_code, term_data in term_map.items():
                     try:
-                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
-                        if not terms:
-                            logger.warning(
-                                "_sync_entity_domains: term not found for code=%s",
-                                entity_code,
-                            )
-                            continue
-                        term_id = str(terms[0].get("term_id", ""))
+                        term_id = str(term_data.get("term_id", ""))
                         if not term_id:
                             continue
-                        current_domains: list[str] = terms[0].get("domain_ids") or []
+                        current_domains: list[str] = (
+                            cast("list[str]", term_data.get("domain_ids")) or []
+                        )
                         merged = list({*current_domains, scene_id})
                         writer.update_term(
                             dataset_id=base_id,
@@ -2719,9 +2731,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     ) -> None:
         """Called by remove_scene_members — removes scene_id from term.domain_ids.
 
-        Reads the existing term by ``term_code = entity_code``, removes
-        ``scene_id`` from its domain_ids set, and writes the result back
-        via ``update_term``.  Other scene IDs are preserved.
+        Batch-reads all existing terms by ``term_code = entity_code`` in one
+        DB query, then removes ``scene_id`` from each term's domain_ids set
+        and writes back via ``update_term``.  Other scene IDs are preserved.
         """
         if not entity_codes:
             return
@@ -2732,20 +2744,32 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             )
 
             reader = create_reader()
+            # Batch-read all terms in a single DB query (was O(N) per-entity).
+            terms_batch = reader.get_terms_batch_raw(term_codes=entity_codes)  # type: ignore[attr-defined]
+            term_map: dict[str, dict[str, object]] = {
+                str(t["term_code"]): t for t in terms_batch if t.get("term_code")
+            }
+
+            missing = [c for c in entity_codes if c not in term_map]
+            if missing:
+                logger.warning(
+                    "_remove_entity_domains: %d terms not found (e.g. %s)",
+                    len(missing),
+                    ", ".join(missing[:5]),
+                )
+
+            if not term_map:
+                return
+
             with create_writer() as writer:
-                for entity_code in entity_codes:
+                for entity_code, term_data in term_map.items():
                     try:
-                        terms = reader.get_terms_batch_raw(term_codes=[entity_code])  # type: ignore[attr-defined]
-                        if not terms:
-                            logger.warning(
-                                "_remove_entity_domains: term not found for code=%s",
-                                entity_code,
-                            )
-                            continue
-                        term_id = str(terms[0].get("term_id", ""))
+                        term_id = str(term_data.get("term_id", ""))
                         if not term_id:
                             continue
-                        current_domains: list[str] = terms[0].get("domain_ids") or []
+                        current_domains: list[str] = (
+                            cast("list[str]", term_data.get("domain_ids")) or []
+                        )
                         updated = [d for d in current_domains if d != scene_id]
                         writer.update_term(
                             dataset_id=base_id,
