@@ -1333,7 +1333,7 @@ class RemoteOntologyBackend:
                 fname = f.get("field_name", f.get("propertyName", ""))
                 fcode = f.get("field_code", f.get("propertyCode", ""))
                 aliases: list[str] = f.get("aliases", []) or []
-                if fname == name_text or name_text in aliases:
+                if fname == name_text or name_text in aliases or fcode == name_text:
                     return (fcode, fname)
         return None
 

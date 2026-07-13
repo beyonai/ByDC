@@ -2122,12 +2122,14 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             return None
         for f in raw.get("fields", []):
             field_name: str = f.get("field_name", f.get("fieldName", "")) or ""
+            field_code: str = f.get("field_code", f.get("fieldCode", "")) or ""
             aliases: list[str] = list(f.get("aliases", []) or [])
-            if name_text == field_name or name_text in aliases:
-                return (
-                    f.get("field_code", f.get("fieldCode", "")) or "",
-                    field_name,
-                )
+            if (
+                name_text == field_name
+                or name_text in aliases
+                or name_text == field_code
+            ):
+                return (field_code, field_name)
         return None
 
     def resolve_property_names(
