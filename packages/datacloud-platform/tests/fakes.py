@@ -800,27 +800,16 @@ class FakeOntologyBackend:
         base_id: str,  # noqa: ARG002
         scene_ids: list[str],  # noqa: ARG002
         *,
-        keyword: str,
+        keyword: str | list[str],
         query_type: str = "vector",
         search_scope: str = "all",
-        ontology_type: list[str] | None = None,
+        metadata_type: list[str] | None = None,
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
+        result_per_type: int = 5,
+        top_k: int = 20,
         **kwargs: Any,
-    ) -> dict[str, Any]:
-        """Return empty results."""
-        return {
-            "metadata": [],
-            "instances": [],
-            "totalCount": {"metadata": 0, "instances": 0},
-        }
-
-    def search_ontology_batch(
-        self,
-        base_id: str,  # noqa: ARG002
-        keyword: str,
-        limit: int = 20,
     ) -> dict[str, Any]:
         """Return empty results."""
         return {
@@ -1441,36 +1430,18 @@ class FakeTermBackend:
         base_id: str,
         scene_ids: list[str],
         *,
-        keyword: str,
+        keyword: str | list[str],
         query_type: str = "vector",
         search_scope: str = "all",
-        ontology_type: list[str] | None = None,
+        metadata_type: list[str] | None = None,
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
+        result_per_type: int = 5,
+        top_k: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Return preset _ontology_search_results or empty dict."""
-        return dict(self._ontology_search_results)
-
-    def search_ontology_batch(
-        self,
-        base_id: str,
-        keyword: str,
-        limit: int = 20,
-    ) -> dict[str, Any]:
-        """Return preset _ontology_search_results or empty dict.
-
-        Records the call for test inspection via ``_batch_searches``.
-        """
-        self._batch_searches.append(
-            {
-                "base_id": base_id,
-                "keyword": keyword,
-                "limit": limit,
-                "result": dict(self._ontology_search_results),
-            }
-        )
         return dict(self._ontology_search_results)
 
     def graph_query(
