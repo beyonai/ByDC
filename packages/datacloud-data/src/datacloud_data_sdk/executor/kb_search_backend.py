@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Protocol
@@ -255,7 +256,14 @@ class HttpKnowledgeSearchBackend:
         """Delete any existing document then upload a generated Markdown document."""
         config = self._get_config(request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
-        file_content = _render_markdown_with_front_matter(request.labels, request.content)
+
+        # Merge relation info parsed from --- related_docs --- fenced blocks into labels.
+        related_docs = _parse_related_docs(request.content)
+        effective_labels = _merge_related_docs_into_labels(request.labels, related_docs)
+
+        # Strip the --- related_docs --- blocks from content before uploading.
+        clean_content = _strip_related_docs_blocks(request.content)
+        file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
         filename = PurePosixPath(markdown_file_path).name or "document.md"
         data = {
             "knCode": request.kb_id,
@@ -314,7 +322,7 @@ class HttpKnowledgeSearchBackend:
                 raise KbExecutionError(request.datasource_alias, str(exc)) from exc
 
         record = {
-            **request.labels,
+            **effective_labels,
             "knCode": request.kb_id,
             "filePath": markdown_file_path,
             "content": request.content,
@@ -1242,6 +1250,108 @@ def _to_markdown_file_path(file_path: str, kb_directory: str | None = None) -> s
         return str(path.with_name(filename))
     directory = PurePosixPath(kb_directory)
     return str(directory / filename)
+
+
+_RELATED_DOCS_BLOCK_RE = re.compile(
+    r"---\s*related_docs\s*---(.*?)---\s*related_docs\s*---",
+    re.DOTALL,
+)
+
+
+def _parse_related_docs(content: str) -> list[dict[str, str]]:
+    """Extract all entries from ``--- related_docs ---`` fenced blocks.
+
+    Returns a list of ``{target_doc_id, relation}`` dicts, e.g.::
+
+        [
+            {"target_doc_id": "Concept/Skill.md", "relation": "maps-to"},
+            {"target_doc_id": "Concept/本体库.md", "relation": "part-of"},
+        ]
+    """
+    import yaml  # lazy import — optional dependency
+
+    entries: list[dict[str, str]] = []
+    for block_text in _RELATED_DOCS_BLOCK_RE.findall(content):
+        try:
+            parsed = yaml.safe_load(block_text)
+        except yaml.YAMLError:
+            logger.warning("related_docs block YAML parse error — skipping")
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        related_docs = parsed.get("related_docs")
+        if not isinstance(related_docs, list):
+            continue
+        for item in related_docs:
+            if not isinstance(item, dict):
+                continue
+            target = str(item.get("target_doc_id") or "").strip()
+            relation = str(item.get("relation") or "").strip()
+            if target and relation:
+                entries.append({"target_doc_id": target, "relation": relation})
+    return entries
+
+
+def _strip_related_docs_blocks(content: str) -> str:
+    """Remove all ``--- related_docs ---`` fenced blocks from *content*.
+
+    Trims any trailing blank lines left behind so the result ends cleanly.
+    """
+    stripped = _RELATED_DOCS_BLOCK_RE.sub("", content)
+    # Collapse runs of 3+ newlines down to 2 (one blank line)
+    stripped = re.sub(r"\n{3,}", "\n\n", stripped)
+    return stripped.rstrip()
+
+
+def _related_doc_id_to_term(target_doc_id: str) -> tuple[str, str]:
+    """Split ``Type/Name.md`` into ``(type_code, term_name)``.
+
+    Examples::
+
+        "Concept/Skill.md" → ("Concept", "Skill")
+        "Product/byDC.md"  → ("Product", "byDC")
+        "Skill"            → ("", "Skill")
+    """
+    path = PurePosixPath(target_doc_id)
+    term_name = path.stem or target_doc_id
+    # Use the parent directory name as the type code (ignore root "/")
+    parent = path.parent
+    type_code = parent.name if parent.name and parent.name != "." else ""
+    return type_code, term_name
+
+
+def _merge_related_docs_into_labels(
+    labels: dict[str, Any],
+    related_docs: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Merge ``related_docs`` entries into *labels* as flat relation keys.
+
+    Each relation name becomes a top-level key whose value is a list of
+    ``target_doc_id`` strings, mirroring the existing front-matter convention::
+
+        maps-to:
+          - Concept/Skill.md
+          - Concept/Agent.md
+        part-of:
+          - Concept/本体库.md
+
+    Existing relation keys in *labels* are preserved; new targets are appended.
+    """
+    if not related_docs:
+        return labels
+
+    merged = dict(labels)
+    for entry in related_docs:
+        relation = entry["relation"]
+        target = entry["target_doc_id"]
+        bucket = merged.get(relation)
+        if not isinstance(bucket, list):
+            bucket = [bucket] if bucket is not None else []
+            merged[relation] = bucket
+        if target not in bucket:
+            bucket.append(target)
+
+    return merged
 
 
 def _render_markdown_with_front_matter(labels: dict[str, Any], content: str) -> str:

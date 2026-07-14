@@ -28,7 +28,11 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeSearchRequest,
     KnowledgeWriteBackend,
     KnowledgeWriteRequest,
+    _merge_related_docs_into_labels,
+    _parse_related_docs,
+    _related_doc_id_to_term,
     _render_markdown_with_front_matter,
+    _strip_related_docs_blocks,
     _to_markdown_file_path,
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -306,6 +310,9 @@ class KbSearchExecutor:
         records = _normalize_action_records(records, cls)
         meta = _standard_action_meta(cls, datasource_alias, query)
 
+        # Enqueue KB term sync for each written document.
+        await self._enqueue_kb_term_sync(write_requests)
+
         # Collect KB file paths from write requests for the summary message.
         kb_file_paths = [
             _to_markdown_file_path(req.file_path, req.kb_directory) for req in write_requests
@@ -333,6 +340,63 @@ class KbSearchExecutor:
             record["_write_note"] = write_note
 
         return response
+
+    async def _enqueue_kb_term_sync(self, write_requests: list[KnowledgeWriteRequest]) -> None:
+        """非阻塞投递 KB 术语同步事件（knowledge 包不可用时静默跳过）。"""
+        try:
+            from datacloud_knowledge.sync import (  # type: ignore[import-untyped]
+                TermSyncEvent,
+                enqueue_sync,
+            )
+
+            from datacloud_data_sdk.constants import DEFAULT_BASE_ID
+        except Exception:  # noqa: BLE001
+            logger.debug("KB 术语同步跳过：knowledge 包不可用")
+            return
+
+        terms: list[dict[str, Any]] = []
+        for req in write_requests:
+            markdown_file_path = _to_markdown_file_path(req.file_path, req.kb_directory)
+            file_stem = PurePosixPath(markdown_file_path).stem or markdown_file_path
+            parent = PurePosixPath(markdown_file_path).parent
+            term_type_code = parent.name if parent.name and parent.name != "." else ""
+
+            related_docs = _parse_related_docs(req.content)
+            relations: list[dict[str, str]] = [
+                {
+                    "term_name": rel_name,
+                    "term_code": rel_name,
+                    "term_type_code": rel_type,
+                    "relation_name": entry["relation"],
+                }
+                for entry in related_docs
+                for rel_type, rel_name in [_related_doc_id_to_term(entry["target_doc_id"])]
+            ]
+
+            term: dict[str, Any] = {
+                "term_name": file_stem,
+                "term_code": file_stem,
+                "term_type_code": term_type_code,
+                "ext_attrs": {"kb_id": req.kb_id, "kb_file_path": markdown_file_path},
+            }
+            if relations:
+                term["relations"] = relations
+            terms.append(term)
+
+        if not terms:
+            return
+
+        try:
+            await enqueue_sync(
+                TermSyncEvent(
+                    op="kb_write",
+                    base_id=DEFAULT_BASE_ID,
+                    object_code=write_requests[0].object_code,
+                    records=terms,
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("KB 术语同步投递失败", exc_info=True)
 
     def _resolve_backend(
         self,
@@ -640,7 +704,10 @@ def _attach_session_file(
             logical_path = f"/datacloud/kb/{file_name}"
 
             # Render content with YAML front-matter labels, identical to the KB upload.
-            file_content = _render_markdown_with_front_matter(req.labels, req.content)
+            related_docs = _parse_related_docs(req.content)
+            effective_labels = _merge_related_docs_into_labels(req.labels, related_docs)
+            clean_content = _strip_related_docs_blocks(req.content)
+            file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
 
             storage.write_text(logical_path, file_content)
             written_paths.append(logical_path)

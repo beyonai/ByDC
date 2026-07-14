@@ -77,9 +77,12 @@ async def read_file(
     """
     logger.info("read_file called: path=%r begin_line=%d end_line=%d", path, begin_line, end_line)
 
+    # /by 或 /.sessions/ 开头的路径走原有 storage 逻辑
+    _use_storage = path.startswith("/by/") or path.startswith("/.sessions/")
+
     # skill 路径分支：直接读本地磁盘
     skill_workspace_dir = _resolve_skill_workspace_dir()
-    if skill_workspace_dir:
+    if skill_workspace_dir and not _use_storage:
         skill_dir = Path(skill_workspace_dir).resolve()  # noqa: ASYNC240
         target = Path(path) if Path(path).is_absolute() else (skill_dir / path)  # noqa: ASYNC240
         try:

@@ -11,7 +11,7 @@ from datacloud_knowledge.sync.config import TermSyncConfig
 
 logger = logging.getLogger(__name__)
 
-_QUEUE_MAX = 10_000
+_QUEUE_MAX = 100_000
 
 # 全局队列（进程内单例）
 _TERM_SYNC_QUEUE: asyncio.Queue[TermSyncEvent] = asyncio.Queue(maxsize=_QUEUE_MAX)
@@ -22,17 +22,19 @@ class TermSyncEvent:
     """单次写入事件。
 
     Attributes:
-        op: "insert" | "update" | "delete"
-        object_code: 对象编码（用于推导 term_type_code）
-        records: 涉及的记录列表；delete 时为删除前快照
-        config: 同步配置
+        op: "insert" | "update" | "delete" | "kb_write"
+        base_id: 术语库 ID
+        object_code: 对象编码（用于推导 term_type_code；kb_write 时传空串）
+        records: 涉及的记录列表；delete 时为删除前快照；
+                 kb_write 时为已格式化的 term dict 列表（直接传给 import_terms）
+        config: 同步配置；kb_write 时为 None
     """
 
     op: str
     base_id: str
     object_code: str
     records: list[dict[str, Any]]
-    config: TermSyncConfig
+    config: TermSyncConfig | None = field(default=None)
     schema: str | None = field(default=None)
     db_url: str | None = field(default=None)
 
@@ -74,6 +76,20 @@ class TermSyncHandler(Protocol):
                       先反查 UUID 再删除。与 upsert_terms 参数结构对称。
         """
         ...
+
+    def import_terms(
+        self,
+        base_id: str,
+        *,
+        library_id: str,
+        terms: list[dict[str, Any]],
+        backfill: bool = False,
+    ) -> dict[str, Any]:
+        """Batch import terms via datacloud_knowledge provider.
+
+        ``terms`` 为 dict 列表，支持 camelCase 和 snake_case 两种 key 格式。
+        内部自动转换为 ``TermCreate`` 对象再传给 sdk。
+        """
 
 
 async def enqueue_sync(event: TermSyncEvent) -> None:
@@ -142,12 +158,19 @@ _DOMAIN_CODE = "PERSONAL_DOMAIN"
 def _apply_sync_event(event: TermSyncEvent, *, handler: TermSyncHandler) -> None:
     """将单个同步事件通过 handler 写入术语库。
 
+    kb_write op 直接调 import_terms；其他 op 走动态表 upsert/delete 路径。
     由 term_sync_worker 在 asyncio Task 内串行调用。
     """
-    cfg = event.config
-    if not cfg.enabled:
-        return
     if not event.records:
+        return
+
+    if event.op == "kb_write":
+        handler.import_terms(base_id=event.base_id, library_id=event.base_id, terms=event.records, backfill=True)
+        logger.debug("KB 术语同步完成: base_id=%s terms=%d", event.base_id, len(event.records))
+        return
+
+    cfg = event.config
+    if cfg is None or not cfg.enabled:
         return
 
     term_type_code = cfg.term_type_code(event.object_code)
