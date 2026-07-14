@@ -522,28 +522,23 @@ class _NoopOntologyBackend:
         base_id: str,
         scene_ids: list[str],
         *,
-        keyword: str,
+        keyword: str | list[str],
         query_type: str = "vector",
         search_scope: str = "all",
-        ontology_type: list[str] | None = None,
+        metadata_type: list[str] | None = None,
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
-        pre_resolved_term_codes: list[str] | None = None,
-        limit: int = 20,
+        result_per_type: int = 5,
+        top_k: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Return empty result."""
-        return {"data": [], "totalCount": 0}
-
-    def search_ontology_batch(
-        self,
-        base_id: str,
-        keyword: str,
-        limit: int = 20,
-    ) -> dict[str, Any]:
-        """Return empty result."""
-        return {"data": [], "totalCount": 0}
+        return {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
 
     def graph_query(
         self,

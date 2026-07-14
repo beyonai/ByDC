@@ -11,15 +11,15 @@ class SearchRequest(BaseModel):
     """Ontology search request (10 fields)."""
 
     scene_id: str = Field(alias="sceneId")
-    keyword: str = Field(alias="keyword")
+    keyword: str | list[str] = Field(alias="keyword")
     query_type: str = Field(default="vector", alias="queryType")
     search_scope: str = Field(default="all", alias="searchScope")
     object_code: list[str] = Field(default_factory=list, alias="objectCode")
     view_code: list[str] = Field(default_factory=list, alias="viewCode")
     property_code: list[str] = Field(default_factory=list, alias="propertyCode")
     result_per_type: int = Field(default=5, alias="resultPerType")
-    page_size: int = Field(default=20, alias="pageSize")
-    page_token: str | None = Field(default=None, alias="pageToken")
+    metadata_type: list[str] | None = Field(default=None, alias="metadataType")
+    top_k: int = Field(default=20, alias="topK")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
