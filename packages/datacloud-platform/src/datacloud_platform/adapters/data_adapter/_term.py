@@ -36,6 +36,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "and",
         term_ids: list[str] | None = None,
+        ext_attrs: dict[str, Any] | None = None,
         top_k: int = 20,
         offset: int = 0,
     ) -> QueryResult:
@@ -71,6 +72,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             label_filters=label_filters,
             label_condition=label_condition,
             term_ids=term_ids,
+            ext_attrs=ext_attrs,
             top_k=top_k,
             offset=offset,
         )

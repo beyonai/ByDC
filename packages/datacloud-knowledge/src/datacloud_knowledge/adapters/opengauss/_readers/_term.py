@@ -1949,6 +1949,7 @@ class _TermReader(_ReaderBase):
         label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "and",
         term_ids: list[str] | None = None,
+        ext_attrs: dict[str, Any] | None = None,
         top_k: int = 20,
         offset: int = 0,
     ) -> QueryResult:
@@ -1977,6 +1978,11 @@ class _TermReader(_ReaderBase):
                     filters.append(Term.library_id.in_(dataset_ids))
                 if term_ids:
                     filters.append(Term.term_id.in_(term_ids))
+
+                # ext_attrs 过滤：支持 JSONB 字段的键值匹配
+                if ext_attrs:
+                    for key, value in ext_attrs.items():
+                        filters.append(Term.ext_attrs[key].astext == str(value))
 
                 # 关键词或术语名称匹配
                 normalized_keyword = (keyword or "").strip()
@@ -2042,10 +2048,10 @@ class _TermReader(_ReaderBase):
             raw_tags = row[7]
             if isinstance(raw_tags, dict):
                 tags = {str(k): str(v) for k, v in raw_tags.items()}
-            ext_attrs: dict[str, str] = {}
+            term_ext_attrs: dict[str, str] = {}
             raw_ext_attrs = row[8]
             if isinstance(raw_ext_attrs, dict):
-                ext_attrs = {str(k): str(v) for k, v in raw_ext_attrs.items()}
+                term_ext_attrs = {str(k): str(v) for k, v in raw_ext_attrs.items()}
 
             items.append(
                 ProviderTermItem(
@@ -2058,7 +2064,7 @@ class _TermReader(_ReaderBase):
                     desc=str(row[6]) if row[6] else "",
                     labels=tags,
                     synonyms="",
-                    ext_attrs=ext_attrs,
+                    ext_attrs=term_ext_attrs,
                     created_time=0,
                     updated_time=0,
                 )
