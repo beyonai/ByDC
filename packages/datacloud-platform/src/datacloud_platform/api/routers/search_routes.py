@@ -37,13 +37,12 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
                     keyword=body.get("keyword", ""),
                     query_type=body.get("queryType", "vector"),
                     search_scope=body.get("searchScope", "all"),
-                    ontology_type=body.get("ontologyType"),
+                    metadata_type=body.get("metadataType"),
                     object_code=body.get("objectCode"),
                     view_code=body.get("viewCode"),
                     property_code=body.get("propertyCode"),
                     result_per_type=body.get("resultPerType", 5),
-                    page_size=body.get("pageSize", 20),
-                    page_token=body.get("pageToken"),
+                    top_k=body.get("topK", 20),
                 )
             )
         except KeyError as e:
@@ -60,13 +59,12 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
                     keyword=body.get("keyword", ""),
                     query_type=body.get("queryType", "vector"),
                     search_scope=body.get("searchScope", "all"),
-                    ontology_type=body.get("ontologyType"),
+                    metadata_type=body.get("metadataType"),
                     object_code=body.get("objectCode"),
                     view_code=body.get("viewCode"),
                     property_code=body.get("propertyCode"),
                     result_per_type=body.get("resultPerType", 5),
-                    page_size=body.get("pageSize", 20),
-                    page_token=body.get("pageToken"),
+                    top_k=body.get("topK", 20),
                 )
             )
         except KeyError as e:

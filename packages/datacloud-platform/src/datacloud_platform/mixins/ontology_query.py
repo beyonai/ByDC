@@ -179,17 +179,6 @@ class OntologyQueryMixin:
         """本体元数据与实例向量/关键词检索。"""
         return self._ontology_for(base_id).search_ontology(base_id, scene_ids, **kwargs)
 
-    def search_ontology_batch(
-        self: _HasOntologyBackend,
-        base_id: str,
-        keyword: str,
-        limit: int = 20,
-    ) -> dict[str, Any]:
-        """跨场景批量本体检索，聚合+去重结果。"""
-        return self._ontology_for(base_id).search_ontology_batch(
-            base_id, keyword, limit=limit
-        )
-
     def graph_query(
         self: _HasOntologyBackend,
         base_id: str,
