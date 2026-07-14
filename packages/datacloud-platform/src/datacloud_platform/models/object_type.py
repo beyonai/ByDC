@@ -28,6 +28,7 @@ class ObjectType(BaseModel):
     table_name: str | None = Field(default=None, alias="tableName")
     properties: list[Property] = Field(default_factory=list, alias="properties")
     actions: list[Action] = Field(default_factory=list, alias="actions")
+    ext_property: dict[str, Any] = Field(default_factory=dict, alias="extProperty")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

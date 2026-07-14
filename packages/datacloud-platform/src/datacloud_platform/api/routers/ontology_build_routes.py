@@ -52,6 +52,7 @@ class ObjectCollectRequest(BaseModel):
     kb_id: str = Field(default="", alias="kb_id")
     kb_directory: str = Field(default="", alias="kb_directory")
     base_id: str = Field(default="", alias="base_id")
+    ext_property: dict = Field(default={}, alias="ext_property")
     fields: list[dict[str, Any]] | None = Field(default=None, alias="fields")
 
 
@@ -138,6 +139,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
                 kb_id=body.kb_id,
                 kb_directory=body.kb_directory,
                 base_id=body.base_id,
+                ext_property=body.ext_property,
             )
         except Exception as exc:
             logger.exception("object/collect 失败")
