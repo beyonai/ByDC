@@ -599,6 +599,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_code=code,
             entity_name=obj_dict.get("objectName") or obj_dict.get("object_name", code),
             entity_desc=obj_dict.get("objectDesc") or obj_dict.get("description", ""),
+            fields=obj_dict.get("fields", []),
             base_id=base_id,
         )
         self._invoke_sync_hook(
@@ -652,6 +653,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_name=obj_dict.get("objectName")
             or obj_dict.get("object_name", object_code),
             entity_desc=obj_dict.get("objectDesc") or obj_dict.get("description", ""),
+            fields=obj_dict.get("fields", []),
             base_id=base_id,
         )
         self._invoke_sync_hook(
@@ -882,6 +884,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_code=code,
             entity_name=view_dict.get("viewName") or view_dict.get("view_name", code),
             entity_desc=view_dict.get("description", ""),
+            fields=view_dict.get("mappings", []),
             base_id=base_id,
         )
         self._invoke_sync_hook(
@@ -921,6 +924,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             entity_name=view_dict.get("viewName")
             or view_dict.get("view_name", view_code),
             entity_desc=view_dict.get("description", ""),
+            fields=view_dict.get("mappings", []),
             base_id=base_id,
         )
         self._invoke_sync_hook(
@@ -2454,7 +2458,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 prop_code = field.get("field_code", field.get("fieldCode", "")) or ""
                 prop_name = field.get("field_name", field.get("fieldName", "")) or ""
                 if prop_code and prop_name:
-                    entities.append(("prop", prop_code, prop_name))
+                    entities.append(("prop", f"o.{code}.{prop_code}", prop_name))
         for view in views:
             code = (
                 view.get("view_code", view.get("viewCode", view.get("view_id", "")))
@@ -2468,7 +2472,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 prop_code = mapping.get("property_code", "") or ""
                 prop_name = mapping.get("property_name", "") or ""
                 if prop_code and prop_name:
-                    entities.append(("prop", prop_code, prop_name))
+                    entities.append(("prop", f"v.{code}.{prop_code}", prop_name))
         for rel in relations:
             code = rel.get("relation_code", rel.get("relationCode", "")) or ""
             name = rel.get("relation_name", "")
@@ -2559,8 +2563,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Calls ``upsert_term`` with ``backfill_vectors=False`` — vector
         backfill runs in a daemon thread after commit (best-effort,
         non-blocking, failure logged).
+
+        When ``fields`` is provided, also upserts property terms with
+        ``o.{entity_code}.{field_code}`` (object) or ``v.{entity_code}.{property_code}``
+        (view) prefix format.
         """
-        _ = entity_desc, fields
         try:
             from datacloud_knowledge.adapters import (  # noqa: PLC0415
                 backfill_embeddings,
@@ -2571,6 +2578,57 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             domains = list(domain_codes) if domain_codes else []
 
             with create_writer() as writer:
+                # Upsert property terms first (if fields provided)
+                prop_term_ids: list[str] = []
+                if fields:
+                    for field in fields:
+                        if entity_type == "object":
+                            fc = (
+                                field.get("field_code", field.get("fieldCode", ""))
+                                or ""
+                            )
+                            fn = (
+                                field.get("field_name", field.get("fieldName", ""))
+                                or ""
+                            )
+                            if fc and fn:
+                                prop_term_id = writer.upsert_term(
+                                    term_code=f"o.{entity_code}.{fc}",
+                                    term_name=fn,
+                                    term_type_code="prop",
+                                    library_id=base_id or None,
+                                    domain_ids=domains,
+                                    search_scope={"base": base_id} if base_id else {},
+                                    backfill_vectors=False,
+                                )
+                                if prop_term_id:
+                                    prop_term_ids.append(prop_term_id)
+                        elif entity_type == "view":
+                            pc = (
+                                field.get(
+                                    "property_code", field.get("propertyCode", "")
+                                )
+                                or ""
+                            )
+                            pn = (
+                                field.get(
+                                    "property_name", field.get("propertyName", "")
+                                )
+                                or ""
+                            )
+                            if pc and pn:
+                                prop_term_id = writer.upsert_term(
+                                    term_code=f"v.{entity_code}.{pc}",
+                                    term_name=pn,
+                                    term_type_code="prop",
+                                    library_id=base_id or None,
+                                    domain_ids=domains,
+                                    search_scope={"base": base_id} if base_id else {},
+                                    backfill_vectors=False,
+                                )
+                                if prop_term_id:
+                                    prop_term_ids.append(prop_term_id)
+
                 term_id = writer.upsert_term(
                     term_code=entity_code,
                     term_name=entity_name,
@@ -2580,6 +2638,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     search_scope={"base": base_id} if base_id else {},
                     backfill_vectors=False,
                 )
+
             logger.info(
                 "_sync_entity_terms: type=%s term_type=%s code=%s done",
                 entity_type,
@@ -2588,19 +2647,23 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             )
 
             # Defer vector backfill to daemon thread — non-blocking
+            all_term_ids: list[str] = []
             if term_id:
+                all_term_ids.append(term_id)
+            all_term_ids.extend(prop_term_ids)
+            if all_term_ids:
                 import threading
 
                 def _backfill() -> None:
                     try:
-                        backfill_embeddings(term_ids=[term_id], batch_size=50)
+                        backfill_embeddings(term_ids=all_term_ids, batch_size=50)
                     except Exception:
                         logger.exception(
                             "_sync_entity_terms: embedding backfill failed "
-                            "type=%s code=%s term_id=%s",
+                            "type=%s code=%s term_ids=%s",
                             entity_type,
                             entity_code,
-                            term_id,
+                            all_term_ids,
                         )
 
                 threading.Thread(target=_backfill, daemon=True).start()
