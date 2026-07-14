@@ -124,6 +124,7 @@ class OntologyBuildSession:
         kb_id: str = "",
         kb_directory: str = "",
         base_id: str = "",
+        ext_property: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """收集本体对象信息，合并到暂存状态，返回当前完整状态。
 
@@ -174,6 +175,8 @@ class OntologyBuildSession:
             state["kb_directory"] = kb_directory
         if base_id:
             state["base_id"] = base_id
+        if ext_property is not None:
+            state["ext_property"] = ext_property
 
         if fields:
             existing: dict[str, dict[str, Any]] = {

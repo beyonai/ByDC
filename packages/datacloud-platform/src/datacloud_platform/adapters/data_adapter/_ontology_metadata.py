@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     pass
@@ -27,7 +27,7 @@ def _map_get_or_fetch(
     """
     if preloaded is not None:
         return preloaded.get(code)
-    return store.get(entity_type, code)
+    return cast("dict[str, Any] | None", store.get(entity_type, code))
 
 
 class OntologyMetadataMixin(DataCloudDataBackendBase):

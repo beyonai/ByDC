@@ -661,7 +661,7 @@ def _fetch_relations_recursive(
         next_term_detail = platform.get_term_detail(
             base_id, library_id=base_id, term_id=next_term_id
         )
-        next_ext_attrs = {}
+        next_ext_attrs: dict[str, Any] = {}
         next_term_code = ""
         next_term_type = ""
 
@@ -694,9 +694,7 @@ def _fetch_relations_recursive(
                 "term_name": next_term_name,
                 "term_code": next_term_code,
                 "term_type": next_term_type,
-                "attributes": next_ext_attrs
-                if isinstance(next_ext_attrs, dict)
-                else {},
+                "attributes": next_ext_attrs,
                 "path": new_path,
                 "depth": current_level,
                 "seg": new_seg,
