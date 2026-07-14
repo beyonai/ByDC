@@ -23,6 +23,7 @@ def _collect_object(
         kb_id=params.get("kb_id", ""),
         kb_directory=params.get("kb_directory", ""),
         base_id=params.get("base_id", ""),
+        ext_property=params.get("ext_property", {}),
     )
 
 

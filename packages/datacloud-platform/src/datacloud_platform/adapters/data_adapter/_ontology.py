@@ -495,6 +495,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             ),
             userCode=(ext.get("user_code") or getattr(cls, "user_code", None)),
             baseId="",
+            ext_property=ext,
             properties=[
                 Property(
                     propertyName=f.field_name,
