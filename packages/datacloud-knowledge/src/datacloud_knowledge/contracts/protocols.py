@@ -440,6 +440,7 @@ class TermReader(Protocol):
         label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "and",
         term_ids: list[str] | None = None,
+        ext_attrs: dict[str, Any] | None = None,
         top_k: int = 20,
         offset: int = 0,
     ) -> QueryResult:

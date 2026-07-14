@@ -29,6 +29,7 @@ class TermBackend(Protocol):
         label_filters: list[dict[str, Any]] | None = None,
         label_condition: str = "and",
         term_ids: list[str] | None = None,
+        ext_attrs: dict[str, Any] | None = None,
         top_k: int = 20,
         offset: int = 0,
     ) -> dict[str, Any]:
