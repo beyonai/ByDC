@@ -811,12 +811,17 @@ class FakeOntologyBackend:
         top_k: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Return empty results."""
-        return {
+        """Return empty keyword-keyed results."""
+        empty: dict[str, Any] = {
             "metadata": [],
             "instances": [],
             "totalCount": {"metadata": 0, "instances": 0},
         }
+        keywords: list[str] = [keyword] if isinstance(keyword, str) else list(keyword)
+        keywords = [k for k in keywords if k and k.strip()]
+        if not keywords:
+            return {}
+        return {kw: dict(empty) for kw in keywords}
 
     def graph_query(
         self,
