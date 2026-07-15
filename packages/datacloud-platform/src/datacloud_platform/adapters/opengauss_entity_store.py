@@ -581,6 +581,16 @@ class OpenGaussEntityStore:
             "actions": "actionName",
             "datasources": "dbName",
         }
+        # snake_case fallbacks (for normalized canonical data)
+        name_fallback: dict[str, str] = {
+            "objects": "object_name",
+            "views": "view_name",
+            "relations": "relation_name",
+            "actions": "action_name",
+            "datasources": "db_name",
+        }
         key = name_map.get(entity_type, "")
-        name: str = data.get(key, "") or ""
+        name: str = (
+            data.get(key, "") or data.get(name_fallback.get(entity_type, ""), "") or ""
+        )
         return name

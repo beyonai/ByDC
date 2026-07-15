@@ -43,46 +43,38 @@ def _normalize_entity(
 ) -> dict[str, Any]:
     """Normalize an entity dict from model_dump(by_alias=True) camelCase to canonical format.
 
-    Handles both write-side (for_storage=True — canonicalize before EntityStore.save)
-    and read-side (for_storage=False — normalize legacy data for read paths).
-
-    The canonical format uses snake_case keys that match what OntologyLoader and
-    _raw_to_*_dict read paths expect.  All field-level normalization (ObjectType
-    properties → fields, ViewProperty → mappings, ActionParam isRequired → required)
-    is handled here so downstream code never sees camelCase keys.
+    Produces ONLY canonical snake_case keys — no camelCase residual.
+    All field-level normalization (ObjectType properties → fields, ViewProperty → mappings,
+    ActionParam isRequired → required) is handled here.
     """
-    result = dict(data)
+    result: dict[str, Any] = {}
 
     if entity_type == "object":
-        result.setdefault("object_code", data.get("objectCode", ""))
-        result.setdefault("object_name", data.get("objectName", ""))
-        result.setdefault(
-            "source_type",
+        result["object_code"] = data.get("object_code") or data.get("objectCode", "")
+        result["object_name"] = data.get("object_name") or data.get("objectName", "")
+        result["source_type"] = (
             data.get("source_type")
             or data.get("sourceType")
-            or data.get("objectSource", "DB"),
+            or data.get("objectSource", "DB")
         )
-        result.setdefault(
-            "description", data.get("description") or data.get("objectDesc", "")
+        result["description"] = data.get("description") or data.get("objectDesc", "")
+        result["concept_type"] = data.get("concept_type") or data.get("conceptType")
+        result["datasource_alias"] = data.get("datasource_alias") or data.get(
+            "datasourceAlias"
         )
-        result.setdefault(
-            "concept_type", data.get("concept_type") or data.get("conceptType")
+        result["table_name"] = data.get("table_name") or data.get("tableName")
+        result["source_config"] = data.get("source_config") or data.get("sourceConfig")
+        result["ext_property"] = (
+            data.get("ext_property") or data.get("extProperty") or {}
         )
-        result.setdefault(
-            "datasource_alias",
-            data.get("datasource_alias") or data.get("datasourceAlias"),
+        result["tags"] = data.get("tags") or []
+        result["owner_type"] = str(
+            data.get("owner_type") or data.get("ownerType", "enterprise")
         )
-        result.setdefault("table_name", data.get("table_name") or data.get("tableName"))
-        result.setdefault(
-            "source_config", data.get("source_config") or data.get("sourceConfig")
-        )
+        result["user_code"] = data.get("user_code") or data.get("userCode")
+
         # DYNAMIC_TABLE objects need a datasource_alias and table_name for the executor.
-        # Legacy objects created before these were required get a default.
         if str(result.get("source_type", "")).upper() == "DYNAMIC_TABLE":
-            result.setdefault("datasource_alias", _DEFAULT_DYNAMIC_DATASOURCE_ALIAS)
-            result.setdefault("table_name", result.get("object_code", ""))
-            # setdefault won't override an existing key (including None), so
-            # explicitly set if the value is still falsy after setdefault.
             if not result.get("datasource_alias"):
                 result["datasource_alias"] = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
             if not result.get("table_name"):
@@ -99,10 +91,7 @@ def _normalize_entity(
                     sc["jdbc_url"] = (
                         f"jdbc:sqlite:{mount}/byclaw-datacloud/personal_object.db"
                     )
-        result.setdefault(
-            "ext_property", data.get("ext_property") or data.get("extProperty", {})
-        )
-        result.setdefault("tags", data.get("tags", []))
+
         # properties → fields with field-level normalization
         raw_props = data.get("properties") or data.get("fields", [])
         if raw_props and not data.get("fields"):
@@ -121,27 +110,24 @@ def _normalize_entity(
                 }
                 for p in raw_props
             ]
-        # actions: forward as-is (model_dump key names happen to match)
-        result.setdefault("actions", data.get("actions", []))
+        elif data.get("fields"):
+            result["fields"] = data["fields"]
+        result["actions"] = data.get("actions") or []
 
     elif entity_type == "view":
-        result.setdefault(
-            "view_code",
+        result["view_code"] = (
             data.get("view_code")
             or data.get("viewCode")
             or data.get("view_id")
-            or data.get("viewId", ""),
+            or data.get("viewId", "")
         )
-        result.setdefault(
-            "view_name", data.get("view_name") or data.get("viewName", "")
-        )
-        result.setdefault(
-            "description", data.get("description") or data.get("viewDesc")
-        )
+        result["view_name"] = data.get("view_name") or data.get("viewName", "")
+        result["description"] = data.get("description") or data.get("viewDesc")
+
         # objectCodes → objects
         raw_codes = data.get("objects") or data.get("objectCodes") or []
-        if raw_codes and not data.get("objects"):
-            result["objects"] = raw_codes
+        result["objects"] = raw_codes
+
         # properties → mappings with ViewProperty → mapping normalization
         raw_view_props = data.get("mappings") or data.get("properties", [])
         if raw_view_props and not data.get("mappings"):
@@ -158,81 +144,78 @@ def _normalize_entity(
                 }
                 for m in raw_view_props
             ]
-        result.setdefault(
-            "owner_type", data.get("owner_type") or data.get("ownerType", "enterprise")
+        elif data.get("mappings"):
+            result["mappings"] = data["mappings"]
+
+        result["owner_type"] = str(
+            data.get("owner_type") or data.get("ownerType", "enterprise")
         )
-        result.setdefault("user_code", data.get("user_code") or data.get("userCode"))
+        result["user_code"] = data.get("user_code") or data.get("userCode")
 
     elif entity_type == "relation":
-        result.setdefault(
-            "relation_code",
-            data.get("relation_code") or data.get("relationCode", ""),
+        result["relation_code"] = data.get("relation_code") or data.get(
+            "relationCode", ""
         )
-        result.setdefault(
-            "relation_name",
-            data.get("relation_name") or data.get("relationName"),
+        result["relation_name"] = data.get("relation_name") or data.get(
+            "relationName", ""
         )
-        result.setdefault(
-            "relation_cardinality",
-            data.get("relation_cardinality")
-            or data.get("relationCardinality")
-            or data.get("relation_type"),
+        result["relation_type"] = (
+            data.get("relation_type")
+            or data.get("relation_cardinality")
+            or data.get("relationCardinality", "MANY_TO_ONE")
         )
-        result.setdefault(
-            "relation_desc",
-            data.get("relation_desc")
-            or data.get("description")
-            or data.get("relationDesc"),
+        result["description"] = (
+            data.get("description")
+            or data.get("relation_desc")
+            or data.get("relationDesc", "")
         )
-        result.setdefault(
-            "relation_scene_type",
-            data.get("relation_scene_type") or data.get("relationSceneType"),
+        result["relation_scene_type"] = data.get("relation_scene_type") or data.get(
+            "relationSceneType"
         )
-        # sourceObjectCode / targetObjectCode → source_class / target_class
-        result.setdefault(
-            "source_class",
-            data.get("source_class") or data.get("sourceObjectCode", ""),
+        result["source_class"] = data.get("source_class") or data.get(
+            "sourceObjectCode", ""
         )
-        result.setdefault(
-            "target_class",
-            data.get("target_class") or data.get("targetObjectCode", ""),
+        result["target_class"] = data.get("target_class") or data.get(
+            "targetObjectCode", ""
         )
-        result.setdefault(
-            "owner_type",
-            str(data.get("owner_type") or data.get("ownerType", "enterprise")),
+        result["owner_type"] = str(
+            data.get("owner_type") or data.get("ownerType", "enterprise")
         )
-        result.setdefault("user_code", data.get("user_code") or data.get("userCode"))
+        result["user_code"] = data.get("user_code") or data.get("userCode")
+
+        # Extract join_keys from attribute JSON to top-level
+        attr = data.get("attribute")
+        if isinstance(attr, dict):
+            jk = attr.get("join_keys") or attr.get("joinKeys")
+            if jk:
+                result["join_keys"] = jk
+        # Also preserve top-level join_keys (OWL / direct format)
+        if "join_keys" not in result:
+            top_jk = data.get("join_keys") or data.get("joinKeys")
+            if top_jk:
+                result["join_keys"] = top_jk
 
     elif entity_type == "action":
-        result.setdefault(
-            "action_code", data.get("action_code") or data.get("actionCode", "")
+        result["action_code"] = data.get("action_code") or data.get("actionCode", "")
+        result["action_name"] = data.get("action_name") or data.get("actionName", "")
+        result["action_type"] = data.get("action_type") or data.get("actionType")
+        result["belong_object_code"] = data.get("belong_object_code") or data.get(
+            "belongObjectCode", ""
         )
-        result.setdefault(
-            "action_name", data.get("action_name") or data.get("actionName", "")
+        result["description"] = (
+            data.get("description")
+            or data.get("action_desc")
+            or data.get("actionDesc", "")
         )
-        result.setdefault(
-            "action_type", data.get("action_type") or data.get("actionType")
+        result["request_url"] = data.get("request_url") or data.get("requestUrl")
+        result["request_method"] = data.get("request_method") or data.get(
+            "requestMethod"
         )
-        result.setdefault(
-            "belong_object_code",
-            data.get("belong_object_code") or data.get("belongObjectCode", ""),
+        result["owner_type"] = str(
+            data.get("owner_type") or data.get("ownerType", "enterprise")
         )
-        result.setdefault(
-            "action_desc",
-            data.get("action_desc")
-            or data.get("description")
-            or data.get("actionDesc"),
-        )
-        result.setdefault(
-            "request_url", data.get("request_url") or data.get("requestUrl")
-        )
-        result.setdefault(
-            "request_method", data.get("request_method") or data.get("requestMethod")
-        )
-        result.setdefault(
-            "owner_type", data.get("owner_type") or data.get("ownerType", "enterprise")
-        )
-        result.setdefault("user_code", data.get("user_code") or data.get("userCode"))
+        result["user_code"] = data.get("user_code") or data.get("userCode")
+
         # Normalize params: isRequired → required
         raw_params = data.get("params", [])
         if raw_params:
@@ -246,7 +229,7 @@ def _normalize_entity(
 
     elif entity_type == "datasource":
         # Datasource model_dump keys (dbId, dbCode, dbType, dbParams) match read path expectations
-        pass
+        result = dict(data)
 
     return result
 
