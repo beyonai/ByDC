@@ -47,6 +47,11 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
             )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("search_ontology_base failed")
+            raise HTTPException(status_code=500, detail="Internal Server Error")
 
     @router.post("/{base_id}/scenes/{scene_id}/search", tags=["Search"])
     def search_ontology(base_id: str, scene_id: str, body: dict[str, Any]) -> Any:
@@ -69,6 +74,11 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
             )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("search_ontology failed")
+            raise HTTPException(status_code=500, detail="Internal Server Error")
 
     @router.post("/{base_id}/instances/search", tags=["Instance"])
     def search_instances(base_id: str, body: dict[str, Any]) -> Any:

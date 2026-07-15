@@ -332,6 +332,7 @@ def _term_get_knowledge_by_word(
     - disambiguation_mode: str - 消歧模式，"auto" = 自动选择top1（默认），"return_all" = 返回所有候选术语
     - max_candidates: int - return_all 模式下每个关键词返回的最大候选数（默认 5）
     - kb_id: str - 可选，按知识库 ID 过滤
+    - relationCategory: str - 可选，按关系类别过滤，"metadata" = ONTOLOGY，"instance" = BUSINESS
 
     返回格式:
     {
@@ -375,6 +376,20 @@ def _term_get_knowledge_by_word(
 
     # 获取 ext_attrs 过滤条件
     filter_kb_id = params.get("kb_id")
+
+    # 关系类别过滤：metadata → ONTOLOGY, instance → BUSINESS
+    _RELATION_CATEGORY_MAP: dict[str, str] = {
+        "metadata": "ONTOLOGY",
+        "instance": "BUSINESS",
+    }
+    raw_category = params.get("relationCategory")
+    filter_relation_category: str | None = None
+    if raw_category:
+        if raw_category not in _RELATION_CATEGORY_MAP:
+            raise ValueError(
+                f"relationCategory must be 'metadata' or 'instance', got '{raw_category}'"
+            )
+        filter_relation_category = _RELATION_CATEGORY_MAP[raw_category]
 
     # 解析查询深度: "0" = 不查询关系, "1" = 1层, "all" = 无限制
     if search_level == "0":
@@ -596,6 +611,7 @@ def _term_get_knowledge_by_word(
             max_level,
             root_seg,
             visited_term_ids,
+            filter_relation_category,
         )
         root_term["graph"] = relations
         root_term["max_depth"] = max((r["depth"] for r in relations), default=0)
@@ -620,18 +636,21 @@ def _fetch_relations_recursive(
     max_level: int,
     parent_seg: str,
     visited_terms: set[str],
+    relation_category: str | None = None,
 ) -> list[dict[str, Any]]:
     """递归获取术语关系,构建LLM友好的图结构。"""
     if current_level > max_level:
         return []
 
     # 查询当前术语的关系
-    relations_result = platform.query_term_relations(
-        base_id,
-        term_id=term_id,
-        direction="both",
-        page_size=100,
-    )
+    query_kwargs: dict[str, Any] = {
+        "term_id": term_id,
+        "direction": "both",
+        "page_size": 100,
+    }
+    if relation_category:
+        query_kwargs["relation_category"] = relation_category
+    relations_result = platform.query_term_relations(base_id, **query_kwargs)
 
     result = []
     child_index = 0
@@ -713,6 +732,7 @@ def _fetch_relations_recursive(
                 max_level,
                 new_seg,
                 visited_terms,
+                relation_category,
             )
             result.extend(child_relations)
 
