@@ -1057,7 +1057,7 @@ class _TermWriter(_WriterBase):
                     )
                     rel_name = rel.get("relation_name") or rel.get("relationName") or "relates_to"
                     rel_category = (
-                        rel.get("relation_category") or rel.get("relationCategory") or "association"
+                        rel.get("relation_category") or rel.get("relationCategory") or "BUSINESS"
                     )
 
                     if not target_code and not target_name:
