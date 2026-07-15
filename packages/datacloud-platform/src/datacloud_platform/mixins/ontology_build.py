@@ -66,7 +66,6 @@ class OntologyBuildMixin:
         kb_directory: str = "",
         base_id: str = "",
         ext_property: dict[str, Any] | None = None,
-        relations: list[dict[str, Any]] = None
     ) -> dict[str, Any]:
         """收集本体对象信息（多轮），委托给 OntologyBuildSession。"""
         session = self._build_session(user_code)
@@ -83,7 +82,6 @@ class OntologyBuildMixin:
                 kb_directory=kb_directory,
                 base_id=base_id,
                 ext_property=ext_property,
-                relations=relations,
             ),
         )
 

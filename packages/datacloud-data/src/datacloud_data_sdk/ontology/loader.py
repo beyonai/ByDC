@@ -83,6 +83,7 @@ class LoaderConfig:
     default_kb_backend: str | None = DEFAULT_KB_BACKEND
     query_result_csv_threshold: int = 10  # 0 = 不启用溢出截断
     sql_execute_url: str | None = None  # HTTP_SQL 后端服务地址（chatbi 等调用方注入）
+    platform: Any = None
 
 
 class OntologyLoader:

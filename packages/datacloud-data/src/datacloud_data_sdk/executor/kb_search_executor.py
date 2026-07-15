@@ -20,6 +20,7 @@ import traceback
 from pathlib import PurePosixPath
 from typing import Any, cast
 
+from datacloud_data_sdk.constants import DEFAULT_BASE_ID
 from datacloud_data_sdk.exceptions import KbExecutionError
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
@@ -279,7 +280,7 @@ class KbSearchExecutor:
                 KnowledgeWriteRequest(
                     object_code=cls.object_code,
                     datasource_alias=datasource_alias,
-                    kb_resource_id = kb_resource_id,
+                    kb_resource_id=kb_resource_id,
                     kb_id=kb_id,
                     kb_directory=kb_directory,
                     file_path=file_path,
@@ -344,7 +345,12 @@ class KbSearchExecutor:
         return response
 
     async def _enqueue_kb_term_sync(self, write_requests: list[KnowledgeWriteRequest]) -> None:
-        """非阻塞投递 KB 术语同步事件（knowledge 包不可用时静默跳过）。"""
+        """非阻塞投递 KB 术语同步事件（knowledge 包不可用时静默跳过）。
+
+        对每个写入请求：
+        1. 从内容中解析 related_docs 块，构建文档级关联关系。
+        2. 从 loader._relations 中获取当前对象的本体关联关系，将术语写入关联对象。
+        """
         try:
             from datacloud_knowledge.sync import (  # type: ignore[import-untyped]
                 TermSyncEvent,
@@ -362,24 +368,71 @@ class KbSearchExecutor:
             file_stem = PurePosixPath(markdown_file_path).stem or markdown_file_path
             term_type_code = req.object_code
 
+            # 从内容 related_docs 块中解析文档级关联关系
             related_docs = _parse_related_docs(req.content)
             relations: list[dict[str, str]] = []
             for entry in related_docs:
                 _rel_type, rel_name = _related_doc_id_to_term(entry["target_doc_id"])
                 kb_dir = str(PurePosixPath(entry["target_doc_id"]).parent.name)
-                term_type = self._get_object_code_by_kb(entry.get("kb_resource_id", ""), kb_dir) or _rel_type
-                relations.append({
-                    "term_name": rel_name,
-                    "term_code": rel_name,
-                    "term_type_code": term_type,
-                    "relation_name": entry["relation"],
-                })
+                term_type = (
+                    self._get_object_code_by_kb(entry.get("kb_resource_id", ""), kb_dir)
+                    or _rel_type
+                )
+                if not term_type:
+                    logger.warning("术语关联关系获取不到术语类型：%s", entry)
+                    continue
+                relations.append(
+                    {
+                        "term_name": rel_name,
+                        "term_code": rel_name,
+                        "term_type_code": term_type,
+                        "relation_name": entry["relation"],
+                    }
+                )
+
+            # 从 loader 本体关联关系中获取当前对象关联的目标对象，补充关联术语
+            # join_keys 中的字段值即为目标术语的标识
+            ontology_relations = self._loader.get_ontology_relations()
+            for rel in ontology_relations:
+                if rel.source_class == term_type_code:
+                    related_object_code = rel.target_class
+                    # 当前对象为 source，取 sourceField 对应的 label 值作为目标术语名
+                    join_field_key = "sourceField"
+                elif rel.target_class == term_type_code:
+                    related_object_code = rel.source_class
+                    # 当前对象为 target，取 targetField 对应的 label 值作为目标术语名
+                    join_field_key = "targetField"
+                else:
+                    continue
+
+                if not related_object_code:
+                    continue
+
+                for jk in rel.join_keys or []:
+                    field_name = jk.get(join_field_key) or ""
+                    if not field_name:
+                        continue
+                    term_value = str(req.labels.get(field_name) or "")
+                    if not term_value:
+                        continue
+                    relations.append(
+                        {
+                            "term_name": term_value,
+                            "term_code": term_value,
+                            "term_type_code": related_object_code,
+                            "relation_name": rel.relation_name or rel.relation_code,
+                        }
+                    )
 
             term: dict[str, Any] = {
                 "term_name": file_stem,
                 "term_code": file_stem,
                 "term_type_code": term_type_code,
-                "ext_attrs": {"kb_id": req.kb_id, "kb_file_path": markdown_file_path, "kb_resource_id": req.kb_resource_id},
+                "ext_attrs": {
+                    "kb_id": req.kb_id,
+                    "kb_file_path": markdown_file_path,
+                    "kb_resource_id": req.kb_resource_id,
+                },
             }
             if relations:
                 term["relations"] = relations
@@ -400,8 +453,22 @@ class KbSearchExecutor:
         except Exception:  # noqa: BLE001
             logger.debug("KB 术语同步投递失败", exc_info=True)
 
-    def _get_object_code_by_kb(self, kb_id: str, kb_directory: str) -> str:
-        return "p_p_Product_0027024630_a7f3c1_0027024630_0a3619"
+    def _get_object_code_by_kb(self, kb_resource_id: str, kb_directory: str) -> str | None:
+        if not kb_resource_id:
+            return None
+        cfg = self._loader._config if self._loader else None
+        platform = getattr(cfg, "platform", None)
+        response = platform.query_ontologies_by_scene(
+            DEFAULT_BASE_ID,
+            "",
+            ext_property_filters={"kb_resource_id": kb_resource_id, "kb_directory": kb_directory},
+            page=1,
+            page_size=5,
+            cross_scene=True,
+        )
+        if response and response.get("data") and response.get("data").get("objects"):
+            return response.get("data").get("objects")[0].get("objectCode")
+        return None
 
     def _resolve_backend(
         self,

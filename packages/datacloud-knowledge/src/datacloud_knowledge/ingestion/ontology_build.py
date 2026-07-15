@@ -126,7 +126,6 @@ class OntologyBuildSession:
         kb_directory: str = "",
         base_id: str = "",
         ext_property: dict[str, Any] | None = None,
-        relations: list[dict[str, Any]] = None
     ) -> dict[str, Any]:
         """收集本体对象信息，合并到暂存状态，返回当前完整状态。
 
@@ -179,8 +178,6 @@ class OntologyBuildSession:
             state["base_id"] = base_id
         if ext_property is not None:
             state["ext_property"] = ext_property
-        if relations:
-            state["relations"] = relations
 
         if fields:
             existing: dict[str, dict[str, Any]] = {
@@ -200,7 +197,7 @@ class OntologyBuildSession:
                 nr = dict(rel)
                 nr.setdefault(
                     "source_object_code",
-                    rel.get("source_object_code") or rel.get("source_class", ""),
+                    rel.get("source_object_code") or rel.get("source_class", "") or state["entity_code"],
                 )
                 nr.setdefault(
                     "target_object_code",

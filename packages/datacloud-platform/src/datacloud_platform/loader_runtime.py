@@ -138,6 +138,7 @@ class LoaderRuntimeManager:
         loader.configure(
             query_result_csv_threshold=self._settings.query_result_csv_threshold,
         )
+        loader.configure(platform=self._platform)
 
     def _configure_plan_generator(self, loader: OntologyLoader) -> None:
         if getattr(loader._config, "plan_generator", None) is not None:
