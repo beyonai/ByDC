@@ -79,6 +79,9 @@ class WorkspaceObjectCollectRequest(BaseModel):
     entity_desc: str = Field(default="", alias="entity_desc")
     table_name: str | None = Field(default=None, alias="table_name")
     fields: list[dict[str, Any]] | None = Field(default=None, alias="fields")
+    object_relations: list[dict[str, Any]] | None = Field(
+        default=None, alias="object_relations"
+    )
     term_sync: dict[str, Any] | None = Field(default=None, alias="term_sync")
 
 
@@ -257,6 +260,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
                 entity_name=body.entity_name,
                 entity_desc=body.entity_desc,
                 fields=body.fields,
+                object_relations=body.object_relations,
             )
         except Exception as exc:
             logger.exception("object/collect 失败")

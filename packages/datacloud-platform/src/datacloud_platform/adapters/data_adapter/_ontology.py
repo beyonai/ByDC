@@ -407,28 +407,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             Tuple of (paginated ObjectSummary list, total matching count).
         """
         store = self._entity_store.sub_store(base_id)
-        # Use list_all for accurate filtering (search only matches name/index keys)
-        all_items = store.list_all("objects")
-        summaries: list[ObjectSummary] = []
-        for raw in all_items:
-            summary = self._raw_to_summary(raw)
-            if owner_type and summary.owner_type != owner_type:
-                continue
-            if owner_type == "personal" and user_code:
-                if summary.user_code != user_code:
-                    continue
-            if keyword:
-                kw = keyword.strip().lower()
-                if (
-                    kw not in summary.object_name.lower()
-                    and kw not in summary.object_code.lower()
-                    and kw not in summary.description.lower()
-                ):
-                    continue
-            summaries.append(summary)
-        total = len(summaries)
-        offset = (page - 1) * page_size
-        return summaries[offset : offset + page_size], total
+        items, total = store.search(
+            "objects",
+            base_id=base_id,
+            keyword=keyword,
+            owner_type=owner_type,
+            user_code=user_code,
+            page=page,
+            page_size=page_size,
+        )
+        summaries = [self._raw_to_summary(raw) for raw in items]
+        return summaries, total
 
     def get_object_detail(
         self, object_code: str, *, base_id: str = ""
@@ -758,29 +747,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             Tuple of (paginated View dict list, total count).
         """
         store = self._entity_store.sub_store(base_id)
-        all_items = store.list_all("views")
-        result: list[dict[str, Any]] = []
-        for raw in all_items:
-            view_dict = self._raw_to_view_dict(raw)
-            v_owner: str = view_dict.get("ownerType", "enterprise")
-            if owner_type and v_owner != owner_type:
-                continue
-            if owner_type == "personal" and user_code:
-                v_user: str | None = view_dict.get("userCode")
-                if v_user != user_code:
-                    continue
-            if keyword:
-                kw = keyword.strip().lower()
-                if (
-                    kw not in (view_dict.get("viewName", "") or "").lower()
-                    and kw not in (view_dict.get("viewCode", "") or "").lower()
-                    and kw not in (view_dict.get("description", "") or "").lower()
-                ):
-                    continue
-            result.append(view_dict)
-        total = len(result)
-        offset = (page - 1) * page_size
-        return result[offset : offset + page_size], total
+        items, total = store.search(
+            "views",
+            base_id=base_id,
+            keyword=keyword,
+            owner_type=owner_type,
+            user_code=user_code,
+            page=page,
+            page_size=page_size,
+        )
+        result = [self._raw_to_view_dict(raw) for raw in items]
+        return result, total
 
     def get_view_detail(
         self, view_code: str, *, base_id: str = ""
@@ -982,6 +959,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         if tgt_obj:
             tgt_name = tgt_obj.get("object_name", tgt_obj.get("objectName", "")) or ""
 
+        jk = raw.get("join_keys")
         rel = Relation(
             relationCode=raw.get("relation_code", raw.get("relationCode", "")),
             relationName=raw.get("relation_name") or raw.get("relationName"),
@@ -998,6 +976,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             or raw.get("relationSceneType"),
             ownerType=str(raw.get("owner_type", raw.get("ownerType", "enterprise"))),
             userCode=raw.get("user_code") or raw.get("userCode"),
+            attribute={"join_keys": jk} if jk else None,
         )
         return rel.model_dump(by_alias=True)
 
@@ -1025,27 +1004,17 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             Tuple of (paginated Relation dict list, total count).
         """
         store = self._entity_store.sub_store(base_id)
-        all_items = store.list_all("relations")
-        result: list[dict[str, Any]] = []
-        for raw in all_items:
-            rel_dict = self._raw_to_relation_dict(raw, store)
-            if keyword:
-                kw = keyword.strip().lower()
-                if (
-                    kw not in (rel_dict.get("relationName", "") or "").lower()
-                    and kw not in (rel_dict.get("relationCode", "") or "").lower()
-                    and kw not in (rel_dict.get("relationDesc", "") or "").lower()
-                ):
-                    continue
-            if owner_type and rel_dict.get("ownerType", "enterprise") != owner_type:
-                continue
-            if owner_type == "personal" and user_code:
-                if rel_dict.get("userCode") != user_code:
-                    continue
-            result.append(rel_dict)
-        total = len(result)
-        offset = (page - 1) * page_size
-        return result[offset : offset + page_size], total
+        items, total = store.search(
+            "relations",
+            base_id=base_id,
+            keyword=keyword,
+            owner_type=owner_type,
+            user_code=user_code,
+            page=page,
+            page_size=page_size,
+        )
+        result = [self._raw_to_relation_dict(raw, store) for raw in items]
+        return result, total
 
     def get_relation_detail(
         self, rel_code: str, *, base_id: str = ""

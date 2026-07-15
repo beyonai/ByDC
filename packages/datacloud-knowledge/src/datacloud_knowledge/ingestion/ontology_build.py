@@ -121,6 +121,7 @@ class OntologyBuildSession:
         entity_name: str = "",
         entity_desc: str = "",
         fields: list[dict[str, Any]] | None = None,
+        object_relations: list[dict[str, Any]] | None = None,
         kb_id: str = "",
         kb_directory: str = "",
         base_id: str = "",
@@ -192,6 +193,35 @@ class OntologyBuildSession:
                 }
             state["fields"] = list(existing.values())
 
+        if object_relations:
+            # 归一化 relation dict：兼容 source_class/target_class 新旧字段名
+            normalized_rels: list[dict[str, Any]] = []
+            for rel in object_relations:
+                nr = dict(rel)
+                nr.setdefault(
+                    "source_object_code",
+                    rel.get("source_object_code") or rel.get("source_class", ""),
+                )
+                nr.setdefault(
+                    "target_object_code",
+                    rel.get("target_object_code") or rel.get("target_class", ""),
+                )
+                normalized_rels.append(nr)
+
+            def _rel_key(r: dict[str, Any]) -> tuple[str, str]:
+                return (
+                    r.get("source_object_code", ""),
+                    r.get("target_object_code", ""),
+                )
+
+            existing_rels: dict[tuple[str, str], dict[str, Any]] = {
+                _rel_key(r): r for r in state.get("object_relations", [])
+            }
+            for rel in normalized_rels:
+                rkey: tuple[str, str] = _rel_key(rel)
+                existing_rels[rkey] = {**existing_rels.get(rkey, {}), **rel}
+            state["object_relations"] = list(existing_rels.values())
+
         store.save(key, state, ttl=3600)
         # 同时用原始短码 key 保存，让 submit 传短码也能查找到
         if original_key != key:
@@ -252,20 +282,32 @@ class OntologyBuildSession:
                     state["fields"] = auto_fields
 
         if object_relations:
+            # 归一化 relation dict：兼容 source_class/target_class 新旧字段名
+            normalized_rels: list[dict[str, Any]] = []
+            for rel in object_relations:
+                nr = dict(rel)
+                nr.setdefault(
+                    "source_object_code",
+                    rel.get("source_object_code") or rel.get("source_class", ""),
+                )
+                nr.setdefault(
+                    "target_object_code",
+                    rel.get("target_object_code") or rel.get("target_class", ""),
+                )
+                normalized_rels.append(nr)
 
-            def _rel_key(r: dict[str, Any]) -> tuple[str, str, str, str]:
+            def _rel_key(r: dict[str, Any]) -> tuple[str, str]:
                 return (
                     r.get("source_object_code", ""),
-                    r.get("source_object_field_code", ""),
                     r.get("target_object_code", ""),
-                    r.get("target_object_field_code", ""),
                 )
 
-            existing_rels: dict[tuple[str, str, str, str], dict[str, Any]] = {
+            existing_rels: dict[tuple[str, str], dict[str, Any]] = {
                 _rel_key(r): r for r in state.get("object_relations", [])
             }
-            for rel in object_relations:
-                existing_rels[_rel_key(rel)] = {**existing_rels.get(_rel_key(rel), {}), **rel}
+            for rel in normalized_rels:
+                rkey: tuple[str, str] = _rel_key(rel)
+                existing_rels[rkey] = {**existing_rels.get(rkey, {}), **rel}
             state["object_relations"] = list(existing_rels.values())
 
         # 用户传入的 fields 覆盖/追加（同名覆盖，新字段追加）

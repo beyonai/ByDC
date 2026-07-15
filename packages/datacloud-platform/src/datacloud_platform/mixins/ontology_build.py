@@ -61,6 +61,7 @@ class OntologyBuildMixin:
         entity_name: str = "",
         entity_desc: str = "",
         fields: list[dict[str, Any]] | None = None,
+        object_relations: list[dict[str, Any]] | None = None,
         kb_id: str = "",
         kb_directory: str = "",
         base_id: str = "",
@@ -77,6 +78,7 @@ class OntologyBuildMixin:
                 entity_name=entity_name,
                 entity_desc=entity_desc,
                 fields=fields,
+                object_relations=object_relations,
                 kb_id=kb_id,
                 kb_directory=kb_directory,
                 base_id=base_id,
@@ -212,6 +214,27 @@ class OntologyBuildMixin:
         # 4. CRUD: 创建对象 + 加入场景
         self.create_object_with_scene(base_id, obj, scene_id)  # type: ignore[attr-defined]
 
+        # 4.5 创建对象关联关系（source 固定为当前实际对象编码）
+        for rel in state.get("object_relations", []):
+            src_code = actual_entity_code
+            tgt_code = rel.get("target_object_code") or rel.get("target_class", "")
+            relation_code = rel.get("relation_code") or f"{src_code}_to_{tgt_code}"
+            relation = Relation(
+                relationCode=relation_code,
+                relationName=rel.get("relation_name", ""),
+                relationCardinality=rel.get("relation_type", "MANY_TO_ONE"),
+                relationDesc=rel.get("description", ""),
+                sourceObjectCode=src_code,
+                targetObjectCode=tgt_code,
+                attribute={
+                    "join_keys": rel.get("join_keys", []),
+                },
+            )
+            try:
+                self.create_relation(base_id, relation)  # type: ignore[attr-defined]
+            except Exception:
+                logger.exception("创建对象关系失败: %s", rel)
+
         # 5. DYNAMIC_TABLE: 建物理表
         if entity_source == "DYNAMIC_TABLE":
             from datacloud_data_sdk.ddl.table_manager import create_table
@@ -302,12 +325,19 @@ class OntologyBuildMixin:
 
         # 5. 创建对象间关系（MANY_TO_ONE）
         for rel in state.get("object_relations", []):
+            src_code = rel.get("source_object_code") or rel.get("source_class", "")
+            tgt_code = rel.get("target_object_code") or rel.get("target_class", "")
+            relation_code = rel.get("relation_code") or f"{src_code}_to_{tgt_code}"
             relation = Relation(
-                relationCode=f"{rel.get('source_object_code', '')}_to_{rel.get('target_object_code', '')}",
+                relationCode=relation_code,
                 relationName=rel.get("relation_name", ""),
                 relationCardinality=rel.get("relation_type", "MANY_TO_ONE"),
-                sourceObjectCode=rel.get("source_object_code", ""),
-                targetObjectCode=rel.get("target_object_code", ""),
+                relationDesc=rel.get("description", ""),
+                sourceObjectCode=src_code,
+                targetObjectCode=tgt_code,
+                attribute={
+                    "join_keys": rel.get("join_keys", []),
+                },
             )
             try:
                 self.create_relation(base_id, relation)  # type: ignore[attr-defined]

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from starlette import status
+from starlette.concurrency import run_in_threadpool
 
 from datacloud_platform.api.deps import extract_beyond_token
 from datacloud_platform.constants import DEFAULT_BASE_ID
@@ -158,9 +159,10 @@ def create_rpc_router(platform: DatacloudPlatform) -> APIRouter:
                     )
                 params["base_id"] = system_code
 
-            result = handler(platform, params, request)
-            if inspect.isawaitable(result):
-                result = await result
+            if inspect.iscoroutinefunction(handler):
+                result = await handler(platform, params, request)
+            else:
+                result = await run_in_threadpool(handler, platform, params, request)
             return result
         except tuple(_EXCEPTION_MAP) as e:
             logger.warning(
