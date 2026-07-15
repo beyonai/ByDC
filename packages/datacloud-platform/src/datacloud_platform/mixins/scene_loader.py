@@ -177,6 +177,19 @@ class SceneLoaderMixin:
                 else ([], 0)
             )
             content: dict[str, Any] = {"objects": objs, "views": vws}
+
+            # 加载涉及的 relations（source 或 target 在已加载对象中）
+            all_codes: set[str] = set(object_codes) | set(vw_codes)
+            if all_codes:
+                all_rels = store.list_all("relations")
+                related_rels = [
+                    r
+                    for r in all_rels
+                    if r.get("source_class", r.get("sourceObjectCode", "")) in all_codes
+                    or r.get("target_class", r.get("targetObjectCode", "")) in all_codes
+                ]
+                if related_rels:
+                    content["relations"] = related_rels
         else:
             content = _build_content_from_remote_scenes(
                 backend, base_id, ["-1"], object_codes, vw_codes

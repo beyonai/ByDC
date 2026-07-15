@@ -54,6 +54,9 @@ class ObjectCollectRequest(BaseModel):
     base_id: str = Field(default="", alias="base_id")
     ext_property: dict[str, Any] = Field(default_factory=dict, alias="ext_property")
     fields: list[dict[str, Any]] | None = Field(default=None, alias="fields")
+    object_relations: list[dict[str, Any]] | None = Field(
+        default=None, alias="object_relations"
+    )
 
 
 class ObjectSubmitRequest(BaseModel):
@@ -136,6 +139,7 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
                 entity_name=body.entity_name,
                 entity_desc=body.entity_desc,
                 fields=body.fields,
+                object_relations=body.object_relations,
                 kb_id=body.kb_id,
                 kb_directory=body.kb_directory,
                 base_id=body.base_id,
