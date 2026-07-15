@@ -1100,6 +1100,131 @@ class PostgresSearchEngine(TermSearchEngine):
             log.exception("向量术语搜索失败")
             raise
 
+    def search_terms_by_embedding_batch(
+        self,
+        *,
+        vectors: list[list[float]],
+        metadata_term_types: Sequence[str] | None = None,
+        metadata_term_codes: Sequence[str] | None = None,
+        instance_term_types: Sequence[str] | None = None,
+        per_keyword_limit: int = 20,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Batch vector search via UNION ALL — one SQL for all keywords.
+
+        Each keyword gets separate metadata and instance subqueries, each with
+        its own LIMIT. Results are keyed by ``"{idx}_md"`` / ``"{idx}_inst"``.
+
+        Args:
+            vectors: One embedding vector per keyword.
+            metadata_term_types: Shared metadata type filter (None = skip metadata).
+            metadata_term_codes: Shared metadata code filter (None = no code filter).
+            instance_term_types: Shared instance type filter (None = skip instance).
+            per_keyword_limit: LIMIT per subquery (per key per scope).
+
+        Returns:
+            ``{"0_md": [hits], "0_inst": [hits], "1_md": [...], ...}``
+            where each hit is ``{term_code, term_name, term_type_code, name_text, score}``.
+        """
+        n_keywords = len(vectors)
+        if n_keywords == 0:
+            return {}
+
+        # Build metadata filter clause with individual placeholders
+        md_filter: str = ""
+        if metadata_term_types:
+            placeholders = ", ".join(f":mdtype_{i}" for i in range(len(metadata_term_types)))
+            parts = [f"t.term_type_code IN ({placeholders})"]
+            if metadata_term_codes:
+                placeholders = ", ".join(f":mdcode_{i}" for i in range(len(metadata_term_codes)))
+                parts.append(f"t.term_code IN ({placeholders})")
+            md_filter = " AND ".join(parts)
+
+        # Build instance filter clause with individual placeholders
+        inst_filter: str = ""
+        if instance_term_types:
+            placeholders = ", ".join(f":insttype_{i}" for i in range(len(instance_term_types)))
+            inst_filter = f"t.term_type_code IN ({placeholders})"
+
+        # Build UNION ALL subqueries: 2 per keyword (metadata + instance)
+        subqueries: list[str] = []
+        for i in range(n_keywords):
+            if md_filter:
+                subqueries.append(
+                    f"("
+                    f"SELECT "
+                    f"CAST(:kw_{i}_md AS text) AS matched_keyword, "
+                    f"tn.name_text, t.term_code, t.term_type_code, "
+                    f"1.0 - (tn.name_embedding <=> CAST(:vec_{i} AS vector)) AS score "
+                    f"FROM term_name tn "
+                    f"JOIN term t ON tn.term_id = t.term_id "
+                    f"WHERE tn.name_embedding IS NOT NULL "
+                    f"AND ({md_filter}) "
+                    f"ORDER BY tn.name_embedding <=> CAST(:vec_{i} AS vector) "
+                    f"LIMIT {int(per_keyword_limit)}"
+                    f")"
+                )
+            if inst_filter:
+                subqueries.append(
+                    f"("
+                    f"SELECT "
+                    f"CAST(:kw_{i}_inst AS text) AS matched_keyword, "
+                    f"tn.name_text, t.term_code, t.term_type_code, "
+                    f"1.0 - (tn.name_embedding <=> CAST(:vec_{i} AS vector)) AS score "
+                    f"FROM term_name tn "
+                    f"JOIN term t ON tn.term_id = t.term_id "
+                    f"WHERE tn.name_embedding IS NOT NULL "
+                    f"AND ({inst_filter}) "
+                    f"ORDER BY tn.name_embedding <=> CAST(:vec_{i} AS vector) "
+                    f"LIMIT {int(per_keyword_limit)}"
+                    f")"
+                )
+
+        if not subqueries:
+            return {}
+
+        sql = text(" UNION ALL ".join(subqueries))
+
+        try:
+            params: dict[str, Any] = {}
+            if metadata_term_types:
+                for i, tt in enumerate(metadata_term_types):
+                    params[f"mdtype_{i}"] = tt
+            if metadata_term_codes:
+                for i, tc in enumerate(metadata_term_codes):
+                    params[f"mdcode_{i}"] = tc
+            if instance_term_types:
+                for i, it in enumerate(instance_term_types):
+                    params[f"insttype_{i}"] = it
+            for i, vec in enumerate(vectors):
+                params[f"kw_{i}_md"] = f"{i}_md"
+                if inst_filter:
+                    params[f"kw_{i}_inst"] = f"{i}_inst"
+                params[f"vec_{i}"] = "[" + ",".join(str(round(v, 8)) for v in vec) + "]"
+
+            with self._with_session() as session:
+                rows = session.execute(sql, params).fetchall()
+
+            # Group results by matched_keyword
+            grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for row in rows:
+                matched_keyword, name_text, term_code, term_type_code, score = row
+                grouped[str(matched_keyword)].append(
+                    {
+                        "term_code": str(term_code) if term_code else "",
+                        "term_name": str(name_text),
+                        "term_type_code": str(term_type_code),
+                        "name_text": str(name_text),
+                        "score": float(score),
+                    }
+                )
+
+            log.debug("批量向量搜索找到 %d 条结果 (%d keywords)", len(rows), n_keywords)
+            return dict(grouped)
+
+        except Exception:
+            log.exception("批量向量搜索失败")
+            raise
+
     # ═══════════════════════════════════════════════════════════════
     # 批量召回方法（供 intent.recall 使用）
     # ═══════════════════════════════════════════════════════════════

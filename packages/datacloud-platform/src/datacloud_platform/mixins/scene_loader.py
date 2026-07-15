@@ -224,12 +224,13 @@ class SceneLoaderMixin:
                 scene_ids=["-1"],
                 keyword=keyword,
                 search_scope="metadata",
-                ontology_type=["object"],
-                limit=top_k,
+                metadata_type=["object"],
+                top_k=top_k,
             )
+            kw_result = result.get(keyword, {})
             codes = [
                 h.get("termCode", "")
-                for h in result.get("metadata", [])
+                for h in kw_result.get("metadata", [])
                 if h.get("termCode")
             ]
             logger.info(
@@ -243,12 +244,14 @@ class SceneLoaderMixin:
                 scene_ids=["-1"],
                 keyword=keyword,
                 search_scope="metadata",
-                ontology_type=["action"],
-                limit=top_k,
+                metadata_type=["action"],
+                top_k=top_k,
             )
+            kw_result = result.get(keyword, {})
+            metadata_hits = kw_result.get("metadata", [])
             # Deduplicate by belongObjectCode
             codes_set: dict[str, None] = {}
-            for h in result.get("metadata", []):
+            for h in metadata_hits:
                 boc = h.get("belongObjectCode")
                 if boc:
                     codes_set[boc] = None
@@ -256,7 +259,7 @@ class SceneLoaderMixin:
             logger.info(
                 "search_and_load: action search keyword=%r hits=%d objects=%d",
                 keyword,
-                len(result.get("metadata", [])),
+                len(metadata_hits),
                 len(codes),
             )
 

@@ -654,11 +654,11 @@ class KnowledgeMixin:
                         scene_ids=[],
                         keyword=t.raw_text,
                         search_scope="metadata",
-                        ontology_type=["property"],
-                        pre_resolved_term_codes=resolved_codes,
-                        limit=top_k,
+                        metadata_type=["property"],
+                        top_k=top_k,
                     )
-                    metadata_hits: list[dict[str, Any]] = sr.get("metadata", [])
+                    kw_result = sr.get(t.raw_text, {})
+                    metadata_hits: list[dict[str, Any]] = kw_result.get("metadata", [])
                     field_candidates: list[dict[str, Any]] = []
                     for hit in metadata_hits:
                         field_candidates.append(

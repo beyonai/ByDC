@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
@@ -16,6 +17,22 @@ from datacloud_platform.models.scene import (
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
+
+
+def _parse_ext_property_filters(raw: Any) -> dict[str, Any] | None:
+    """Parse ``ext_property_filters`` from API params (dict or JSON string)."""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str):
+        try:
+            result = json.loads(raw)
+            if isinstance(result, dict):
+                return result
+        except json.JSONDecodeError:
+            pass
+    return None
 
 
 def _list_scenes(
@@ -140,6 +157,8 @@ def _query_ontologies_by_code(
                 f"must be 'OBJECT' or 'VIEW' (case-insensitive)"
             )
 
+    ext_filters = _parse_ext_property_filters(params.get("ext_property_filters"))
+
     result = platform.query_ontologies_by_scene(
         base_id,
         scene_id,
@@ -150,6 +169,7 @@ def _query_ontologies_by_code(
         owner_type=params.get("owner_type"),
         user_code=params.get("user_code"),
         cross_scene=cross_scene,
+        ext_property_filters=ext_filters,
     )
     return ok(data=result["data"], totalCount=result["totalCount"])
 

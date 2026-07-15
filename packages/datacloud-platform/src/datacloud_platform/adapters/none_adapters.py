@@ -187,6 +187,7 @@ class _NoopOntologyBackend:
         owner_type: str | None = None,
         user_code: str | None = None,
         cross_scene: bool = False,
+        ext_property_filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Return empty result."""
         _ = (
@@ -199,6 +200,7 @@ class _NoopOntologyBackend:
             owner_type,
             user_code,
             cross_scene,
+            ext_property_filters,
         )
         return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
@@ -522,28 +524,28 @@ class _NoopOntologyBackend:
         base_id: str,
         scene_ids: list[str],
         *,
-        keyword: str,
+        keyword: str | list[str],
         query_type: str = "vector",
         search_scope: str = "all",
-        ontology_type: list[str] | None = None,
+        metadata_type: list[str] | None = None,
         object_code: list[str] | None = None,
         view_code: list[str] | None = None,
         property_code: list[str] | None = None,
-        pre_resolved_term_codes: list[str] | None = None,
-        limit: int = 20,
+        result_per_type: int = 5,
+        top_k: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Return empty result."""
-        return {"data": [], "totalCount": 0}
-
-    def search_ontology_batch(
-        self,
-        base_id: str,
-        keyword: str,
-        limit: int = 20,
-    ) -> dict[str, Any]:
-        """Return empty result."""
-        return {"data": [], "totalCount": 0}
+        """Return empty keyword-keyed result: ``{kw: {metadata:[], instances:[], totalCount:{...}}}``."""
+        empty: dict[str, Any] = {
+            "metadata": [],
+            "instances": [],
+            "totalCount": {"metadata": 0, "instances": 0},
+        }
+        keywords: list[str] = [keyword] if isinstance(keyword, str) else list(keyword)
+        keywords = [k for k in keywords if k and k.strip()]
+        if not keywords:
+            return {}
+        return {kw: dict(empty) for kw in keywords}
 
     def graph_query(
         self,

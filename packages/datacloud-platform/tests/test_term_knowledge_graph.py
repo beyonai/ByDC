@@ -16,12 +16,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from fastapi import Request
 
 from datacloud_platform.api.routers.rpc.handlers.term import (
     _term_get_knowledge_by_word,
 )
-from datacloud_platform.models.common import ok
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform

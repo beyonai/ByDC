@@ -31,13 +31,12 @@ def _search_ontology(
             keyword=params.get("keyword", ""),
             query_type=params.get("queryType", "vector"),
             search_scope=params.get("searchScope", "all"),
-            ontology_type=params.get("ontologyType"),
+            metadata_type=params.get("metadataType"),
             object_code=params.get("objectCode"),
             view_code=params.get("viewCode"),
             property_code=params.get("propertyCode"),
             result_per_type=params.get("resultPerType", 5),
-            page_size=params.get("pageSize", 20),
-            page_token=params.get("pageToken"),
+            top_k=params.get("topK", 20),
         )
     )
 
@@ -53,13 +52,12 @@ def _search_scene(
             keyword=params.get("keyword", ""),
             query_type=params.get("queryType", "vector"),
             search_scope=params.get("searchScope", "all"),
-            ontology_type=params.get("ontologyType"),
+            metadata_type=params.get("metadataType"),
             object_code=params.get("objectCode"),
             view_code=params.get("viewCode"),
             property_code=params.get("propertyCode"),
             result_per_type=params.get("resultPerType", 5),
-            page_size=params.get("pageSize", 20),
-            page_token=params.get("pageToken"),
+            top_k=params.get("topK", 20),
         )
     )
 

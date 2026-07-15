@@ -52,7 +52,7 @@ class ObjectCollectRequest(BaseModel):
     kb_id: str = Field(default="", alias="kb_id")
     kb_directory: str = Field(default="", alias="kb_directory")
     base_id: str = Field(default="", alias="base_id")
-    ext_property: dict = Field(default={}, alias="ext_property")
+    ext_property: dict[str, Any] = Field(default_factory=dict, alias="ext_property")
     relations: list = Field(default_factory=list, alias="relations")
     fields: list[dict[str, Any]] | None = Field(default=None, alias="fields")
 

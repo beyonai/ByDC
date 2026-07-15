@@ -146,6 +146,9 @@ class _ScopedEntityStore:
         base_id: str = "",
         keyword: str | None = None,
         codes: list[str] | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        ext_property_filters: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -154,6 +157,9 @@ class _ScopedEntityStore:
             base_id=base_id or self._default_base_id,
             keyword=keyword,
             codes=codes,
+            owner_type=owner_type,
+            user_code=user_code,
+            ext_property_filters=ext_property_filters,
             page=page,
             page_size=page_size,
         )
@@ -237,18 +243,51 @@ class JsonEntityStore:
         base_id: str = "",
         keyword: str | None = None,
         codes: list[str] | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        ext_property_filters: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
-        """Paginated search with keyword and code-set filtering.
+        """Paginated search with keyword, code-set, owner, and extProperty filtering.
 
         Loads the lightweight index, filters in Python, sorts by code,
         slices for pagination, then batch-reads matching entity files.
+        All post-index filters load the full entity dict for evaluation.
         """
         _ = base_id
         if codes is not None and len(codes) == 0:
             return [], 0
 
+        # When heavy filters are present, skip the index-level keyword shortcut
+        # and evaluate against full entity data for consistent total counts.
+        has_heavy_filters = bool(owner_type or user_code or ext_property_filters)
+
+        if has_heavy_filters:
+            all_data = self.list_all(entity_type)
+            filtered: list[dict[str, Any]] = []
+            for data in all_data:
+                if codes is not None:
+                    code = data.get("object_code") or data.get("view_code") or ""
+                    if code not in codes:
+                        continue
+                if keyword:
+                    name = data.get("object_name") or data.get("view_name") or ""
+                    if keyword.lower() not in name.lower():
+                        continue
+                if not _json_entity_match(
+                    data, owner_type, user_code, ext_property_filters
+                ):
+                    continue
+                filtered.append(data)
+            filtered.sort(
+                key=lambda d: d.get("object_code") or d.get("view_code") or ""
+            )
+            total = len(filtered)
+            offset = (page - 1) * page_size
+            return filtered[offset : offset + page_size], total
+
+        # Fast path: index-level keyword + code-set filter (no heavy filters)
         index = self.load_index(entity_type)
         matching_codes = list(index.keys())
 
@@ -272,9 +311,9 @@ class JsonEntityStore:
 
         items: list[dict[str, Any]] = []
         for code in page_codes:
-            data = self.get(entity_type, code)
-            if data is not None:
-                items.append(data)
+            entity = self.get(entity_type, code)
+            if entity is not None:
+                items.append(entity)
 
         return items, total
 
@@ -542,3 +581,41 @@ def _to_index_entry(data: dict[str, Any], entity_type: str) -> dict[str, Any]:
         "shard": code[:2].lower(),
         "field_count": len(data.get("fields", data.get("properties", []))),
     }
+
+
+def _json_entity_match(
+    data: dict[str, Any],
+    owner_type: str | None,
+    user_code: str | None,
+    ext_property_filters: dict[str, Any] | None,
+) -> bool:
+    """Match an entity data dict against owner_type, user_code, and extProperty filters.
+
+    Mirrors the dual-location lookup of ``_raw_to_summary``: checks both
+    top-level and ``ext_property`` for ``owner_type`` / ``user_code``.
+    """
+    if owner_type or user_code:
+        ext = data.get("ext_property", {}) or {}
+        if owner_type:
+            actual_owner: str = (
+                ext.get("owner_type")
+                or data.get("owner_type")
+                or data.get("ownerType", "enterprise")
+            ) or "enterprise"
+            if actual_owner != owner_type:
+                return False
+        if user_code:
+            actual_user: str | None = (
+                ext.get("user_code") or data.get("user_code") or data.get("userCode")
+            )
+            if actual_user != user_code:
+                return False
+
+    if ext_property_filters:
+        ext = data.get("ext_property", {}) or {}
+        for key, expected in ext_property_filters.items():
+            actual = ext.get(key)
+            if actual != expected:
+                return False
+
+    return True

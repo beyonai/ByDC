@@ -295,13 +295,18 @@ class OpenGaussEntityStore:
         base_id: str = "",
         keyword: str | None = None,
         codes: list[str] | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        ext_property_filters: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
-        """Paginated search with keyword and code-set filtering.
+        """Paginated search with keyword, code-set, owner, and extProperty filtering.
 
-        Uses a single SQL query with ``COUNT(*) OVER()`` for total count
-        alongside the data, avoiding a second round-trip.
+        All filters are pushed down to SQL via JSONB operators on the ``data``
+        column.  ``owner_type`` / ``user_code`` are matched at top-level as well
+        as inside ``ext_property`` for backward compatibility with OWL-imported
+        entities.
         """
         bid = base_id or self._default_base_id
         model = _ENTITY_TABLES[entity_type]
@@ -311,27 +316,68 @@ class OpenGaussEntityStore:
         if codes is not None and len(codes) == 0:
             return [], 0
 
-        from sqlalchemy import select
+        from sqlalchemy import or_, select
         from sqlalchemy.orm import Session
 
         with Session(self._engine) as session:
-            total_col = func.count().over().label("total")
-            stmt = select(model.data, total_col).where(  # type: ignore[attr-defined]
-                getattr(model, "base_id") == bid,
-            )
+            # Base WHERE clause (reused for both count and data queries)
+            base_where = [getattr(model, "base_id") == bid]
 
             if codes is not None:
-                stmt = stmt.where(getattr(model, code_col_name).in_(codes))
+                base_where.append(getattr(model, code_col_name).in_(codes))
 
             if keyword:
-                stmt = stmt.where(getattr(model, name_col_name).ilike(f"%{keyword}%"))
+                base_where.append(getattr(model, name_col_name).ilike(f"%{keyword}%"))
 
+            # JSONB pushdown: owner_type (top-level + ext_property for compat)
+            data_col = model.data  # type: ignore[attr-defined]
+            if owner_type:
+                base_where.append(
+                    or_(
+                        data_col.op("->>")("owner_type") == owner_type,
+                        data_col.op("->")("ext_property").op("->>")("owner_type")
+                        == owner_type,
+                    )
+                )
+
+            # JSONB pushdown: user_code (top-level + ext_property for compat)
+            if user_code:
+                base_where.append(
+                    or_(
+                        data_col.op("->>")("user_code") == user_code,
+                        data_col.op("->")("ext_property").op("->>")("user_code")
+                        == user_code,
+                    )
+                )
+
+            # JSONB pushdown: ext_property key-value filter (AND semantics)
+            if ext_property_filters:
+                for key, val in ext_property_filters.items():
+                    base_where.append(
+                        data_col.op("->")("ext_property").op("->>")(key) == str(val)
+                    )
+
+            # Lightweight count query — reads no JSONB data
+            count_stmt = (
+                select(func.count(getattr(model, code_col_name)))
+                .select_from(model)
+                .where(*base_where)
+            )
+            total: int = session.execute(count_stmt).scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            # Data query — reads only the requested page
             code_attr = getattr(model, code_col_name)
-            stmt = stmt.order_by(code_attr)
-            stmt = stmt.limit(page_size).offset((page - 1) * page_size)
-
-            rows = session.execute(stmt).all()
-            total: int = rows[0][1] if rows else 0
+            data_stmt = (
+                select(model.data)  # type: ignore[attr-defined]
+                .where(*base_where)
+                .order_by(code_attr)
+                .limit(page_size)
+                .offset((page - 1) * page_size)
+            )
+            rows = session.execute(data_stmt).all()
             items: list[dict[str, Any]] = [dict(r[0]) for r in rows if r[0] is not None]
             return items, total
 

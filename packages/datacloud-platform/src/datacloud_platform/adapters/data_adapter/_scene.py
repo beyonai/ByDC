@@ -271,6 +271,7 @@ class SceneMixin(DataCloudDataBackendBase):
         owner_type: str | None = None,
         user_code: str | None = None,
         cross_scene: bool = False,
+        ext_property_filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Query ontologies — stub (shadowed by OntologyBackendMixin)."""
         _ = (
@@ -283,6 +284,7 @@ class SceneMixin(DataCloudDataBackendBase):
             owner_type,
             user_code,
             cross_scene,
+            ext_property_filters,
         )
         return {}
 

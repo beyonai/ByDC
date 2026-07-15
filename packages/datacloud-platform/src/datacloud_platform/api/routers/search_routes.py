@@ -37,17 +37,21 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
                     keyword=body.get("keyword", ""),
                     query_type=body.get("queryType", "vector"),
                     search_scope=body.get("searchScope", "all"),
-                    ontology_type=body.get("ontologyType"),
+                    metadata_type=body.get("metadataType"),
                     object_code=body.get("objectCode"),
                     view_code=body.get("viewCode"),
                     property_code=body.get("propertyCode"),
                     result_per_type=body.get("resultPerType", 5),
-                    page_size=body.get("pageSize", 20),
-                    page_token=body.get("pageToken"),
+                    top_k=body.get("topK", 20),
                 )
             )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("search_ontology_base failed")
+            raise HTTPException(status_code=500, detail="Internal Server Error")
 
     @router.post("/{base_id}/scenes/{scene_id}/search", tags=["Search"])
     def search_ontology(base_id: str, scene_id: str, body: dict[str, Any]) -> Any:
@@ -60,17 +64,21 @@ def create_search_routes(platform: DatacloudPlatform) -> APIRouter:
                     keyword=body.get("keyword", ""),
                     query_type=body.get("queryType", "vector"),
                     search_scope=body.get("searchScope", "all"),
-                    ontology_type=body.get("ontologyType"),
+                    metadata_type=body.get("metadataType"),
                     object_code=body.get("objectCode"),
                     view_code=body.get("viewCode"),
                     property_code=body.get("propertyCode"),
                     result_per_type=body.get("resultPerType", 5),
-                    page_size=body.get("pageSize", 20),
-                    page_token=body.get("pageToken"),
+                    top_k=body.get("topK", 20),
                 )
             )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception("search_ontology failed")
+            raise HTTPException(status_code=500, detail="Internal Server Error")
 
     @router.post("/{base_id}/instances/search", tags=["Instance"])
     def search_instances(base_id: str, body: dict[str, Any]) -> Any:

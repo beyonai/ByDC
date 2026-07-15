@@ -68,7 +68,7 @@ def _render_file(path: Path, env: dict[str, str], encoding: str = "utf-8") -> st
     #   "schema".."table"  → "schema"."table"  （标识符）
     #   "schema"..seq_name → "schema".seq_name  （nextval 字符串内）
     content = content.replace('".."', '"."')
-    content = re.sub(r'("[\w]+")\.\.([\w]+)', r'\1.\2', content)
+    content = re.sub(r'("[\w]+")\.\.([\w]+)', r"\1.\2", content)
     return _render(content, env)
 
 
@@ -86,28 +86,27 @@ def _execute_sql(sql_content: str, env: dict[str, str]) -> None:
     password = env["DATACLOUD_DB_PASSWORD"]
     schema = env["DATACLOUD_DB_SCHEMA"]
 
-    conninfo = (
-        f"host={host} port={port} dbname={database} "
-        f"user={user} password={password}"
-    )
+    conninfo = f"host={host} port={port} dbname={database} user={user} password={password}"
     ddl_stmts, dml_stmts = _split_sql_ddl_dml(sql_content)
     logger.info("    DDL 语句数=%d  DML 语句数=%d", len(ddl_stmts), len(dml_stmts))
 
     # 从 DDL 中提取所有被 nextval 引用的序列名，提前创建（导出时可能漏掉 CREATE SEQUENCE）
     # nextval('"schema".seq_name'::regclass) 格式
-    seq_names = sorted({
-        m.group(1)
-        for stmt in ddl_stmts
-        for m in re.finditer(r"nextval\('[^']*?\.?([\w]+)'", stmt)
-    })
+    seq_names = sorted(
+        {
+            m.group(1)
+            for stmt in ddl_stmts
+            for m in re.finditer(r"nextval\('[^']*?\.?([\w]+)'", stmt)
+        }
+    )
 
     with psycopg.connect(conninfo, autocommit=True, client_encoding="utf-8") as conn:
-        conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')  # noqa: S608
-        conn.execute(f'SET search_path TO "{schema}"')  # noqa: S608
+        conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
+        conn.execute(f'SET search_path TO "{schema}"')
         # 先确保序列存在（幂等）
         for seq in seq_names:
             logger.info("    CREATE SEQUENCE IF NOT EXISTS %s", seq)
-            conn.execute(f'CREATE SEQUENCE IF NOT EXISTS "{seq}"')  # noqa: S608
+            conn.execute(f'CREATE SEQUENCE IF NOT EXISTS "{seq}"')
         # 再执行 DDL（建表），跳过依赖缺失函数的 TRIGGER，最后执行 DML（插入数据）
         for stmt in ddl_stmts:
             upper = stmt.lstrip().upper()

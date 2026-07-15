@@ -165,7 +165,9 @@ def _apply_sync_event(event: TermSyncEvent, *, handler: TermSyncHandler) -> None
         return
 
     if event.op == "kb_write":
-        handler.import_terms(base_id=event.base_id, library_id=event.base_id, terms=event.records, backfill=True)
+        handler.import_terms(
+            base_id=event.base_id, library_id=event.base_id, terms=event.records, backfill=True
+        )
         logger.debug("KB 术语同步完成: base_id=%s terms=%d", event.base_id, len(event.records))
         return
 

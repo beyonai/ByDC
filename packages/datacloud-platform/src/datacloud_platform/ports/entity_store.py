@@ -166,10 +166,13 @@ class EntityStore(Protocol):
         base_id: str = "",
         keyword: str | None = None,
         codes: list[str] | None = None,
+        owner_type: str | None = None,
+        user_code: str | None = None,
+        ext_property_filters: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
-        """Paginated search with keyword and code-set filtering.
+        """Paginated search with keyword, code-set, owner, and extProperty filtering.
 
         Args:
             entity_type: One of ``objects``, ``views``, ``relations``, ``actions``,
@@ -178,11 +181,17 @@ class EntityStore(Protocol):
             keyword: Optional case-insensitive substring filter on entity name.
             codes: Optional code whitelist. ``None`` means no filter;
                 ``[]`` means match nothing (empty result).
+            owner_type: Optional owner_type filter (``enterprise`` / ``personal``).
+            user_code: Optional user_code filter (only effective with owner_type).
+            ext_property_filters: Optional dict of ``{key: value}`` filters on the
+                entity's ``ext_property`` JSONB field.  Equality match only;
+                all keys must match (AND semantics).
             page: 1-based page number.
             page_size: Maximum items per page.
 
         Returns:
             ``(items, total)`` where *items* is the current page of entity data dicts
             and *total* is the total number of matching entities (before pagination).
+            All filters are applied at the storage layer — *total* reflects them.
         """
         ...
