@@ -176,7 +176,10 @@ class OntologyQueryMixin:
         scene_ids: list[str],
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """本体元数据与实例向量/关键词检索。"""
+        """本体元数据与实例向量/关键词检索。
+
+        Returns keyword-keyed format: ``{"kw1": {...}, "kw2": {...}}``.
+        """
         return self._ontology_for(base_id).search_ontology(base_id, scene_ids, **kwargs)
 
     def graph_query(

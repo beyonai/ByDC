@@ -77,6 +77,7 @@ class SceneMixin:
         owner_type: str | None = None,
         user_code: str | None = None,
         cross_scene: bool = False,
+        ext_property_filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Query ontologies (objects) in a scene with pagination and keyword filter."""
         return self._ontology_for(base_id).query_ontologies_by_scene(
@@ -89,6 +90,7 @@ class SceneMixin:
             owner_type=owner_type,
             user_code=user_code,
             cross_scene=cross_scene,
+            ext_property_filters=ext_property_filters,
         )
 
     def get_object_subtree(
