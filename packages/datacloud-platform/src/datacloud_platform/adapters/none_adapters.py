@@ -187,6 +187,7 @@ class _NoopOntologyBackend:
         owner_type: str | None = None,
         user_code: str | None = None,
         cross_scene: bool = False,
+        ext_property_filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Return empty result."""
         _ = (
@@ -199,6 +200,7 @@ class _NoopOntologyBackend:
             owner_type,
             user_code,
             cross_scene,
+            ext_property_filters,
         )
         return {"data": {"objects": [], "views": []}, "totalCount": 0}
 
@@ -533,12 +535,17 @@ class _NoopOntologyBackend:
         top_k: int = 20,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """Return empty result."""
-        return {
+        """Return empty keyword-keyed result: ``{kw: {metadata:[], instances:[], totalCount:{...}}}``."""
+        empty: dict[str, Any] = {
             "metadata": [],
             "instances": [],
             "totalCount": {"metadata": 0, "instances": 0},
         }
+        keywords: list[str] = [keyword] if isinstance(keyword, str) else list(keyword)
+        keywords = [k for k in keywords if k and k.strip()]
+        if not keywords:
+            return {}
+        return {kw: dict(empty) for kw in keywords}
 
     def graph_query(
         self,

@@ -145,34 +145,39 @@ def _normalize_remote_view(v: dict[str, Any]) -> None:
 def _normalize_remote_search_result(result: dict[str, Any]) -> None:
     """Normalize remote /search/ontology response fields to local expectations.
 
-    Remote API returns: resultType, objectCode/actionCode, objectName/actionName.
+    Remote API returns: resultType, <prefix>Code, <prefix>Name.
     Local consumers expect: termType, termCode, nameText, belongObjectCode.
 
-    For action items (resultType="action"), DtStudio returns:
-      - objectCode = parent object code (the belongObjectCode)
-      - actionCode = the action's own code (the termCode)
-      - actionName = human-readable action name (the nameText)
+    Skip skill and rule — not consumed by downstream callers.
     """
     for item in result.get("metadata", []) or []:
         if not isinstance(item, dict):
             continue
         rt = str(item.get("resultType", ""))
         if rt == "action":
-            # Action mapping: consumer reads termType="ontology_action"
             item["termType"] = "ontology_action"
             item["termCode"] = item.get("actionCode", "")
             item["nameText"] = item.get("actionName", "")
-            parent_obj = item.get("objectCode", "")
-            if parent_obj:
-                item["belongObjectCode"] = parent_obj
-        elif rt in ("object", "view", "skill"):
-            item["termType"] = rt
-            tc = item.get("objectCode", "")
-            if tc:
-                item["termCode"] = tc
-            nt = item.get("objectName", "")
-            if nt:
-                item["nameText"] = nt
+            # Remote action returns belongObjectCode directly
+            boc = item.get("belongObjectCode", "")
+            if boc:
+                item["belongObjectCode"] = boc
+        elif rt == "object":
+            item["termType"] = "object"
+            item["termCode"] = item.get("objectCode", "")
+            item["nameText"] = item.get("objectName", "")
+        elif rt == "view":
+            item["termType"] = "view"
+            item["termCode"] = item.get("viewCode", "")
+            item["nameText"] = item.get("viewName", "")
+        elif rt == "property":
+            item["termType"] = "ontology_property"
+            item["termCode"] = item.get("propertyCode", "")
+            item["nameText"] = item.get("propertyName", "")
+            boc = item.get("belongObjectCode", "")
+            if boc:
+                item["belongObjectCode"] = boc
+        # skill, rule — skip, not consumed downstream
 
 
 class RemoteOntologyBackend:
@@ -1041,17 +1046,21 @@ class RemoteOntologyBackend:
         page: int = 1,
         page_size: int = 20,
         keyword: str | None = None,
-        type: str | None = None,
+        type: str = "object",
         owner_type: str | None = None,
         user_code: str | None = None,
         cross_scene: bool = False,
+        ext_property_filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Query ontologies by scene with pagination via remote OntologySceneController.
 
         Supports scene_id="-1" for all scenes (global search).
         Returns a single page — call ``_query_ontologies_all_pages`` to fetch all pages.
+
+        ``ext_property_filters`` are applied client-side since the remote API
+        does not support them natively.
         """
-        _ = owner_type, user_code, cross_scene
+        _ = owner_type, user_code, cross_scene, ext_property_filters
         if cross_scene:
             scene_id = "-1"
         client = self._get_client()
@@ -1286,33 +1295,69 @@ class RemoteOntologyBackend:
         return result
 
     def get_term_scope_info(self, base_id: str, object_code: str) -> dict[str, Any]:
-        """Return {library_id, scene_id} identifying which scene contains object_code."""
+        """Return {library_id, scene_id} identifying which scene contains object_code.
+
+        Tries list_scenes first; falls back to search_ontology if list_scenes
+        is unavailable or returns no matching scene.
+        """
+        scene_id = ""
         try:
             scenes = self.list_scenes(base_id)
+            scene_list: list[Any] = scenes
+            if isinstance(scenes, dict):
+                scene_list = scenes.get("data", scenes.get("scenes", []))
+            for s in scene_list:
+                if not isinstance(s, dict):
+                    continue
+                sid = str(s.get("sceneId") or s.get("scene_id") or "")
+                try:
+                    obj_codes, _ = self.get_scene_members(base_id, sid)
+                except Exception:
+                    continue
+                if object_code in obj_codes:
+                    scene_id = sid
+                    break
         except Exception:
             logger.debug(
                 "get_term_scope_info: list_scenes failed for base_id=%r",
                 base_id,
                 exc_info=True,
             )
-            return {"library_id": "PERSONAL_LIB", "scene_id": ""}
-        scene_list: list[Any] = scenes
-        if isinstance(scenes, dict):
-            scene_list = scenes.get("data", scenes.get("scenes", []))
-        for s in scene_list:
-            if not isinstance(s, dict):
-                continue
-            scene_id = str(s.get("sceneId") or s.get("scene_id") or "")
-            try:
-                obj_codes, _ = self.get_scene_members(base_id, scene_id)
-            except Exception:
-                continue
-            if object_code in obj_codes:
-                return {
-                    "library_id": "PERSONAL_LIB",
-                    "scene_id": scene_id,
-                }
-        return {"library_id": "PERSONAL_LIB", "scene_id": ""}
+
+        # Fallback: discover scene via search_ontology (remote list_scenes unavailable
+        # or object not found in listed scenes)
+        if not scene_id:
+            scene_id = self._discover_scene_by_search(base_id, object_code)
+
+        return {"library_id": "PERSONAL_LIB", "scene_id": scene_id}
+
+    def _discover_scene_by_search(self, base_id: str, object_code: str) -> str:
+        """Discover which scene contains object_code via search_ontology fallback."""
+        try:
+            result = self.search_ontology(
+                base_id,
+                scene_ids=["-1"],
+                keyword=object_code,
+                search_scope="metadata",
+                metadata_type=["object"],
+                top_k=5,
+            )
+            # search_ontology returns keyword-keyed: {"object_code": {"metadata": [...]}}
+            for kw_result in result.values():
+                if not isinstance(kw_result, dict):
+                    continue
+                for item in kw_result.get("metadata", []) or []:
+                    sid = str(item.get("sceneId", ""))
+                    if sid and sid != "-1":
+                        return sid
+        except Exception:
+            logger.debug(
+                "_discover_scene_by_search failed base_id=%r object_code=%r",
+                base_id,
+                object_code,
+                exc_info=True,
+            )
+        return ""
 
     # ── Property resolution ───────────────────────────────────────────
 
@@ -1511,6 +1556,188 @@ class RemoteOntologyBackend:
                         }
                     )
         return result
+
+    # ── Ontology search & graph ─────────────────────────────────────────
+
+    def _search_ontology_single(
+        self,
+        base_id: str,
+        scene_ids: list[str],
+        *,
+        keyword: str,
+        query_type: str,
+        search_scope: str,
+        metadata_type: list[str] | None,
+        object_code: list[str] | None,
+        view_code: list[str] | None,
+        property_code: list[str] | None,
+        result_per_type: int,
+        top_k: int,
+    ) -> dict[str, Any]:
+        """Send a single keyword request to remote DtStudio /search/ontology.
+
+        Returns normalized flat result (not keyword-keyed).
+        Used by :meth:`search_ontology` for concurrent multi-keyword dispatch.
+        """
+        _ = base_id
+        import httpx as _httpx  # noqa: PLC0415
+
+        client = _httpx.Client(timeout=_httpx.Timeout(30.0))
+        try:
+            return self._search_ontology_request(
+                client,
+                scene_ids,
+                keyword=keyword,
+                query_type=query_type,
+                search_scope=search_scope,
+                metadata_type=metadata_type,
+                object_code=object_code,
+                view_code=view_code,
+                property_code=property_code,
+                result_per_type=result_per_type,
+                top_k=top_k,
+            )
+        finally:
+            client.close()
+
+    def _search_ontology_request(
+        self,
+        client: Any,
+        scene_ids: list[str],
+        *,
+        keyword: str,
+        query_type: str,
+        search_scope: str,
+        metadata_type: list[str] | None,
+        object_code: list[str] | None,
+        view_code: list[str] | None,
+        property_code: list[str] | None,
+        result_per_type: int,
+        top_k: int,
+    ) -> dict[str, Any]:
+        """Core HTTP request to remote /search/ontology, with normalization + filtering."""
+        headers = self._build_auth_headers()
+        url = (
+            f"{self._source_url}/DtStudio/daiservice/search/ontology"
+            if "/DtStudio" not in self._source_url
+            else f"{self._source_url}/search/ontology"
+        )
+        body: dict[str, Any] = {
+            "keyword": keyword,
+            "sceneId": (scene_ids[0] if scene_ids and scene_ids[0] else "-1"),
+            "queryType": query_type,
+            "searchScope": search_scope,
+            "pageSize": top_k,
+            "resultPerType": result_per_type,
+        }
+        if object_code:
+            body["objectCode"] = object_code
+        if view_code:
+            body["viewCode"] = view_code
+        if property_code:
+            body["propertyCode"] = property_code
+        response = client.post(url, json=body, headers=headers)
+        response.raise_for_status()
+        raw = response.json()
+        if isinstance(raw, dict) and "data" in raw and raw.get("code") == 200:
+            result = cast("dict[str, Any]", raw["data"])
+        else:
+            result = cast("dict[str, Any]", raw)
+        _normalize_remote_search_result(result)
+        if metadata_type:
+            filtered = [
+                item
+                for item in result.get("metadata", []) or []
+                if isinstance(item, dict) and item.get("termType", "") in metadata_type
+            ]
+            result["metadata"] = filtered
+            result["totalCount"] = result.get("totalCount") or {}
+            result["totalCount"]["metadata"] = len(filtered)
+        return result
+
+    def search_ontology(
+        self,
+        base_id: str,
+        scene_ids: list[str],
+        *,
+        keyword: str | list[str],
+        query_type: str = "vector",
+        search_scope: str = "all",
+        metadata_type: list[str] | None = None,
+        object_code: list[str] | None = None,
+        view_code: list[str] | None = None,
+        property_code: list[str] | None = None,
+        result_per_type: int = 5,
+        top_k: int = 20,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Forward ontology search to remote DtStudio /search/ontology endpoint.
+
+        Supports multi-keyword via concurrent async requests.
+        Returns keyword-keyed format: ``{"kw1": {...}, "kw2": {...}}``.
+        """
+        _ = kwargs
+        keywords: list[str] = [keyword] if isinstance(keyword, str) else list(keyword)
+        keywords = [k for k in keywords if k and k.strip()]
+        if not keywords:
+            return {}
+
+        # Single keyword: fast path, no async overhead
+        if len(keywords) == 1:
+            kw_result = self._search_ontology_single(
+                base_id,
+                scene_ids,
+                keyword=keywords[0],
+                query_type=query_type,
+                search_scope=search_scope,
+                metadata_type=metadata_type,
+                object_code=object_code,
+                view_code=view_code,
+                property_code=property_code,
+                result_per_type=result_per_type,
+                top_k=top_k,
+            )
+            return {keywords[0]: kw_result}
+
+        # Multi-keyword: concurrent dispatch via ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Build shared args dict for _search_ontology_single
+        results: dict[str, Any] = {}
+        with ThreadPoolExecutor(max_workers=min(len(keywords), 10)) as executor:
+            future_map = {
+                executor.submit(
+                    self._search_ontology_single,
+                    base_id,
+                    scene_ids,
+                    keyword=kw,
+                    query_type=query_type,
+                    search_scope=search_scope,
+                    metadata_type=metadata_type,
+                    object_code=object_code,
+                    view_code=view_code,
+                    property_code=property_code,
+                    result_per_type=result_per_type,
+                    top_k=top_k,
+                ): kw
+                for kw in keywords
+            }
+            for future in as_completed(future_map):
+                kw = future_map[future]
+                try:
+                    results[kw] = future.result()
+                except Exception:
+                    logger.warning(
+                        "search_ontology concurrent fetch failed for keyword=%r",
+                        kw,
+                        exc_info=True,
+                    )
+                    results[kw] = {
+                        "metadata": [],
+                        "instances": [],
+                        "totalCount": {"metadata": 0, "instances": 0},
+                    }
+        return results
 
 
 class RemoteTermBackend:
