@@ -90,6 +90,7 @@ class KnowledgeWriteRequest:
 
     object_code: str
     datasource_alias: str
+    kb_resource_id: str
     kb_id: str
     file_path: str
     content: str
@@ -1261,11 +1262,11 @@ _RELATED_DOCS_BLOCK_RE = re.compile(
 def _parse_related_docs(content: str) -> list[dict[str, str]]:
     """Extract all entries from ``--- related_docs ---`` fenced blocks.
 
-    Returns a list of ``{target_doc_id, relation}`` dicts, e.g.::
+    Returns a list of ``{target_doc_id, relation, kb_id}`` dicts, e.g.::
 
         [
-            {"target_doc_id": "Concept/Skill.md", "relation": "maps-to"},
-            {"target_doc_id": "Concept/本体库.md", "relation": "part-of"},
+            {"target_doc_id": "Concept/Skill.md", "relation": "maps-to", "kb_id": "12"},
+            {"target_doc_id": "Concept/本体库.md", "relation": "part-of", "kb_id": "12"},
         ]
     """
     import yaml  # lazy import — optional dependency
@@ -1287,8 +1288,9 @@ def _parse_related_docs(content: str) -> list[dict[str, str]]:
                 continue
             target = str(item.get("target_doc_id") or "").strip()
             relation = str(item.get("relation") or "").strip()
+            kb_id = str(item.get("kb_resource_id") or "").strip()
             if target and relation:
-                entries.append({"target_doc_id": target, "relation": relation})
+                entries.append({"target_doc_id": target, "relation": relation, "kb_resource_id": kb_id})
     return entries
 
 
@@ -1343,7 +1345,7 @@ def _merge_related_docs_into_labels(
     merged = dict(labels)
     for entry in related_docs:
         relation = entry["relation"]
-        target = entry["target_doc_id"]
+        target = entry["kb_resource_id"] + "/" + entry["target_doc_id"]
         bucket = merged.get(relation)
         if not isinstance(bucket, list):
             bucket = [bucket] if bucket is not None else []

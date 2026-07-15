@@ -220,8 +220,9 @@ class KbSearchExecutor:
         configured_backend = getattr(self._loader._config, "kb_search_backend", None)
         datasource_alias = self._get_datasource_alias(cls)
         query = ""
-
+        kb_resource_id = self._get_kb_resource_id(cls)
         kb_id = self._get_kb_id(cls)
+        kb_directory = self._get_kb_directory(cls)
         if not kb_id:
             return self._empty_response(
                 object_code,
@@ -278,8 +279,9 @@ class KbSearchExecutor:
                 KnowledgeWriteRequest(
                     object_code=cls.object_code,
                     datasource_alias=datasource_alias,
+                    kb_resource_id = kb_resource_id,
                     kb_id=kb_id,
-                    kb_directory=self._get_kb_directory(cls),
+                    kb_directory=kb_directory,
                     file_path=file_path,
                     labels=labels,
                     content=content,
@@ -358,26 +360,26 @@ class KbSearchExecutor:
         for req in write_requests:
             markdown_file_path = _to_markdown_file_path(req.file_path, req.kb_directory)
             file_stem = PurePosixPath(markdown_file_path).stem or markdown_file_path
-            parent = PurePosixPath(markdown_file_path).parent
-            term_type_code = parent.name if parent.name and parent.name != "." else ""
+            term_type_code = req.object_code
 
             related_docs = _parse_related_docs(req.content)
-            relations: list[dict[str, str]] = [
-                {
+            relations: list[dict[str, str]] = []
+            for entry in related_docs:
+                _rel_type, rel_name = _related_doc_id_to_term(entry["target_doc_id"])
+                kb_dir = str(PurePosixPath(entry["target_doc_id"]).parent.name)
+                term_type = self._get_object_code_by_kb(entry.get("kb_resource_id", ""), kb_dir) or _rel_type
+                relations.append({
                     "term_name": rel_name,
                     "term_code": rel_name,
-                    "term_type_code": rel_type,
+                    "term_type_code": term_type,
                     "relation_name": entry["relation"],
-                }
-                for entry in related_docs
-                for rel_type, rel_name in [_related_doc_id_to_term(entry["target_doc_id"])]
-            ]
+                })
 
             term: dict[str, Any] = {
                 "term_name": file_stem,
                 "term_code": file_stem,
                 "term_type_code": term_type_code,
-                "ext_attrs": {"kb_id": req.kb_id, "kb_file_path": markdown_file_path},
+                "ext_attrs": {"kb_id": req.kb_id, "kb_file_path": markdown_file_path, "kb_resource_id": req.kb_resource_id},
             }
             if relations:
                 term["relations"] = relations
@@ -397,6 +399,9 @@ class KbSearchExecutor:
             )
         except Exception:  # noqa: BLE001
             logger.debug("KB 术语同步投递失败", exc_info=True)
+
+    def _get_object_code_by_kb(self, kb_id: str, kb_directory: str) -> str:
+        return "p_p_Product_0027024630_a7f3c1_0027024630_0a3619"
 
     def _resolve_backend(
         self,
@@ -552,6 +557,21 @@ class KbSearchExecutor:
         source_config = getattr(cls, "source_config", {}) or {}
         if isinstance(source_config, dict):
             value = source_config.get("kb_id") or source_config.get("knCode")
+            if value:
+                return str(value)
+        return None
+
+    @staticmethod
+    def _get_kb_resource_id(cls: Any) -> str | None:
+        ext_property = getattr(cls, "ext_property", {}) or {}
+        if isinstance(ext_property, dict):
+            value = ext_property.get("kb_resource_id")
+            if value:
+                return str(value)
+        # fallback: submit_object 新路径将 kb_id 存入 source_config
+        source_config = getattr(cls, "source_config", {}) or {}
+        if isinstance(source_config, dict):
+            value = source_config.get("kb_resource_id")
             if value:
                 return str(value)
         return None
