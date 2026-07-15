@@ -78,39 +78,6 @@ def _build_scope_filter(allowed_scope: list) -> dict:
     }
 
 
-def _discover_scene_for_object(
-    base_id: str,
-    object_code: str,
-    platform: Any,
-) -> str:
-    """通过搜索 API 发现对象所属的 scene_id（远程 list_scenes 不可用时的回退）。
-
-    远程 DtStudio 的 /search/ontology 接受 sceneId="-1" 作为全局搜索，
-    返回结果中包含 sceneId 字段。从匹配的结果中提取 scene_id。
-    """
-    try:
-        result = platform.search_ontology(
-            base_id,
-            scene_ids=["-1"],
-            keyword=object_code,
-            search_scope="metadata",
-            ontology_type=["object"],
-            limit=5,
-        )
-        for item in result.get("metadata", []):
-            sid = str(item.get("sceneId", ""))
-            if sid and sid != "-1":
-                return sid
-    except Exception:
-        logger.debug(
-            "_discover_scene_for_object failed base_id=%r object_code=%r",
-            base_id,
-            object_code,
-            exc_info=True,
-        )
-    return ""
-
-
 def _activate_object_with_context(
     state: dict[str, Any],
     object_code: str,
@@ -166,19 +133,8 @@ def _activate_object_with_context(
         state["active_tools"] = list(existing) + new_tools
         return new_tools, ""
 
-    # 按需构建 — remote fallback chain: term_scope_info → allowed_scope → search API
-    lookup_scene = scene_id or scope_scene_id or ""
-    if not lookup_scene:
-        # Last resort: try to discover scene via search (remote list_scenes not available)
-        lookup_scene = _discover_scene_for_object(base_id, object_code, platform)
-        logger.info(
-            "[activate_object] _discover_scene_for_object base_id=%r object_code=%r → scene=%r",
-            base_id,
-            object_code,
-            lookup_scene,
-        )
-    if not lookup_scene:
-        lookup_scene = "-1"
+    # 按需构建 — remote fallback chain: term_scope_info → allowed_scope → "-1"
+    lookup_scene = scene_id or scope_scene_id or "-1"
     logger.info(
         "[activate_object] calling get_scene_details base_id=%r scene=%r object_code=%r",
         base_id,
@@ -329,47 +285,51 @@ def _do_search_ontology(
             scene_ids=scene_ids,
             keyword=query,
             search_scope=search_scope_str,
-            ontology_type=ontology_type,
+            metadata_type=ontology_type,
             object_code=object_codes,
             view_code=view_codes,
-            limit=top_k,
+            top_k=top_k,
         )
 
         hits_by_type: list[dict[str, Any]] = []
-        for item in result.get("metadata", []):
-            term_code = str(item.get("termCode", ""))
-            name_text = str(item.get("nameText", ""))
-            score = float(item.get("score", 1.0))
-            term_type = str(item.get("termType", ""))
-            belong_obj = str(item.get("belongObjectCode", ""))
+        # result is keyword-keyed: {"kw": {"metadata": [...], "instances": [...]}}
+        for kw_result in result.values():
+            if not isinstance(kw_result, dict):
+                continue
+            for item in kw_result.get("metadata", []) or []:
+                term_code = str(item.get("termCode", ""))
+                name_text = str(item.get("nameText", ""))
+                score = float(item.get("score", 1.0))
+                term_type = str(item.get("termType", ""))
+                belong_obj = str(item.get("belongObjectCode", ""))
 
-            if term_type == "ontology_action":
-                hits_by_type.append(
-                    {
-                        "objectCode": belong_obj or "",
-                        "objectName": name_text,
-                        "resultType": "action",
-                        "score": score,
-                    }
-                )
-            elif term_type == "object":
-                hits_by_type.append(
-                    {
-                        "objectCode": term_code,
-                        "objectName": name_text,
-                        "resultType": "object",
-                        "score": score,
-                    }
-                )
-            else:
-                hits_by_type.append(
-                    {
-                        "objectCode": term_code,
-                        "objectName": name_text,
-                        "resultType": term_type,
-                        "score": score,
-                    }
-                )
+                if term_type == "ontology_action":
+                    hits_by_type.append(
+                        {
+                            "objectCode": belong_obj or "",
+                            "objectName": name_text,
+                            "resultType": "action",
+                            "score": score,
+                        }
+                    )
+                elif term_type == "object":
+                    hits_by_type.append(
+                        {
+                            "objectCode": term_code,
+                            "objectName": name_text,
+                            "resultType": "object",
+                            "score": score,
+                        }
+                    )
+                else:
+                    hits_by_type.append(
+                        {
+                            "objectCode": term_code,
+                            "objectName": name_text,
+                            "resultType": term_type,
+                            "score": score,
+                        }
+                    )
 
         # ── Skill 搜索：type_filter 为 "all" 或 "skill" 时，搜索 TOOL_POOL 中
         # 已注册的 activate_skill_* wrapper
