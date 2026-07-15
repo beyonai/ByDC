@@ -195,6 +195,7 @@ class OntologyBackend(Protocol):
         owner_type: str | None = None,
         user_code: str | None = None,
         cross_scene: bool = False,
+        ext_property_filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Query ontologies (objects) in a scene with pagination and keyword filter."""
         ...

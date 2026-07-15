@@ -1957,8 +1957,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         owner_type: str | None = None,
         user_code: str | None = None,
         cross_scene: bool = False,
+        ext_property_filters: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Query ontologies (objects + views) with pagination, type, and owner_type filters.
+        """Query ontologies (objects + views) with pagination and full filter pushdown.
+
+        All filters (keyword, owner_type, user_code, ext_property_filters) are
+        pushed down to the ``EntityStore.search()`` layer so that ``totalCount``
+        reflects the actual matching count — no post-filter correction needed.
 
         Args:
             scene_id: Target scene ID (empty when cross_scene=True).
@@ -1966,10 +1971,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             page: 1-based page number.
             page_size: Items per page.
             keyword: Case-insensitive filter on name/code.
-            type: 'object' or 'view' to restrict to one type.
-            owner_type: Filter by owner_type.
+            type: ``"object"`` or ``"view"`` to restrict to one type.
+            owner_type: Filter by owner_type (enterprise/personal).
             user_code: Filter by user_code.
             cross_scene: If True and scene_id empty, include ALL objects/views.
+            ext_property_filters: Optional ``{key: value}`` filters on the
+                entity's ``ext_property`` dict.  All keys must match (AND).
 
         Returns:
             Dict with data, totalCount, page, pageSize.
@@ -1993,8 +2000,6 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     "page": page,
                     "pageSize": page_size,
                 }
-            # Non-empty filter: only query codes that belong to this scene.
-            # An empty filter means the scene has no members — return empty.
             obj_members: list[str] = list(found.get("member_object_codes", []))
             vw_members: list[str] = list(found.get("member_view_codes", []))
             if not obj_members and not vw_members:
@@ -2007,30 +2012,34 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             obj_codes = obj_members
             view_codes = vw_members
 
-        # Batch query objects via store.search (keyword filtered at DB level)
-        # Load in batches, post-filter owner/user, stop when enough for requested page.
-        fetch_size = max(
-            page_size * 4, 500
-        )  # Load extra to account for owner/user filtering
+        # Query objects — use lightweight SQL when OpenGauss, fallback to store.search()
         all_objects: list[dict[str, Any]] = []
         obj_total = 0
-        obj_page = 1
         if type is None or type.lower() != "view":
-            while True:
-                obj_items, _t = store.search(
+            if hasattr(self._entity_store, "_engine"):
+                all_objects, obj_total = self._query_objects_summary_sql(
+                    base_id=base_id,
+                    codes=obj_codes,
+                    keyword=keyword,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    ext_property_filters=ext_property_filters,
+                    page=page,
+                    page_size=page_size,
+                )
+            else:
+                obj_items, obj_total = store.search(
                     "objects",
                     keyword=keyword,
                     codes=obj_codes,
-                    page=obj_page,
-                    page_size=fetch_size,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    ext_property_filters=ext_property_filters,
+                    page=page,
+                    page_size=page_size,
                 )
-                obj_total = _t  # Total matching objects (before owner/user filter)
                 for raw in obj_items:
                     summary = self._raw_to_summary(raw)
-                    if owner_type and summary.owner_type != owner_type:
-                        continue
-                    if user_code and summary.user_code != user_code:
-                        continue
                     all_objects.append(
                         {
                             "objectCode": summary.object_code,
@@ -2043,36 +2052,38 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                             "userCode": summary.user_code,
                         }
                     )
-                # Stop if: batch was partial (end of data) OR we have enough for page
-                if len(obj_items) < fetch_size:
-                    break
-                if len(all_objects) >= page * page_size:
-                    break
-                obj_page += 1
 
-        # Batch query views via store.search (keyword filtered at DB level)
+        # Query views — use lightweight SQL when OpenGauss, fallback to store.search()
         all_views: list[dict[str, Any]] = []
         vw_total = 0
-        vw_page = 1
         if type is None or type.lower() != "object":
-            while True:
-                vw_items, _t = store.search(
+            if hasattr(self._entity_store, "_engine"):
+                all_views, vw_total = self._query_views_summary_sql(
+                    base_id=base_id,
+                    codes=view_codes,
+                    keyword=keyword,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    ext_property_filters=ext_property_filters,
+                    page=page,
+                    page_size=page_size,
+                )
+            else:
+                vw_items, vw_total = store.search(
                     "views",
                     keyword=keyword,
                     codes=view_codes,
-                    page=vw_page,
-                    page_size=fetch_size,
+                    owner_type=owner_type,
+                    user_code=user_code,
+                    ext_property_filters=ext_property_filters,
+                    page=page,
+                    page_size=page_size,
                 )
-                vw_total = _t
                 for raw in vw_items:
                     vc = raw.get(
                         "view_code", raw.get("viewCode", raw.get("view_id", ""))
                     )
                     view_summary = self._to_view_summary(raw, vc)
-                    if owner_type and view_summary.owner_type != owner_type:
-                        continue
-                    if user_code and view_summary.user_code != user_code:
-                        continue
                     all_views.append(
                         {
                             "viewCode": view_summary.view_code,
@@ -2083,28 +2094,246 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                             "userCode": view_summary.user_code,
                         }
                     )
-                if len(vw_items) < fetch_size:
-                    break
-                if len(all_objects) + len(all_views) >= page * page_size:
-                    break
-                vw_page += 1
-
-        # Pagination (client-side after owner/user post-filter)
-        total = obj_total + vw_total  # Pre-filter total from store
-        offset = (page - 1) * page_size
-        paged_objects = all_objects[offset : offset + page_size]
-        remaining = page_size - len(paged_objects)
-        paged_views: list[dict[str, Any]] = []
-        if remaining > 0:
-            view_start = max(0, offset - len(all_objects))
-            paged_views = all_views[view_start : view_start + remaining]
 
         return {
-            "data": {"objects": paged_objects, "views": paged_views},
-            "totalCount": total,
+            "data": {"objects": all_objects, "views": all_views},
+            "totalCount": obj_total + vw_total,
             "page": page,
             "pageSize": page_size,
         }
+
+    def _query_objects_summary_sql(
+        self,
+        *,
+        base_id: str,
+        codes: list[str] | None,
+        keyword: str | None,
+        owner_type: str | None,
+        user_code: str | None,
+        ext_property_filters: dict[str, Any] | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query object summaries via lightweight SQL — JSONB path extraction only.
+
+        Reads only summary fields from JSONB (no fields/actions arrays), avoiding
+        the full-column deserialization overhead of ``store.search()``.
+        """
+        from sqlalchemy import or_, select, text
+        from sqlalchemy.orm import Session
+        from sqlalchemy.sql import func
+
+        engine = self._entity_store._engine  # type: ignore[attr-defined]
+        from datacloud_platform.adapters.opengauss_entity_store import (
+            _ObjectRow,
+        )
+
+        model = _ObjectRow
+        where_clauses: list[Any] = [model.base_id == base_id]
+
+        if codes is not None:
+            if not codes:
+                return [], 0
+            where_clauses.append(model.object_code.in_(codes))
+
+        if keyword:
+            where_clauses.append(model.object_name.ilike(f"%{keyword}%"))
+
+        data_col = model.data
+        if owner_type:
+            where_clauses.append(
+                or_(
+                    data_col.op("->>")("owner_type") == owner_type,
+                    data_col.op("->")("ext_property").op("->>")("owner_type")
+                    == owner_type,
+                )
+            )
+        if user_code:
+            where_clauses.append(
+                or_(
+                    data_col.op("->>")("user_code") == user_code,
+                    data_col.op("->")("ext_property").op("->>")("user_code")
+                    == user_code,
+                )
+            )
+        if ext_property_filters:
+            for key, val in ext_property_filters.items():
+                where_clauses.append(
+                    data_col.op("->")("ext_property").op("->>")(key) == str(val)
+                )
+
+        with Session(engine) as session:
+            # Count (lightweight, no JSONB data)
+            count_stmt = (
+                select(func.count(model.object_code))
+                .select_from(model)
+                .where(*where_clauses)
+            )
+            total: int = session.execute(count_stmt).scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            # Data: extract only summary fields via JSONB path operators
+            data_stmt = (
+                select(
+                    data_col.op("->>")("object_code").label("object_code"),
+                    data_col.op("->>")("object_name").label("object_name"),
+                    func.coalesce(
+                        data_col.op("->>")("description"),
+                        data_col.op("->>")("object_desc"),
+                        text("''"),
+                    ).label("object_desc"),
+                    func.coalesce(
+                        data_col.op("->>")("source_type"),
+                        data_col.op("->>")("object_source"),
+                        text("'DB'"),
+                    ).label("object_source"),
+                    func.coalesce(
+                        func.jsonb_array_length(data_col.op("->")("fields")),
+                        text("0"),
+                    ).label("field_count"),
+                    func.coalesce(
+                        func.jsonb_array_length(data_col.op("->")("actions")),
+                        text("0"),
+                    ).label("action_count"),
+                    func.coalesce(
+                        data_col.op("->>")("owner_type"),
+                        data_col.op("->")("ext_property").op("->>")("owner_type"),
+                        text("'enterprise'"),
+                    ).label("owner_type"),
+                    func.coalesce(
+                        data_col.op("->>")("user_code"),
+                        data_col.op("->")("ext_property").op("->>")("user_code"),
+                    ).label("user_code"),
+                )
+                .where(*where_clauses)
+                .order_by(model.object_code)
+                .limit(page_size)
+                .offset((page - 1) * page_size)
+            )
+            rows = session.execute(data_stmt).all()
+
+        items: list[dict[str, Any]] = []
+        for r in rows:
+            items.append(
+                {
+                    "objectCode": r.object_code or "",
+                    "objectName": r.object_name or "",
+                    "objectDesc": r.object_desc or "",
+                    "objectSource": r.object_source or "",
+                    "fieldCount": int(r.field_count or 0),
+                    "actionCount": int(r.action_count or 0),
+                    "ownerType": r.owner_type or "enterprise",
+                    "userCode": r.user_code or None,
+                }
+            )
+        return items, total
+
+    def _query_views_summary_sql(
+        self,
+        *,
+        base_id: str,
+        codes: list[str] | None,
+        keyword: str | None,
+        owner_type: str | None,
+        user_code: str | None,
+        ext_property_filters: dict[str, Any] | None,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query view summaries via lightweight SQL — JSONB path extraction only."""
+        from sqlalchemy import or_, select, text
+        from sqlalchemy.orm import Session
+        from sqlalchemy.sql import func
+
+        engine = self._entity_store._engine  # type: ignore[attr-defined]
+        from datacloud_platform.adapters.opengauss_entity_store import (
+            _ViewRow,
+        )
+
+        model = _ViewRow
+        where_clauses: list[Any] = [model.base_id == base_id]
+
+        if codes is not None:
+            if not codes:
+                return [], 0
+            where_clauses.append(model.view_code.in_(codes))
+
+        if keyword:
+            where_clauses.append(model.view_name.ilike(f"%{keyword}%"))
+
+        data_col = model.data
+        if owner_type:
+            where_clauses.append(
+                or_(
+                    data_col.op("->>")("owner_type") == owner_type,
+                    data_col.op("->")("ext_property").op("->>")("owner_type")
+                    == owner_type,
+                )
+            )
+        if user_code:
+            where_clauses.append(
+                or_(
+                    data_col.op("->>")("user_code") == user_code,
+                    data_col.op("->")("ext_property").op("->>")("user_code")
+                    == user_code,
+                )
+            )
+        if ext_property_filters:
+            for key, val in ext_property_filters.items():
+                where_clauses.append(
+                    data_col.op("->")("ext_property").op("->>")(key) == str(val)
+                )
+
+        with Session(engine) as session:
+            count_stmt = (
+                select(func.count(model.view_code))
+                .select_from(model)
+                .where(*where_clauses)
+            )
+            total: int = session.execute(count_stmt).scalar() or 0
+
+            if total == 0:
+                return [], 0
+
+            data_stmt = (
+                select(
+                    data_col.op("->>")("view_code").label("view_code"),
+                    data_col.op("->>")("view_name").label("view_name"),
+                    func.coalesce(data_col.op("->>")("description"), text("''")).label(
+                        "description"
+                    ),
+                    func.coalesce(
+                        data_col.op("->>")("owner_type"),
+                        data_col.op("->")("ext_property").op("->>")("owner_type"),
+                        text("'enterprise'"),
+                    ).label("owner_type"),
+                    func.coalesce(
+                        data_col.op("->>")("user_code"),
+                        data_col.op("->")("ext_property").op("->>")("user_code"),
+                    ).label("user_code"),
+                )
+                .where(*where_clauses)
+                .order_by(model.view_code)
+                .limit(page_size)
+                .offset((page - 1) * page_size)
+            )
+            rows = session.execute(data_stmt).all()
+
+        items: list[dict[str, Any]] = []
+        for r in rows:
+            items.append(
+                {
+                    "viewCode": r.view_code or "",
+                    "viewName": r.view_name or "",
+                    "description": r.description or "",
+                    "objectCodes": [],
+                    "ownerType": r.owner_type or "enterprise",
+                    "userCode": r.user_code or None,
+                }
+            )
+        return items, total
 
     # ── Property name/code resolution ────────────────────────────────
 
