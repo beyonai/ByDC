@@ -348,6 +348,8 @@ def query_terms(
     label_filters: list[LabelFilter] | None = None,
     label_condition: LabelCondition = "and",
     term_ids: list[str] | None = None,
+    ext_attrs: dict[str, Any] | None = None,
+    query_vector: list[float] | None = None,
     top_k: int = 20,
     offset: int = 0,
 ) -> QueryResult:
@@ -366,6 +368,8 @@ def query_terms(
         label_filters:    标签过滤条件列表。
         label_condition:  多标签组合方式（and/or）。
         term_ids:         按 ID 列表精确查询。传入时忽略 keyword/query_type。
+        ext_attrs:        扩展属性键值过滤。None = 不限制。
+        query_vector:     查询向量（仅 embedding/mixed 需要）。None = 不启用向量检索。
         top_k:            返回条数（1..200）。
         offset:           分页偏移（>=0）。
 
@@ -383,6 +387,59 @@ def query_terms(
         label_filters=label_filters,
         label_condition=label_condition,
         term_ids=term_ids,
+        ext_attrs=ext_attrs,
+        query_vector=query_vector,
+        top_k=top_k,
+        offset=offset,
+    )
+
+
+def query_terms_batch(
+    *,
+    keywords: list[str],
+    dataset_ids: list[str] | None = None,
+    term_type: str | None = None,
+    query_type: QueryType = "fulltext",
+    parent_term_code: str | None = None,
+    label_filters: list[LabelFilter] | None = None,
+    label_condition: LabelCondition = "and",
+    ext_attrs: dict[str, Any] | None = None,
+    query_vectors: list[list[float]] | None = None,
+    top_k: int = 20,
+    offset: int = 0,
+) -> list[QueryResult]:
+    """批量检索术语 — 每个 keyword 返回独立的 QueryResult。
+
+    内部为每个 keyword 执行独立的检索 + 元数据过滤。
+    不支持 term_ids/term_name（精确匹配走 query_terms 单次调用）。
+
+    Args:
+        keywords:         搜索关键词列表。
+        dataset_ids:      术语库 ID 列表。None/空 = 不限制。
+        term_type:        术语类型编码。None = 不限制类型。
+        query_type:       检索策略（fulltext/exact/embedding/mixed）。
+        parent_term_code: 父术语编码过滤。None = 不限制。
+        label_filters:    标签过滤条件列表。
+        label_condition:  多标签组合方式（and/or）。
+        ext_attrs:        扩展属性键值过滤。None = 不限制。
+        query_vectors:    查询向量列表（仅 embedding/mixed 需要，长度与 keywords 一致）。
+        top_k:            返回条数（1..200）。
+        offset:           分页偏移（>=0）。
+
+    Returns:
+        list[QueryResult]，与 keywords 一一对应。
+    """
+    reader = create_reader()
+    return reader.query_terms_batch(
+        keywords=keywords,
+        dataset_ids=dataset_ids,
+        term_type=term_type,
+        query_type=query_type,
+        parent_term_code=parent_term_code,
+        label_filters=label_filters,
+        label_condition=label_condition,
+        ext_attrs=ext_attrs,
+        query_vectors=query_vectors,
         top_k=top_k,
         offset=offset,
     )
@@ -595,6 +652,7 @@ __all__ = [
     "list_terms",
     "prepare_query_clarification",
     "query_terms",
+    "query_terms_batch",
     "resolve_field_aliases",
     "search_terms_by_type",
     "update_term",

@@ -197,7 +197,9 @@ class OntologyBuildSession:
                 nr = dict(rel)
                 nr.setdefault(
                     "source_object_code",
-                    rel.get("source_object_code") or rel.get("source_class", "") or state["entity_code"],
+                    rel.get("source_object_code")
+                    or rel.get("source_class", "")
+                    or state["entity_code"],
                 )
                 nr.setdefault(
                     "target_object_code",

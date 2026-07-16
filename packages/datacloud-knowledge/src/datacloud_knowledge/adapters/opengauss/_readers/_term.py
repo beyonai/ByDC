@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ from datacloud_knowledge.adapters.opengauss._db.models import (
     TermRelation,
 )
 from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
+from datacloud_knowledge.adapters.opengauss.jieba_recall import jieba_recall
+from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.contracts.term_provider_types import (
     LabelCondition,
     LabelFilter,
@@ -1950,71 +1953,113 @@ class _TermReader(_ReaderBase):
         label_condition: LabelCondition = "and",
         term_ids: list[str] | None = None,
         ext_attrs: dict[str, Any] | None = None,
+        query_vector: list[float] | None = None,
         top_k: int = 20,
         offset: int = 0,
     ) -> QueryResult:
         """检索术语（OpenGauss 实现）。
 
         根据 query_type 选择检索策略：
-        - fulltext: 通过 search_terms_exact 精确匹配
-        - exact: 同 fulltext
-        - embedding/mixed: 当前未实现，返回空结果
+        - exact:     TermName.name_text 精确匹配 + Term.term_code 精确匹配
+        - fulltext:  BM25 单字 OR + jieba 分词 RRF（仅 CJK）→ rrf_fuse(k=60)
+        - embedding: name_embedding <=> CAST(:vector AS vector)，需 query_vector
+        - mixed:     BM25 + jieba + vector → rrf_fuse 三路(k=60)
 
-        Note:
-            embedding 和 mixed 策略需要 pgvector 扩展支持，当前 OpenGauss 实现
-            暂未集成向量检索路径。label_filters 参数当前未使用。
+        Args:
+            dataset_ids: 术语库 ID 列表。
+            keyword: 搜索关键词（用于 fulltext/embedding/mixed）。
+            term_name: 精确名称匹配（走 exact 路径）。
+            term_type: 术语类型编码（支持驼峰简写）。
+            query_type: 检索策略（exact/fulltext/embedding/mixed）。
+            parent_term_code: 父术语 ID 过滤。
+            label_filters: 标签过滤条件列表。
+            label_condition: 标签组合条件（and/or）。
+            term_ids: 精确 term_id 列表（走精确 ID 路径）。
+            ext_attrs: 扩展属性键值过滤。
+            query_vector: 查询向量（仅 embedding/mixed 需要）。
+            top_k: 返回条数。
+            offset: 分页偏移。
+
+        Returns:
+            分页检索结果。
         """
-        _ = (label_filters, label_condition)  # OpenGauss 实现暂不使用 label 过滤
         try:
             with self._get_session() as session:
-                # 构建基础过滤
-                filters: list[Any] = []
-                if term_type:
-                    canonical = self._normalize_type_code(term_type)
-                    filters.append(Term.term_type_code == canonical)
-                if parent_term_code:
-                    filters.append(Term.parent_term_id == parent_term_code)
-                if dataset_ids:
-                    filters.append(Term.library_id.in_(dataset_ids))
+                # ── Step 1: 候选 term_ids + score_map ──────────────
+                candidate_ids: set[str] | None = None
+                score_map: dict[str, float] = {}
+
                 if term_ids:
-                    filters.append(Term.term_id.in_(term_ids))
-
-                # ext_attrs 过滤：支持 JSONB 字段的键值匹配
-                if ext_attrs:
-                    for key, value in ext_attrs.items():
-                        filters.append(Term.ext_attrs[key].astext == str(value))
-
-                # 关键词或术语名称匹配
-                normalized_keyword = (keyword or "").strip()
-                if term_name:
-                    filters.append(
-                        or_(
-                            Term.term_name == term_name,
-                            Term.term_code == term_name,
-                        )
-                    )
-                elif normalized_keyword:
-                    filters.append(
-                        or_(
-                            Term.term_name.ilike(f"%{normalized_keyword}%"),
-                            Term.term_code.ilike(f"%{normalized_keyword}%"),
-                        )
+                    # 精确 term_id 路径，跳过文本搜索
+                    candidate_ids = set(term_ids)
+                    score_map = dict.fromkeys(term_ids, 1.0)
+                elif term_name:
+                    # term_name 精确匹配（exact 语义）
+                    candidate_ids, score_map = self._text_search_candidates(
+                        session,
+                        keyword=term_name,
+                        query_type="exact",
+                        top_k=top_k + offset,
                     )
 
-                if not filters:
-                    filters.append(text("1=1"))
+                kw = (keyword or "").strip()
+                if kw:
+                    # Determine effective query_type
+                    effective_qtype: QueryType = query_type
+
+                    # term_name 不存在 keyword 时 embedding/empty/mixed 回退
+                    if query_type == "embedding" and query_vector is None:
+                        logger.warning(
+                            "embedding query_type requires query_vector — returning empty"
+                        )
+                        return QueryResult(total=0, items=[])
+                    if query_type == "mixed" and query_vector is None:
+                        logger.info("mixed query_type without query_vector — degrading to fulltext")
+                        effective_qtype = "fulltext"
+
+                    search_ids, search_scores = self._text_search_candidates(
+                        session,
+                        keyword=kw,
+                        query_type=effective_qtype,
+                        query_vector=query_vector,
+                        top_k=top_k + offset,
+                    )
+
+                    if candidate_ids is not None:
+                        # Intersect with existing candidate_ids (from term_ids or term_name)
+                        candidate_ids = candidate_ids & search_ids
+                    else:
+                        candidate_ids = search_ids
+                    score_map = {tid: search_scores.get(tid, 1.0) for tid in candidate_ids}
+
+                # No text search at all — use empty result
+                if candidate_ids is None:
+                    return QueryResult(total=0, items=[])
+
+                # ── Step 2: 元数据过滤 ─────────────────────────────
+                canonical_type = self._normalize_type_code(term_type) if term_type else None
+                filters = self._apply_metadata_filters(
+                    candidate_ids=candidate_ids,
+                    term_type=canonical_type,
+                    dataset_ids=dataset_ids,
+                    parent_term_code=parent_term_code,
+                    ext_attrs=ext_attrs,
+                    label_filters=label_filters,
+                    label_condition=label_condition,
+                )
 
                 where_clause = and_(*filters)
 
+                # ── Step 3: 计数 ────────────────────────────────────
                 total = int(
                     session.execute(
                         select(func.count()).select_from(Term).where(where_clause)
                     ).scalar_one()
                 )
-
                 if total == 0:
                     return QueryResult(total=0, items=[])
 
+                # ── Step 4: 详情查询 + 响应构造 ──────────────────────
                 rows = session.execute(
                     select(
                         Term.term_id,
@@ -2036,9 +2081,10 @@ class _TermReader(_ReaderBase):
                 ).all()
         except Exception:
             logger.exception(
-                "query_terms failed: keyword=%s term_type=%s",
+                "query_terms failed: keyword=%s term_type=%s query_type=%s",
                 keyword,
                 term_type,
+                query_type,
             )
             raise
 
@@ -2065,11 +2111,180 @@ class _TermReader(_ReaderBase):
                     labels=tags,
                     synonyms="",
                     ext_attrs=term_ext_attrs,
-                    created_time=0,
-                    updated_time=0,
+                    created_time=self._datetime_to_epoch(row[9]),
+                    updated_time=self._datetime_to_epoch(row[10]),
+                    score=score_map.get(str(row[0])),
                 )
             )
         return QueryResult(total=total, items=items)
+
+    def query_terms_batch(
+        self,
+        *,
+        keywords: list[str],
+        dataset_ids: list[str] | None = None,
+        term_type: str | None = None,
+        query_type: QueryType = "fulltext",
+        parent_term_code: str | None = None,
+        label_filters: list[LabelFilter] | None = None,
+        label_condition: LabelCondition = "and",
+        ext_attrs: dict[str, Any] | None = None,
+        query_vectors: list[list[float]] | None = None,
+        top_k: int = 20,
+        offset: int = 0,
+    ) -> list[QueryResult]:
+        """批量检索术语 — 每个 keyword 返回独立的 QueryResult。
+
+        内部为每个 keyword 执行独立的 ``_text_search_candidates`` + 元数据过滤。
+        不支持 ``term_ids`` 和 ``term_name`` 参数（精确 ID/名称匹配走 ``query_terms`` 单次调用）。
+
+        Args:
+            keywords: 搜索关键词列表。
+            dataset_ids: 术语库 ID 列表。
+            term_type: 术语类型编码。
+            query_type: 检索策略（exact/fulltext/embedding/mixed）。
+            parent_term_code: 父术语 ID 过滤。
+            label_filters: 标签过滤条件列表。
+            label_condition: 标签组合条件（and/or）。
+            ext_attrs: 扩展属性键值过滤。
+            query_vectors: 查询向量列表（仅 embedding/mixed 需要，长度必须与 keywords 一致）。
+            top_k: 返回条数。
+            offset: 分页偏移。
+
+        Returns:
+            list[QueryResult]，与 keywords 一一对应。
+        """
+        if not keywords:
+            return []
+
+        # 校验 query_vectors
+        if query_type in ("embedding", "mixed"):
+            if query_vectors is None:
+                if query_type == "embedding":
+                    logger.warning(
+                        "embedding batch requires query_vectors — returning empty results"
+                    )
+                    return [QueryResult(total=0, items=[])] * len(keywords)
+                logger.info("mixed batch without query_vectors — degrading to fulltext")
+                effective_type: QueryType = "fulltext"
+            elif len(query_vectors) != len(keywords):
+                raise ValueError(
+                    f"query_vectors length ({len(query_vectors)}) must match "
+                    f"keywords length ({len(keywords)})"
+                )
+            else:
+                effective_type = query_type
+        else:
+            effective_type = query_type
+            query_vectors = None
+
+        results: list[QueryResult] = []
+        try:
+            with self._get_session() as session:
+                canonical_type = self._normalize_type_code(term_type) if term_type else None
+
+                for idx, kw in enumerate(keywords):
+                    stripped = kw.strip()
+                    if not stripped:
+                        results.append(QueryResult(total=0, items=[]))
+                        continue
+
+                    # ── 文本搜索 ────────────────────────────────────
+                    qv = query_vectors[idx] if query_vectors else None
+                    search_ids, score_map = self._text_search_candidates(
+                        session,
+                        keyword=stripped,
+                        query_type=effective_type,
+                        query_vector=qv,
+                        top_k=top_k + offset,
+                    )
+
+                    if not search_ids:
+                        results.append(QueryResult(total=0, items=[]))
+                        continue
+
+                    # ── 元数据过滤 ──────────────────────────────────
+                    filters = self._apply_metadata_filters(
+                        candidate_ids=search_ids,
+                        term_type=canonical_type,
+                        dataset_ids=dataset_ids,
+                        parent_term_code=parent_term_code,
+                        ext_attrs=ext_attrs,
+                        label_filters=label_filters,
+                        label_condition=label_condition,
+                    )
+                    where_clause = and_(*filters)
+
+                    # ── 计数 ────────────────────────────────────────
+                    total = int(
+                        session.execute(
+                            select(func.count()).select_from(Term).where(where_clause)
+                        ).scalar_one()
+                    )
+                    if total == 0:
+                        results.append(QueryResult(total=0, items=[]))
+                        continue
+
+                    # ── 详情查询 ────────────────────────────────────
+                    rows = session.execute(
+                        select(
+                            Term.term_id,
+                            Term.term_code,
+                            Term.term_name,
+                            Term.term_type_code,
+                            Term.library_id,
+                            Term.parent_term_id,
+                            Term.desc_summary,
+                            Term.term_tags,
+                            Term.ext_attrs,
+                            Term.created_time,
+                            Term.updated_time,
+                        )
+                        .where(where_clause)
+                        .limit(top_k)
+                        .offset(offset)
+                        .order_by(Term.updated_time.desc())
+                    ).all()
+
+                    items: list[ProviderTermItem] = []
+                    for row in rows:
+                        tags: dict[str, str] = {}
+                        raw_tags = row[7]
+                        if isinstance(raw_tags, dict):
+                            tags = {str(k): str(v) for k, v in raw_tags.items()}
+                        term_ext_attrs: dict[str, str] = {}
+                        raw_ext_attrs = row[8]
+                        if isinstance(raw_ext_attrs, dict):
+                            term_ext_attrs = {str(k): str(v) for k, v in raw_ext_attrs.items()}
+
+                        items.append(
+                            ProviderTermItem(
+                                term_id=str(row[0]),
+                                term_code=str(row[1]),
+                                term_name=str(row[2]),
+                                term_type=str(row[3]),
+                                dataset_id=str(row[4]) if row[4] else "",
+                                parent_term_code=str(row[5]) if row[5] else "",
+                                desc=str(row[6]) if row[6] else "",
+                                labels=tags,
+                                synonyms="",
+                                ext_attrs=term_ext_attrs,
+                                created_time=self._datetime_to_epoch(row[9]),
+                                updated_time=self._datetime_to_epoch(row[10]),
+                                score=score_map.get(str(row[0])),
+                            )
+                        )
+                    results.append(QueryResult(total=total, items=items))
+        except Exception:
+            logger.exception(
+                "query_terms_batch failed: keywords=%s term_type=%s query_type=%s",
+                keywords,
+                term_type,
+                query_type,
+            )
+            raise
+
+        return results
 
     def get_term_detail(
         self,
@@ -2752,6 +2967,184 @@ class _TermReader(_ReaderBase):
         raise ValueError(f"未知排序字段: {order_by}")
 
     @staticmethod
+    def _has_cjk(text: str) -> bool:
+        """Check if text contains CJK characters."""
+        return bool(re.search(r"[\u4e00-\u9fff]", text))
+
+    @staticmethod
+    def _label_filter_expr(lf: LabelFilter) -> Any:
+        """Convert a LabelFilter to a SQLAlchemy expression on ``Term.term_tags``.
+
+        Supports:
+        - ``filter_value`` → exact match on ``term_tags->>'field_code'``
+        - ``min_filter_value`` / ``max_filter_value`` → numeric range filter
+        """
+        exprs: list[Any] = []
+        key = lf.field_code
+        val_text = Term.term_tags.op("->>")(key)
+
+        if lf.filter_value is not None:
+            exprs.append(val_text == lf.filter_value)
+        if lf.min_filter_value is not None:
+            val_num = cast(func.nullif(val_text, ""), NUMERIC)
+            exprs.append(val_num >= lf.min_filter_value)
+        if lf.max_filter_value is not None:
+            val_num = cast(func.nullif(val_text, ""), NUMERIC)
+            exprs.append(val_num <= lf.max_filter_value)
+
+        if not exprs:
+            return text("1=1")
+        return and_(*exprs)
+
+    def _text_search_candidates(
+        self,
+        session: Any,
+        *,
+        keyword: str,
+        query_type: QueryType,
+        query_vector: list[float] | None = None,
+        top_k: int = 500,
+    ) -> tuple[set[str], dict[str, float]]:
+        """Unified text search entry — returns ``(candidate_term_ids, score_map)``.
+
+        Dispatches to BM25 / vector / exact match based on ``query_type``.
+
+        Returns:
+            ``(set of term_ids, {term_id: score})``.  Empty set when no candidates.
+        """
+        kw = keyword.strip()
+        if not kw:
+            return set(), {}
+
+        # ── exact ──────────────────────────────────────────────────
+        if query_type == "exact":
+            rows1 = session.execute(select(TermName.term_id).where(TermName.name_text == kw)).all()
+            rows2 = session.execute(select(Term.term_id).where(Term.term_code == kw)).all()
+            eids: set[str] = {str(r[0]) for r in rows1} | {str(r[0]) for r in rows2}
+            return eids, dict.fromkeys(eids, 1.0)
+
+        # ── embedding ──────────────────────────────────────────────
+        if query_type == "embedding":
+            if query_vector is None:
+                logger.warning(
+                    "embedding query_type requires query_vector, got None — returning empty"
+                )
+                return set(), {}
+            sql = text(
+                """
+                SELECT tn.term_id,
+                       1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
+                FROM term_name tn
+                WHERE tn.name_embedding IS NOT NULL
+                ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
+                LIMIT :limit
+                """
+            )
+            vec_str = "[" + ",".join(str(round(v, 8)) for v in query_vector) + "]"
+            rows = session.execute(sql, {"vector": vec_str, "limit": top_k}).all()
+            return {str(r[0]) for r in rows}, {str(r[0]): float(r[1]) for r in rows}
+
+        # ── fulltext / mixed ───────────────────────────────────────
+        bm25_results = bm25_search_with_or(session, kw, top_k=top_k, min_score=0.001)
+        ranked_lists: list[list[tuple[str, str, str, str, str]]] = []
+        if bm25_results:
+            ranked_lists.append(
+                [
+                    (r.term_id, r.term_name, r.name_id, r.term_type_code, r.term_code)
+                    for r in bm25_results
+                ]
+            )
+
+        has_cjk = self._has_cjk(kw)
+        if has_cjk:
+            jieba_results = jieba_recall(session, kw, top_k=top_k)
+            if jieba_results:
+                ranked_lists.append(jieba_results)
+
+        # ── mixed: add vector results ──────────────────────────────
+        vec_scores: dict[str, float] = {}
+        if query_type == "mixed" and query_vector is not None:
+            vec_sql = text(
+                """
+                SELECT tn.term_id,
+                       1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
+                FROM term_name tn
+                WHERE tn.name_embedding IS NOT NULL
+                ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
+                LIMIT :limit
+                """
+            )
+            vec_str = "[" + ",".join(str(round(v, 8)) for v in query_vector) + "]"
+            vec_rows = session.execute(vec_sql, {"vector": vec_str, "limit": top_k}).all()
+            if vec_rows:
+                ranked_lists.append([(str(r[0]), "", "", "", "") for r in vec_rows])
+                vec_scores = {str(r[0]): float(r[1]) for r in vec_rows}
+        elif query_type == "mixed":
+            logger.info("mixed query_type without query_vector — degrading to fulltext")
+
+        if not ranked_lists:
+            return set(), {}
+
+        fused = rrf_fuse(ranked_lists, k=60, top_n=top_k)
+        fused_ids = {c.term_id for c in fused}
+        fused_scores = {c.term_id: float(c.rrf_score) for c in fused}
+
+        if query_type == "mixed" and vec_scores:
+            result_ids = fused_ids
+            result_scores = {
+                tid: max(fused_scores.get(tid, 0.0), vec_scores.get(tid, 0.0)) for tid in fused_ids
+            }
+        else:
+            result_ids = fused_ids
+            result_scores = fused_scores
+        return result_ids, result_scores
+
+    @staticmethod
+    def _apply_metadata_filters(
+        *,
+        candidate_ids: set[str] | None = None,
+        term_type: str | None = None,
+        dataset_ids: list[str] | None = None,
+        parent_term_code: str | None = None,
+        ext_attrs: dict[str, Any] | None = None,
+        label_filters: list[LabelFilter] | None = None,
+        label_condition: LabelCondition = "and",
+    ) -> list[Any]:
+        """Build a list of SQLAlchemy filter expressions for Term metadata.
+
+        All filters are AND-ed together; callers pass the list to ``.where(*filters)``.
+        """
+        filters: list[Any] = []
+
+        if candidate_ids is not None:
+            filters.append(Term.term_id.in_(list(candidate_ids)))
+
+        if term_type:
+            filters.append(Term.term_type_code == term_type)
+
+        if dataset_ids:
+            filters.append(Term.library_id.in_(dataset_ids))
+
+        if parent_term_code:
+            filters.append(Term.parent_term_id == parent_term_code)
+
+        if ext_attrs:
+            for key, value in ext_attrs.items():
+                filters.append(Term.ext_attrs[key].astext == str(value))
+
+        if label_filters:
+            tag_exprs = [_TermReader._label_filter_expr(lf) for lf in label_filters]
+            if label_condition == "and":
+                filters.append(and_(*tag_exprs))
+            else:
+                filters.append(or_(*tag_exprs))
+
+        if not filters:
+            filters.append(text("1=1"))
+
+        return filters
+
+    @staticmethod
     def _convert_db_row_to_term_row(row: Any, *, score: float | None = None) -> _TermSearchRow:
         """将 DB 查询行转换为内部 _TermSearchRow 结构。"""
         term_tags = row[5] if isinstance(row[5], dict) else {}
@@ -2806,6 +3199,145 @@ class _TermReader(_ReaderBase):
         return [
             row_by_term_id[term_id] for term_id in ordered_term_ids if term_id in row_by_term_id
         ]
+
+    def query_term_relations_tree(
+        self,
+        *,
+        term_id: str,
+        relation_category: str | None = None,
+        direction: str = "both",
+        max_depth: int = 3,
+    ) -> dict[str, Any]:
+        """Query entire relation tree via recursive CTE with term detail JOINs.
+
+        Returns all relations up to ``max_depth`` in a single query, including
+        source/target term names, codes, types, and ext_attrs.  Each result
+        dict carries ``depth`` (hop distance from root) and ``next_term_id``
+        (the newly-discovered endpoint at this edge).
+        """
+        # direction filtering in the CTE base step
+        direction_clause: str
+        if direction == "outgoing":
+            direction_clause = "tr.source_term_id = :root_id"
+            next_expr = "tr.target_term_id"
+        elif direction == "incoming":
+            direction_clause = "tr.target_term_id = :root_id"
+            next_expr = "tr.source_term_id"
+        else:
+            direction_clause = "(tr.source_term_id = :root_id OR tr.target_term_id = :root_id)"
+            next_expr = (
+                "CASE WHEN tr.source_term_id = :root_id "
+                "THEN tr.target_term_id ELSE tr.source_term_id END"
+            )
+
+        # Build category filter clause (avoid NULL parameter type ambiguity)
+        cat_filter: str
+        cat_param: dict[str, str]
+        if relation_category:
+            cat_filter = "AND tr.relation_category = :rel_cat"
+            cat_param = {"rel_cat": relation_category}
+        else:
+            cat_filter = ""
+            cat_param = {}
+
+        sql = text(f"""
+            WITH RECURSIVE bfs AS (
+                SELECT
+                    tr.relation_id,
+                    tr.source_term_id,
+                    tr.target_term_id,
+                    tr.relation_name,
+                    tr.relation_category,
+                    1 AS depth,
+                    ({next_expr}) AS next_term_id,
+                    ARRAY[CAST(:root_id AS varchar)]::varchar[] AS visited_ids
+                FROM term_relation tr
+                WHERE {direction_clause}
+                  {cat_filter}
+
+                UNION ALL
+
+                SELECT
+                    tr.relation_id,
+                    tr.source_term_id,
+                    tr.target_term_id,
+                    tr.relation_name,
+                    tr.relation_category,
+                    b.depth + 1,
+                    CASE
+                        WHEN tr.source_term_id = b.next_term_id THEN tr.target_term_id
+                        ELSE tr.source_term_id
+                    END AS next_term_id,
+                    b.visited_ids || b.next_term_id
+                FROM bfs b
+                JOIN term_relation tr
+                    ON (tr.source_term_id = b.next_term_id
+                        OR tr.target_term_id = b.next_term_id)
+                    AND tr.relation_id != b.relation_id
+                WHERE b.depth < :max_depth
+                  AND NOT (
+                      CASE
+                          WHEN tr.source_term_id = b.next_term_id THEN tr.target_term_id
+                          ELSE tr.source_term_id
+                      END
+                  ) = ANY(b.visited_ids)
+                  {cat_filter}
+            )
+            SELECT DISTINCT ON (bfs.relation_id)
+                bfs.source_term_id,
+                bfs.target_term_id,
+                bfs.relation_name,
+                bfs.relation_category,
+                bfs.depth,
+                bfs.next_term_id,
+                st.term_name   AS source_term_name,
+                st.term_code   AS source_term_code,
+                st.term_type_code AS source_term_type,
+                st.ext_attrs   AS source_ext_attrs,
+                tt.term_name   AS target_term_name,
+                tt.term_code   AS target_term_code,
+                tt.term_type_code AS target_term_type,
+                tt.ext_attrs   AS target_ext_attrs
+            FROM bfs
+            LEFT JOIN term st ON st.term_id = bfs.source_term_id
+            LEFT JOIN term tt ON tt.term_id = bfs.target_term_id
+            ORDER BY bfs.relation_id, bfs.depth
+        """)
+
+        with self._get_session() as session:
+            rows = session.execute(
+                sql,
+                {"root_id": term_id, "max_depth": max_depth, **cat_param},
+            ).fetchall()
+
+        data = [
+            {
+                "source_term_id": str(r[0]) if r[0] else None,
+                "target_term_id": str(r[1]) if r[1] else None,
+                "relation_name": str(r[2]),
+                "relation_category": str(r[3]),
+                "depth": int(r[4]),
+                "next_term_id": str(r[5]) if r[5] else "",
+                "source_term_name": str(r[6]) if r[6] else "",
+                "source_term_code": str(r[7]) if r[7] else "",
+                "source_term_type": str(r[8]) if r[8] else "",
+                "source_ext_attrs": r[9] if isinstance(r[9], dict) else {},
+                "target_term_name": str(r[10]) if r[10] else "",
+                "target_term_code": str(r[11]) if r[11] else "",
+                "target_term_type": str(r[12]) if r[12] else "",
+                "target_ext_attrs": r[13] if isinstance(r[13], dict) else {},
+            }
+            for r in rows
+        ]
+
+        total = len(data)
+        return {
+            "data": data,
+            "pageIndex": 1,
+            "pageSize": total,
+            "totalCount": total,
+            "totalPages": 1,
+        }
 
     def query_term_relations(
         self,
