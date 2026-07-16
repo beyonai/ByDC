@@ -201,7 +201,11 @@ class OntologyBuildMixin:
                 term_type_code = f"{actual_entity_code}_{prop_code}"
                 term_type = "DICT_TERM"
             terminology = (
-                TermMeta(termMasterType=term_type, termTypeCode=term_type_code, termField=prop_code)
+                TermMeta(
+                    termMasterType=term_type,
+                    termTypeCode=term_type_code,
+                    termField=prop_code,
+                )
                 if term_type_code
                 else None
             )
