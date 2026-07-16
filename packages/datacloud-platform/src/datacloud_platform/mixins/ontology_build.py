@@ -12,7 +12,7 @@ from typing import Any, cast
 
 from datacloud_platform.backends._contracts import _HasTermBackend
 from datacloud_platform.models.object_type import ObjectType
-from datacloud_platform.models.property import Property
+from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
 
@@ -186,6 +186,31 @@ class OntologyBuildMixin:
                     f"jdbc:sqlite:{mount}/byclaw-datacloud/personal_object.db"
                 )
 
+        fields: list[dict[str, Any]] = state.get("fields", [])
+        properties: list[Property] = []
+        for f in fields:
+            prop_code = f.get("property_code", "")
+            term_type_code = f.get("term_type_code", "")
+            term_values = f.get("term_values") or []
+            term_type = "LIST_TERM"
+            if term_values and not term_type_code:
+                term_type_code = f"{actual_entity_code}_{prop_code}"
+                term_type = "DICT_TERM"
+            terminology = (
+                TermMeta(termMasterType=term_type, termTypeCode=term_type_code, termField=prop_code)
+                if term_type_code
+                else None
+            )
+            properties.append(
+                Property(
+                    propertyCode=prop_code,
+                    propertyName=f.get("property_name", prop_code),
+                    propertyDesc=f.get("property_desc", ""),
+                    dataType=f.get("data_type", "STRING"),
+                    terminology=terminology,
+                )
+            )
+
         obj = ObjectType(
             objectCode=actual_entity_code,
             objectName=state.get("entity_name", actual_entity_code),
@@ -198,19 +223,14 @@ class OntologyBuildMixin:
             tableName=table_name,
             datasourceAlias=datasource_alias,  # type: ignore[call-arg]
             ext_property=state.get("ext_property"),
-            properties=[
-                Property(
-                    propertyCode=f.get("property_code", ""),
-                    propertyName=f.get("property_name", f.get("property_code", "")),
-                    propertyDesc=f.get("property_desc", ""),
-                    dataType=f.get("data_type", "STRING"),
-                )
-                for f in state.get("fields", [])
-            ],
+            properties=properties,
         )
 
         # 4. CRUD: 创建对象 + 加入场景
         self.create_object_with_scene(base_id, obj, scene_id)  # type: ignore[attr-defined]
+
+        # 4.1 写入内联术语（term_values → 术语类型 + 术语实例）
+        self._write_inline_terms(base_id, actual_entity_code, fields)  # type: ignore[attr-defined]
 
         # 4.5 创建对象关联关系（source 固定为当前实际对象编码）
         for rel in state.get("object_relations", []):

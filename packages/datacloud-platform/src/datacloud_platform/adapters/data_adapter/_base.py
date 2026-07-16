@@ -38,6 +38,55 @@ def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
     return codes
 
 
+def _normalize_terminology(raw: Any) -> tuple[dict[str, Any], str | None, str | None, str | None]:
+    """Normalize terminology/termMeta to (terminology, term_set, term_type, term_field)."""
+    if not raw:
+        return {}, None, None, None
+    if not isinstance(raw, dict):
+        if hasattr(raw, "model_dump"):
+            raw = raw.model_dump(by_alias=True)
+        else:
+            return {}, None, None, None
+
+    term_type_code = raw.get("termTypeCode") or raw.get("term_type_code")
+    term_field = raw.get("termField") or raw.get("term_field")
+    term_master_type = str(
+        raw.get("termMasterType") or raw.get("term_master_type") or ""
+    ).lower()
+
+    term_set = f"{term_type_code}.code" if term_type_code and term_field else None
+    term_type = None
+    if term_master_type in ("dict", "dict_term"):
+        term_type = "enum"
+    elif term_master_type in ("list", "list_term", "ontology", "ontology_term"):
+        term_type = "lookup"
+
+    return raw, term_set, term_type, term_field
+
+
+def _normalize_property_field(p: dict[str, Any]) -> dict[str, Any]:
+    """Normalize ObjectType property dict to SDK field dict."""
+    terminology, term_set, term_type, term_field = _normalize_terminology(
+        p.get("terminology") or p.get("termMeta") or p.get("term_meta")
+    )
+    return {
+        "field_code": p.get("field_code") or p.get("propertyCode", ""),
+        "field_name": p.get("field_name") or p.get("propertyName", ""),
+        "field_type": p.get("field_type") or p.get("dataType", "STRING"),
+        "data_format": p.get("data_format") or p.get("dataFormat"),
+        "description": p.get("description") or p.get("propertyDesc", ""),
+        "is_primary_key": (
+            bool(p.get("is_primary_key")) or p.get("businessKey", 0) == 1
+        ),
+        "required": bool(p.get("required") or p.get("isRequired", False)),
+        "source_column": p.get("source_column") or p.get("sourceColumn"),
+        "terminology": terminology,
+        "term_set": p.get("term_set") or term_set,
+        "term_type": p.get("term_type") or term_type,
+        "term_field": p.get("term_field") or term_field,
+    }
+
+
 def _normalize_entity(
     entity_type: str, data: dict[str, Any], *, for_storage: bool = False
 ) -> dict[str, Any]:
@@ -95,21 +144,7 @@ def _normalize_entity(
         # properties → fields with field-level normalization
         raw_props = data.get("properties") or data.get("fields", [])
         if raw_props and not data.get("fields"):
-            result["fields"] = [
-                {
-                    "field_code": p.get("field_code") or p.get("propertyCode", ""),
-                    "field_name": p.get("field_name") or p.get("propertyName", ""),
-                    "field_type": p.get("field_type") or p.get("dataType", "STRING"),
-                    "data_format": p.get("data_format") or p.get("dataFormat"),
-                    "description": p.get("description") or p.get("propertyDesc", ""),
-                    "is_primary_key": (
-                        bool(p.get("is_primary_key")) or p.get("businessKey", 0) == 1
-                    ),
-                    "required": bool(p.get("required") or p.get("isRequired", False)),
-                    "source_column": p.get("source_column") or p.get("sourceColumn"),
-                }
-                for p in raw_props
-            ]
+            result["fields"] = [_normalize_property_field(p) for p in raw_props]
         elif data.get("fields"):
             result["fields"] = data["fields"]
         result["actions"] = data.get("actions") or []
