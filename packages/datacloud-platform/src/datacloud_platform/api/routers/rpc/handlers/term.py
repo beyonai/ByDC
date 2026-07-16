@@ -391,6 +391,57 @@ def _term_get_knowledge_by_word(
     return ok(data=result)
 
 
+def _term_get_connection_network(
+    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+) -> Any:
+    """getTermConnectionNetwork — 纯图算子：给 seeds 返回最佳子图 + 探索目录。
+
+    Backend 做图算法（解析 + 多源 BFS 评分 + 子图构建），Agent 做推理。
+    """
+    base_id = _base(params)
+
+    seeds: list[str] = params.get("seeds", [])
+    if not seeds:
+        raise ValueError("seeds is required (at least 1)")
+
+    detail_level: str = str(params.get("detail_level", "summary"))
+    if detail_level not in ("summary", "full"):
+        raise ValueError("detail_level must be 'summary' or 'full'")
+
+    max_depth: int = int(params.get("max_depth", 3))
+    if not 1 <= max_depth <= 4:
+        raise ValueError("max_depth must be 1..4")
+
+    max_best_edges: int = int(params.get("max_best_edges", 20))
+    if not 1 <= max_best_edges <= 200:
+        raise ValueError("max_best_edges must be 1..200")
+
+    direction: str = str(params.get("direction", "both"))
+    if direction not in ("out", "in", "both"):
+        raise ValueError("direction must be out/in/both")
+
+    kb_ids_raw: list[str] | None = params.get("kb_ids")
+    kb_ids: set[str] | None = set(kb_ids_raw) if kb_ids_raw else None
+
+    relation_names: list[str] | None = params.get("relation_names")
+    include_debug: bool = bool(params.get("include_debug", False))
+    include_catalog: bool = bool(params.get("include_catalog", False))
+
+    result = platform.get_term_connection_network(
+        base_id,
+        seeds=seeds,
+        detail_level=detail_level,
+        max_depth=max_depth,
+        max_best_edges=max_best_edges,
+        direction=direction,
+        relation_names=relation_names,
+        kb_ids=kb_ids,
+        include_debug=include_debug,
+        include_catalog=include_catalog,
+    )
+    return ok(data=result)
+
+
 TERM_REGISTRY: dict[str, Any] = {
     "search": _term_search,
     "list": _term_list,
@@ -401,6 +452,7 @@ TERM_REGISTRY: dict[str, Any] = {
     "delete": _term_delete,
     "getRelations": _term_get_relations,
     "getKnowledgeByTermWord": _term_get_knowledge_by_word,
+    "getTermConnectionNetwork": _term_get_connection_network,
 }
 
 
