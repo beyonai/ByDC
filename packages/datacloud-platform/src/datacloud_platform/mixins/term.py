@@ -75,6 +75,11 @@ class TermMixin(TermSyncHandler):
     ) -> dict[str, Any]:
         return self._term_for(base_id).query_term_relations(**kwargs)
 
+    def query_term_relations_tree(
+        self: _HasTermBackend, base_id: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        return self._term_for(base_id).query_term_relations_tree(**kwargs)
+
     # ── TermRelation ───────────────────────────────────────────────
 
     def list_term_relations(

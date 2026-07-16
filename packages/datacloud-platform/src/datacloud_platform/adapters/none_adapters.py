@@ -670,6 +670,18 @@ class _NoopTermBackend:
         _ = term_id, relation_category, direction, depth, keyword, page_index, page_size
         return {"data": [], "totalCount": 0}
 
+    def query_term_relations_tree(
+        self,
+        *,
+        term_id: str,
+        max_depth: int = 3,
+        relation_category: str | None = None,
+        direction: str = "both",
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        _ = term_id, max_depth, relation_category, direction
+        return {"data": [], "totalCount": 0}
+
     # ── TermRelation ────────────────────────────────────────────────────
 
     def list_term_relations(

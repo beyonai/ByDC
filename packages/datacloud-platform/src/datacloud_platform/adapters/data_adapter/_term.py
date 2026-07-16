@@ -309,6 +309,27 @@ class TermBackendMixin(DataCloudDataBackendBase):
             logger.exception("query_term_relations failed term_id=%s", term_id)
             return {"data": [], "totalCount": 0}
 
+    def query_term_relations_tree(
+        self,
+        *,
+        term_id: str,
+        max_depth: int = 3,
+        relation_category: str | None = None,
+        direction: str = "both",
+    ) -> dict[str, Any]:
+        """Query entire relation tree via recursive CTE (single DB call)."""
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.query_term_relations_tree(  # type: ignore[no-any-return]
+                term_id=term_id,
+                max_depth=max_depth,
+                relation_category=relation_category,
+                direction=direction,
+            )
+        except Exception:
+            logger.exception("query_term_relations_tree failed term_id=%s", term_id)
+            return {"data": [], "totalCount": 0}
+
     # ── TermRelation ────────────────────────────────────────────────────
 
     def list_term_relations(
