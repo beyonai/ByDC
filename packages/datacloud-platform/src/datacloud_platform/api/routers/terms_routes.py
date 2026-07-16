@@ -56,7 +56,7 @@ class TermOptionsRequest(BaseModel):
 
     term_set: str = Field(default="", alias="termSet")
     term_type_code: str = Field(default="", alias="termTypeCode")
-    term_field: str = Field(default="", alias="termField")
+    term_field: str | None = Field(default="", alias="termField")
     dataset_id: int | None = Field(default=None, alias="datasetId")
     keyword: str = ""
     page: int = _DEFAULT_PAGE
@@ -83,6 +83,8 @@ async def term_options_endpoint(
 
     normalized_page = max(body.page, _DEFAULT_PAGE)
     normalized_page_size = min(max(body.page_size, 1), _MAX_PAGE_SIZE)
+    if body.term_field is None:
+        body.term_field = ""
     term_field = body.term_field.strip().lower()
     search_keyword = body.keyword.strip()
     offset = (normalized_page - 1) * normalized_page_size

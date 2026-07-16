@@ -433,6 +433,11 @@ class KbSearchExecutor:
                     "kb_file_path": markdown_file_path,
                     "kb_resource_id": req.kb_resource_id,
                 },
+                "labels": {
+                    "kb_id": req.kb_id,
+                    "kb_file_path": markdown_file_path,
+                    "kb_resource_id": req.kb_resource_id,
+                },
             }
             if relations:
                 term["relations"] = relations

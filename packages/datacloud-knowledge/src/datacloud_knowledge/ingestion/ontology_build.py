@@ -221,6 +221,27 @@ class OntologyBuildSession:
                 existing_rels[rkey] = {**existing_rels.get(rkey, {}), **rel}
             state["object_relations"] = list(existing_rels.values())
 
+        # 如果字段通过 object_relations 关联了其他对象，自动绑定 term_type_code
+        # join_keys[].sourceField 对应当前对象的字段，target_object_code 即术语类型
+        if state.get("object_relations") and state.get("fields"):
+            current_code = state["entity_code"]
+            fields_map: dict[str, dict[str, Any]] = {
+                f["property_code"]: f for f in state["fields"]
+            }
+            for rel in state["object_relations"]:
+                src_obj = str(rel.get("source_object_code") or "")
+                if src_obj and src_obj != current_code:
+                    continue
+                target_code = str(rel.get("target_object_code") or "")
+                if not target_code:
+                    continue
+                for jk in rel.get("join_keys") or []:
+                    prop_code = str(jk.get("sourceField") or "")
+                    if prop_code and prop_code in fields_map:
+                        if not fields_map[prop_code].get("term_type_code"):
+                            fields_map[prop_code]["term_type_code"] = target_code
+            state["fields"] = list(fields_map.values())
+
         store.save(key, state, ttl=3600)
         # 同时用原始短码 key 保存，让 submit 传短码也能查找到
         if original_key != key:

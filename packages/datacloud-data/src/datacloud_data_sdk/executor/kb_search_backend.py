@@ -264,6 +264,8 @@ class HttpKnowledgeSearchBackend:
 
         # Strip the --- related_docs --- blocks from content before uploading.
         clean_content = _strip_related_docs_blocks(request.content)
+        # Strip any leading YAML front matter (--- ... ---) so it is not duplicated.
+        clean_content = _strip_front_matter(clean_content)
         file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
         filename = PurePosixPath(markdown_file_path).name or "document.md"
         data = {
@@ -1258,6 +1260,9 @@ _RELATED_DOCS_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+# Matches a YAML front matter block at the very start of a document.
+_FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\r?\n.*?^---[ \t]*\r?\n?", re.DOTALL | re.MULTILINE)
+
 
 def _parse_related_docs(content: str) -> list[dict[str, str]]:
     """Extract all entries from ``--- related_docs ---`` fenced blocks.
@@ -1290,7 +1295,8 @@ def _parse_related_docs(content: str) -> list[dict[str, str]]:
             # 处理 /.sessions?/<session_id>/<path> 格式，提取 session_id 并规范化路径
             match = re.search(r"/\.sessions?/(\d+)/(.*)", target)
             if match:
-                target = "/" + match.group(2)
+                parts = [p for p in match.group(2).split("/") if p]
+                target = "/" + "/".join(parts[-2:] if len(parts) > 2 else parts)
             relation = str(item.get("relation") or "").strip()
             kb_id = str(item.get("kb_resource_id") or "").strip()
             if target and relation:
@@ -1309,6 +1315,11 @@ def _strip_related_docs_blocks(content: str) -> str:
     # Collapse runs of 3+ newlines down to 2 (one blank line)
     stripped = re.sub(r"\n{3,}", "\n\n", stripped)
     return stripped.rstrip()
+
+
+def _strip_front_matter(content: str) -> str:
+    """Remove a leading YAML front matter block (``--- ... ---``) from *content*."""
+    return _FRONT_MATTER_RE.sub("", content, count=1).lstrip("\n")
 
 
 def _related_doc_id_to_term(target_doc_id: str) -> tuple[str, str]:
