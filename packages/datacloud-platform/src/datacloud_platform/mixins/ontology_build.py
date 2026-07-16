@@ -19,8 +19,12 @@ from datacloud_platform.models.view import View, ViewProperty
 logger = logging.getLogger(__name__)
 
 
-def _extract_search_items(result: Any) -> list[Any]:
-    """从 search_terms 响应中提取 items 列表，兼容 dict 和对象。"""
+def _extract_search_items(result: Any) -> list[dict[str, Any]]:
+    """从 search_terms 响应中提取 items 列表，兼容 dict 和对象。
+
+    search_terms() 可能返回 SearchTermsResult (Pydantic) 或 dict，
+    使用 getattr 兼容两种形态。下游通过 _get_attr() 安全访问字段。
+    """
     if isinstance(result, dict):
         return result.get("items", [])  # type: ignore[no-any-return]
     return getattr(result, "items", [])
