@@ -8,25 +8,160 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any
 from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
+
+from datacloud_knowledge.adapters import create_writer
+from datacloud_knowledge.contracts.intent_types import (
+    PreResolveResult,
+    find_paired_where_key,
+    is_field_code,
+    term_key,
+)
+from datacloud_knowledge.contracts.types import (
+    ClarificationMode,
+    FieldResolutionResult,
+    MatchCandidate as SdkMatchCandidate,
+    MatchResult as SdkMatchResult,
+    ResolvedField,
+)
+from datacloud_knowledge.intent import disambiguate as sdk_disambiguate
+from datacloud_knowledge.intent.clarification._merge import (
+    build_main_resolution_hints,
+    merge_cc_resolution_hints,
+    merge_pre_resolve_hints,
+    merge_to_confirmed_query,
+    normalize_cc_result_with_hints,
+)
+from datacloud_knowledge.intent.clarification._patch import build_pre_resolved_input
+from datacloud_knowledge.intent.clarification.api import (
+    format_clarification_compute,
+    format_clarification_query,
+)
+from datacloud_knowledge.intent.clarification.cartesian import (
+    build_paradigm_list,
+    serialize_knowledge_meta,
+    serialize_paradigm_payload,
+)
+from datacloud_knowledge.intent.clarification.confirm import (
+    format_cc_confirm_context,
+    format_main_confirm_context,
+    llm_confirm_cc,
+    llm_confirm_main,
+)
+from datacloud_knowledge.intent.clarification.extract import (
+    extract_terms_complex_conditions,
+    extract_terms_query,
+)
+from datacloud_knowledge.intent.clarification.models import (
+    ClarificationNoCandidatesError,
+)
+from datacloud_knowledge.intent.clarification.postprocess import (
+    normalize_clarification_params,
+)
+from datacloud_knowledge.intent.score_update import (
+    batch_update_scores as sdk_batch_update,
+)
+from datacloud_knowledge.intent.types import (
+    ScoreUpdateRecord as SdkScoreUpdateRecord,
+)
+from datacloud_knowledge.retrieval.candidate_search import (
+    search_all_candidates_with_name_id,
+)
+from datacloud_knowledge.retrieval.dimension_values import (
+    DimensionValueResolver,
+)
+from datacloud_knowledge.retrieval.owl_relation_resolver import (
+    resolve_object_for_property as sdk_resolve,
+)
 
 from datacloud_platform.backends._contracts import (
     _HasOntologyAndTermBackend,
     _HasTermBackend,
 )
-from datacloud_knowledge.contracts.types import FieldResolutionResult, ClarificationMode
+from datacloud_platform.models.shared import (
+    DimensionProperty,
+    MatchCandidate,
+    MatchResult,
+    ReferenceProperty,
+)
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from datacloud_platform.models.shared import (
-        DimensionProperty,
-        MatchCandidate,
-        MatchResult,
-        ReferenceProperty,
-        ScoreUpdateRecord,
-    )
+    from datacloud_platform.models.shared import ScoreUpdateRecord
+
+
+# ── Module-level helpers for _unified_recall_with_backends ────────────────
+
+
+def _shape_metadata_candidate(hit: dict[str, Any]) -> dict[str, Any]:
+    """将 search_ontology metadata hit 整形为召回候选标准格式。
+
+    enriched metadata hit 字段（_ontology_metadata.py _enrich_metadata_hits 产出）：
+    - resultType:  "property" | "object" | "view" | "action"
+    - propertyName: property 的显示名（仅 resultType="property" 时存在）
+    - objectName:   object 的显示名（仅 resultType="object" 时存在）
+    - termCode:     完整 term_code (如 "o.by_opportunity.opp_code")
+    - objectCode:   object code
+    - score:        向量相似度分数
+    """
+    name_text = hit.get("propertyName") or hit.get("objectName") or ""
+    return {
+        "term_id": hit.get("termCode", hit.get("objectCode", "")),
+        "term_name": name_text,
+        "term_type_code": hit.get("resultType", hit.get("termType", "")),
+        "match_type": "ontology_metadata",
+        "confidence": hit.get("score", 0),
+        "score": hit.get("score", 0),
+    }
+
+
+def _shape_instance_candidate(hit: dict[str, Any]) -> dict[str, Any]:
+    """将 search_ontology instance hit 整形为召回候选标准格式。"""
+    return {
+        "term_id": hit.get("matchedValue", ""),
+        "term_name": hit.get("matchedValue", ""),
+        "term_type_code": hit.get("matchedProperty", ""),
+        "match_type": "ontology_instance",
+        "confidence": hit.get("score", 0),
+        "score": hit.get("score", 0),
+    }
+
+
+def _extract_property_code(
+    where_value_term: Any,
+    all_terms: list[Any],
+    pre: Any,
+    cc_pre: Any,
+) -> str | None:
+    """从已确认的 whereKey 的 term_code 提取半码格式 property_code。
+
+    pre.confirmed 中 whereKey 对应的 ResolvedField.term_code 格式：
+      "o.{object_code}.{property_code}"  或  "v.{view_code}.{property_code}"
+
+    提取为 search_ontology 协议要求的半码格式：
+      "{owner_code}.{property_code}"
+    """
+    key_term = find_paired_where_key(where_value_term, all_terms)
+    if key_term is None:
+        return None
+
+    confirmed_key = f"{key_term.path}:{key_term.raw_text}"
+    resolved = pre.confirmed.get(confirmed_key) or cc_pre.confirmed.get(confirmed_key)
+    if resolved is None:
+        return None
+
+    term_code = getattr(resolved, "term_code", "")
+    if not term_code:
+        return None
+
+    # term_code: "o.by_opportunity.opp_code" → "by_opportunity.opp_code"
+    # term_code: "v.dashboard.panel_title"   → "dashboard.panel_title"
+    parts = term_code.split(".", 2)
+    if len(parts) == 3:
+        return f"{parts[1]}.{parts[2]}"
+    return None
 
 
 class KnowledgeMixin:
@@ -63,12 +198,6 @@ class KnowledgeMixin:
         if not query.strip():
             return []
 
-        from datacloud_knowledge.retrieval.candidate_search import (
-            search_all_candidates_with_name_id,
-        )
-
-        from datacloud_platform.models.shared import MatchCandidate
-
         raw: dict[str, list[dict[str, Any]]] = search_all_candidates_with_name_id(
             [query], top_k=limit
         )
@@ -97,16 +226,6 @@ class KnowledgeMixin:
 
         编排: 调用 datacloud_knowledge SDK 的消歧函数。
         """
-        from datacloud_knowledge.contracts.types import (
-            MatchCandidate as SdkMatchCandidate,
-        )
-        from datacloud_knowledge.contracts.types import (
-            MatchResult as SdkMatchResult,
-        )
-        from datacloud_knowledge.intent import disambiguate as sdk_disambiguate
-
-        from datacloud_platform.models.shared import MatchCandidate, MatchResult
-
         if not candidates:
             return [MatchResult(exact={}, fuzzy={})]
 
@@ -210,34 +329,6 @@ class KnowledgeMixin:
           Step 5: 结果合并（SDK 纯函数）
           Step 6: 构建 paradigmList（SDK 纯函数）
         """
-        from datacloud_knowledge.intent.clarification._merge import (
-            build_main_resolution_hints,
-            merge_cc_resolution_hints,
-            merge_pre_resolve_hints,
-            merge_to_confirmed_query,
-            normalize_cc_result_with_hints,
-        )
-        from datacloud_knowledge.intent.clarification._patch import (
-            build_pre_resolved_input,
-        )
-        from datacloud_knowledge.intent.clarification.cartesian import (
-            build_paradigm_list,
-            serialize_knowledge_meta,
-            serialize_paradigm_payload,
-        )
-        from datacloud_knowledge.intent.clarification.confirm import (
-            format_cc_confirm_context,
-            format_main_confirm_context,
-            llm_confirm_cc,
-            llm_confirm_main,
-        )
-        from datacloud_knowledge.intent.clarification.extract import (
-            extract_terms_complex_conditions,
-            extract_terms_query,
-        )
-        from datacloud_knowledge.intent.clarification.models import (
-            ClarificationNoCandidatesError,
-        )
 
         struct_input_dict: dict[str, Any] = dict(structured_input)
 
@@ -399,14 +490,6 @@ class KnowledgeMixin:
         Returns:
             PreResolveResult（与 SDK 兼容的结构）。
         """
-        from datacloud_knowledge.contracts.intent_types import (
-            PreResolveResult,
-            find_paired_where_key,
-            is_field_code,
-            term_key,
-        )
-        from datacloud_knowledge.contracts.types import ResolvedField
-
         onto = self._ontology_for(base_id)
         term = self._term_for(base_id)
 
@@ -516,7 +599,7 @@ class KnowledgeMixin:
             try:
                 for key_code in confirmed_key_codes:
                     sr = term.search_terms(term_type=key_code, top_k=200)
-                    enum_items: list[dict[str, Any]] = sr.get("items", [])
+                    enum_items: list[dict[str, Any]] = sr["items"]
                     enum_values: list[str] = []
                     for item in enum_items:
                         name = str(item.get("term_name", ""))
@@ -568,216 +651,157 @@ class KnowledgeMixin:
         scope_code: str,
         top_k: int = 10,
     ) -> dict[str, list[dict[str, Any]]]:
-        """等价于 unified_recall，但按领域拆分，走 platform backend。
+        """等价于 unified_recall，全部走 onto.search_ontology()。
 
-        编排说明：
-        - select/whereKey/groupBy/orderBy（category {3} 本体术语）
-          → search_ontology(search_scope="metadata") 搜本体元数据（属性名/对象名）
-        - whereValue（category {1,2} 术语实例）
-          → search_terms(keyword, term_type=<bound_type>) 搜术语实例
-          当 whereKey 已确定时，term_type 精确到一个类型 → 检索范围极窄
+        Step A  — 分类去重：field_terms（含 vector_only）vs value_terms
+        Step B  — 构建 property_code 映射（仅 confirmed value terms）
+        Step C  — 批量检索：字段 batch | 值已确认 batch | 值未确认 batch
+        Step D  — 结果组装
 
         输入格式与输出格式与 unified_recall 完全一致。
         """
-        from datacloud_knowledge.contracts.intent_types import find_paired_where_key
-
         onto = self._ontology_for(base_id)
-        term_backend = self._term_for(base_id)
-
-        # ── 构建 whereValue→type_code 映射 ──
-        prop_type_map: dict[str, str] = getattr(pre, "prop_type_map", {}) or {}
-        cc_prop_type_map: dict[str, str] = getattr(cc_pre, "prop_type_map", {}) or {}
-        merged_prop_map = {**prop_type_map, **cc_prop_type_map}
-
-        value_type_map: dict[str, str] = {}
-        if merged_prop_map:
-            for t in terms:
-                if getattr(t, "ktype", "") != "whereValue" or not getattr(
-                    t, "search_enabled", True
-                ):
-                    continue
-                key_term = find_paired_where_key(t, terms)
-                if key_term is None:
-                    continue
-                type_code = merged_prop_map.get(key_term.raw_text)
-                if type_code:
-                    value_type_map[getattr(t, "path", "")] = type_code
-
-        # ── Step 3b: select/whereKey/groupBy/orderBy → 搜本体元数据 ──
-        field_terms = [
-            t
-            for t in terms
-            if getattr(t, "search_enabled", True)
-            and getattr(t, "ktype", "") in ("select", "whereKey", "groupBy", "orderBy")
-        ]
-
-        # ── Step 3c: whereValue → 搜术语实例 ──
-        value_terms = [
-            t
-            for t in terms
-            if getattr(t, "search_enabled", True)
-            and getattr(t, "ktype", "") == "whereValue"
-        ]
-
-        # 英文标识符只走向量
-        vector_only_terms = [
-            t
-            for t in terms
-            if getattr(t, "search_enabled", True) and getattr(t, "vector_only", False)
-        ]
 
         result: dict[str, list[dict[str, Any]]] = {}
 
-        # ── 搜本体元数据（select/whereKey 等）──
-        # Pre-resolve property codes for scope_code once (avoids N repeated lookups)
-        resolved_codes = onto.resolve_scope_term_codes(
-            base_id,
-            object_code=[scope_code],
-            view_code=[scope_code],
-        )
-        if resolved_codes is None:
-            # scope_code not found — fill empty results for all field_terms
-            for t in field_terms:
-                key = f"{t.ktype}:{t.raw_text}"
-                result.setdefault(key, [])
-        else:
-            seen_field: set[str] = set()
-            for t in field_terms:
-                key = f"{t.ktype}:{t.raw_text}"
-                if key in seen_field:
-                    continue
-                seen_field.add(key)
+        # ── Step A: 分类去重 ──
+        field_terms: list[Any] = []
+        value_terms_confirmed: list[Any] = []
+        value_terms_unconfirmed: list[Any] = []
 
-                try:
-                    sr = onto.search_ontology(
-                        base_id,
-                        scene_ids=[],
-                        keyword=t.raw_text,
-                        search_scope="metadata",
-                        metadata_type=["property"],
-                        top_k=top_k,
-                    )
-                    kw_result = sr.get(t.raw_text, {})
-                    metadata_hits: list[dict[str, Any]] = kw_result.get("metadata", [])
-                    field_candidates: list[dict[str, Any]] = []
-                    for hit in metadata_hits:
-                        field_candidates.append(
-                            {
-                                "term_id": hit.get(
-                                    "termCode", hit.get("objectCode", "")
-                                ),
-                                "term_name": hit.get("nameText", ""),
-                                "term_type_code": hit.get("termType", ""),
-                                "match_type": "ontology_metadata",
-                                "confidence": hit.get("score", 0),
-                                "score": hit.get("score", 0),
-                            }
-                        )
-                    result[key] = field_candidates[:top_k]
-                except Exception:
-                    result[key] = []
-                    logger.debug(
-                        "[recall] ontology search failed for %s", key, exc_info=True
-                    )
-
-        # ── 搜术语实例（whereValue）──
-        seen_value: set[str] = set()
-        for t in value_terms:
-            key = f"{t.ktype}:{t.raw_text}"
-            if key in seen_value:
+        for t in terms:
+            if not getattr(t, "search_enabled", True):
                 continue
-            seen_value.add(key)
-
-            # 确定检索范围: whereKey 已确认 → 精确 term_type
-            type_code = value_type_map.get(getattr(t, "path", ""))
-            if type_code:
-                # 已确认 → 直接按 term_type 搜索，范围极窄
-                try:
-                    v_sr = term_backend.search_terms(
-                        keyword=t.raw_text,
-                        term_type=type_code,
-                        query_type="fulltext",
-                        top_k=top_k,
-                    )
-                except Exception:
+            ktype: str = getattr(t, "ktype", "")
+            if ktype in ("select", "whereKey", "groupBy", "orderBy") or getattr(
+                t, "vector_only", False
+            ):
+                key = f"{ktype}:{t.raw_text}"
+                if key not in result:
                     result[key] = []
+                    field_terms.append(t)
+            elif ktype == "whereValue":
+                key = f"{ktype}:{t.raw_text}"
+                if key in result:
                     continue
-                v_raw: list[dict[str, Any]] = v_sr.get("items", [])
-                v_out: list[dict[str, Any]] = []
-                for v_item in v_raw:
-                    v_out.append(
-                        {
-                            "term_id": str(v_item.get("term_id", "")),
-                            "term_name": v_item.get("term_name", ""),
-                            "term_type_code": v_item.get("term_type_code", ""),
-                            "match_type": "multi_recall",
-                            "confidence": 0.5,
-                            "score": 0.5,
-                        }
-                    )
-                result[key] = v_out[:top_k]
-            else:
-                # 未确认 → 跨 scope 搜索
-                uv_out: list[dict[str, Any]] = []
-                uv_seen: set[str] = set()
-                try:
-                    uv_sr = term_backend.search_terms(
-                        keyword=t.raw_text,
-                        query_type="fulltext",
-                        top_k=top_k,
-                    )
-                    uv_raw: list[dict[str, Any]] = uv_sr.get("items", [])
-                    for uv_item in uv_raw:
-                        uv_tid = str(uv_item.get("term_id", ""))
-                        if uv_tid and uv_tid not in uv_seen:
-                            uv_seen.add(uv_tid)
-                            uv_out.append(
-                                {
-                                    "term_id": uv_tid,
-                                    "term_name": uv_item.get("term_name", ""),
-                                    "term_type_code": uv_item.get("term_type_code", ""),
-                                    "match_type": "multi_recall",
-                                    "confidence": 0.5,
-                                    "score": 0.5,
-                                }
-                            )
-                except Exception:
-                    logger.debug(
-                        "[recall] term search failed for %s", key, exc_info=True
-                    )
-                result[key] = uv_out[:top_k]
+                result[key] = []
+                key_term = find_paired_where_key(t, terms)
+                if key_term is not None and (
+                    f"{key_term.path}:{key_term.raw_text}" in pre.confirmed
+                    or f"{key_term.path}:{key_term.raw_text}" in cc_pre.confirmed
+                ):
+                    value_terms_confirmed.append(t)
+                else:
+                    value_terms_unconfirmed.append(t)
 
-        # ── 英文标识符向量召回 ──
-        for t in vector_only_terms:
+        # ── Step B: 构建 property_code 映射（仅 value 已确认）──
+        confirmed_prop_codes: dict[str, str] = {}
+        for t in value_terms_confirmed:
             key = f"{t.ktype}:{t.raw_text}"
+            prop_code = _extract_property_code(t, terms, pre, cc_pre)
+            if prop_code:
+                confirmed_prop_codes[key] = prop_code
+
+        # ── Step C: 批量检索 ──
+
+        # 字段 batch
+        if field_terms:
+            field_keywords: list[str] = []
+            field_kw_to_key: dict[str, str] = {}
+            for t in field_terms:
+                kw = t.raw_text
+                field_keywords.append(kw)
+                field_kw_to_key[kw] = f"{t.ktype}:{kw}"
+
             try:
-                sr = term_backend.search_terms(
-                    keyword=t.raw_text,
-                    query_type="vector",
+                sr = onto.search_ontology(
+                    base_id,
+                    scene_ids=[],
+                    keyword=field_keywords,
+                    search_scope="metadata",
+                    object_code=[scope_code],
+                    view_code=[scope_code],
+                    metadata_type=["property"],
                     top_k=top_k,
                 )
-                items_vec: list[dict[str, Any]] = sr.get("items", [])
-                vec_candidates: list[dict[str, Any]] = []
-                for item in items_vec:
-                    vec_candidates.append(
-                        {
-                            "term_id": str(item.get("term_id", "")),
-                            "term_name": item.get("term_name", ""),
-                            "term_type_code": item.get("term_type_code", ""),
-                            "match_type": "vector_recall",
-                            "confidence": 0.5,
-                            "score": 0.5,
-                        }
-                    )
-                result[key] = vec_candidates[:top_k]
+                for kw, key in field_kw_to_key.items():
+                    kw_result = sr.get(kw, {})
+                    metadata_hits: list[dict[str, Any]] = kw_result.get("metadata", [])
+                    result[key] = [
+                        _shape_metadata_candidate(hit) for hit in metadata_hits
+                    ][:top_k]
             except Exception:
-                result[key] = []
+                logger.debug(
+                    "[recall] ontology batch search failed for field terms",
+                    exc_info=True,
+                )
+
+        # 值已确认 batch — 按 property_code 分组
+        prop_to_keys: dict[str, list[str]] = {}
+        for key, prop_code in confirmed_prop_codes.items():
+            prop_to_keys.setdefault(prop_code, []).append(key)
+
+        for prop_code, keys in prop_to_keys.items():
+            confirmed_keywords: list[str] = [k.split(":", 1)[1] for k in keys]
+            try:
+                sr = onto.search_ontology(
+                    base_id,
+                    scene_ids=[],
+                    keyword=confirmed_keywords,
+                    search_scope="instance",
+                    property_code=[prop_code],
+                    top_k=top_k,
+                )
+                for key in keys:
+                    kw = key.split(":", 1)[1]
+                    kw_result = sr.get(kw, {})
+                    instance_hits: list[dict[str, Any]] = kw_result.get("instances", [])
+                    result[key] = [
+                        _shape_instance_candidate(hit) for hit in instance_hits
+                    ][:top_k]
+            except Exception:
+                logger.debug(
+                    "[recall] ontology batch search failed for confirmed value %s",
+                    prop_code,
+                    exc_info=True,
+                )
+
+        # 值未确认 batch
+        if value_terms_unconfirmed:
+            unconfirmed_keywords: list[str] = []
+            unconfirmed_kw_to_key: dict[str, str] = {}
+            for t in value_terms_unconfirmed:
+                kw = t.raw_text
+                unconfirmed_keywords.append(kw)
+                unconfirmed_kw_to_key[kw] = f"{t.ktype}:{kw}"
+
+            try:
+                sr = onto.search_ontology(
+                    base_id,
+                    scene_ids=[],
+                    keyword=unconfirmed_keywords,
+                    search_scope="instance",
+                    object_code=[scope_code],
+                    view_code=[scope_code],
+                    top_k=top_k,
+                )
+                for kw, key in unconfirmed_kw_to_key.items():
+                    kw_result = sr.get(kw, {})
+                    instance_hits = kw_result.get("instances", [])
+                    result[key] = [
+                        _shape_instance_candidate(hit) for hit in instance_hits
+                    ][:top_k]
+            except Exception:
+                logger.debug(
+                    "[recall] ontology batch search failed for unconfirmed value terms",
+                    exc_info=True,
+                )
 
         logger.info(
-            "[recall] unified: field=%d value=%d vector=%d total_results=%d",
+            "[recall] unified: field=%d confirmed=%d unconfirmed=%d total_results=%d",
             len(field_terms),
-            len(value_terms),
-            len(vector_only_terms),
+            len(value_terms_confirmed),
+            len(value_terms_unconfirmed),
             sum(len(v) for v in result.values()),
         )
         return result
@@ -807,14 +831,6 @@ class KnowledgeMixin:
           ・元数据别名（字段名→code 映射）→ _persist_metadata_alias
           ・术语别名（值→标准术语映射）→ _persist_term_alias_from_name
         """
-        from datacloud_knowledge.intent.clarification.api import (
-            format_clarification_compute,
-            format_clarification_query,
-        )
-        from datacloud_knowledge.intent.clarification.postprocess import (
-            normalize_clarification_params,
-        )
-
         # ── Step A: 应用用户选择（纯函数）──
         if form is None or metadata is None:
             raise ValueError("form and metadata are required")
@@ -1216,14 +1232,6 @@ class KnowledgeMixin:
 
         编排: 调用 datacloud_knowledge SDK。
         """
-        from datacloud_knowledge.adapters import create_writer
-        from datacloud_knowledge.intent.score_update import (
-            batch_update_scores as sdk_batch_update,
-        )
-        from datacloud_knowledge.intent.types import (
-            ScoreUpdateRecord as SdkScoreUpdateRecord,
-        )
-
         sdk_records = tuple(
             SdkScoreUpdateRecord(name_id=r.name_id, success=r.success) for r in records
         )
@@ -1241,12 +1249,6 @@ class KnowledgeMixin:
 
         编排: 调用 datacloud_knowledge SDK 的 DimensionValueResolver。
         """
-        from datacloud_knowledge.retrieval.dimension_values import (
-            DimensionValueResolver,
-        )
-
-        from datacloud_platform.models.shared import DimensionProperty
-
         raw: dict[str, str] = (
             DimensionValueResolver.get_instance().resolve_value_to_property(
                 value_term_id
@@ -1266,12 +1268,6 @@ class KnowledgeMixin:
 
         编排: 调用 datacloud_knowledge SDK 的 DimensionValueResolver。
         """
-        from datacloud_knowledge.retrieval.dimension_values import (
-            DimensionValueResolver,
-        )
-
-        from datacloud_platform.models.shared import ReferenceProperty
-
         raw: list[dict[str, str]] = (
             DimensionValueResolver.get_instance().get_referenced_by(value_term_id)
         )
@@ -1294,8 +1290,5 @@ class KnowledgeMixin:
 
         编排: 调用 datacloud_knowledge SDK。
         """
-        from datacloud_knowledge.retrieval.owl_relation_resolver import (
-            resolve_object_for_property as sdk_resolve,
-        )
-
-        return sdk_resolve(property_code)
+        result: str | None = sdk_resolve(property_code)
+        return result

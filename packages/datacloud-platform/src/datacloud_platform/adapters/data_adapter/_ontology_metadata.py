@@ -597,11 +597,12 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
     def _build_ref_props_index_sql(
         self, engine: Any, base_id: str
     ) -> dict[str, list[dict[str, str]]]:
-        """Build reverse index via raw SQL CTE (OpenGauss path).
+        """Build reverse index from ``ontology_object_fields`` (fast path) or
+        fall back to CTE on ``ontology_objects`` JSONB (slow path).
 
-        Runs a single query on ``ontology_objects``, expanding the JSONB
-        ``data -> 'fields'`` array and extracting ``termTypeCode`` from
-        ``termMeta`` (current) or ``terminology`` (legacy) keys.
+        The fast path uses a dedicated table populated by the backfill script
+        (``db/scripts/backfill_ontology_object_fields.py``).  The slow path
+        exists for environments where the table hasn't been created yet.
         """
         from sqlalchemy import text
         from sqlalchemy.orm import Session
@@ -610,33 +611,57 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         index: dict[str, list[dict[str, str]]] = {}
 
         with Session(engine) as session:
-            result = session.execute(
-                text("""
-                    WITH expanded AS (
+            try:
+                result = session.execute(
+                    text("""
                         SELECT
-                            jsonb_array_elements(data -> 'fields') AS field,
+                            f.term_type_code,
+                            f.object_code,
+                            COALESCE(o.object_name, '') AS object_name,
+                            f.field_code,
+                            f.field_name
+                        FROM ontology_object_fields f
+                        JOIN ontology_objects o
+                          ON o.base_id = f.base_id
+                         AND o.object_code = f.object_code
+                        WHERE f.base_id = :bid
+                          AND f.term_type_code IS NOT NULL
+                    """),
+                    {"bid": base_id},
+                )
+            except Exception:
+                # Fallback: table doesn't exist → use slow JSONB CTE
+                logger.info(
+                    "ontology_object_fields not available, falling back to JSONB CTE"
+                )
+                result = session.execute(
+                    text("""
+                        WITH expanded AS (
+                            SELECT
+                                jsonb_array_elements(data -> 'fields') AS field,
+                                object_code,
+                                object_name
+                            FROM ontology_objects
+                            WHERE base_id = :bid
+                        )
+                        SELECT
+                            COALESCE(
+                                jsonb_extract_path_text(field, 'termMeta', 'termTypeCode'),
+                                jsonb_extract_path_text(field, 'terminology', 'termTypeCode')
+                            ) AS tt_code,
                             object_code,
-                            object_name
-                        FROM ontology_objects
-                        WHERE base_id = :bid
-                    )
-                    SELECT
-                        COALESCE(
+                            COALESCE(object_name, '') AS object_name,
+                            jsonb_extract_path_text(field, 'field_code') AS field_code,
+                            jsonb_extract_path_text(field, 'field_name') AS field_name
+                        FROM expanded
+                        WHERE COALESCE(
                             jsonb_extract_path_text(field, 'termMeta', 'termTypeCode'),
                             jsonb_extract_path_text(field, 'terminology', 'termTypeCode')
-                        ) AS tt_code,
-                        object_code,
-                        COALESCE(object_name, '') AS object_name,
-                        jsonb_extract_path_text(field, 'field_code') AS field_code,
-                        jsonb_extract_path_text(field, 'field_name') AS field_name
-                    FROM expanded
-                    WHERE COALESCE(
-                        jsonb_extract_path_text(field, 'termMeta', 'termTypeCode'),
-                        jsonb_extract_path_text(field, 'terminology', 'termTypeCode')
-                    ) IS NOT NULL
-                """),
-                {"bid": base_id},
-            )
+                        ) IS NOT NULL
+                    """),
+                    {"bid": base_id},
+                )
+
             for row in result:
                 tt: str = row[0] or ""
                 oc: str = row[1] or ""

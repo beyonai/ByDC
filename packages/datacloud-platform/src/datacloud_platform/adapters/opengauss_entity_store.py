@@ -68,6 +68,22 @@ class _ObjectRow(_Base):
     )
 
 
+class _ObjectFieldRow(_Base):
+    """Denormalised field metadata for fast ``_resolve_referenced_properties`` lookups.
+
+    Populated from ``ontology_objects.data -> fields`` JSONB at write time.
+    New databases get this table via ``Base.metadata.create_all(checkfirst=True)``;
+    existing databases use ``db/scripts/backfill_ontology_object_fields.py``.
+    """
+
+    __tablename__ = "ontology_object_fields"
+    base_id = Column(String(64), primary_key=True)
+    object_code = Column(String(256), primary_key=True)
+    field_code = Column(String(256), primary_key=True)
+    field_name = Column(String(512))
+    term_type_code = Column(String(128))
+
+
 class _ViewRow(_Base):
     __tablename__ = "ontology_views"
     base_id = Column(String(64), primary_key=True)
