@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from datacloud_knowledge.adapters import create_writer
+from datacloud_knowledge.intent.types import ClarificationResult
 from datacloud_knowledge.contracts.intent_types import (
     PreResolveResult,
     find_paired_where_key,
@@ -20,6 +21,7 @@ from datacloud_knowledge.contracts.intent_types import (
 )
 from datacloud_knowledge.contracts.types import (
     ClarificationMode,
+    FinalizedClarification,
     FieldResolutionResult,
     MatchCandidate as SdkMatchCandidate,
     MatchResult as SdkMatchResult,
@@ -308,7 +310,7 @@ class KnowledgeMixin:
         mode: ClarificationMode,
         *,
         language: str = "zh_CN",
-    ) -> dict[str, Any]:
+    ) -> ClarificationResult:
         """准备澄清流程：6 步编排。
 
         编排说明：
@@ -467,11 +469,12 @@ class KnowledgeMixin:
         form_payload = serialize_paradigm_payload(paradigm_list)
         knowledge_payload = serialize_knowledge_meta(meta)
 
-        return {
-            "needs_clarification": confirmed.needs_clarification,
-            "form": form_payload,
-            "metadata": knowledge_payload,
-        }
+        return ClarificationResult(
+            query=query,
+            needs_clarification=confirmed.needs_clarification,
+            form=form_payload,
+            knowledge=knowledge_payload,
+        )
 
     def _pre_resolve_with_backends(
         self: _HasOntologyAndTermBackend,
@@ -551,7 +554,7 @@ class KnowledgeMixin:
                         query_type="fulltext",
                         top_k=1,
                     )
-                    items: list[dict[str, Any]] = sr.get("items", [])
+                    items: list[dict[str, Any]] = getattr(sr, "items", [])
                     if items:
                         matched = items[0]
                         tc = str(matched.get("term_code", ""))
@@ -599,7 +602,7 @@ class KnowledgeMixin:
             try:
                 for key_code in confirmed_key_codes:
                     sr = term.search_terms(term_type=key_code, top_k=200)
-                    enum_items: list[dict[str, Any]] = sr["items"]
+                    enum_items: list[dict[str, Any]] = getattr(sr, "items", [])
                     enum_values: list[str] = []
                     for item in enum_items:
                         name = str(item.get("term_name", ""))
@@ -819,7 +822,8 @@ class KnowledgeMixin:
         metadata: Any = None,
         user_id: str | None = None,
         persist_confirmed_synonyms: bool = True,
-    ) -> dict[str, Any]:
+        language: str = "zh_CN",
+    ) -> FinalizedClarification:
         """完成澄清：应用用户选择 → 标准化 → 持久化。
 
         编排说明（按领域拆分）：
@@ -873,10 +877,10 @@ class KnowledgeMixin:
 
         # 返回格式保持兼容（与旧 provider.finalize_query_clarification 一致）
         persisted_synonyms = {"created_ids": persisted_ids} if persisted_ids else None
-        return {
-            "structured_input": normalized,
-            "persisted_synonyms": persisted_synonyms,
-        }
+        return FinalizedClarification(
+            structured_input=normalized,
+            persisted_synonyms=persisted_synonyms,
+        )
 
     # ── Persistence Dispatch (new) ─────────────────────
 
@@ -998,11 +1002,11 @@ class KnowledgeMixin:
             query_type="exact",
             top_k=1,
         )
-        items: list[dict[str, Any]] = search_result.get("items", [])
+        items: list[dict[str, Any]] = getattr(search_result, "items", [])
         if not items:
             return None
 
-        term_id = items[0].get("term_id", "")
+        term_id = str(items[0].get("term_id", ""))
         if not term_id:
             return None
 
@@ -1041,11 +1045,11 @@ class KnowledgeMixin:
             query_type="fulltext",
             top_k=1,
         )
-        items: list[dict[str, Any]] = search_result.get("items", [])
+        items: list[dict[str, Any]] = getattr(search_result, "items", [])
         if not items:
             return None
 
-        term_id = items[0].get("term_id", "")
+        term_id = str(items[0].get("term_id", ""))
         if not term_id:
             return None
 
@@ -1216,8 +1220,8 @@ class KnowledgeMixin:
                 query_type="fulltext",
                 top_k=10,
             )
-            items: list[dict[str, Any]] = search_result.get("items", [])
-            results.extend(items)
+        items: list[dict[str, Any]] = getattr(search_result, "items", [])
+        results.extend(items)
 
         return results
 

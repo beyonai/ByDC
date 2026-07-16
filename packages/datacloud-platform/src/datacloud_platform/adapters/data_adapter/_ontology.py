@@ -2390,18 +2390,40 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
     def get_view_included_objects(
         self, ontology_code: str, *, base_id: str = ""
     ) -> list[str]:
-        """Return object codes that the view includes (via HAS_OBJECT/MANY_TO_ONE relations).
+        """Return object codes that the view includes.
+
+        Two sources are checked:
+        1. The view's own ``objects`` field (the canonical storage key for
+           view-included object codes in the entity store).
+        2. HAS_OBJECT / MANY_TO_ONE relations where the view is the source.
 
         Args:
             ontology_code: The view code to query.
             base_id: Base / project identifier.
 
         Returns:
-            List of target object codes.
+            List of target object codes (deduplicated).
         """
         store = self._entity_store.sub_store(base_id)
-        all_rels = store.list_all("relations")
         result: list[str] = []
+
+        # Source 1: view's own objects field (canonical in entity store)
+        view_raw = store.get("views", ontology_code)
+        if view_raw:
+            raw_objects = view_raw.get("objects", [])
+            if isinstance(raw_objects, list):
+                for item in raw_objects:
+                    if isinstance(item, str) and item and item not in result:
+                        result.append(item)
+                    elif isinstance(item, dict):
+                        code = str(
+                            item.get("object_code", item.get("objectCode", "")) or ""
+                        )
+                        if code and code not in result:
+                            result.append(code)
+
+        # Source 2: HAS_OBJECT / MANY_TO_ONE relations
+        all_rels = store.list_all("relations")
         for r in all_rels:
             source = r.get("source_class", r.get("source_object_code", "")) or ""
             category = r.get("relation_category", "") or ""

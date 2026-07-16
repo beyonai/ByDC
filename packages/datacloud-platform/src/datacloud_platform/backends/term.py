@@ -113,6 +113,22 @@ class TermBackend(Protocol):
         """
         ...
 
+    def query_term_relations_tree(
+        self,
+        *,
+        term_id: str,
+        max_depth: int = 3,
+        relation_category: str | None = None,
+        direction: str = "both",
+    ) -> dict[str, Any]:
+        """通过递归 CTE 一次查询获取多跳关系树（含 term 详情 JOIN）。
+
+        返回的每条 relation 包含 source/target 的 term_name, term_code,
+        term_type_code, ext_attrs，以及 depth（跳数）和 next_term_id（BFS
+        中新发现的端点）。
+        """
+        ...
+
     # ── TermRelation ───────────────────────────────────────────────
 
     def list_term_relations(

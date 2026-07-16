@@ -408,6 +408,19 @@ def _normalize_dim_group_op(dim: dict[str, Any]) -> dict[str, Any]:
     return new_dim
 
 
+# 带 view/object 前缀的字段码模式：v.<code>.<field> 或 o.<code>.<field>
+# 支持 snake_case / camelCase / PascalCase 字段名（如 v.Scene.field, o.by_opp.opp_name）
+_PREFIXED_FIELD_RE: re.Pattern[str] = re.compile(
+    r"^[vo]\.[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$"
+)
+
+
+def _strip_field_prefix(field: str) -> str:
+    """去掉 view/object 前缀，如 'v.scene_sales_management.opp_name' → 'opp_name'。"""
+    m = _PREFIXED_FIELD_RE.match(field)
+    return field.rsplit(".", 1)[-1] if m else field
+
+
 def _apply_resolved_to_params(
     tool_params: dict[str, Any],
     resolved: dict[str, str],
@@ -427,13 +440,14 @@ def _apply_resolved_to_params(
 
         - field_name_cn / field = 中文名 → catalog 映射 → field_code
         - field_name_cn / field = 字段编码 → 直接透传（跳过 catalog）
+        - field_name_cn / field = v.xxx.field → 剥离前缀 → field_code
         """
         if not isinstance(item, dict):
             return item
         # 优先读 field_name_cn，fallback 到 field
         raw = item.get("field_name_cn") or item.get("field")
         if raw:
-            s = str(raw)
+            s = _strip_field_prefix(str(raw))
             # 字段编码直接透传；中文名走 catalog 映射
             resolved_code = s if _is_field_code(s) else _map(s)
             new_item = {k: v for k, v in item.items() if k not in ("field_name_cn", "field")}
@@ -441,20 +455,27 @@ def _apply_resolved_to_params(
             return new_item
         return item
 
+    def _resolve_select_term(term: str) -> str:
+        """select 列表项解析：去前缀 → 字段编码直通 / 中文名走 catalog。
+
+        None / 空字符串直接返回空串，避免上游 JSON 解析产生意外 None 条目时
+        _strip_field_prefix 抛出 AttributeError（旧代码 str() 将 None → "None" 是静默错误）。
+        """
+        if not term:
+            return ""
+        s = _strip_field_prefix(term)
+        return s if _is_field_code(s) else _map(s)
+
     patched["filters"] = [
         _translate_field(f) if isinstance(f, dict) else f for f in patched.get("filters") or []
     ]
     # select 是字符串列表：字段编码直通，中文名走 _map 映射
-    patched["select"] = [
-        s if _is_field_code(str(s)) else _map(str(s)) for s in patched.get("select") or []
-    ]
+    patched["select"] = [_resolve_select_term(s) for s in patched.get("select") or []]
     if "dimensions" in tool_params:
         patched["dimensions"] = [
             _normalize_dim_group_op(_translate_field(d))
             if isinstance(d, dict)
-            else d
-            if _is_field_code(str(d))
-            else _map(str(d))
+            else _resolve_select_term(d)
             if isinstance(d, str)
             else d
             for d in patched.get("dimensions") or []
@@ -542,7 +563,7 @@ def _analyze_clarification(
         "[KG-CHAIN] result: needs=%s form_len=%d knowledge_len=%d raw_form=%s",
         result.needs_clarification,
         len(result.form or ""),
-        len(result.metadata or ""),
+        len(result.knowledge or ""),
         result.form,
     )
     form_payload = result.form if isinstance(result.form, str) else ""
@@ -565,7 +586,7 @@ def _analyze_clarification(
                     for _r in _results
                 ],
             )
-    return paradigm_list, str(result.metadata or ""), result.needs_clarification
+    return paradigm_list, str(result.knowledge or ""), result.needs_clarification
 
 
 def _format_clarification(
@@ -853,8 +874,11 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                     " not found in ontology catalog — check KG choiceKeyword vs OWL field_name/aliases",
                     _unresolved_fp,
                 )
-            if _resolved_fp:
-                _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
+            _fmt_params = _apply_resolved_to_params(_fmt_params, _resolved_fp)
+            logger.warning(
+                "[query_clarification] RESUME PATCHED select=%s",
+                _fmt_params.get("select"),
+            )
             _fmt_params["query"] = _raw_query_fp  # 澄清格式化结果不含 query，需补回
             ctx["tool_params"] = _fmt_params
             if _is_complex_fp:

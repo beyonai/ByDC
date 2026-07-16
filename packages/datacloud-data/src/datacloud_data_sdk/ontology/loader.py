@@ -52,6 +52,46 @@ def _default_kb_backends() -> dict[str, Any]:
     return {DEFAULT_KB_BACKEND: HttpKnowledgeSearchBackend()}
 
 
+def resolve_view_object_ids(view_data: dict[str, Any]) -> list[str]:
+    """从视图字典中提取对象 ID 列表，处理所有已知的字段名约定。
+
+    按优先级处理以下键名约定：
+    - ``objects``: 字符串列表或包含 ``object_code``/``objectCode`` 的字典列表（规范内部格式）
+    - ``object_ids``: 字符串列表
+    - ``objectCodes``: 字符串列表（远程后端约定，camelCase）
+    - ``object_codes``: 字符串列表（snake_case 替代）
+
+    Args:
+        view_data: 视图字典。
+
+    Returns:
+        提取到的对象 ID 字符串列表。
+    """
+    raw = view_data.get("objects")
+    if isinstance(raw, list):
+        if raw and isinstance(raw[0], str):
+            return [str(c) for c in raw if c]
+        result: list[str] = []
+        for item in raw:
+            if isinstance(item, dict):
+                code = str(item.get("object_code") or item.get("objectCode") or "")
+                if code:
+                    result.append(code)
+            elif isinstance(item, str) and item:
+                result.append(item)
+        return result
+
+    codes = (
+        view_data.get("object_ids")
+        or view_data.get("objectCodes")
+        or view_data.get("object_codes")
+        or []
+    )
+    if isinstance(codes, list):
+        return [str(c) for c in codes if c]
+    return []
+
+
 @dataclass
 class LoaderConfig:
     """
@@ -644,14 +684,7 @@ class OntologyLoader:
         if scene is None:
             raise ObjectNotFoundError(view_id)
 
-        raw_objects = scene.get("objects", [])
-        if raw_objects and isinstance(raw_objects[0], str):
-            object_ids = raw_objects
-        elif raw_objects:
-            object_ids = [item["object_code"] for item in raw_objects]
-        else:
-            # Support simple list-of-string format via "object_ids" key
-            object_ids = scene.get("object_ids", [])
+        object_ids = resolve_view_object_ids(scene)
         objects = [self.get_object(oid) for oid in object_ids]
 
         object_set = set(object_ids)

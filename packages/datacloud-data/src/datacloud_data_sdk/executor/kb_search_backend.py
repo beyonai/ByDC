@@ -1300,7 +1300,9 @@ def _parse_related_docs(content: str) -> list[dict[str, str]]:
             relation = str(item.get("relation") or "").strip()
             kb_id = str(item.get("kb_resource_id") or "").strip()
             if target and relation:
-                entries.append({"target_doc_id": target, "relation": relation, "kb_resource_id": kb_id})
+                entries.append(
+                    {"target_doc_id": target, "relation": relation, "kb_resource_id": kb_id}
+                )
     return entries
 
 

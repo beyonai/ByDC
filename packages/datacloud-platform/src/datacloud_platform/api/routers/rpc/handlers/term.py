@@ -13,6 +13,10 @@ from fastapi import Request
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.common import ok
 
+from datacloud_knowledge.contracts.term_provider_types import (
+    QueryResult,
+)
+
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
 
@@ -331,7 +335,7 @@ def _term_get_knowledge_by_word(
     - searchLevel: str - 关系查询深度，"0" = 仅返回术语本身不含 graph，"1" = 1层关系，"all" = 所有层级（默认 "1"）
     - disambiguation_mode: str - 消歧模式，"auto" = 自动选择top1（默认），"return_all" = 返回所有候选术语
     - max_candidates: int - return_all 模式下每个关键词返回的最大候选数（默认 5）
-    - kb_id: str - 可选，按知识库 ID 过滤
+    - kb_ids: list[str] - 可选，按知识库 ID 过滤
     - relationCategory: str - 可选，按关系类别过滤，"metadata" = ONTOLOGY，"instance" = BUSINESS
 
     返回格式:
@@ -375,7 +379,7 @@ def _term_get_knowledge_by_word(
     base_id = _base(params)
 
     # 获取 ext_attrs 过滤条件
-    filter_kb_id = params.get("kb_id")
+    filter_kb_ids = params.get("kb_ids")
 
     # 关系类别过滤：metadata → ONTOLOGY, instance → BUSINESS
     _RELATION_CATEGORY_MAP: dict[str, str] = {
@@ -439,12 +443,12 @@ def _term_get_knowledge_by_word(
         )
 
         # 应用 ext_attrs 过滤
-        if filter_kb_id:
+        if filter_kb_ids:
             if not ext_attrs or not isinstance(ext_attrs, dict):
                 continue
 
             term_kb_id = ext_attrs.get("kb_id")
-            if str(term_kb_id) != str(filter_kb_id):
+            if str(term_kb_id) not in filter_kb_ids:
                 continue
 
         # 构建根节点
@@ -471,9 +475,22 @@ def _term_get_knowledge_by_word(
     if keywords:
         for keyword in keywords:
             # 使用混合检索策略（BM25 + 向量语义）
-            search_result = platform.search_terms(
+            search_result: Any = platform.search_terms(
                 base_id, keyword=keyword, query_type="mixed", top_k=20
             )
+
+            # 如果设置了过滤条件，检查是否匹配
+            if filter_kb_ids:
+                items = sorted(
+                    [
+                        item
+                        for item in search_result.items
+                        if item.ext_attrs.get("kb_id", "") in filter_kb_ids
+                    ],
+                    key=lambda x: abs(len(x.term_name) - len(keyword)),
+                )
+                items_total = len(items)
+                search_result = QueryResult(items=items, total=items_total)
 
             # 兼容 QueryResult dataclass 和 dict 两种返回类型
             result_items: Any
@@ -556,15 +573,6 @@ def _term_get_knowledge_by_word(
                             ext_attrs,
                         )
 
-                        # 如果设置了过滤条件，检查是否匹配
-                        if filter_kb_id:
-                            if not ext_attrs or not isinstance(ext_attrs, dict):
-                                continue
-
-                            term_kb_id = ext_attrs.get("kb_id")
-                            if str(term_kb_id) != str(filter_kb_id):
-                                continue
-
                         # 构建根节点统一结构
                         term_name = (
                             term_item.term_name
@@ -638,103 +646,89 @@ def _fetch_relations_recursive(
     visited_terms: set[str],
     relation_category: str | None = None,
 ) -> list[dict[str, Any]]:
-    """递归获取术语关系,构建LLM友好的图结构。"""
+    """通过递归 CTE 一次查询获取多跳关系树，构建 LLM 友好的图结构。"""
     if current_level > max_level:
         return []
 
-    # 查询当前术语的关系
-    query_kwargs: dict[str, Any] = {
-        "term_id": term_id,
-        "direction": "both",
-        "page_size": 100,
+    # 一次查询获取完整关系树（含 term 详情 JOIN）
+    tree_data = platform.query_term_relations_tree(
+        base_id,
+        term_id=term_id,
+        max_depth=max_level - current_level + 1,
+        relation_category=relation_category,
+    )
+    edges: list[dict[str, Any]] = tree_data.get("data", [])
+    if not edges:
+        return []
+
+    # Sort by depth for BFS-order processing
+    edges.sort(key=lambda e: e.get("depth", 0))
+
+    # term_id → (path, seg, term_name)
+    node_info: dict[str, tuple[str, str, str]] = {
+        term_id: (current_path, parent_seg, term_name),
     }
-    if relation_category:
-        query_kwargs["relation_category"] = relation_category
-    relations_result = platform.query_term_relations(base_id, **query_kwargs)
+    # parent_id → child index counter
+    child_counters: dict[str, int] = {}
+    result: list[dict[str, Any]] = []
 
-    result = []
-    child_index = 0
-
-    for rel in relations_result.get("data", []):
-        source_id = rel.get("source_term_id")
-        target_id = rel.get("target_term_id")
-        relation_name = rel.get("relation_name", "")
-
-        # 判断方向和下一跳
-        if target_id == term_id:
-            next_term_id = source_id
-            next_term_name = rel.get("source_term_name", "")
-            arrow = f" <--[{relation_name}]-- "
-        else:
-            next_term_id = target_id
-            next_term_name = rel.get("target_term_name", "")
-            arrow = f" --[{relation_name}]--> "
-
-        if not next_term_id or next_term_id in visited_terms:
+    for edge in edges:
+        next_id = edge.get("next_term_id", "")
+        if not next_id or next_id in visited_terms or next_id in node_info:
             continue
 
-        visited_terms.add(next_term_id)
-        child_index += 1
+        source_id = edge.get("source_term_id", "")
+        target_id = edge.get("target_term_id", "")
+        relation_name = edge.get("relation_name", "")
+        depth = edge.get("depth", 1)
 
-        # 获取完整术语详情
-        next_term_detail = platform.get_term_detail(
-            base_id, library_id=base_id, term_id=next_term_id
+        # Determine parent (already in node_info) and child (next_id)
+        if source_id == next_id:
+            parent_id = target_id
+            child_id = source_id
+            child_name = edge.get("source_term_name", "")
+            arrow = f" <--[{relation_name}]-- "
+            child_code = edge.get("source_term_code", "")
+            child_type = edge.get("source_term_type", "")
+            child_attrs = edge.get("source_ext_attrs", {})
+        else:
+            parent_id = source_id
+            child_id = target_id
+            child_name = edge.get("target_term_name", "")
+            arrow = f" --[{relation_name}]--> "
+            child_code = edge.get("target_term_code", "")
+            child_type = edge.get("target_term_type", "")
+            child_attrs = edge.get("target_ext_attrs", {})
+
+        if parent_id not in node_info:
+            continue  # parent hasn't been processed yet; skip
+
+        parent_path, parent_seg_val, _ = node_info[parent_id]
+        child_counters.setdefault(parent_id, 0)
+        child_counters[parent_id] += 1
+
+        child_seg = (
+            f"{parent_seg_val}.{child_counters[parent_id]}"
+            if parent_seg_val != "0"
+            else str(child_counters[parent_id])
         )
-        next_ext_attrs: dict[str, Any] = {}
-        next_term_code = ""
-        next_term_type = ""
+        child_path = parent_path + arrow + child_name
 
-        if next_term_detail:
-            next_ext_attrs = (
-                next_term_detail.ext_attrs
-                if hasattr(next_term_detail, "ext_attrs") and next_term_detail.ext_attrs
-                else {}
-            )
-            next_term_code = (
-                next_term_detail.term_code
-                if hasattr(next_term_detail, "term_code")
-                else ""
-            )
-            next_term_type = (
-                next_term_detail.term_type
-                if hasattr(next_term_detail, "term_type")
-                else ""
-            )
+        node_info[child_id] = (child_path, child_seg, child_name)
+        visited_terms.add(child_id)
 
-        # 构建路径字符串
-        new_path = current_path + arrow + next_term_name
-        # 构建seg编号
-        new_seg = f"{parent_seg}.{child_index}"
-
-        # 添加当前节点
         result.append(
             {
-                "term_id": next_term_id,
-                "term_name": next_term_name,
-                "term_code": next_term_code,
-                "term_type": next_term_type,
-                "attributes": next_ext_attrs,
-                "path": new_path,
-                "depth": current_level,
-                "seg": new_seg,
+                "term_id": child_id,
+                "term_name": child_name,
+                "term_code": child_code,
+                "term_type": child_type,
+                "attributes": child_attrs if isinstance(child_attrs, dict) else {},
+                "path": child_path,
+                "depth": current_level + depth - 1,
+                "seg": child_seg,
             }
         )
-
-        # 递归获取下一跳
-        if current_level < max_level:
-            child_relations = _fetch_relations_recursive(
-                platform,
-                base_id,
-                next_term_id,
-                next_term_name,
-                new_path,
-                current_level + 1,
-                max_level,
-                new_seg,
-                visited_terms,
-                relation_category,
-            )
-            result.extend(child_relations)
 
     return result
 
