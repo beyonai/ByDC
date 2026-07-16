@@ -543,3 +543,21 @@ class DomainDetail(BaseModel):
     children_count: int = 0
     created_time: Any | None = None
     updated_time: Any | None = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 澄清结果
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True, slots=True)
+class FinalizedClarification:
+    """澄清回填结果。
+
+    Attributes:
+        structured_input: 回填后的结构化查询参数。
+        persisted_synonyms: 持久化的同义词汇总，含 created_ids 列表。
+    """
+
+    structured_input: dict[str, Any]
+    persisted_synonyms: dict[str, Any] | None = None
