@@ -18,6 +18,13 @@ from datacloud_platform.models.datasource import (
     DocSource,
 )
 from datacloud_platform.models.object_type import ObjectType, ObjectTypeSummary
+from datacloud_platform.models.graph_query import (
+    GRAPH_QUERY_PROFILE_DEFAULTS,
+    GraphQueryOptions,
+    GraphQueryProfile,
+    _parse_query_profile,
+    _resolve_graph_query_options,
+)
 from datacloud_platform.models.ontology import OntologySummary
 from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
@@ -69,6 +76,11 @@ __all__ = [
     "ObjectTypeSummary",
     "OntologyBaseCreate",
     "OntologyBaseUpdate",
+    "GRAPH_QUERY_PROFILE_DEFAULTS",
+    "GraphQueryOptions",
+    "GraphQueryProfile",
+    "_parse_query_profile",
+    "_resolve_graph_query_options",
     "OntologySummary",
     "ParsedOwlContent",
     "Property",
