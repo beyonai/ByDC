@@ -16,6 +16,7 @@ from datacloud_analysis.tool_hook_plugins.types import (
     HookContext,
     HookDecision,
 )
+from datacloud_analysis.tools.file_io import read_file_via_storage as _read_file_via_storage
 
 PLUGIN_ID = "builtin.operation_confirmation"
 PRIORITY = 150
@@ -64,7 +65,150 @@ _LABEL_DESCRIPTION_MAX_LEN = 30
 _SENTENCE_PUNCTUATION = frozenset("，。；：、,.;:!?！？\n\r")
 _NULL_FILTER_OPERATORS = frozenset({"is_null", "is_not_null"})
 
+# 知识库 write 动作的文件路径字段（按优先级排列，与 kb_search_executor 保持一致）
+_KB_WRITE_PATH_FIELDS: tuple[str, ...] = ("source_path", "file_path")
+# 知识库 write 动作的内容字段（与 kb_search_executor 保持一致，统一写入 content）
+_KB_WRITE_CONTENT_FIELD = "content"
+
 logger = logging.getLogger(__name__)
+
+
+async def _try_fill_file_content(
+    tool_params: dict[str, Any],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """读取 tool_params 中的文件路径字段，用文件内容替换对应的内容字段。
+
+    仅处理知识库 write 动作的字段：source_path / file_path → content。
+    支持 records 数组模式（每条记录独立读取）和单条模式。
+    读取失败、内容为空或发生异常时静默忽略，保留原参数。
+
+    Args:
+        tool_params: 工具调用参数字典。
+        metadata: HookContext.metadata，用于构建 InvocationContext。
+
+    Returns:
+        有内容被替换时返回新的参数字典副本，否则返回原字典。
+    """
+    storage = _resolve_storage_from_metadata(metadata)
+    if storage is None:
+        return tool_params
+
+    inv_ctx = _build_invocation_context(metadata, storage)
+
+    records = tool_params.get("records")
+    if isinstance(records, list):
+        new_records = [
+            await _fill_record_file_content(record, storage, inv_ctx) for record in records
+        ]
+        if any(new is not orig for new, orig in zip(new_records, records, strict=True)):
+            return {**tool_params, "records": new_records}
+        return tool_params
+
+    # 单条模式
+    return await _fill_record_file_content(tool_params, storage, inv_ctx)
+
+
+async def _fill_record_file_content(
+    record: Any,
+    storage: Any,
+    inv_ctx: Any,
+) -> Any:
+    """对单条记录尝试读取文件内容并替换内容字段，失败则返回原记录。"""
+    if not isinstance(record, dict):
+        return record
+    path_value = ""
+    for path_field in _KB_WRITE_PATH_FIELDS:
+        candidate = str(record.get(path_field) or "").strip()
+        if candidate:
+            path_value = candidate
+            break
+    if not path_value:
+        return record
+    try:
+        with inv_ctx:
+            file_content: str = await _read_file_via_storage(path_value, storage)
+    except Exception:
+        logger.warning(
+            "[operation_confirmation] read_file raised exception path=%r",
+            path_value,
+            exc_info=True,
+        )
+        return record
+    if not file_content or file_content.startswith("错误："):
+        logger.info(
+            "[operation_confirmation] read_file skipped: path=%r result=%r",
+            path_value,
+            file_content[:80] if file_content else "",
+        )
+        return record
+    patched = dict(record)
+    patched[_KB_WRITE_CONTENT_FIELD] = file_content
+    logger.info(
+        "[operation_confirmation] file content filled: path=%r content_field=%s len=%d",
+        path_value,
+        _KB_WRITE_CONTENT_FIELD,
+        len(file_content),
+    )
+    return patched
+
+
+def _resolve_storage_from_metadata(metadata: dict[str, Any]) -> Any | None:
+    """从 metadata 取 loader.result_file_storage；不存在则返回 None。"""
+    loader = metadata.get("loader")
+    return getattr(loader, "result_file_storage", None)
+
+
+def _build_invocation_context(metadata: dict[str, Any], storage: Any) -> Any:
+    """构建 InvocationContext，对齐 hook_aware_tool_node 的参数来源。
+
+    设置完整字段，确保 with 块内调用的所有代码都能通过 get_current_context()
+    拿到正确的 user_id / session_id / workspace_dir / token 等信息。
+    """
+    from datacloud_data_sdk.context import InvocationContext  # type: ignore[import]
+
+    try:
+        from datacloud_analysis.orchestration.execution.tool_wrapper import (  # noqa: PLC0415
+            _resolve_gateway_user_id,
+        )
+        from datacloud_analysis.workspace.runtime import (  # noqa: PLC0415
+            resolve_shared_workspace_dir,
+        )
+    except ImportError:
+        return InvocationContext(result_file_storage=storage)
+
+    gw_ctx = metadata.get("gateway_context")
+    configurable = dict(metadata.get("configurable") or {})
+
+    user_id = _resolve_gateway_user_id(gw_ctx) if gw_ctx is not None else ""
+    session_id = str(getattr(gw_ctx, "session_id", "") or "")
+    token = str(getattr(gw_ctx, "beyond_token", "") or configurable.get("beyond_token") or "")
+    locale = str(configurable.get("locale") or "zh_CN")
+    workspace_dir = str(configurable.get("workspace_dir") or "")
+    workspace_root = resolve_shared_workspace_dir(workspace_dir) if workspace_dir else None
+    config_extras: dict[str, Any] | None = configurable.get("extras")
+    extras = config_extras if config_extras is not None else getattr(gw_ctx, "extras", None)
+
+    return InvocationContext(
+        user_id=user_id,
+        session_id=session_id,
+        token=token,
+        gateway_context=gw_ctx,
+        workspace_dir=str(workspace_root) if workspace_root is not None else workspace_dir,
+        result_file_storage=storage,
+        extras=extras,
+        language=locale,
+    )
+
+
+def _is_kb_write_action(action: Any) -> bool:
+    """判断 action 是否为知识库 write 动作。"""
+    action_family = str(getattr(action, "action_family", "") or "").lower()
+    if action_family != "write":
+        return False
+    scope = getattr(action, "_datacloud_scope", None)
+    source_type = str(getattr(scope, "source_type", "") or "").upper()
+    return source_type == "KNOWLEDGE_BASE"
 
 
 async def before_call_back(ctx: HookContext) -> HookDecision | None:
@@ -81,6 +225,10 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
     if action is None:
         return None
     term_loader = _term_loader_from_loader(loader)
+
+    # 读取文件内容替换模型参数（仅知识库 write 动作，读取失败则静默忽略）
+    if _is_kb_write_action(action):
+        tool_params = await _try_fill_file_content(tool_params, metadata)
 
     formatted_params = _get_operation_formatted_params(state_dict, tool_name, tool_call_id)
     if formatted_params is not None:

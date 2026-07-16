@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from pathlib import Path
@@ -114,6 +115,40 @@ async def read_file(
         logger.error("read_file failed path=%r error=%s", path, exc)
         return f"错误：读取失败 {exc}"
 
+    if content is None:
+        return f"错误：文件不存在 {path}"
+    return content
+
+
+async def read_file_via_storage(
+    path: str,
+    storage: ResultFileStorage,
+    begin_line: int = 0,
+    end_line: int = -1,
+) -> str:
+    """使用显式传入的 storage 读取文件，不依赖 InvocationContext。
+
+    用于 hook 等 InvocationContext 尚未注入的场景。
+
+    Args:
+        path: 文件路径。
+        storage: 已实例化的 ResultFileStorage。
+        begin_line: 起始行号（0 起，含），默认 0。
+        end_line: 结束行号（不含），-1 表示读到末尾。
+
+    Returns:
+        文件内容字符串；失败时返回以 "错误：" 开头的描述。
+    """
+    try:
+        content = await asyncio.to_thread(
+            storage.read_text, path, begin_line=begin_line, end_line=end_line
+        )
+    except ValueError as exc:
+        logger.error("read_file_via_storage ValueError: path=%r error=%s", path, exc)
+        return f"错误：{exc}"
+    except (OSError, httpx.HTTPError) as exc:
+        logger.error("read_file_via_storage failed path=%r error=%s", path, exc)
+        return f"错误：读取失败 {exc}"
     if content is None:
         return f"错误：文件不存在 {path}"
     return content

@@ -525,7 +525,7 @@ def build_kb_write_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
         },
         "source_path": {
             "type": "string",
-            "description": "上传到知识库后的文件全路径，以 / 开头，不包括知识库名称。",
+            "description": "原文件全路径，以 / 开头。",
         },
         "content": {
             "type": "string",
