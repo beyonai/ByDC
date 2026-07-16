@@ -12,7 +12,7 @@ from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
-from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_data_sdk.ontology.loader import OntologyLoader, resolve_view_object_ids
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
@@ -152,6 +152,31 @@ class SceneLoaderMixin:
                             ref_codes.append(ref)
                             loaded_codes.add(ref)
 
+            # Expand views: collect objects included by each view.
+            # Dual-source: (1) HAS_OBJECT/MANY_TO_ONE relations, (2) view's own
+            # objects/object_ids/objectCodes field.
+            if vw_codes:
+                expanded_before = len(loaded_codes)
+                for vc in vw_codes:
+                    # Source 1: relations
+                    for voc in backend.get_view_included_objects(vc, base_id=base_id):
+                        if voc and voc not in loaded_codes:
+                            ref_codes.append(voc)
+                            loaded_codes.add(voc)
+                    # Source 2: view's own objects/object_ids/objectCodes field
+                    view_data = store.get("views", vc)
+                    if view_data:
+                        for voc in _extract_view_object_codes(view_data):
+                            if voc and voc not in loaded_codes:
+                                ref_codes.append(voc)
+                                loaded_codes.add(voc)
+                logger.debug(
+                    "load_ontology_from_codes: expanded %d view-included objects "
+                    "(sources: relations + view field) for base_id=%s",
+                    len(loaded_codes) - expanded_before,
+                    base_id,
+                )
+
             if ref_codes:
                 ref_objs, _ = store.search(
                     "objects",
@@ -179,7 +204,7 @@ class SceneLoaderMixin:
             content: dict[str, Any] = {"objects": objs, "views": vws}
 
             # 加载涉及的 relations（source 或 target 在已加载对象中）
-            all_codes: set[str] = set(object_codes) | set(vw_codes)
+            all_codes: set[str] = loaded_codes | set(vw_codes)
             if all_codes:
                 all_rels = store.list_all("relations")
                 related_rels = [
@@ -318,6 +343,17 @@ class SceneLoaderMixin:
 # ── module-level helpers ────────────────────────────────────────────────────
 
 
+def _extract_view_object_codes(view_data: dict[str, Any]) -> list[str]:
+    """Extract object codes from a view dict, handling all known field name conventions.
+
+    Delegates to :func:`datacloud_data_sdk.ontology.loader.resolve_view_object_ids`.
+
+    Remote backends (DtStudio) return ``objectCodes`` (camelCase list of strings).
+    Entity stores may use ``objects`` (list of strings or dicts) or ``object_ids``.
+    """
+    return resolve_view_object_ids(view_data)
+
+
 def _build_content(
     loader: OntologyQueryable,
     object_codes: list[str],
@@ -422,10 +458,29 @@ def _build_content_from_remote_scenes(
             scene_map.setdefault(sid, {"objects": set(), "views": set()})
             scene_map[sid]["views"].add(code)
 
-    # ── Step 2: sceneDetails per unique sceneId ──
+    # ── Step 2: Expand view objects before API call ──
+    # The remote sceneDetails API may only return objects when object_code is
+    # explicitly specified.  Discover each view's included objects via
+    # get_view_included_objects (or the view's own objectCodes field) and add
+    # them to the request so the API includes them in its response.
+    _view_object_map: dict[str, set[str]] = {}
+    for vc in view_codes:
+        view_objs = set(backend.get_view_included_objects(vc, base_id=base_id))
+        _view_object_map.setdefault(vc, set()).update(view_objs)
+
+    # ── Step 3: sceneDetails per unique sceneId ──
     for sid, codes in scene_map.items():
         obj_list = list(codes["objects"])
         vw_list = list(codes["views"])
+
+        # Augment obj_list with objects discovered from views in this scene
+        for vc in vw_list:
+            for voc in _view_object_map.get(vc, set()):
+                if voc not in obj_list:
+                    obj_list.append(voc)
+                # Also register in codes["objects"] so scene_map reflects the expansion
+                codes["objects"].add(voc)
+
         try:
             detail = backend.get_scene_details(
                 sid,
@@ -441,9 +496,18 @@ def _build_content_from_remote_scenes(
             )
             continue
 
+        # Expand obj_code_set from views' included objects so they aren't filtered out.
+        # Handles multiple field name conventions (objectCodes, object_codes, objects, object_ids).
+        expanded_obj_code_set = set(obj_code_set)
+        for vw in detail.get("views", []) or []:
+            vid = str(vw.get("view_id") or vw.get("view_code") or "")
+            if vid not in vw_code_set:
+                continue
+            expanded_obj_code_set.update(_extract_view_object_codes(vw))
+
         for obj in detail.get("objects", []) or []:
             obj_code = str(obj.get("object_code") or "")
-            if obj_code in obj_code_set:
+            if obj_code in expanded_obj_code_set:
                 all_objects.append(obj)
 
         for vw in detail.get("views", []) or []:

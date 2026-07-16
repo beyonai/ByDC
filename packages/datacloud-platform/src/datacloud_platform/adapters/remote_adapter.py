@@ -132,6 +132,13 @@ def _normalize_remote_view(v: dict[str, Any]) -> None:
             if isinstance(item, dict):
                 item.setdefault("object_code", item.pop("objectCode", ""))
                 item.setdefault("object_name", item.pop("objectName", ""))
+    # Rename objectCodes → objects so load_from_content / get_view can read it.
+    # DtStudio returns top-level "objectCodes" (list of strings); the inner
+    # "objects" field (list of dicts with objectCode/objectName) is separate.
+    if "objectCodes" in v and "objects" not in v:
+        v["objects"] = v.pop("objectCodes")
+    elif "object_codes" in v and "objects" not in v:
+        v["objects"] = v.pop("object_codes")
     # Normalize actions inside view
     for a in v.get("actions") or []:
         a.setdefault("action_code", a.pop("actionCode", ""))
