@@ -585,8 +585,8 @@ async def user_clarify_node(state: AgentState, config: RunnableConfig) -> dict[s
         persist_confirmed_synonyms=True,
         language=language,
     )
-    formatted_params = result["structured_input"]
-    persisted_synonyms = result.get("persisted_synonyms")
+    formatted_params = result.structured_input
+    persisted_synonyms = result.persisted_synonyms
     if persisted_synonyms is not None:
         created_ids = persisted_synonyms.get("created_ids", [])
         logger.info(
