@@ -1287,6 +1287,10 @@ def _parse_related_docs(content: str) -> list[dict[str, str]]:
             if not isinstance(item, dict):
                 continue
             target = str(item.get("target_doc_id") or "").strip()
+            # 处理 /.sessions?/<session_id>/<path> 格式，提取 session_id 并规范化路径
+            match = re.search(r"/\.sessions?/(\d+)/(.*)", target)
+            if match:
+                target = "/" + match.group(2)
             relation = str(item.get("relation") or "").strip()
             kb_id = str(item.get("kb_resource_id") or "").strip()
             if target and relation:
@@ -1345,7 +1349,7 @@ def _merge_related_docs_into_labels(
     merged = dict(labels)
     for entry in related_docs:
         relation = entry["relation"]
-        target = entry["kb_resource_id"] + "/" + entry["target_doc_id"]
+        target = entry["kb_resource_id"] + entry["target_doc_id"]
         bucket = merged.get(relation)
         if not isinstance(bucket, list):
             bucket = [bucket] if bucket is not None else []
