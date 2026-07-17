@@ -38,7 +38,9 @@ def _normalize_object_codes(raw_objects: list[Any]) -> list[str]:
     return codes
 
 
-def _normalize_terminology(raw: Any) -> tuple[dict[str, Any], str | None, str | None, str | None]:
+def _normalize_terminology(
+    raw: Any,
+) -> tuple[dict[str, Any], str | None, str | None, str | None]:
     """Normalize terminology/termMeta to (terminology, term_set, term_type, term_field)."""
     if not raw:
         return {}, None, None, None

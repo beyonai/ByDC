@@ -123,9 +123,39 @@ class TermBackend(Protocol):
     ) -> dict[str, Any]:
         """通过递归 CTE 一次查询获取多跳关系树（含 term 详情 JOIN）。
 
+        支持单根 (term_id) 和多根 (term_ids) 两种模式。
         返回的每条 relation 包含 source/target 的 term_name, term_code,
         term_type_code, ext_attrs，以及 depth（跳数）和 next_term_id（BFS
         中新发现的端点）。
+        """
+        ...
+
+    def query_term_relations_tree_batch(
+        self,
+        *,
+        term_ids: list[str],
+        max_depth: int = 3,
+        direction: str = "both",
+        relation_category: str | None = None,
+    ) -> dict[str, Any]:
+        """多根递归 CTE — 一次查询加载所有种子节点的全子图。
+
+        使用 text[] visited_ids 规避 varchar(1000)[] 类型推导问题。
+        relation_category: ONTOLOGY / BUSINESS 过滤（metadata/instance 映射）。
+        """
+        ...
+
+    def query_edges_by_kb_id(
+        self,
+        *,
+        kb_ids: list[str],
+        limit: int = 2000,
+        relation_category: str | None = None,
+    ) -> dict[str, Any]:
+        """Flat query: 加载产品库所有边，无递归、无深度限制。
+
+        Returns ``{"data": [{source_term_id, target_term_id, relation_name,
+        source_term_name, source_term_type, source_ext_attrs, ...}, ...]}``.
         """
         ...
 

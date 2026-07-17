@@ -231,9 +231,7 @@ class OntologyBuildSession:
         # join_keys[].sourceField 对应当前对象的字段，target_object_code 即术语类型
         if state.get("object_relations") and state.get("fields"):
             current_code = state["entity_code"]
-            fields_map: dict[str, dict[str, Any]] = {
-                f["property_code"]: f for f in state["fields"]
-            }
+            fields_map: dict[str, dict[str, Any]] = {f["property_code"]: f for f in state["fields"]}
             for rel in state["object_relations"]:
                 src_obj = str(rel.get("source_object_code") or "")
                 if src_obj and src_obj != current_code:

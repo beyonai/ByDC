@@ -13,8 +13,9 @@ from fastapi import Request
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.common import ok
 
-from datacloud_knowledge.contracts.term_provider_types import (
-    QueryResult,
+from datacloud_platform.models.graph_query import (
+    _parse_query_profile,
+    _resolve_graph_query_options,
 )
 
 if TYPE_CHECKING:
@@ -327,410 +328,128 @@ def _term_get_relations(
 def _term_get_knowledge_by_word(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    """术语知识图谱查询。
+    """术语知识图谱查询 — 委托给 query_knowledge_graph 编排方法。
 
-    参数说明:
-    - keywords: list[str] - 关键词列表（最多20个）
-    - term_ids: list[str] - 术语ID列表（最多20个）
-    - searchLevel: str - 关系查询深度，"0" = 仅返回术语本身不含 graph，"1" = 1层关系，"all" = 所有层级（默认 "1"）
-    - disambiguation_mode: str - 消歧模式，"auto" = 自动选择top1（默认），"return_all" = 返回所有候选术语
-    - max_candidates: int - return_all 模式下每个关键词返回的最大候选数（默认 5）
-    - kb_ids: list[str] - 可选，按知识库 ID 过滤
-    - relationCategory: str - 可选，按关系类别过滤，"metadata" = ONTOLOGY，"instance" = BUSINESS
-
-    返回格式:
-    {
-        "root_terms": [
-            {
-                "term_id": "...",
-                "term_name": "...",
-                "graph": [...],       # searchLevel=0 时为空列表
-                "max_depth": 0
-            }
-        ],
-        "total_terms": 10
-    }
+    入参:
+    - keywords: list[str] | None
+    - term_ids: list[str] | None
+    - kb_ids: list[str] | None
+    - queryProfile: str (默认 "graph_fast")
+    - searchLevel: 可选覆盖深度
+    - disambiguation_mode: str (默认 "auto")
+    - max_candidates: int | None (1-20)
     """
-    # 参数验证
-    keywords = params.get("keywords")
-    term_ids = params.get("term_ids")
+    query_profile = _parse_query_profile(params)
+    options = _resolve_graph_query_options(params, query_profile)
+    base_id = _base(params)
 
-    # 至少提供一种参数
+    keywords: list[str] | None = params.get("keywords")
+    term_ids: list[str] | None = params.get("term_ids")
+    kb_ids_raw: list[str] | None = params.get("kb_ids")
+    kb_ids = set(kb_ids_raw) if kb_ids_raw else None
+    _raw_mode = str(params.get("disambiguation_mode", "auto"))
+    if _raw_mode not in ("auto", "return_all"):
+        raise ValueError("disambiguation_mode must be 'auto' or 'return_all'")
+    disambiguation_mode: str = _raw_mode
+
+    if params.get("returnTermOrKnowledge") == "knowledge":
+        raise ValueError("returnTermOrKnowledge=knowledge mode is no longer supported")
+
     if not keywords and not term_ids:
         raise ValueError("One of keywords or term_ids is required")
 
-    # keywords 校验
+    # Parse relationCategory (metadata → ONTOLOGY, instance → BUSINESS)
+    _rel_cat_map: dict[str, str] = {"metadata": "ONTOLOGY", "instance": "BUSINESS"}
+    relation_category: str | None = None
+    if params.get("relationCategory") is not None:
+        raw_cat = str(params.get("relationCategory"))
+        relation_category = _rel_cat_map.get(raw_cat, raw_cat)
+
+    # Validate keywords
     if keywords:
         if not isinstance(keywords, list):
             raise ValueError("keywords must be a list")
         if len(keywords) > 20:
             raise ValueError("keywords list exceeds maximum limit of 20")
 
-    # term_ids 校验
+    # Validate term_ids
     if term_ids:
         if not isinstance(term_ids, list):
             raise ValueError("term_ids must be a list")
         if len(term_ids) > 20:
             raise ValueError("term_ids list exceeds maximum limit of 20")
 
-    search_level = params.get("searchLevel", "1")
-    disambiguation_mode = params.get("disambiguation_mode", "auto")
-    max_candidates = params.get("max_candidates", 5)
-    base_id = _base(params)
-
-    # 获取 ext_attrs 过滤条件
-    filter_kb_ids = params.get("kb_ids")
-
-    # 关系类别过滤：metadata → ONTOLOGY, instance → BUSINESS
-    _RELATION_CATEGORY_MAP: dict[str, str] = {
-        "metadata": "ONTOLOGY",
-        "instance": "BUSINESS",
-    }
-    raw_category = params.get("relationCategory")
-    filter_relation_category: str | None = None
-    if raw_category:
-        if raw_category not in _RELATION_CATEGORY_MAP:
-            raise ValueError(
-                f"relationCategory must be 'metadata' or 'instance', got '{raw_category}'"
-            )
-        filter_relation_category = _RELATION_CATEGORY_MAP[raw_category]
-
-    # 解析查询深度: "0" = 不查询关系, "1" = 1层, "all" = 无限制
-    if search_level == "0":
-        max_level = 0
-    elif search_level == "all":
-        max_level = 999
-    else:
-        try:
-            max_level = int(search_level)
-        except ValueError:
-            max_level = 1
-
-    # 验证 disambiguation_mode 参数
-    if disambiguation_mode not in ("auto", "return_all"):
-        raise ValueError("disambiguation_mode must be 'auto' or 'return_all'")
-
-    # 验证 max_candidates 参数
-    try:
-        max_candidates = int(max_candidates)
-        if max_candidates < 1 or max_candidates > 20:
-            raise ValueError("max_candidates must be between 1 and 20")
-    except (TypeError, ValueError) as e:
-        raise ValueError("max_candidates must be an integer between 1 and 20") from e
-
-    # 批量查询根术语
-    root_terms: list[dict[str, Any]] = []
-    visited_term_ids: set[str] = set()
-
-    # 处理精准 term_ids 查询
-    precise_term_ids: list[str] = []
-    if term_ids:
-        precise_term_ids.extend(term_ids)
-
-    for tid in precise_term_ids:
-        if tid in visited_term_ids:
-            continue
-
-        # 直接获取术语详情
-        term_detail = platform.get_term_detail(base_id, library_id=base_id, term_id=tid)
-        if not term_detail:
-            continue
-
-        ext_attrs = (
-            term_detail.ext_attrs
-            if hasattr(term_detail, "ext_attrs") and term_detail.ext_attrs
-            else {}
-        )
-
-        # 应用 ext_attrs 过滤
-        if filter_kb_ids:
-            if not ext_attrs or not isinstance(ext_attrs, dict):
-                continue
-
-            term_kb_id = ext_attrs.get("kb_id")
-            if str(term_kb_id) not in filter_kb_ids:
-                continue
-
-        # 构建根节点
-        term_name = term_detail.term_name if hasattr(term_detail, "term_name") else ""
-        term_dict = {
-            "term_id": tid,
-            "term_name": term_name,
-            "term_code": (
-                term_detail.term_code if hasattr(term_detail, "term_code") else ""
-            ),
-            "term_type": (
-                term_detail.term_type if hasattr(term_detail, "term_type") else ""
-            ),
-            "attributes": ext_attrs if isinstance(ext_attrs, dict) else {},
-            "path": term_name,
-            "depth": 0,
-            "seg": str(len(root_terms) + 1),
-        }
-
-        root_terms.append(term_dict)
-        visited_term_ids.add(tid)
-
-    # 处理关键词查询
-    if keywords:
-        for keyword in keywords:
-            # 使用混合检索策略（BM25 + 向量语义）
-            search_result: Any = platform.search_terms(
-                base_id, keyword=keyword, query_type="mixed", top_k=20
-            )
-
-            # 如果设置了过滤条件，检查是否匹配
-            if filter_kb_ids:
-                items = sorted(
-                    [
-                        item
-                        for item in search_result.items
-                        if item.ext_attrs.get("kb_id", "") in filter_kb_ids
-                    ],
-                    key=lambda x: abs(len(x.term_name) - len(keyword)),
-                )
-                items_total = len(items)
-                search_result = QueryResult(items=items, total=items_total)
-
-            # 兼容 QueryResult dataclass 和 dict 两种返回类型
-            result_items: Any
-            if hasattr(search_result, "items"):
-                result_items = search_result.items
-            else:
-                result_items = (
-                    search_result.get("items", [])
-                    if hasattr(search_result, "get")
-                    else []
-                )
-
-            if result_items:
-                # 优先查找精确匹配
-                exact_matches = []
-                for item in result_items:
-                    if hasattr(item, "term_name"):
-                        term_name = item.term_name
-                    elif hasattr(item, "get"):
-                        term_name = item.get("term_name")
-                    else:
-                        term_name = None
-
-                    if hasattr(item, "term_code"):
-                        term_code = item.term_code
-                    elif hasattr(item, "get"):
-                        term_code = item.get("term_code")
-                    else:
-                        term_code = None
-
-                    # 不区分大小写的精确匹配
-                    if (term_name and term_name.lower() == keyword.lower()) or (
-                        term_code and term_code.lower() == keyword.lower()
-                    ):
-                        exact_matches.append(item)
-
-                # 根据 disambiguation_mode 决定候选术语列表
-                candidate_items: list[Any]
-                if exact_matches:
-                    # 有精确匹配时，根据模式返回精确匹配结果
-                    if disambiguation_mode == "return_all":
-                        candidate_items = exact_matches[:max_candidates]
-                    else:
-                        candidate_items = [exact_matches[0]]
-                else:
-                    # 无精确匹配时，根据模式返回相似度排序结果
-                    if disambiguation_mode == "return_all":
-                        candidate_items = result_items[:max_candidates]
-                    else:
-                        candidate_items = [result_items[0]]
-
-                # 处理所有候选术语
-                for term_item in candidate_items:
-                    # 提取 term_id (兼容 dataclass 和 dict)
-                    term_id = (
-                        term_item.term_id
-                        if hasattr(term_item, "term_id")
-                        else term_item.get("term_id")
-                    )
-
-                    if term_id not in visited_term_ids:
-                        # 获取术语详情以提取 ext_attrs
-                        term_detail = platform.get_term_detail(
-                            base_id, library_id=base_id, term_id=term_id
-                        )
-
-                        ext_attrs = None
-                        if term_detail:
-                            if hasattr(term_detail, "ext_attrs"):
-                                ext_attrs = term_detail.ext_attrs
-                            elif hasattr(term_detail, "get"):
-                                ext_attrs = term_detail.get("ext_attrs")
-
-                        logger.info(
-                            "Term %s (%s) ext_attrs: %s",
-                            term_id,
-                            term_item.term_name
-                            if hasattr(term_item, "term_name")
-                            else term_item.get("term_name"),
-                            ext_attrs,
-                        )
-
-                        # 构建根节点统一结构
-                        term_name = (
-                            term_item.term_name
-                            if hasattr(term_item, "term_name")
-                            else term_item.get("term_name", "")
-                        )
-                        term_dict = {
-                            "term_id": term_id,
-                            "term_name": term_name,
-                            "term_code": (
-                                term_item.term_code
-                                if hasattr(term_item, "term_code")
-                                else term_item.get("term_code", "")
-                            ),
-                            "term_type": (
-                                term_item.term_type
-                                if hasattr(term_item, "term_type")
-                                else term_item.get("term_type", "")
-                            ),
-                            "attributes": ext_attrs
-                            if ext_attrs and isinstance(ext_attrs, dict)
-                            else {},
-                            "path": term_name,
-                            "depth": 0,
-                            "seg": str(len(root_terms) + 1),
-                        }
-
-                        root_terms.append(term_dict)
-                        visited_term_ids.add(term_id)
-
-    if not root_terms:
-        return ok(data={"error": "No term found for keyword"})
-
-    # 为每个 root_term 递归获取关系图谱
-    for idx, root_term in enumerate(root_terms, start=1):
-        root_seg = str(idx)
-        relations = _fetch_relations_recursive(
-            platform,
-            base_id,
-            root_term["term_id"],
-            root_term["term_name"],
-            root_term["term_name"],
-            1,
-            max_level,
-            root_seg,
-            visited_term_ids,
-            filter_relation_category,
-        )
-        root_term["graph"] = relations
-        root_term["max_depth"] = max((r["depth"] for r in relations), default=0)
-
-    total_terms = sum(len(rt["graph"]) for rt in root_terms) + len(root_terms)
-
-    return ok(
-        data={
-            "root_terms": root_terms,
-            "total_terms": total_terms,
-        }
-    )
-
-
-def _fetch_relations_recursive(
-    platform: DatacloudPlatform,
-    base_id: str,
-    term_id: str,
-    term_name: str,
-    current_path: str,
-    current_level: int,
-    max_level: int,
-    parent_seg: str,
-    visited_terms: set[str],
-    relation_category: str | None = None,
-) -> list[dict[str, Any]]:
-    """通过递归 CTE 一次查询获取多跳关系树，构建 LLM 友好的图结构。"""
-    if current_level > max_level:
-        return []
-
-    # 一次查询获取完整关系树（含 term 详情 JOIN）
-    tree_data = platform.query_term_relations_tree(
+    result = platform.query_knowledge_graph(
         base_id,
-        term_id=term_id,
-        max_depth=max_level - current_level + 1,
+        options=options,
+        keywords=keywords,
+        term_ids=term_ids,
+        kb_ids=kb_ids,
+        disambiguation_mode=disambiguation_mode,
         relation_category=relation_category,
     )
-    edges: list[dict[str, Any]] = tree_data.get("data", [])
-    if not edges:
-        return []
+    return ok(data=result)
 
-    # Sort by depth for BFS-order processing
-    edges.sort(key=lambda e: e.get("depth", 0))
 
-    # term_id → (path, seg, term_name)
-    node_info: dict[str, tuple[str, str, str]] = {
-        term_id: (current_path, parent_seg, term_name),
-    }
-    # parent_id → child index counter
-    child_counters: dict[str, int] = {}
-    result: list[dict[str, Any]] = []
+def _term_get_connection_network(
+    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+) -> Any:
+    """getTermConnectionNetwork — 术语连接网络图谱计算。
 
-    for edge in edges:
-        next_id = edge.get("next_term_id", "")
-        if not next_id or next_id in visited_terms or next_id in node_info:
-            continue
+    计算 source_terms → target_terms 之间的连接路径、桥接节点、
+    知识引用和连接摘要。Backend 做图算法（解析 + BFS 路径搜索 + 评分），
+    Agent 做推理和表达。
+    """
+    base_id = _base(params)
 
-        source_id = edge.get("source_term_id", "")
-        target_id = edge.get("target_term_id", "")
-        relation_name = edge.get("relation_name", "")
-        depth = edge.get("depth", 1)
+    source_terms: list[str] = params.get("source_terms", [])
+    if not source_terms:
+        raise ValueError("source_terms is required (at least 1)")
 
-        # Determine parent (already in node_info) and child (next_id)
-        if source_id == next_id:
-            parent_id = target_id
-            child_id = source_id
-            child_name = edge.get("source_term_name", "")
-            arrow = f" <--[{relation_name}]-- "
-            child_code = edge.get("source_term_code", "")
-            child_type = edge.get("source_term_type", "")
-            child_attrs = edge.get("source_ext_attrs", {})
-        else:
-            parent_id = source_id
-            child_id = target_id
-            child_name = edge.get("target_term_name", "")
-            arrow = f" --[{relation_name}]--> "
-            child_code = edge.get("target_term_code", "")
-            child_type = edge.get("target_term_type", "")
-            child_attrs = edge.get("target_ext_attrs", {})
+    target_terms: list[str] = params.get("target_terms", [])
+    if not target_terms:
+        raise ValueError("target_terms is required (at least 1)")
 
-        if parent_id not in node_info:
-            continue  # parent hasn't been processed yet; skip
+    max_depth: int = int(params.get("max_depth", 3))
+    if not 1 <= max_depth <= 4:
+        raise ValueError("max_depth must be 1..4")
 
-        parent_path, parent_seg_val, _ = node_info[parent_id]
-        child_counters.setdefault(parent_id, 0)
-        child_counters[parent_id] += 1
+    max_paths: int = int(params.get("max_paths", 12))
+    if not 1 <= max_paths <= 50:
+        raise ValueError("max_paths must be 1..50")
 
-        child_seg = (
-            f"{parent_seg_val}.{child_counters[parent_id]}"
-            if parent_seg_val != "0"
-            else str(child_counters[parent_id])
-        )
-        child_path = parent_path + arrow + child_name
+    direction: str = str(params.get("direction", "both"))
+    if direction not in ("out", "in", "both"):
+        raise ValueError("direction must be out/in/both")
 
-        node_info[child_id] = (child_path, child_seg, child_name)
-        visited_terms.add(child_id)
+    kb_ids: list[str] | None = params.get("kb_ids")
+    relation_names: list[str] | None = params.get("relation_names")
+    bridge_terms: list[str] | None = params.get("bridge_terms")
+    include_knowledge_refs: bool = bool(params.get("include_knowledge_refs", True))
+    include_debug: bool = bool(params.get("include_debug", False))
 
-        result.append(
-            {
-                "term_id": child_id,
-                "term_name": child_name,
-                "term_code": child_code,
-                "term_type": child_type,
-                "attributes": child_attrs if isinstance(child_attrs, dict) else {},
-                "path": child_path,
-                "depth": current_level + depth - 1,
-                "seg": child_seg,
-            }
-        )
+    # Parse relationCategory (metadata → ONTOLOGY, instance → BUSINESS)
+    _rel_cat_map: dict[str, str] = {"metadata": "ONTOLOGY", "instance": "BUSINESS"}
+    relation_category: str | None = None
+    if params.get("relationCategory") is not None:
+        raw_cat = str(params.get("relationCategory"))
+        relation_category = _rel_cat_map.get(raw_cat, raw_cat)
 
-    return result
+    result = platform.get_term_connection_network(
+        base_id,
+        source_terms=source_terms,
+        target_terms=target_terms,
+        kb_ids=kb_ids,
+        max_depth=max_depth,
+        max_paths=max_paths,
+        direction=direction,
+        relation_names=relation_names,
+        bridge_terms=bridge_terms,
+        relation_category=relation_category,
+        include_knowledge_refs=include_knowledge_refs,
+        include_debug=include_debug,
+    )
+    return ok(data=result)
 
 
 TERM_REGISTRY: dict[str, Any] = {
@@ -743,6 +462,7 @@ TERM_REGISTRY: dict[str, Any] = {
     "delete": _term_delete,
     "getRelations": _term_get_relations,
     "getKnowledgeByTermWord": _term_get_knowledge_by_word,
+    "getTermConnectionNetwork": _term_get_connection_network,
 }
 
 
