@@ -128,6 +128,7 @@ def _build_platform(mock_backend: Mock | None = None) -> _TestPlatform:
     mock_backend.search_terms.return_value = QueryResult(items=[], total=0)
     mock_backend.get_term_detail.return_value = None
     mock_backend.query_term_relations_tree.return_value = {"data": []}
+    mock_backend.embed_batch.return_value = []
     return _TestPlatform(mock_backend)
 
 
@@ -674,3 +675,96 @@ def test_max_depth_zero_when_no_relations() -> None:
     assert rt["max_depth"] == 0
     assert rt["graph"] == []
     assert result["total_terms"] == 1
+
+
+# ============================================================================
+# 向量检索测试 — query_vector 穿通验证
+# ============================================================================
+
+
+def test_keywords_passing_query_vector_to_search_terms() -> None:
+    """关键词检索时 embed_batch 被调用，且 query_vector 传入 search_terms。"""
+    backend = Mock()
+    platform = _build_platform(backend)
+
+    # mock embed_batch 返回 3 个向量（各 3 维）— 必须在 _build_platform 之后设置
+    fake_vectors = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6], [0.7, 0.8, 0.9]]
+    backend.embed_batch.return_value = fake_vectors
+
+    item = _make_search_item("term-001", "本体", "ontology")
+    backend.search_terms.return_value = QueryResult(items=[item], total=1)
+    backend.get_term_detail.return_value = _make_term_detail(
+        "term-001", "本体", "ontology"
+    )
+
+    keywords = ["本体", "Agent", "大语言模型"]
+    result = platform.query_knowledge_graph(
+        base_id="test",
+        options=_fresh_options("graph_fast"),
+        keywords=keywords,
+    )
+
+    # 1. embed_batch 被调用，参数为 keywords 列表
+    backend.embed_batch.assert_called_once_with(keywords)
+
+    # 2. search_terms 每条调用都传递了 query_vector
+    assert backend.search_terms.call_count == len(keywords)
+    for call_idx, call_kwargs in enumerate(backend.search_terms.call_args_list):
+        _, kwargs = call_kwargs
+        assert "query_vector" in kwargs, (
+            f"search_terms call {call_idx} missing query_vector"
+        )
+        expected_vec = fake_vectors[call_idx]
+        assert kwargs["query_vector"] == expected_vec, (
+            f"search_terms call {call_idx}: "
+            f"expected {expected_vec}, got {kwargs['query_vector']}"
+        )
+        assert kwargs["query_type"] == "mixed"
+
+    # 3. 有正常的 root_terms 返回
+    root_terms = result["root_terms"]
+    assert len(root_terms) == 1
+
+
+def test_keywords_empty_skips_embed_batch() -> None:
+    """无关键词时不调用 embed_batch。"""
+    backend = Mock()
+    backend.get_term_detail.return_value = _make_term_detail("term-a", "TermA")
+    platform = _build_platform(backend)
+
+    platform.query_knowledge_graph(
+        base_id="test",
+        options=_fresh_options(),
+        term_ids=["term-a"],
+    )
+
+    backend.embed_batch.assert_not_called()
+
+
+def test_query_vector_passed_even_when_vector_list_shorter() -> None:
+    """embed_batch 返回向量数少于关键词时，多余 keyword 的 query_vector 为 None 且不崩溃。"""
+    backend = Mock()
+    platform = _build_platform(backend)
+    # 返回 1 个向量但 3 个关键词 → idx>=1 时 query_vector=None
+    backend.embed_batch.return_value = [[0.1, 0.2, 0.3]]
+
+    item = _make_search_item("term-001", "X")
+    backend.search_terms.return_value = QueryResult(items=[item], total=1)
+    backend.get_term_detail.return_value = _make_term_detail("term-001", "X")
+
+    keywords = ["a", "b", "c"]
+    platform.query_knowledge_graph(
+        base_id="test",
+        options=_fresh_options("graph_fast"),
+        keywords=keywords,
+    )
+
+    # 第 0 个 keyword: query_vector 为实际向量
+    _, kw0 = backend.search_terms.call_args_list[0]
+    assert kw0["query_vector"] == [0.1, 0.2, 0.3]
+
+    # 第 1/2 个: query_vector 为 None（安全降级）
+    _, kw1 = backend.search_terms.call_args_list[1]
+    assert kw1["query_vector"] is None
+    _, kw2 = backend.search_terms.call_args_list[2]
+    assert kw2["query_vector"] is None

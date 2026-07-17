@@ -391,10 +391,16 @@ class TermMixin(TermSyncHandler):
 
         # ── 1. Search by keywords ─────────────────────────────────────
         if keywords:
-            for keyword in keywords:
+            # Batch compute keyword vectors for mixed-mode RRF fusion
+            keyword_vectors = self._term_for(base_id).embed_batch(keywords)
+            for idx, keyword in enumerate(keywords):
+                query_vector = (
+                    keyword_vectors[idx] if idx < len(keyword_vectors) else None
+                )
                 search_result: Any = self._term_for(base_id).search_terms(
                     keyword=keyword,
                     query_type="mixed",
+                    query_vector=query_vector,
                     top_k=options.top_k,
                     label_filters=label_filters,
                     label_condition="or",
