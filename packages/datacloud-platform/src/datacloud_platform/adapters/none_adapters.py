@@ -694,6 +694,17 @@ class _NoopTermBackend:
         _ = term_ids, max_depth, direction, relation_category
         return {"data": [], "totalCount": 0}
 
+    def query_edges_by_kb_id(
+        self,
+        *,
+        kb_ids: list[str],
+        limit: int = 2000,
+        relation_category: str | None = None,
+    ) -> dict[str, Any]:
+        """Return empty result."""
+        _ = kb_ids, limit, relation_category
+        return {"data": []}
+
     # ── TermRelation ────────────────────────────────────────────────────
 
     def list_term_relations(

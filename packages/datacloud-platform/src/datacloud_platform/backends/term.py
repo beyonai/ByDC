@@ -145,6 +145,20 @@ class TermBackend(Protocol):
         """
         ...
 
+    def query_edges_by_kb_id(
+        self,
+        *,
+        kb_ids: list[str],
+        limit: int = 2000,
+        relation_category: str | None = None,
+    ) -> dict[str, Any]:
+        """Flat query: 加载产品库所有边，无递归、无深度限制。
+
+        Returns ``{"data": [{source_term_id, target_term_id, relation_name,
+        source_term_name, source_term_type, source_ext_attrs, ...}, ...]}``.
+        """
+        ...
+
     # ── TermRelation ───────────────────────────────────────────────
 
     def list_term_relations(

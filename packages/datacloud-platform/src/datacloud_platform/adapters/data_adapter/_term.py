@@ -353,6 +353,25 @@ class TermBackendMixin(DataCloudDataBackendBase):
             )
             return {"data": [], "totalCount": 0}
 
+    def query_edges_by_kb_id(
+        self,
+        *,
+        kb_ids: list[str],
+        limit: int = 2000,
+        relation_category: str | None = None,
+    ) -> dict[str, Any]:
+        """Flat query: load all edges by kb_id filter."""
+        reader = self._get_knowledge_reader()
+        try:
+            return reader.query_edges_by_kb_id(  # type: ignore[no-any-return]
+                kb_ids=kb_ids,
+                limit=limit,
+                relation_category=relation_category,
+            )
+        except Exception:
+            logger.exception("query_edges_by_kb_id failed kb_ids=%s", kb_ids)
+            return {"data": []}
+
     # ── TermRelation ────────────────────────────────────────────────────
 
     def list_term_relations(

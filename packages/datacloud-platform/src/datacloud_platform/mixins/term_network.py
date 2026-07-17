@@ -33,14 +33,9 @@ _UUID_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Progressive depth for bridge-finding (1.4.3 第一层: 不限深).
-# Start shallow, double each step until bridge nodes found or hard cap.
-_BRIDGE_DEPTH_INITIAL: int = 3
-_BRIDGE_DEPTH_HARD_CAP: int = 64
-
-# Maximum raw paths to enumerate before early-exit in DFS.
-# Prevent combinatorial explosion on dense subgraphs.
-_MAX_RAW_PATHS: int = 5000
+# Safety cap for path enumeration — prevents combinatorial explosion
+# on hub nodes with many connections.
+_MAX_PATHS_TOTAL: int = 500
 
 
 class TermConnectionNetworkMixin:
@@ -123,7 +118,6 @@ class TermConnectionNetworkMixin:
 
         source_ids: set[str] = {rt.term_id for rt in source_nodes}
         target_ids: set[str] = {rt.term_id for rt in target_nodes}
-        all_seed_ids = source_ids | target_ids
 
         logger.info(
             "Resolved %d source + %d target terms (%d gaps). Loading graph...",
@@ -132,71 +126,14 @@ class TermConnectionNetworkMixin:
             len(all_gaps),
         )
 
-        # ── Step 2: Load graph edges (progressive depth) ────────────────
-        # Try shallow depth first for bridge finding; deepen only if needed.
-        adjacency: dict[str, list[Edge]] = {}
-        all_edges: list[Edge] = []
+        # ── Step 2: Load ALL edges in the product KB (flat query, no CTE) ──
         debug_info: dict[str, Any] = {}
-        bridge_depth_used: int = _BRIDGE_DEPTH_INITIAL
-        reachable_from_s: set[str] = set()
-        reachable_from_t: set[str] = set()
-        bridge_candidates: set[str] = set()
-        prev_edge_count: int = -1
-
-        depth_step = _BRIDGE_DEPTH_INITIAL
-        while depth_step <= _BRIDGE_DEPTH_HARD_CAP:
-            bridge_depth_used = depth_step
-            effective_depth = max(depth_step, max_depth)
-
-            adjacency, all_edges, _reached = self._load_connection_graph(  # type: ignore[attr-defined]
-                base_id=base_id,
-                seed_ids=all_seed_ids,
-                max_depth=effective_depth,
-                kb_ids=kb_id_set,
-                direction=direction,
-                relation_category=relation_category,
-            )
-
-            if not all_edges:
-                depth_step *= 2
-                continue
-
-            # Quick check: any direct source↔target edge = sufficient.
-            has_direct = any(
-                (se.source in source_ids and se.target in target_ids)
-                or (se.target in source_ids and se.source in target_ids)
-                for edges in adjacency.values()
-                for se in edges
-            )
-
-            # Compute bridge nodes with current depth.
-            reachable_from_s = TermConnectionNetworkMixin._bfs_reachable(
-                adjacency=adjacency, start_ids=source_ids, max_depth=None
-            )
-            reachable_from_t = TermConnectionNetworkMixin._bfs_reachable(
-                adjacency=adjacency, start_ids=target_ids, max_depth=None
-            )
-            bridge_candidates = (
-                (reachable_from_s & reachable_from_t) - source_ids - target_ids
-            )
-
-            if bridge_candidates or has_direct:
-                break
-
-            # Stop if no new edges were found (graph exhausted).
-            cur_count = len(all_edges)
-            if cur_count == prev_edge_count:
-                logger.info("No new edges at depth=%d, stopping.", depth_step)
-                break
-            prev_edge_count = cur_count
-
-            logger.info(
-                "No bridge nodes at depth=%d, deepening... (S=%d, T=%d)",
-                depth_step,
-                len(reachable_from_s),
-                len(reachable_from_t),
-            )
-            depth_step *= 2
+        adjacency, all_edges, _reached = self._load_connection_graph(  # type: ignore[attr-defined]
+            base_id=base_id,
+            kb_ids=kb_id_set,
+            direction=direction,
+            relation_category=relation_category,
+        )
 
         total_edges = len(all_edges)
         if total_edges == 0:
@@ -205,21 +142,30 @@ class TermConnectionNetworkMixin:
                 "success": False,
                 "error": {
                     "code": "NO_EDGES_FOUND",
-                    "message": "No edges found in the subgraph reachable from seeds.",
+                    "message": "No edges found in the product KB.",
                     "detail": None,
                 },
             }
 
-        logger.info(
-            "Loaded %d edges at bridge_depth=%d.", total_edges, bridge_depth_used
+        # ── Step 3: Compute bridge nodes (BFS intersection, unlimited depth) ──
+        reachable_from_s = TermConnectionNetworkMixin._bfs_reachable(
+            adjacency=adjacency, start_ids=source_ids, max_depth=None
+        )
+        reachable_from_t = TermConnectionNetworkMixin._bfs_reachable(
+            adjacency=adjacency, start_ids=target_ids, max_depth=None
         )
 
-        if include_debug:
-            debug_info["total_edges_loaded"] = total_edges
-            debug_info["bridge_depth_used"] = bridge_depth_used
+        bridge_node_ids = (
+            (reachable_from_s & reachable_from_t) - source_ids - target_ids
+        )
 
-        # ── Step 3: Compute bridge nodes ────────────────────────────────
-        bridge_node_ids = bridge_candidates
+        logger.info(
+            "Loaded %d edges. Bridge nodes: %d (S-reachable=%d, T-reachable=%d).",
+            total_edges,
+            len(bridge_node_ids),
+            len(reachable_from_s),
+            len(reachable_from_t),
+        )
 
         bridge_nodes = TermConnectionNetworkMixin._build_node_infos(
             adjacency=adjacency,
@@ -422,16 +368,14 @@ class TermConnectionNetworkMixin:
     def _load_connection_graph(
         self: _HasTermBackend,
         base_id: str,
-        seed_ids: set[str],
-        max_depth: int,
         kb_ids: set[str] | None,
         direction: str,
         relation_category: str | None = None,
     ) -> tuple[dict[str, list[Edge]], list[Edge], set[str]]:
-        """Load the term relation graph from all seeds in one batch CTE call.
+        """Load ALL edges in the product KB via a single flat query (no CTE).
 
-        Uses ``query_term_relations_tree_batch`` (multi-root, text[] visited_ids)
-        to avoid the N+1 per-seed query problem.
+        Uses ``query_edges_by_kb_id`` to fetch every edge where either endpoint
+        belongs to one of the given kb_ids.  No recursion, no depth limits.
 
         Returns:
             Tuple of (adjacency dict, flat edge list, reached term IDs).
@@ -442,17 +386,20 @@ class TermConnectionNetworkMixin:
         reached_ids: set[str] = set()
         total_edges = 0
 
-        # Single call: multi-root CTE loads the entire subgraph at once.
-        tree_result: Any = self._term_for(base_id).query_term_relations_tree_batch(
-            term_ids=list(seed_ids),
-            max_depth=max_depth,
+        kb_id_list: list[str] = list(kb_ids) if kb_ids else []
+        if not kb_id_list:
+            logger.warning("No kb_ids provided, returning empty graph.")
+            return adjacency, all_edges, reached_ids
+
+        result: Any = self._term_for(base_id).query_edges_by_kb_id(
+            kb_ids=kb_id_list,
             relation_category=relation_category,
         )
         edges_data: list[Any]
-        if hasattr(tree_result, "data"):
-            edges_data = list(tree_result.data)
-        elif isinstance(tree_result, dict):
-            edges_data = list(tree_result.get("data", []))
+        if hasattr(result, "data"):
+            edges_data = list(result.data)
+        elif isinstance(result, dict):
+            edges_data = list(result.get("data", []))
         else:
             edges_data = []
 
@@ -463,7 +410,6 @@ class TermConnectionNetworkMixin:
             relation_name = TermConnectionNetworkMixin._extract_field(
                 edge_raw, "relation_name", ""
             )
-
             source_id = TermConnectionNetworkMixin._extract_field(
                 edge_raw, "source_term_id", ""
             )
@@ -493,7 +439,6 @@ class TermConnectionNetworkMixin:
             target_type = TermConnectionNetworkMixin._extract_field(
                 edge_raw, "target_term_type", ""
             )
-
             source_ext = TermConnectionNetworkMixin._extract_field(
                 edge_raw, "source_ext_attrs", {}
             )
@@ -506,13 +451,6 @@ class TermConnectionNetworkMixin:
             target_attrs: dict[str, Any] = (
                 target_ext if isinstance(target_ext, dict) else {}
             )
-
-            # kb_ids filter: at least one side must match
-            if kb_ids is not None:
-                source_kb = str(source_attrs.get("kb_id", ""))
-                target_kb = str(target_attrs.get("kb_id", ""))
-                if source_kb not in kb_ids and target_kb not in kb_ids:
-                    continue
 
             edge = Edge(
                 source=source_id,
@@ -541,10 +479,10 @@ class TermConnectionNetworkMixin:
             total_edges += 1
 
         logger.info(
-            "Loaded %d edges, %d unique nodes (batch CTE, depth=%d).",
+            "Loaded %d edges, %d unique nodes (flat query, kb_ids=%s).",
             total_edges,
             len(reached_ids),
-            max_depth,
+            kb_id_list,
         )
         return adjacency, all_edges, reached_ids
 
@@ -581,11 +519,6 @@ class TermConnectionNetworkMixin:
             node, depth = q.popleft()
 
             if max_depth is not None and depth >= max_depth:
-                continue
-
-            # Hub stop: don't expand from super-hub intermediate nodes
-            degree = len(adjacency.get(node, []))
-            if degree > HUB_THRESHOLD and node not in start_ids:
                 continue
 
             for edge in adjacency.get(node, []):
@@ -634,7 +567,7 @@ class TermConnectionNetworkMixin:
                         }
         return [node_info[nid] for nid in node_ids if nid in node_info]
 
-    # ── DFS path enumeration (1.4.3 第二层) ─────────────────────────────────────
+    # ── Path enumeration (1.4.3 第二层) ─────────────────────────────────────
 
     @staticmethod
     def _enumerate_paths(
@@ -645,124 +578,107 @@ class TermConnectionNetworkMixin:
         max_depth: int,
         direction: str,
     ) -> list[Path]:
-        """Multi-phase DFS path enumeration covering all subgraph connections.
+        """BFS from each source, recording all S→T and S→bridge paths.
 
-        Three phases (generic, no hard-coded assumptions):
-        1. S → T ∪ bridge  (primary connection + source-side context)
-        2. T → S ∪ bridge  (reverse direction + target-side context)
-        3. bridge → bridge  (top-K by degree, depth ≤ 2)
-
-        Uses depth-first search with per-path visited tracking. Paths are
-        deduplicated by ordered node-id sequence.
+        Two-pass BFS:
+        - Pass 1: S → (T ∪ bridge)  — source-anchored paths
+        - Pass 2: T → (S ∪ bridge)  — target-anchored paths (reverse perspective)
         """
         all_paths: list[Path] = []
         path_counter = 0
-        seen_sig: set[tuple[str, ...]] = set()  # dedup by node-id chain
+        seen_sig: set[tuple[str, ...]] = set()
         bridge_node_ids = subgraph_node_ids - source_ids - target_ids
 
-        def _dfs_from(
+        def _record(path_edges: list[Edge], start: str) -> None:
+            nonlocal path_counter
+            sig = TermConnectionNetworkMixin._path_sig(start, path_edges)
+            if sig in seen_sig:
+                return
+            seen_sig.add(sig)
+            path_counter += 1
+            p = TermConnectionNetworkMixin._reconstruct_path_from_edges(
+                path_id=f"p{path_counter}",
+                path_edges=list(path_edges),
+                direction=direction,
+            )
+            if p is not None:
+                all_paths.append(p)
+
+        def _bfs_pass(
             start_ids: set[str],
             endpoint_ids: set[str],
-            min_depth: int,
-            depth_limit: int,
             *,
             bridge_ids: set[str] | None = None,
-            bridge_min_depth: int = 2,
         ) -> None:
-            """DFS with separate depth thresholds for bridge vs non-bridge endpoints.
-
-            bridge_ids / bridge_min_depth: if provided, bridge endpoints require
-            at least bridge_min_depth hops (avoids flooding with direct neighbours).
-            """
-            nonlocal path_counter
+            """BFS from each start — single parent per node, one path per endpoint."""
             for start in start_ids:
-                if start not in adjacency:
-                    continue
-                init_v = frozenset({start})
-                stack: list[tuple[str, list[Edge], frozenset[str]]] = [
-                    (start, [], init_v)
-                ]
-                while stack:
-                    if path_counter >= _MAX_RAW_PATHS:
-                        return
-                    node, edges, visited = stack.pop()
-                    d = len(edges)
-
-                    if node in endpoint_ids:
-                        effective_min = (
-                            bridge_min_depth
-                            if bridge_ids is not None and node in bridge_ids
-                            else min_depth
-                        )
-                        if d >= effective_min:
-                            sig = TermConnectionNetworkMixin._path_sig(start, edges)
-                            if sig not in seen_sig:
-                                seen_sig.add(sig)
-                                path_counter += 1
-                                p = TermConnectionNetworkMixin._reconstruct_path_from_edges(
-                                    path_id=f"p{path_counter}",
-                                    path_edges=list(edges),
-                                    direction=direction,
-                                )
-                                if p is not None:
-                                    all_paths.append(p)
-
-                    if d >= depth_limit:
+                if start not in adjacency or path_counter >= _MAX_PATHS_TOTAL:
+                    return
+                parent: dict[str, tuple[str, Edge | None]] = {start: (start, None)}
+                visited: set[str] = {start}
+                q: deque[tuple[str, int]] = deque([(start, 0)])
+                while q and path_counter < _MAX_PATHS_TOTAL:
+                    node, d = q.popleft()
+                    if d >= max_depth:
                         continue
-
+                    # Hub stop for path search only — not in bridge computation
                     degree = len(adjacency.get(node, []))
-                    if degree > HUB_THRESHOLD and node not in source_ids | target_ids:
+                    if (
+                        degree > HUB_THRESHOLD
+                        and node not in source_ids | target_ids
+                        and d > 0
+                    ):
                         continue
-
-                    for edge in adjacency.get(node, []):
-                        nb = edge.other_end(node)
+                    for e in adjacency.get(node, []):
+                        nb = e.other_end(node)
                         if nb in visited or nb not in subgraph_node_ids:
                             continue
-                        stack.append((nb, edges + [edge], visited | {nb}))
+                        visited.add(nb)
+                        parent[nb] = (node, e)
+                        q.append((nb, d + 1))
+                        if nb in endpoint_ids:
+                            min_d = 2 if (bridge_ids and nb in bridge_ids) else 1
+                            if d + 1 >= min_d:
+                                edges_list = (
+                                    TermConnectionNetworkMixin._edges_from_parent(
+                                        start, nb, parent
+                                    )
+                                )
+                                if edges_list:
+                                    _record(edges_list, start)
 
-        # ── Phase 1: S → T (depth ≥ 1) + S → bridge (depth ≥ 2) ──
-        _dfs_from(
-            start_ids=source_ids,
-            endpoint_ids=target_ids | bridge_node_ids,
-            min_depth=1,
-            depth_limit=max_depth,
-            bridge_ids=bridge_node_ids,
-            bridge_min_depth=2,
-        )
+        # ── Pass 1: S → T + S → bridge ──────────────────────────────
+        _bfs_pass(source_ids, target_ids | bridge_node_ids, bridge_ids=bridge_node_ids)
 
-        # ── Phase 2: T → S (depth ≥ 1) + T → bridge (depth ≥ 2) ──
-        _dfs_from(
-            start_ids=target_ids,
-            endpoint_ids=source_ids | bridge_node_ids,
-            min_depth=1,
-            depth_limit=max_depth,
-            bridge_ids=bridge_node_ids,
-            bridge_min_depth=2,
-        )
-
-        # ── Phase 3: top-K bridge → all (depth ≥ 2) ──────────────────
-        bridge_degree: list[tuple[int, str]] = sorted(
-            (
-                (len(adjacency.get(bid, [])), bid)
-                for bid in bridge_node_ids
-                if bid in adjacency
-            ),
-            reverse=True,
-        )
-        top_k_bridges = {bid for _, bid in bridge_degree[:10]}
-
-        _dfs_from(
-            start_ids=top_k_bridges,
-            endpoint_ids=source_ids | target_ids | bridge_node_ids,
-            min_depth=2,
-            depth_limit=2,
-        )
+        # ── Pass 2: T → S + T → bridge ──────────────────────────────
+        _bfs_pass(target_ids, source_ids | bridge_node_ids, bridge_ids=bridge_node_ids)
 
         return all_paths
 
     @staticmethod
+    def _edges_from_parent(
+        start: str, end: str, parent: dict[str, tuple[str, Edge | None]]
+    ) -> list[Edge]:
+        """Backtrack from end to start via parent chain, return edge list."""
+        if end not in parent:
+            return []
+        edges: list[Edge] = []
+        curr = end
+        while curr != start:
+            entry = parent.get(curr)
+            if entry is None:
+                return []
+            prev, edge = entry
+            if edge is None:
+                return []
+            edges.append(edge)
+            curr = prev
+        edges.reverse()
+        return edges
+
+    @staticmethod
     def _path_sig(start: str, edges: list[Edge]) -> tuple[str, ...]:
-        """Build a canonical node-id chain for path deduplication."""
+        """Build canonical node-id chain for path deduplication."""
         sig: list[str] = [start]
         current = start
         for edge in edges:
@@ -1040,29 +956,13 @@ class TermConnectionNetworkMixin:
         target_nodes: list[ResolvedTerm],
         top_paths: list[Path],
     ) -> dict[str, str]:
-        """Build connection_summary with one_sentence and writing_claim.
+        """Build connection_summary with empty one_sentence and writing_claim.
 
-        one_sentence: Brief description of the overall connection.
-        writing_claim: An inference claim for Agent writing use.
+        Semantic fields are left empty per design — the writing Agent
+        generates its own interpretations from the structured path data.
         """
-        src_names = [rt.term_name for rt in source_nodes]
-        tgt_names = [rt.term_name for rt in target_nodes]
-
-        src_str = "、".join(src_names[:3])
-        tgt_str = "、".join(tgt_names[:3])
-
-        one_sentence = f"{src_str} 到 {tgt_str} 的连接网络"
-
-        # Build writing_claim from top paths
-        if top_paths:
-            claims: list[str] = []
-            for path in top_paths[:3]:
-                claims.append(path.readable_path)
-            writing_claim = "；".join(claims)
-        else:
-            writing_claim = ""
-
-        return {"one_sentence": one_sentence, "writing_claim": writing_claim}
+        _ = source_nodes, target_nodes, top_paths
+        return {"one_sentence": "", "writing_claim": ""}
 
     # ── Response builder ──────────────────────────────────────────────────
 
