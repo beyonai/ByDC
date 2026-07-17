@@ -394,50 +394,60 @@ def _term_get_knowledge_by_word(
 def _term_get_connection_network(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    """getTermConnectionNetwork — 纯图算子：给 seeds 返回最佳子图 + 探索目录。
+    """getTermConnectionNetwork — 术语连接网络图谱计算。
 
-    Backend 做图算法（解析 + 多源 BFS 评分 + 子图构建），Agent 做推理。
+    计算 source_terms → target_terms 之间的连接路径、桥接节点、
+    知识引用和连接摘要。Backend 做图算法（解析 + BFS 路径搜索 + 评分），
+    Agent 做推理和表达。
     """
     base_id = _base(params)
 
-    seeds: list[str] = params.get("seeds", [])
-    if not seeds:
-        raise ValueError("seeds is required (at least 1)")
+    source_terms: list[str] = params.get("source_terms", [])
+    if not source_terms:
+        raise ValueError("source_terms is required (at least 1)")
 
-    detail_level: str = str(params.get("detail_level", "summary"))
-    if detail_level not in ("summary", "full"):
-        raise ValueError("detail_level must be 'summary' or 'full'")
+    target_terms: list[str] = params.get("target_terms", [])
+    if not target_terms:
+        raise ValueError("target_terms is required (at least 1)")
 
     max_depth: int = int(params.get("max_depth", 3))
     if not 1 <= max_depth <= 4:
         raise ValueError("max_depth must be 1..4")
 
-    max_best_edges: int = int(params.get("max_best_edges", 20))
-    if not 1 <= max_best_edges <= 200:
-        raise ValueError("max_best_edges must be 1..200")
+    max_paths: int = int(params.get("max_paths", 12))
+    if not 1 <= max_paths <= 50:
+        raise ValueError("max_paths must be 1..50")
 
     direction: str = str(params.get("direction", "both"))
     if direction not in ("out", "in", "both"):
         raise ValueError("direction must be out/in/both")
 
-    kb_ids_raw: list[str] | None = params.get("kb_ids")
-    kb_ids: set[str] | None = set(kb_ids_raw) if kb_ids_raw else None
-
+    kb_ids: list[str] | None = params.get("kb_ids")
     relation_names: list[str] | None = params.get("relation_names")
+    bridge_terms: list[str] | None = params.get("bridge_terms")
+    include_knowledge_refs: bool = bool(params.get("include_knowledge_refs", True))
     include_debug: bool = bool(params.get("include_debug", False))
-    include_catalog: bool = bool(params.get("include_catalog", False))
+
+    # Parse relationCategory (metadata → ONTOLOGY, instance → BUSINESS)
+    _rel_cat_map: dict[str, str] = {"metadata": "ONTOLOGY", "instance": "BUSINESS"}
+    relation_category: str | None = None
+    if params.get("relationCategory") is not None:
+        raw_cat = str(params.get("relationCategory"))
+        relation_category = _rel_cat_map.get(raw_cat, raw_cat)
 
     result = platform.get_term_connection_network(
         base_id,
-        seeds=seeds,
-        detail_level=detail_level,
+        source_terms=source_terms,
+        target_terms=target_terms,
+        kb_ids=kb_ids,
         max_depth=max_depth,
-        max_best_edges=max_best_edges,
+        max_paths=max_paths,
         direction=direction,
         relation_names=relation_names,
-        kb_ids=kb_ids,
+        bridge_terms=bridge_terms,
+        relation_category=relation_category,
+        include_knowledge_refs=include_knowledge_refs,
         include_debug=include_debug,
-        include_catalog=include_catalog,
     )
     return ok(data=result)
 

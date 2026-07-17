@@ -1,12 +1,13 @@
-"""Term network graph data structures for knowledge graph traversal.
+"""Term connection network graph data structures.
 
-Resolved terms, edges, paths, and gaps model the graph entities used during
-term-to-term traversal and path resolution in the knowledge graph layer.
+Data models for source-target term connection network computation:
+resolved terms, graph edges, BFS paths, bridge nodes, knowledge refs,
+connection summary, and gaps.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -56,90 +57,80 @@ class Edge:
 
 
 @dataclass(frozen=True, slots=True)
-class ScoredEdge:
-    """A graph edge augmented with a relevance score and traversal depth."""
+class Gap:
+    """A term that could not be resolved during seed resolution."""
 
-    edge: Edge
-    score: float
-    hops_from_seed: int
+    term: str
+    reason: str  # "no_exact_match"
+    resolution: str  # "unresolved"
+    resolved_term_name: str = ""
+
+
+# ── Path output types ───────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True, slots=True)
-class CatalogEntry:
-    """A knowledge-graph term entry used in catalogue listings.
-
-    Attributes:
-        term_id: Unique identifier of the term node.
-        term_name: Human-readable name of the term.
-        term_type: Type/category of the term.
-        kb_file_path: Path to the knowledge-base file this term belongs to.
-        unshown_edge_count: Number of edges hidden from the catalogue view.
-        unshown_relations: Relation names of hidden edges.
-        unshown_neighbors: Neighbour term names reachable via hidden edges.
-    """
+class PathNode:
+    """A term node appearing on a connection path."""
 
     term_id: str
     term_name: str
     term_type: str
+    kb_id: str
     kb_file_path: str
-    unshown_edge_count: int
-    unshown_relations: list[str]
-    unshown_neighbors: list[str]
 
 
 @dataclass(frozen=True, slots=True)
-class SuggestedSeed:
-    """A routing suggestion: term to add as a seed for deeper exploration."""
+class PathEdge:
+    """An edge on a connection path."""
+
+    source_term_id: str
+    target_term_id: str
+    relation_name: str
+
+
+@dataclass(slots=True)
+class Path:
+    """A single connection path between a source and target term.
+
+    Attributes:
+        path_id: Unique path identifier (e.g. "p1").
+        depth: Number of edges (hops) in the path.
+        score: Relevance score for sorting.
+        readable_path: Human-readable path string (e.g. "A --[maps-to]--> B").
+        nodes: Ordered list of term nodes on the path.
+        edges: Ordered list of edges on the path.
+    """
+
+    path_id: str
+    depth: int
+    score: float
+    readable_path: str
+    nodes: list[PathNode] = field(default_factory=list)
+    edges: list[PathEdge] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class KnowledgeRef:
+    """A knowledge base reference for a term appearing on paths."""
 
     term_id: str
     term_name: str
-    reason: str
-    hops_from_seed: int
+    term_type: str
+    kb_id: str
+    kb_file_path: str
+    path_ids: list[str] = field(default_factory=list)
 
 
-@dataclass(frozen=True, slots=True)
-class Gap:
-    """A term that could not be resolved during graph traversal."""
+@dataclass(slots=True)
+class ConnectionSummary:
+    """Summary of the connection network for Agent consumption."""
 
-    term: str
-    reason: str  # "no_exact_match"
-    resolution: str  # "unresolved" | "mapped_to"
-    resolved_term_name: str = ""
+    one_sentence: str = ""
+    writing_claim: str = ""
 
 
-@dataclass(frozen=True, slots=True)
-class SubgraphStats:
-    """Aggregated statistics for a knowledge-graph subgraph.
-
-    Attributes:
-        relation_freq: Frequency count of each relation name in the subgraph.
-        node_degree: Degree (edge count) of each node in the subgraph.
-    """
-
-    relation_freq: dict[str, int]
-    node_degree: dict[str, int]
-
-
-def _relation_quality(relation_name: str, stats: SubgraphStats) -> float:
-    """Compute a quality score [0.3, 3.0] for a relation based on subgraph statistics.
-
-    The score combines a baseline (0.3) with a term-frequency component that rewards
-    relations appearing frequently in the subgraph, up to a maximum of 3.0.
-
-    Args:
-        relation_name: The relation name to score.
-        stats: Aggregated subgraph statistics.
-
-    Returns:
-        A quality score between 0.3 and 3.0 (inclusive).
-    """
-    freq = stats.relation_freq.get(relation_name, 0)
-    max_freq = max(stats.relation_freq.values(), default=1)
-    tf_score = freq / max_freq
-    return 0.3 + tf_score * 2.7
-
-
-# --- Module-level constants ---
+# ── Module-level constants ───────────────────────────────────────────────────
 
 DEFAULT_RELATION_NAMES: tuple[str, ...] = (
     "maps-to",
@@ -149,12 +140,20 @@ DEFAULT_RELATION_NAMES: tuple[str, ...] = (
     "所属产品",
 )
 
-PRIORITY_TERM_TYPES: frozenset[str] = frozenset(
-    {"Concept", "Methodology", "TechComponent", "Ability", "Feature", "Operation"}
-)
-
 MAX_EDGES: int = 2000
-"""邻接表最大边数，超出后停止 CTE 加载。"""
+"""Maximum edges to load into adjacency. Stop CTE loading beyond this."""
 
 HUB_THRESHOLD: int = 50
-"""Threshold for node degree above which a node is considered a hub."""
+"""Node degree threshold for hub penalty in path scoring."""
+
+# Relation weight multipliers for path scoring (1.4.4).
+RELATION_WEIGHTS: dict[str, float] = {
+    "maps-to": 2.0,
+    "part-of": 1.0,
+    "realizes": 1.0,
+    "supports": 0.5,
+    "所属产品": 0.5,
+}
+
+# Nodes matching these name patterns get a generic-penalty in path scoring.
+GENERIC_NODE_PENALTY_PATTERNS: tuple[str, ...] = ("ByDC",)
