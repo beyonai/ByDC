@@ -44,7 +44,8 @@ class TermBackendMixin(DataCloudDataBackendBase):
         """检索术语。
 
         支持按关键词、术语名称、类型、标签等多维度检索，返回分页结果。
-        典型用途：术语搜索、候选列表加载。
+        当 query_type 为 mixed/embedding 且未提供 query_vector 时，
+        内部自动计算 embedding 向量。
 
         Args:
             dataset_ids:      术语库 ID 列表。None/空 = 不限制。
@@ -56,12 +57,23 @@ class TermBackendMixin(DataCloudDataBackendBase):
             label_filters:    标签过滤条件列表。
             label_condition:  多标签组合方式（and/or）。
             term_ids:         按 ID 列表精确查询。传入时忽略 keyword/query_type。
+            query_vector:     查询向量。None 时 mixed/embedding 自动计算。
             top_k:            返回条数（1..200）。
             offset:           分页偏移（>=0）。
 
         Returns:
             QueryResult，包含 total 和 items（TermItem 列表）。
         """
+        # Auto-compute vector for mixed/embedding when not provided
+        effective_vector = query_vector
+        if (
+            effective_vector is None
+            and query_type in ("mixed", "embedding")
+            and keyword
+        ):
+            svc = self._get_embedding()
+            effective_vector = svc.get_text_embedding(keyword)
+
         reader = create_reader()
         return reader.query_terms(
             dataset_ids=dataset_ids,
@@ -74,10 +86,71 @@ class TermBackendMixin(DataCloudDataBackendBase):
             label_condition=label_condition,
             term_ids=term_ids,
             ext_attrs=ext_attrs,
-            query_vector=query_vector,
+            query_vector=effective_vector,
             top_k=top_k,
             offset=offset,
         )
+
+    def search_terms_batch(
+        self,
+        *,
+        keywords: list[str],
+        dataset_ids: list[str] | None = None,
+        term_type: str | None = None,
+        query_type: QueryType = "mixed",
+        parent_term_code: str | None = None,
+        label_filters: list[LabelFilter] | None = None,
+        label_condition: LabelCondition = "and",
+        ext_attrs: dict[str, Any] | None = None,
+        top_k: int = 20,
+        offset: int = 0,
+    ) -> dict[str, QueryResult]:
+        """批量检索术语 — 内部批量 embedding + UNION ALL SQL。
+
+        Args:
+            keywords:         搜索关键词列表。
+            dataset_ids:      术语库 ID 列表。
+            term_type:        术语类型编码。
+            query_type:       检索策略（fulltext/exact/embedding/mixed）。
+            parent_term_code: 父术语编码过滤。
+            label_filters:    标签过滤条件列表。
+            label_condition:  多标签组合方式（and/or）。
+            ext_attrs:        扩展属性键值过滤。
+            top_k:            返回条数。
+            offset:           分页偏移。
+
+        Returns:
+            ``{keyword: QueryResult, ...}``，与 keywords 一一对应。
+        """
+        if not keywords:
+            return {}
+
+        # Auto-compute batch vectors for mixed/embedding
+        query_vectors: list[list[float]] | None = None
+        if query_type in ("mixed", "embedding"):
+            svc = self._get_embedding()
+            query_vectors = svc.get_text_embedding_batch(keywords)
+
+        reader = create_reader()
+        batch_results = reader.query_terms_batch(
+            keywords=keywords,
+            dataset_ids=dataset_ids,
+            term_type=term_type,
+            query_type=query_type,
+            parent_term_code=parent_term_code,
+            label_filters=label_filters,
+            label_condition=label_condition,
+            ext_attrs=ext_attrs,
+            query_vectors=query_vectors,
+            top_k=top_k,
+            offset=offset,
+        )
+
+        # Zip results with keywords
+        result: dict[str, QueryResult] = {}
+        for keyword, qr in zip(keywords, batch_results):
+            result[keyword] = qr
+        return result
 
     def get_term_detail(
         self, *, library_id: str, term_id: str

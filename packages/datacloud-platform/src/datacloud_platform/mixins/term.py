@@ -31,6 +31,11 @@ class TermMixin(TermSyncHandler):
     ) -> dict[str, Any]:
         return self._term_for(base_id).search_terms(**kwargs)
 
+    def search_terms_batch(
+        self: _HasTermBackend, base_id: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        return self._term_for(base_id).search_terms_batch(**kwargs)
+
     def get_term_detail(
         self: _HasTermBackend, base_id: str, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
@@ -389,22 +394,19 @@ class TermMixin(TermSyncHandler):
         root_visited: set[str] = set()
         root_terms: list[dict[str, Any]] = []
 
-        # ── 1. Search by keywords ─────────────────────────────────────
+        # ── 1. Search by keywords (batch) ────────────────────────────
         if keywords:
-            # Batch compute keyword vectors for mixed-mode RRF fusion
-            keyword_vectors = self._term_for(base_id).embed_batch(keywords)
-            for idx, keyword in enumerate(keywords):
-                query_vector = (
-                    keyword_vectors[idx] if idx < len(keyword_vectors) else None
-                )
-                search_result: Any = self._term_for(base_id).search_terms(
-                    keyword=keyword,
-                    query_type="mixed",
-                    query_vector=query_vector,
-                    top_k=options.top_k,
-                    label_filters=label_filters,
-                    label_condition="or",
-                )
+            batch_results = self._term_for(base_id).search_terms_batch(
+                keywords=keywords,
+                query_type="mixed",
+                top_k=options.top_k,
+                label_filters=label_filters,
+                label_condition="or",
+            )
+            for keyword in keywords:
+                search_result: Any = batch_results.get(keyword)
+                if search_result is None:
+                    continue
 
                 # Handle both QueryResult dataclass and dict returns
                 result_items: Any
