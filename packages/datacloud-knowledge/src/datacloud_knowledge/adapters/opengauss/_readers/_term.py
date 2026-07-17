@@ -3608,4 +3608,71 @@ class _TermReader(_ReaderBase):
             "totalPages": (total + page_size - 1) // page_size if page_size > 0 else 0,
         }
 
+    # ── Flat edge loading (no CTE, no recursion) ──────────────────────
+
+    def query_edges_by_kb_id(
+        self,
+        *,
+        kb_ids: list[str],
+        limit: int = 2000,
+        relation_category: str | None = None,
+    ) -> dict[str, Any]:
+        """Flat query: load all edges where either endpoint belongs to any kb_id.
+
+        Replaces recursive CTE for the bridge-node computation.  Single
+        scan of term_relation + term with ext_attrs->>'kb_id' filter.
+        """
+        if not kb_ids:
+            return {"data": []}
+
+        cat_clause = ""
+        cat_param: dict[str, str] = {}
+        if relation_category:
+            cat_clause = "AND tr.relation_category = :rel_cat"
+            cat_param = {"rel_cat": relation_category}
+
+        sql = text(f"""
+            SELECT
+                tr.source_term_id,
+                tr.target_term_id,
+                tr.relation_name,
+                st.term_name           AS source_term_name,
+                st.term_type_code      AS source_term_type,
+                st.ext_attrs           AS source_ext_attrs,
+                tt.term_name           AS target_term_name,
+                tt.term_type_code      AS target_term_type,
+                tt.ext_attrs           AS target_ext_attrs
+            FROM term_relation tr
+            JOIN term st ON st.term_id = tr.source_term_id
+            JOIN term tt ON tt.term_id = tr.target_term_id
+            WHERE (st.ext_attrs->>'kb_id' = ANY(:kb_ids)
+               OR tt.ext_attrs->>'kb_id' = ANY(:kb_ids))
+              {cat_clause}
+            ORDER BY tr.relation_id
+            LIMIT :limit
+        """)
+
+        with self._get_session() as session:
+            rows = session.execute(
+                sql,
+                {"kb_ids": list(kb_ids), "limit": limit, **cat_param},
+            ).fetchall()
+
+        data = [
+            {
+                "source_term_id": str(r[0]) if r[0] else None,
+                "target_term_id": str(r[1]) if r[1] else None,
+                "relation_name": str(r[2]),
+                "source_term_name": str(r[3]) if r[3] else "",
+                "source_term_type": str(r[4]) if r[4] else "",
+                "source_ext_attrs": r[5] if isinstance(r[5], dict) else {},
+                "target_term_name": str(r[6]) if r[6] else "",
+                "target_term_type": str(r[7]) if r[7] else "",
+                "target_ext_attrs": r[8] if isinstance(r[8], dict) else {},
+            }
+            for r in rows
+        ]
+
+        return {"data": data}
+
     # ── end of _TermReader ────────────────────────────────────────────
