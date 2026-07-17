@@ -11,7 +11,15 @@ from datacloud_platform.models.property import Property  # noqa: TC001
 
 
 class ObjectType(BaseModel):
-    """Object type definition (13 API fields — properties and actions embedded)."""
+    """
+    Object type definition (13 API fields — properties and actions embedded).
+    term_sync:{
+         "enabled": true,
+         "term_name_field": "<父表名称字段>",
+         "term_code_field": "id",
+         "sync_on": ["insert", "update", "delete", "kb_write"]
+       }
+    """
 
     object_id: str | None = Field(default=None, alias="objectId")
     object_code: str = Field(alias="objectCode")
@@ -29,6 +37,7 @@ class ObjectType(BaseModel):
     properties: list[Property] = Field(default_factory=list, alias="properties")
     actions: list[Action] = Field(default_factory=list, alias="actions")
     ext_property: dict[str, Any] = Field(default_factory=dict, alias="extProperty")
+    term_sync: dict[str, Any] = Field(default_factory=dict, alias="termSync")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

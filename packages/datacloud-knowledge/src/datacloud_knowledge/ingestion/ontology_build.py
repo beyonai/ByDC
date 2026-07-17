@@ -126,6 +126,8 @@ class OntologyBuildSession:
         kb_directory: str = "",
         base_id: str = "",
         ext_property: dict[str, Any] | None = None,
+        term_sync: dict[str, Any] | None = None,
+        rewrite_entity_code: bool | None = True,
     ) -> dict[str, Any]:
         """收集本体对象信息，合并到暂存状态，返回当前完整状态。
 
@@ -148,12 +150,14 @@ class OntologyBuildSession:
 
         # 首次收集时，自动生成带工号+随机后缀的唯一编码
         if not state.get("entity_code"):
-            short_id = uuid.uuid4().hex[:6]
-            unique_code = (
-                f"p_{entity_code}_{user_code}_{short_id}"
-                if user_code
-                else f"p_{entity_code}_{short_id}"
-            )
+            unique_code = entity_code
+            if rewrite_entity_code is None or rewrite_entity_code:
+                short_id = uuid.uuid4().hex[:6]
+                unique_code = (
+                    f"p_{entity_code}_{user_code}_{short_id}"
+                    if user_code
+                    else f"p_{entity_code}_{short_id}"
+                )
             state["entity_code"] = unique_code
             key = f"{prefix}{session_id}_{unique_code}" if session_id else f"{prefix}{unique_code}"
         else:
@@ -178,6 +182,8 @@ class OntologyBuildSession:
             state["base_id"] = base_id
         if ext_property is not None:
             state["ext_property"] = ext_property
+        if term_sync is not None:
+            state["term_sync"] = term_sync
 
         if fields:
             existing: dict[str, dict[str, Any]] = {

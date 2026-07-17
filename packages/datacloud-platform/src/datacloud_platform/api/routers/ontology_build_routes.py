@@ -57,6 +57,8 @@ class ObjectCollectRequest(BaseModel):
     object_relations: list[dict[str, Any]] | None = Field(
         default=None, alias="object_relations"
     )
+    term_sync: dict[str, Any] | None = Field(default=None, alias="term_sync")
+    rewrite_entity_code: bool = Field(default=True, alias="rewrite_entity_code")
 
 
 class ObjectSubmitRequest(BaseModel):
@@ -144,6 +146,8 @@ def create_ontology_build_routes(platform: DatacloudPlatform) -> APIRouter:
                 kb_directory=body.kb_directory,
                 base_id=body.base_id,
                 ext_property=body.ext_property,
+                term_sync=body.term_sync,
+                rewrite_entity_code=body.rewrite_entity_code,
             )
         except Exception as exc:
             logger.exception("object/collect 失败")

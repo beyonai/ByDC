@@ -122,6 +122,8 @@ def _normalize_entity(
         )
         result["user_code"] = data.get("user_code") or data.get("userCode")
 
+        result["term_sync"] = data.get("term_sync") or data.get("termSync")
+
         # DYNAMIC_TABLE objects need a datasource_alias and table_name for the executor.
         if str(result.get("source_type", "")).upper() == "DYNAMIC_TABLE":
             if not result.get("datasource_alias"):

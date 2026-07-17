@@ -361,7 +361,8 @@ class KbSearchExecutor:
         except Exception:  # noqa: BLE001
             logger.debug("KB 术语同步跳过：knowledge 包不可用")
             return
-
+        cls = self._loader.get_ontology_class(write_requests[0].object_code)
+        term_sync = cls.term_sync
         terms: list[dict[str, Any]] = []
         for req in write_requests:
             markdown_file_path = _to_markdown_file_path(req.file_path, req.kb_directory)
@@ -424,9 +425,17 @@ class KbSearchExecutor:
                         }
                     )
 
+            # 若配置了 term_sync，从 labels 中取对应字段值作为 term_name / term_code
+            if term_sync is not None and term_sync.enabled:
+                term_name = str(req.labels.get(term_sync.term_name_field) or file_stem)
+                term_code = str(req.labels.get(term_sync.term_code_field) or file_stem)
+            else:
+                term_name = file_stem
+                term_code = file_stem
+
             term: dict[str, Any] = {
-                "term_name": file_stem,
-                "term_code": file_stem,
+                "term_name": term_name,
+                "term_code": term_code,
                 "term_type_code": term_type_code,
                 "ext_attrs": {
                     "kb_id": req.kb_id,

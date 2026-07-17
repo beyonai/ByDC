@@ -70,6 +70,8 @@ class OntologyBuildMixin:
         kb_directory: str = "",
         base_id: str = "",
         ext_property: dict[str, Any] | None = None,
+        term_sync: dict[str, Any] | None = None,
+        rewrite_entity_code: bool | None = True,
     ) -> dict[str, Any]:
         """收集本体对象信息（多轮），委托给 OntologyBuildSession。"""
         session = self._build_session(user_code)
@@ -86,6 +88,8 @@ class OntologyBuildMixin:
                 kb_directory=kb_directory,
                 base_id=base_id,
                 ext_property=ext_property,
+                term_sync=term_sync,
+                rewrite_entity_code=rewrite_entity_code,
             ),
         )
 
@@ -211,6 +215,7 @@ class OntologyBuildMixin:
                     propertyName=f.get("property_name", prop_code),
                     propertyDesc=f.get("property_desc", ""),
                     dataType=f.get("data_type", "STRING"),
+                    is_required=f.get("is_required") or f.get("required", False),
                     terminology=terminology,
                 )
             )
@@ -228,6 +233,7 @@ class OntologyBuildMixin:
             datasourceAlias=datasource_alias,  # type: ignore[call-arg]
             ext_property=state.get("ext_property"),
             properties=properties,
+            term_sync=state.get("term_sync"),
         )
 
         # 4. CRUD: 创建对象 + 加入场景
