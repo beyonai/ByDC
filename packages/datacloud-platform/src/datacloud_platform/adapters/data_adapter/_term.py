@@ -39,6 +39,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         ext_attrs: dict[str, Any] | None = None,
         top_k: int = 20,
         offset: int = 0,
+        query_vector: list[float] | None = None,
     ) -> QueryResult:
         """检索术语。
 
@@ -73,6 +74,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             label_condition=label_condition,
             term_ids=term_ids,
             ext_attrs=ext_attrs,
+            query_vector=query_vector,
             top_k=top_k,
             offset=offset,
         )

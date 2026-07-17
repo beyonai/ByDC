@@ -32,6 +32,7 @@ class TermBackend(Protocol):
         ext_attrs: dict[str, Any] | None = None,
         top_k: int = 20,
         offset: int = 0,
+        query_vector: list[float] | None = None,
     ) -> dict[str, Any]:
         """多策略术语检索（exact/BM25/vector/RRF混合）。
 

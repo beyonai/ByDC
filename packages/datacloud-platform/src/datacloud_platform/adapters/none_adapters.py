@@ -604,6 +604,7 @@ class _NoopTermBackend:
         term_ids: list[str] | None = None,
         top_k: int = 20,
         offset: int = 0,
+        query_vector: list[float] | None = None,
     ) -> dict[str, Any]:
         """Return empty search result."""
         return {"data": [], "totalCount": 0}

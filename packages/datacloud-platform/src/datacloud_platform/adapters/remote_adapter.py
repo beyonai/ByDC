@@ -1820,6 +1820,7 @@ class RemoteTermBackend:
         term_ids: list[str] | None = None,
         top_k: int = 20,
         offset: int = 0,
+        query_vector: list[float] | None = None,
     ) -> dict[str, Any]:
         """Remote term search — not yet implemented."""
         logger.debug("Remote term: search_terms not yet implemented")
