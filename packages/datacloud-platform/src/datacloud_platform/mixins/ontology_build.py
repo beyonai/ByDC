@@ -219,7 +219,7 @@ class OntologyBuildMixin:
                     propertyName=f.get("property_name", prop_code),
                     propertyDesc=f.get("property_desc", ""),
                     dataType=f.get("data_type", "STRING"),
-                    is_required=f.get("is_required") or f.get("required", False),
+                    isRequired=f.get("is_required") or f.get("required", False),
                     terminology=terminology,
                 )
             )
