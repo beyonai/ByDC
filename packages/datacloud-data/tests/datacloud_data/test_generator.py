@@ -544,3 +544,52 @@ def test_g9_compute_description_no_map_error_hint() -> None:
     """G9: compute 常见错误不含误导性"系统无法映射时会报错"描述。"""
     desc = build_compute_description("企业基础信息", "企业信息对象", FIELDS)
     assert "系统无法映射时会报错" not in desc
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# update_kb schema 测试
+# ─────────────────────────────────────────────────────────────────────────────
+
+from datacloud_data_sdk.virtual_action.generator import build_update_kb_schema  # noqa: E402
+
+
+def test_merge_write_schema_required_fields() -> None:
+    """update_kb schema 含 4 个必填字段，original_content/current_content 不在 schema 中。"""
+    schema = build_update_kb_schema("知识库对象", KB_FIELDS)
+    assert schema["required"] == [
+        "original_source_path",
+        "current_source_path",
+        "source_path",
+        "content",
+    ]
+    # 原/现文件正文不暴露给模型，不在 schema properties 中
+    props = schema["properties"]
+    assert "original_content" not in props
+    assert "current_content" not in props
+
+
+def test_merge_write_schema_labels_excludes_primary_key() -> None:
+    """update_kb schema 的 labels 不暴露主键字段。"""
+    schema = build_update_kb_schema("知识库对象", KB_FIELDS)
+    labels_props = schema["properties"]["labels"]["properties"]
+    assert "status" in labels_props
+    assert "doc_id" not in labels_props
+
+
+def test_merge_write_schema_action_family() -> None:
+    """update_kb schema 的 x-dc-action-family 为 update_kb。"""
+    schema = build_update_kb_schema("知识库对象", KB_FIELDS)
+    assert schema["x-dc-action-family"] == "update_kb"
+
+
+def test_merge_write_schema_all_path_fields_present() -> None:
+    """update_kb schema 含两个来源路径字段、写入路径和 content 字段；原/现正文不在 schema 中。"""
+    schema = build_update_kb_schema("知识库对象", KB_FIELDS)
+    props = schema["properties"]
+    for key in (
+        "original_source_path",
+        "current_source_path",
+        "source_path",
+        "content",
+    ):
+        assert key in props, f"缺少字段: {key}"

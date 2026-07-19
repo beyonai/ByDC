@@ -37,7 +37,7 @@ class ObjectType(BaseModel):
     properties: list[Property] = Field(default_factory=list, alias="properties")
     actions: list[Action] = Field(default_factory=list, alias="actions")
     ext_property: dict[str, Any] = Field(default_factory=dict, alias="extProperty")
-    term_sync: dict[str, Any] = Field(default_factory=dict, alias="termSync")
+    term_sync: dict[str, Any] | None = Field(default_factory=dict, alias="termSync")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

@@ -15,6 +15,8 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeFileNameSearchRequest,
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
+    KnowledgeUpdateRequest,
+    KnowledgeUpdateResult,
     KnowledgeWriteRequest,
     KnowledgeWriteResult,
     _render_markdown_with_front_matter,
@@ -51,6 +53,8 @@ class CustomSearchBackend:
         self.file_name_request: KnowledgeFileNameSearchRequest | None = None
         self.write_request: KnowledgeWriteRequest | None = None
         self.write_requests: list[KnowledgeWriteRequest] = []
+        self.update_request: KnowledgeUpdateRequest | None = None
+        self.update_requests: list[KnowledgeUpdateRequest] = []
 
     async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
         self.request = request
@@ -75,6 +79,22 @@ class CustomSearchBackend:
         self.write_request = request
         self.write_requests.append(request)
         return KnowledgeWriteResult(
+            records=[
+                {
+                    **request.labels,
+                    "knCode": request.kb_id,
+                    "filePath": request.file_path,
+                    "content": request.content,
+                }
+            ],
+            total=1,
+            meta={"provider": "custom"},
+        )
+
+    async def update(self, request: KnowledgeUpdateRequest) -> KnowledgeUpdateResult:
+        self.update_request = request
+        self.update_requests.append(request)
+        return KnowledgeUpdateResult(
             records=[
                 {
                     **request.labels,
@@ -1429,3 +1449,152 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
     }
     with patch.dict(sys.modules, modules):
         yield init_redis
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# update_kb 测试
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_merge_write_action_is_injected() -> None:
+    """inject_virtual_actions 应为 KB 对象注入 update_kb_* 动作。"""
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "meeting_doc",
+                    "object_name": "会议文档",
+                    "source_type": "KNOWLEDGE_BASE",
+                    "ext_property": {"kb_id": "kb-sales"},
+                    "fields": [
+                        {"field_code": "status", "field_name": "状态", "field_type": "STRING"},
+                    ],
+                }
+            ]
+        }
+    )
+    inject_virtual_actions(loader)
+
+    obj = loader.get_object("meeting_doc")
+    action_codes = [a.action_code for a in obj._cls.actions]
+    assert "update_kb_meeting_doc" in action_codes
+
+
+@pytest.mark.asyncio
+async def test_merge_write_sends_three_write_requests() -> None:
+    """update_kb 动作应只向 backend 发送 1 条 update 请求（融合后文件），来源路径记录在 meta 中。"""
+    backend = CustomSearchBackend()
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "meeting_doc",
+                    "object_name": "会议文档",
+                    "source_type": "KNOWLEDGE_BASE",
+                    "ext_property": {"kb_id": "kb-sales"},
+                    "fields": [
+                        {"field_code": "status", "field_name": "状态", "field_type": "STRING"},
+                    ],
+                }
+            ]
+        }
+    )
+    loader.configure(
+        kb_backends={"http_knowledge_import": backend},
+        default_kb_backend="http_knowledge_import",
+    )
+
+    result = await KbSearchExecutor(loader).update_kb(
+        "meeting_doc",
+        {
+            "original_source_path": "/sales/old.md",
+            "current_source_path": "/sales/new.md",
+            "source_path": "/sales/merged.md",
+            "content": "融合后内容",
+            "labels": {"status": "active"},
+        },
+    )
+
+    assert len(backend.update_requests) == 1
+    assert backend.update_requests[0].file_path == "/sales/merged.md"
+    assert result["total"] == 1
+    assert "records" in result
+    assert "meta" in result
+    assert "/sales/old.md" in result["meta"]["source_paths"]
+    assert "/sales/new.md" in result["meta"]["source_paths"]
+
+
+@pytest.mark.asyncio
+async def test_merge_write_fails_without_kb_id() -> None:
+    """update_kb 在 kb_id 未配置时返回错误响应。"""
+    backend = CustomSearchBackend()
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "meeting_doc",
+                    "object_name": "会议文档",
+                    "source_type": "KNOWLEDGE_BASE",
+                    "fields": [],
+                }
+            ]
+        }
+    )
+    loader.configure(
+        kb_backends={"http_knowledge_import": backend},
+        default_kb_backend="http_knowledge_import",
+    )
+
+    result = await KbSearchExecutor(loader).update_kb(
+        "meeting_doc",
+        {
+            "original_source_path": "/a.md",
+            "current_source_path": "/b.md",
+            "source_path": "/c.md",
+            "content": "融合内容",
+        },
+    )
+
+    assert result["total"] == 0
+    assert result["meta"]["note"] == "knowledge base id not configured"
+
+
+@pytest.mark.asyncio
+async def test_merge_write_fails_on_missing_path() -> None:
+    """update_kb 路径不以 / 开头时返回错误响应。"""
+    backend = CustomSearchBackend()
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "objects": [
+                {
+                    "object_code": "meeting_doc",
+                    "object_name": "会议文档",
+                    "source_type": "KNOWLEDGE_BASE",
+                    "ext_property": {"kb_id": "kb-sales"},
+                    "fields": [],
+                }
+            ]
+        }
+    )
+    loader.configure(
+        kb_backends={"http_knowledge_import": backend},
+        default_kb_backend="http_knowledge_import",
+    )
+
+    result = await KbSearchExecutor(loader).update_kb(
+        "meeting_doc",
+        {
+            "original_source_path": "no-leading-slash.md",  # 非法路径
+            "current_source_path": "/b.md",
+            "source_path": "/c.md",
+            "content": "融合内容",
+        },
+    )
+
+    assert result["total"] == 0
+    assert "original_source_path" in result["meta"]["note"]

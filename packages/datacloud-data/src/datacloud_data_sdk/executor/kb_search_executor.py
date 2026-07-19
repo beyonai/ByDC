@@ -27,6 +27,8 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeFileNameSearchRequest,
     KnowledgeSearchBackend,
     KnowledgeSearchRequest,
+    KnowledgeUpdateBackend,
+    KnowledgeUpdateRequest,
     KnowledgeWriteBackend,
     KnowledgeWriteRequest,
     _merge_related_docs_into_labels,
@@ -339,6 +341,156 @@ class KbSearchExecutor:
             meta["columns"] = columns
 
         # Inject _write_note into every record so callers can surface it directly.
+        for record in response.get("records") or []:
+            record["_write_note"] = write_note
+
+        return response
+
+    async def update_kb(
+        self,
+        object_code: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute merge_write_* action by writing only the merged output file.
+
+        融合更新：仅将融合后文件写入知识库；原融合文件和现整理文件路径仅作来源引用记录，
+        不会被修改或重新写入。调用方负责提供融合后的 content，此方法不做内容合并计算。
+        """
+        cls = self._loader.get_ontology_class(object_code)
+        kb_configs = getattr(self._loader._config, "kb_source_configs", None)
+        configured_backend = getattr(self._loader._config, "kb_search_backend", None)
+        datasource_alias = self._get_datasource_alias(cls)
+        query = ""
+        kb_resource_id = self._get_kb_resource_id(cls)
+        kb_id = self._get_kb_id(cls)
+        kb_directory = self._get_kb_directory(cls)
+
+        if not kb_id:
+            return self._empty_response(
+                object_code,
+                arguments,
+                "knowledge base id not configured",
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        backend = self._resolve_backend(cls, kb_configs, configured_backend)
+        if not hasattr(backend, "update"):
+            return self._empty_response(
+                object_code,
+                arguments,
+                "knowledge backend does not support update",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        # 校验来源路径（必填，仅作引用记录）
+        for path_key in ("original_source_path", "current_source_path"):
+            path_val = str(arguments.get(path_key) or "")
+            if not path_val.startswith("/"):
+                return self._empty_response(
+                    object_code,
+                    arguments,
+                    f"{path_key} must start with /",
+                    error=True,
+                    meta_extra=_standard_action_meta(cls, datasource_alias, query),
+                )
+
+        # 校验融合后文件（必填，唯一写入目标）
+        merged_path = str(arguments.get("source_path") or "")
+        merged_content = str(arguments.get("content") or "")
+        if not merged_path.startswith("/"):
+            return self._empty_response(
+                object_code,
+                arguments,
+                "source_path must start with /",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+        if not merged_content:
+            return self._empty_response(
+                object_code,
+                arguments,
+                "content is required",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        # labels 只应用于融合后文件
+        merged_labels = self._resolve_label_terms(arguments.get("labels") or {}, cls)
+        markdown_file_path = _to_markdown_file_path(merged_path, kb_directory)
+        merged_labels = self._inject_primary_key_label(merged_labels, cls, markdown_file_path)
+
+        update_request = KnowledgeUpdateRequest(
+            object_code=cls.object_code,
+            datasource_alias=datasource_alias,
+            kb_resource_id=kb_resource_id,
+            kb_id=kb_id,
+            kb_directory=kb_directory,
+            file_path=merged_path,
+            labels=merged_labels,
+            content=merged_content,
+            file_description=str(arguments.get("file_description") or ""),
+            metadata_properties=_metadata_properties_from_labels(merged_labels, cls),
+        )
+
+        try:
+            update_backend = cast(KnowledgeUpdateBackend, backend)
+            result = await update_backend.update(update_request)
+            raw_records: list[dict[str, Any]] = list(result.records)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("knowledge base merge_write failed: object_code=%s", object_code)
+            return self._empty_response(
+                object_code,
+                arguments,
+                str(exc),
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        records = ResultTermConverter(
+            getattr(self._loader._config, "term_loader", None)
+        ).convert_by_fields(raw_records, list(getattr(cls, "fields", [])))
+        records = _normalize_action_records(records, cls)
+        meta = _standard_action_meta(cls, datasource_alias, query)
+
+        write_requests = [
+            KnowledgeWriteRequest(
+                object_code=update_request.object_code,
+                datasource_alias=update_request.datasource_alias,
+                kb_resource_id=update_request.kb_resource_id,
+                kb_id=update_request.kb_id,
+                kb_directory=update_request.kb_directory,
+                file_path=update_request.file_path,
+                labels=update_request.labels,
+                content=update_request.content,
+                file_description=update_request.file_description,
+                metadata_properties=update_request.metadata_properties,
+            )
+        ]
+        await self._enqueue_kb_term_sync(write_requests)
+
+        kb_file_paths = [
+            _to_markdown_file_path(update_request.file_path, update_request.kb_directory)
+        ]
+        meta["kb_files"] = kb_file_paths
+        meta["source_paths"] = [
+            str(arguments.get("original_source_path") or ""),
+            str(arguments.get("current_source_path") or ""),
+        ]
+
+        response: dict[str, Any] = {"records": records, "total": len(records), "meta": meta}
+        _attach_session_file(response, write_requests)
+
+        session_paths: list[str] = (response.get("file") or {}).get("file_urls") or []
+        meta["session_files"] = session_paths
+        write_note = _write_summary(kb_file_paths, session_paths)
+        meta["_write_note"] = write_note
+
+        columns: list[dict[str, str]] = meta.get("columns") or []
+        if not any(c.get("name") == "_write_note" for c in columns):
+            columns.append({"name": "_write_note", "label": "写入说明", "type": "string"})
+            meta["columns"] = columns
+
         for record in response.get("records") or []:
             record["_write_note"] = write_note
 

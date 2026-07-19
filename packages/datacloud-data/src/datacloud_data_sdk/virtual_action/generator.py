@@ -562,6 +562,70 @@ def build_kb_write_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     }
 
 
+def build_update_kb_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
+    """生成 update_kb_* 知识库融合更新动作 inputSchema。
+
+    融合更新需要提供三个文件的信息：
+    - 原融合文件（original_source_path + original_content）
+    - 现整理文件（current_source_path + current_content）
+    - 融合后文件（source_path + content，即写入目标）
+
+    labels 字段约定与 write_* 完全一致，由调用方提供融合后的 content。
+    """
+    label_properties = {
+        _fc(field): _field_value_property(field)
+        for field in _writable_fields(fields, include_primary_key=False)
+    }
+    labels_schema: dict[str, Any] = {
+        "type": "object",
+        "additionalProperties": False,
+        "description": "融合后文件的知识库属性标签，键必须是对象属性编码；主键字段不在此处填写。",
+        "properties": label_properties,
+    }
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "description": (
+            f"将两个已有{scope_name}知识库文档融合为一个新文档并写入。"
+            "当你已经完成了文档融合（即把原融合文件与现整理文件合并整理成了新的正文），"
+            "需要将融合后的文档写入知识库，并记录两个来源文件路径时，使用此工具；"
+            "仅写入单个新文件或覆盖单个已有文件时请使用 write_* 工具。"
+            "调用方须自行计算融合后的 content，后端只写入融合后文件，不对原文件做任何修改。"
+            "content 必须提供完整正文，不得摘要、截断、删减或改写。"
+            "主键字段由最终生成的 .md 文件名自动生成，不需要也不允许在 labels 中显式传入。"
+            "注意不要修改原文件路径"
+        ),
+        "x-dc-action-family": "update_kb",
+        "x-dc-scope-type": "object",
+        "properties": {
+            "original_source_path": {
+                "type": "string",
+                "description": "原文件全路径，以 / 开头。仅作为来源引用记录，不会被修改或重新写入。(注意不要修改原文件路径)",
+            },
+            "current_source_path": {
+                "type": "string",
+                "description": "现整理文件全路径，以 / 开头。仅作为来源引用记录，不会被修改或重新写入。(注意不要修改原文件路径)",
+            },
+            "source_path": {
+                "type": "string",
+                "description": "融合后文件写入路径，以 / 开头。(注意不要修改原文件路径)",
+            },
+            "content": {
+                "type": "string",
+                "description": "融合后文件完整正文文本，必须包含融合后全部内容，不得摘要、截断、删减或改写。",
+            },
+            "labels": labels_schema,
+            "file_description": {"type": "string", "description": "融合后文件描述。"},
+        },
+        "required": [
+            "original_source_path",
+            "current_source_path",
+            "source_path",
+            "content",
+        ],
+    }
+
+
 def build_insert_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     """生成 insert_* 动态表新增动作 inputSchema。"""
     writable = _writable_fields(fields, include_primary_key=False)

@@ -25,7 +25,7 @@ ENABLED = True
 _INTERRUPT_TYPE = "operation_form"
 _CONFIRM_PARAM = "userConfirmed"
 _OPERATION_CONFIRM_PARAM = "_operationConfirm"
-_OPERATION_FAMILIES = frozenset({"insert", "update", "delete", "write", "operation"})
+_OPERATION_FAMILIES = frozenset({"insert", "update", "delete", "write", "update_kb", "operation"})
 _INPUT_DIRECTIONS = frozenset({"IN", "INOUT", ""})
 _IGNORED_SCHEMA_FIELDS = frozenset({_CONFIRM_PARAM, _OPERATION_CONFIRM_PARAM})
 _DISPLAY_WRAPPER_FIELDS = frozenset({"requestBody", "body", "parameters"})
@@ -60,6 +60,10 @@ _FIELD_NAME_OVERRIDES: dict[str, str] = {
     "content": "正文内容",
     "source_text": "正文内容",
     "file_description": "文件描述",
+    "original_source_path": "原文件路径",
+    "original_content": "原文件正文内容",
+    "current_source_path": "现整理文件路径",
+    "current_content": "现整理文件正文内容",
 }
 _LABEL_DESCRIPTION_MAX_LEN = 30
 _SENTENCE_PUNCTUATION = frozenset("，。；：、,.;:!?！？\n\r")
@@ -69,6 +73,11 @@ _NULL_FILTER_OPERATORS = frozenset({"is_null", "is_not_null"})
 _KB_WRITE_PATH_FIELDS: tuple[str, ...] = ("source_path", "file_path")
 # 知识库 write 动作的内容字段（与 kb_search_executor 保持一致，统一写入 content）
 _KB_WRITE_CONTENT_FIELD = "content"
+# 知识库 update_kb 动作：从存储读取并注入表单展示的路径-内容字段对（不覆盖模型传入的 content）
+_KB_UPDATE_KB_DISPLAY_PAIRS: tuple[tuple[str, str], ...] = (
+    ("original_source_path", "original_content"),
+    ("current_source_path", "current_content"),
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +116,114 @@ async def _try_fill_file_content(
 
     # 单条模式
     return await _fill_record_file_content(tool_params, storage, inv_ctx)
+
+
+async def _try_fill_update_kb_file_content(
+    tool_params: dict[str, Any],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """根据 update_kb 动作的原/现路径字段，从存储读取文件内容注入 tool_params 供表单展示。
+
+    处理两对路径-内容字段（来源引用，只读展示）：
+    - original_source_path → original_content
+    - current_source_path  → current_content
+
+    注意：不处理 source_path→content，该字段由模型提供，属于实际写入内容。
+    读取失败或内容为空时静默忽略。
+
+    Args:
+        tool_params: 工具调用参数字典。
+        metadata: HookContext.metadata，用于构建 InvocationContext。
+
+    Returns:
+        有内容被注入时返回新的参数字典副本，否则返回原字典。
+    """
+    storage = _resolve_storage_from_metadata(metadata)
+    if storage is None:
+        return tool_params
+
+    inv_ctx = _build_invocation_context(metadata, storage)
+    patched = dict(tool_params)
+    changed = False
+
+    for path_field, content_field in _KB_UPDATE_KB_DISPLAY_PAIRS:
+        path_value = str(patched.get(path_field) or "").strip()
+        if not path_value:
+            continue
+        try:
+            with inv_ctx:
+                file_content: str = await _read_file_via_storage(path_value, storage)
+        except Exception:
+            logger.warning(
+                "[operation_confirmation] update_kb read_file raised exception path=%r field=%s",
+                path_value,
+                path_field,
+                exc_info=True,
+            )
+            continue
+        if not file_content or file_content.startswith("错误："):
+            logger.info(
+                "[operation_confirmation] update_kb read_file skipped: path=%r field=%s result=%r",
+                path_value,
+                path_field,
+                file_content[:80] if file_content else "",
+            )
+            continue
+        patched[content_field] = file_content
+        changed = True
+        logger.info(
+            "[operation_confirmation] update_kb file content filled: path=%r field=%s len=%d",
+            path_value,
+            content_field,
+            len(file_content),
+        )
+
+    return patched if changed else tool_params
+
+
+def _inject_update_kb_display_fields(
+    schema: dict[str, Any],
+    tool_params: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """将 tool_params 中的 original_content / current_content 注入 schema properties。
+
+    这两个字段不在 update_kb 的 inputSchema 里（不暴露给模型），但在表单中需要展示。
+    由 _try_fill_update_kb_file_content 从存储填充后，通过此函数临时注入 schema 供渲染。
+    注入的字段标记为 readOnly，用户不可编辑。
+    """
+    display_pairs: list[tuple[str, str, str]] = [
+        ("original_source_path", "original_content", "原文件正文内容"),
+        ("current_source_path", "current_content", "现整理文件正文内容"),
+    ]
+    extra_props: dict[str, Any] = {}
+    for path_field, content_field, label in display_pairs:
+        if content_field in tool_params:
+            extra_props[content_field] = {
+                "type": "string",
+                "title": label,
+                "description": f"由系统根据 {path_field} 自动读取，仅供确认查阅，不可修改。",
+                "readOnly": True,
+                "x-dc-form-type": "textarea",
+            }
+    if not extra_props:
+        return schema, tool_params
+
+    # 深拷贝 schema，在对应路径字段之后插入内容展示字段
+    from copy import deepcopy
+
+    patched_schema = deepcopy(schema)
+    props = patched_schema.get("properties")
+    if not isinstance(props, dict):
+        return schema, tool_params
+
+    new_props: dict[str, Any] = {}
+    for key, val in props.items():
+        new_props[key] = val
+        for path_field, content_field, _ in display_pairs:
+            if key == path_field and content_field in extra_props:
+                new_props[content_field] = extra_props[content_field]
+    patched_schema["properties"] = new_props
+    return patched_schema, tool_params
 
 
 async def _fill_record_file_content(
@@ -211,6 +328,16 @@ def _is_kb_write_action(action: Any) -> bool:
     return source_type == "KNOWLEDGE_BASE"
 
 
+def _is_kb_update_kb_action(action: Any) -> bool:
+    """判断 action 是否为知识库 update_kb 动作。"""
+    action_family = str(getattr(action, "action_family", "") or "").lower()
+    if action_family != "update_kb":
+        return False
+    scope = getattr(action, "_datacloud_scope", None)
+    source_type = str(getattr(scope, "source_type", "") or "").upper()
+    return source_type == "KNOWLEDGE_BASE"
+
+
 async def before_call_back(ctx: HookContext) -> HookDecision | None:
     """Interrupt operation tool calls before execution and resume with confirmed params."""
     tool_name = str(ctx.get("tool_name") or "")
@@ -226,9 +353,11 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         return None
     term_loader = _term_loader_from_loader(loader)
 
-    # 读取文件内容替换模型参数（仅知识库 write 动作，读取失败则静默忽略）
+    # 读取文件内容替换模型参数（仅知识库 write / update_kb 动作，读取失败则静默忽略）
     if _is_kb_write_action(action):
         tool_params = await _try_fill_file_content(tool_params, metadata)
+    elif _is_kb_update_kb_action(action):
+        tool_params = await _try_fill_update_kb_file_content(tool_params, metadata)
 
     formatted_params = _get_operation_formatted_params(state_dict, tool_name, tool_call_id)
     if formatted_params is not None:
@@ -587,6 +716,9 @@ def _build_top_level_rule(
         )
 
     input_schema = _schema_for_single_action_display(_get_action_input_schema(action), tool_params)
+    # update_kb 动作：把从存储读取到的原/现文件内容注入 schema 和 values，供表单展示（只读）
+    if _is_kb_update_kb_action(action):
+        input_schema, tool_params = _inject_update_kb_display_fields(input_schema, tool_params)
     schema, values, parent_path = _display_schema_and_values(input_schema, tool_params)
     row = _build_fields_from_schema(
         schema,
@@ -597,6 +729,7 @@ def _build_top_level_rule(
         param_meta=param_meta,
         term_loader=term_loader,
         locale=locale,
+        action=action,
     )
     if row:
         return [row]
@@ -615,6 +748,7 @@ def _build_top_level_rule(
                 form_id=form_id,
                 term_loader=term_loader,
                 locale=locale,
+                action=action,
             )
             for index, param in enumerate(params, start=1)
         ]
@@ -643,6 +777,7 @@ def _build_records_rule(
             param_meta=param_meta,
             term_loader=term_loader,
             locale=locale,
+            action=action,
         )
         for index, record in enumerate(records, start=1)
     ]
@@ -795,6 +930,7 @@ def _build_fields_from_schema(
     param_meta: dict[str, Any] | None = None,
     term_loader: Any | None = None,
     locale: str | None = None,
+    action: Any,
 ) -> list[dict[str, Any]]:
     properties = schema.get("properties")
     if not isinstance(properties, dict):
@@ -840,6 +976,7 @@ def _build_fields_from_schema(
                     param_meta=param_meta,
                     term_loader=term_loader,
                     locale=locale,
+                    action=action,
                 )
             ]
         elif normalized_field_type == "array":
@@ -858,6 +995,7 @@ def _build_fields_from_schema(
                         param_meta=param_meta,
                         term_loader=term_loader,
                         locale=locale,
+                        action=action,
                     )
                     for index, item in enumerate(item_values, start=1)
                 ]
@@ -887,10 +1025,14 @@ def _build_fields_from_schema(
             data_format=str(property_schema.get("x-data-format") or "").strip() or None,
             term_loader=term_loader,
             locale=locale,
+            action=action,
         )
         filter_options = _filter_condition_options(property_schema)
         if filter_options:
             field["filterOptions"] = filter_options
+        forced_form_type = str(property_schema.get("x-dc-form-type") or "").strip()
+        if forced_form_type:
+            field["formType"] = forced_form_type
         if not fields:
             field["itemId"] = item_id
         fields.append(field)
@@ -905,6 +1047,7 @@ def _build_field_from_param(
     form_id: str,
     term_loader: Any | None = None,
     locale: str | None = None,
+    action: Any,
 ) -> dict[str, Any]:
     code = str(getattr(param, "param_code", "") or "")
     field = _build_field(
@@ -921,6 +1064,7 @@ def _build_field_from_param(
         data_format=str(getattr(param, "data_format", "") or "").strip() or None,
         term_loader=term_loader,
         locale=locale,
+        action=action,
     )
     if first:
         field["itemId"] = _build_item_id(form_id, 1)
@@ -942,9 +1086,17 @@ def _build_field(
     data_format: str | None = None,
     term_loader: Any | None = None,
     locale: str | None = None,
+    action: Any,
 ) -> dict[str, Any]:
     field: dict[str, Any] = {
-        "formType": _field_form_type(field_type, term, optional, data_format),
+        "formType": _field_form_type(
+            field_type=field_type,
+            action=action,
+            filed_name=field_name,
+            term=term,
+            optional=optional,
+            data_format=data_format,
+        ),
         "fieldCode": field_code,
         "fieldPath": field_path,
         "fieldName": field_name,
@@ -980,10 +1132,16 @@ def _build_field(
 
 def _field_form_type(
     field_type: str,
+    action: Any,
+    filed_name: str,
     term: dict[str, Any] | None,
     optional: list[str],
     data_format: str | None = None,
 ) -> str:
+    if _is_kb_write_action(action) and filed_name == "正文内容":
+        return "textarea"
+    if _is_kb_update_kb_action(action) and filed_name == "正文内容":
+        return "textarea"
     if field_type == "object":
         return "object"
     if field_type == "array<object>":

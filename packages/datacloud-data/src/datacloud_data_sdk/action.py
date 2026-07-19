@@ -1377,6 +1377,11 @@ class Action:
 
             return await KbSearchExecutor(self._loader).write(object_code, params)
 
+        if action_family == "update_kb":
+            from datacloud_data_sdk.executor.kb_search_executor import KbSearchExecutor
+
+            return await KbSearchExecutor(self._loader).update_kb(object_code, params)
+
         if action_family in {"insert", "update", "delete"}:
             from datacloud_data_sdk.executor.dynamic_table_executor import DynamicTableExecutor
 

@@ -403,6 +403,7 @@ def _inject_kb_object_actions(
         build_file_name_chunk_search_description,
         build_file_name_chunk_search_schema,
         build_kb_write_schema,
+        build_update_kb_schema,
         build_search_description,
         build_search_schema,
     )
@@ -469,6 +470,25 @@ def _inject_kb_object_actions(
         cls.actions.append(action)
         registry.register(write_code, ActionRoute("object", obj_code, "write"))
         logger.debug("注入 %s", write_code)
+
+    update_kb_code = f"update_kb_{obj_code}"
+    if update_kb_code not in existing_codes:
+        schema = build_update_kb_schema(obj_name, cls.fields)
+        action = _make_action(
+            action_code=update_kb_code,
+            action_name=f"融合更新{obj_name}",
+            description=schema.get("description", f"融合更新{obj_name}"),
+            belong_class=obj_code,
+            action_family="update_kb",
+            virtual_backend="kb_search",
+            scope_type="object",
+            scope_code=obj_code,
+            input_schema=schema,
+            action_type="operation",
+        )
+        cls.actions.append(action)
+        registry.register(update_kb_code, ActionRoute("object", obj_code, "update_kb"))
+        logger.debug("注入 %s", update_kb_code)
 
     legacy_code = f"query_{obj_code}"
     if not registry.get(legacy_code):
