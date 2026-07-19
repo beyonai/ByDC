@@ -604,9 +604,27 @@ class _NoopTermBackend:
         term_ids: list[str] | None = None,
         top_k: int = 20,
         offset: int = 0,
+        query_vector: list[float] | None = None,
     ) -> dict[str, Any]:
         """Return empty search result."""
         return {"data": [], "totalCount": 0}
+
+    def search_terms_batch(
+        self,
+        *,
+        keywords: list[str],
+        dataset_ids: list[str] | None = None,
+        term_type: str | None = None,
+        query_type: str = "mixed",
+        parent_term_code: str | None = None,
+        label_filters: list[dict[str, Any]] | None = None,
+        label_condition: str = "and",
+        ext_attrs: dict[str, Any] | None = None,
+        top_k: int = 20,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Return empty batch results."""
+        return {kw: {"data": [], "totalCount": 0} for kw in keywords}
 
     def get_term_detail(
         self, *, library_id: str, term_id: str

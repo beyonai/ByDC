@@ -2133,10 +2133,7 @@ class _TermReader(_ReaderBase):
         top_k: int = 20,
         offset: int = 0,
     ) -> list[QueryResult]:
-        """批量检索术语 — 每个 keyword 返回独立的 QueryResult。
-
-        内部为每个 keyword 执行独立的 ``_text_search_candidates`` + 元数据过滤。
-        不支持 ``term_ids`` 和 ``term_name`` 参数（精确 ID/名称匹配走 ``query_terms`` 单次调用）。
+        """批量检索术语 — BM25 / jieba / vector 三路 UNION ALL + per-kw RRF。
 
         Args:
             keywords: 搜索关键词列表。
@@ -2147,7 +2144,7 @@ class _TermReader(_ReaderBase):
             label_filters: 标签过滤条件列表。
             label_condition: 标签组合条件（and/or）。
             ext_attrs: 扩展属性键值过滤。
-            query_vectors: 查询向量列表（仅 embedding/mixed 需要，长度必须与 keywords 一致）。
+            query_vectors: 查询向量列表（仅 embedding/mixed 需要，长度与 keywords 一致）。
             top_k: 返回条数。
             offset: 分页偏移。
 
@@ -2157,7 +2154,14 @@ class _TermReader(_ReaderBase):
         if not keywords:
             return []
 
-        # 校验 query_vectors
+        from datacloud_knowledge.adapters.opengauss.bm25 import (
+            _build_char_tsquery,
+            _has_name_keywords_column,
+        )
+
+        _ = _has_name_keywords_column  # referenced in batch helpers
+
+        # ── Resolve effective query type ──────────────────────────
         if query_type in ("embedding", "mixed"):
             if query_vectors is None:
                 if query_type == "embedding":
@@ -2178,34 +2182,130 @@ class _TermReader(_ReaderBase):
             effective_type = query_type
             query_vectors = None
 
-        results: list[QueryResult] = []
+        canonical_type = self._normalize_type_code(term_type) if term_type else None
+        n = len(keywords)
+
+        # ── Build empty results array ────────────────────────────
+        results: list[QueryResult | None] = [None] * n
+
+        # ── Identify active keywords (non-empty after strip) ─────
+        active: list[tuple[int, str]] = [
+            (i, kw) for i, kw in enumerate(keywords) if (kw or "").strip()
+        ]
+
+        # ── Pre-compute tsqueries for BM25 ───────────────────────
+        tsquery_map: dict[int, str] = {}
+        has_bm25 = effective_type in ("fulltext", "mixed")
+        if has_bm25:
+            for i, kw in active:
+                tsq = _build_char_tsquery(kw, ts_operator="|")
+                if tsq:
+                    tsquery_map[i] = tsq
+
+        # ── Pre-compute jieba tokens for CJK keywords ────────────
+        jieba_tokens_map: dict[int, list[str]] = {}
+        if has_bm25:
+            import jieba
+
+            for i, kw in active:
+                if self._has_cjk(kw):
+                    tokens = [t for t in jieba.lcut(kw) if len(t.strip()) > 0]
+                    if tokens:
+                        jieba_tokens_map[i] = tokens
+
+        # ── Pre-compute vector map ───────────────────────────────
+        vec_map: dict[int, list[float]] = {}
+        if effective_type == "mixed" and query_vectors is not None:
+            for i in range(n):
+                if i < len(query_vectors) and query_vectors[i]:
+                    vec_map[i] = query_vectors[i]
+
         try:
             with self._get_session() as session:
-                canonical_type = self._normalize_type_code(term_type) if term_type else None
-
-                for idx, kw in enumerate(keywords):
-                    stripped = kw.strip()
-                    if not stripped:
-                        results.append(QueryResult(total=0, items=[]))
-                        continue
-
-                    # ── 文本搜索 ────────────────────────────────────
-                    qv = query_vectors[idx] if query_vectors else None
-                    search_ids, score_map = self._text_search_candidates(
+                # ── Phase 1: BM25 batch (UNION ALL) ──────────────
+                bm25_by_kw: dict[int, list[tuple[str, str, str, str, str]]] = {}
+                if tsquery_map:
+                    bm25_by_kw = self._bm25_batch_union(
                         session,
-                        keyword=stripped,
-                        query_type=effective_type,
-                        query_vector=qv,
+                        tsquery_map=tsquery_map,
                         top_k=top_k + offset,
                     )
 
-                    if not search_ids:
-                        results.append(QueryResult(total=0, items=[]))
+                # ── Phase 2: Jieba batch (UNION ALL) ─────────────
+                jieba_by_kw: dict[int, list[tuple[str, str, str, str, str]]] = {}
+                if jieba_tokens_map:
+                    jieba_by_kw = self._jieba_batch_union(
+                        session,
+                        jieba_tokens_map=jieba_tokens_map,
+                        top_k=top_k + offset,
+                    )
+
+                # ── Phase 3: Vector batch (UNION ALL) ────────────
+                vec_by_kw: dict[int, list[tuple[str, str, str, str, str]]] = {}
+                vec_scores_map: dict[int, dict[str, float]] = {}
+                if vec_map:
+                    vec_by_kw, vec_scores_map = self._vector_batch_union(
+                        session,
+                        vec_map=vec_map,
+                        top_k=top_k + offset,
+                    )
+
+                # ── Phase 4: Per-keyword RRF fuse ────────────────
+                all_candidate_ids: set[str] = set()
+                kw_score_maps: dict[int, dict[str, float]] = {}
+
+                for i, _kw in active:
+                    ranked_lists: list[list[tuple[str, str, str, str, str]]] = []
+                    if i in bm25_by_kw:
+                        ranked_lists.append(bm25_by_kw[i])
+                    if i in jieba_by_kw:
+                        ranked_lists.append(jieba_by_kw[i])
+                    if i in vec_by_kw:
+                        ranked_lists.append(vec_by_kw[i])
+
+                    if not ranked_lists:
+                        results[i] = QueryResult(total=0, items=[])
                         continue
 
-                    # ── 元数据过滤 ──────────────────────────────────
+                    fused = rrf_fuse(ranked_lists, k=60, top_n=top_k + offset)
+                    if not fused:
+                        results[i] = QueryResult(total=0, items=[])
+                        continue
+
+                    candidate_ids = {c.term_id for c in fused}
+                    base_scores: dict[str, float] = {c.term_id: float(c.rrf_score) for c in fused}
+
+                    if effective_type == "mixed" and i in vec_scores_map:
+                        vs = vec_scores_map[i]
+                        result_scores = {
+                            tid: max(base_scores.get(tid, 0.0), vs.get(tid, 0.0))
+                            for tid in candidate_ids
+                        }
+                    else:
+                        result_scores = base_scores
+
+                    all_candidate_ids.update(candidate_ids)
+                    kw_score_maps[i] = result_scores
+
+                # ── Phase 5: One-shot detail query ────────────────
+                if all_candidate_ids:
+                    self._detail_batch(
+                        session,
+                        term_ids=all_candidate_ids,
+                    )
+
+                # ── Phase 6: Build per-keyword QueryResult ────────
+                for i, _kw in active:
+                    if results[i] is not None:
+                        continue
+
+                    candidate_ids_i = kw_score_maps.get(i, {})
+                    if not candidate_ids_i:
+                        results[i] = QueryResult(total=0, items=[])
+                        continue
+
                     filters = self._apply_metadata_filters(
-                        candidate_ids=search_ids,
+                        candidate_ids=set(candidate_ids_i.keys()),
                         term_type=canonical_type,
                         dataset_ids=dataset_ids,
                         parent_term_code=parent_term_code,
@@ -2215,18 +2315,16 @@ class _TermReader(_ReaderBase):
                     )
                     where_clause = and_(*filters)
 
-                    # ── 计数 ────────────────────────────────────────
                     total = int(
                         session.execute(
                             select(func.count()).select_from(Term).where(where_clause)
                         ).scalar_one()
                     )
                     if total == 0:
-                        results.append(QueryResult(total=0, items=[]))
+                        results[i] = QueryResult(total=0, items=[])
                         continue
 
-                    # ── 详情查询 ────────────────────────────────────
-                    rows = session.execute(
+                    filtered_rows = session.execute(
                         select(
                             Term.term_id,
                             Term.term_code,
@@ -2246,8 +2344,10 @@ class _TermReader(_ReaderBase):
                         .order_by(Term.updated_time.desc())
                     ).all()
 
+                    score_map_i = candidate_ids_i
                     items: list[ProviderTermItem] = []
-                    for row in rows:
+                    for row in filtered_rows:
+                        tid = str(row[0])
                         tags: dict[str, str] = {}
                         raw_tags = row[7]
                         if isinstance(raw_tags, dict):
@@ -2259,22 +2359,28 @@ class _TermReader(_ReaderBase):
 
                         items.append(
                             ProviderTermItem(
-                                term_id=str(row[0]),
+                                term_id=tid,
                                 term_code=str(row[1]),
                                 term_name=str(row[2]),
                                 term_type=str(row[3]),
                                 dataset_id=str(row[4]) if row[4] else "",
-                                parent_term_code=str(row[5]) if row[5] else "",
+                                parent_term_code=(str(row[5]) if row[5] else ""),
                                 desc=str(row[6]) if row[6] else "",
                                 labels=tags,
                                 synonyms="",
                                 ext_attrs=term_ext_attrs,
                                 created_time=self._datetime_to_epoch(row[9]),
                                 updated_time=self._datetime_to_epoch(row[10]),
-                                score=score_map.get(str(row[0])),
+                                score=score_map_i.get(tid),
                             )
                         )
-                    results.append(QueryResult(total=total, items=items))
+                    results[i] = QueryResult(total=total, items=items)
+
+                # Fill empty results for inactive keywords
+                for i in range(n):
+                    if results[i] is None:
+                        results[i] = QueryResult(total=0, items=[])
+
         except Exception:
             logger.exception(
                 "query_terms_batch failed: keywords=%s term_type=%s query_type=%s",
@@ -2284,7 +2390,227 @@ class _TermReader(_ReaderBase):
             )
             raise
 
-        return results
+        return [r for r in results if r is not None]
+
+    # ── Batch SQL helpers ─────────────────────────────────────────────
+
+    @staticmethod
+    def _bm25_batch_union(
+        session: Any,
+        *,
+        tsquery_map: dict[int, str],
+        top_k: int,
+    ) -> dict[int, list[tuple[str, str, str, str, str]]]:
+        """Run BM25 search for multiple keywords via UNION ALL.
+
+        Returns ``{kw_idx: [(term_id, term_name, name_id, term_type_code, term_code)]}``.
+        """
+        from datacloud_knowledge.adapters.opengauss.bm25 import (
+            _has_name_keywords_column,
+        )
+
+        if not _has_name_keywords_column(session):
+            logger.error("BM25 requires term_name.name_keywords column")
+            return {}
+
+        subqueries: list[str] = []
+        params: dict[str, Any] = {}
+        for idx, tsquery in tsquery_map.items():
+            subqueries.append(
+                f"("
+                f"SELECT CAST(:kw_{idx} AS text) AS kw_label, "
+                f"tn.term_id, tn.name_text, tn.name_id, t.term_type_code, "
+                f"ts_rank_cd(tn.name_keywords, q_{idx}, 32) AS score, "
+                f"t.term_code "
+                f"FROM term_name tn, term t, "
+                f"to_tsquery('simple', :ts_{idx}) q_{idx} "
+                f"WHERE tn.name_keywords @@ q_{idx} "
+                f"AND tn.term_id = t.term_id "
+                f"AND tn.name_keywords IS NOT NULL "
+                f"ORDER BY score DESC "
+                f"LIMIT {int(top_k)}"
+                f")"
+            )
+            params[f"kw_{idx}"] = f"kw_{idx}"
+            params[f"ts_{idx}"] = tsquery
+
+        if not subqueries:
+            return {}
+
+        sql = text(" UNION ALL ".join(subqueries))
+        rows = session.execute(sql, params).fetchall()
+
+        grouped: dict[int, list[tuple[str, str, str, str, str]]] = {}
+        for row in rows:
+            kw_label, term_id, term_name, name_id, tt, _score, tc = row
+            kw_idx = int(kw_label.split("_", 1)[1])
+            grouped.setdefault(kw_idx, []).append(
+                (str(term_id), str(term_name), str(name_id), str(tt), str(tc or ""))
+            )
+        return grouped
+
+    @staticmethod
+    def _jieba_batch_union(
+        session: Any,
+        *,
+        jieba_tokens_map: dict[int, list[str]],
+        top_k: int,
+    ) -> dict[int, list[tuple[str, str, str, str, str]]]:
+        """Run jieba-token BM25 batch for multiple keywords via UNION ALL.
+
+        Each keyword's tokens are searched by BM25, results are fused per keyword
+        via RRF. Returns ``{kw_idx: [(term_id, ...)}]``.
+        """
+        from datacloud_knowledge.adapters.opengauss.bm25 import (
+            _build_char_tsquery,
+            _has_name_keywords_column,
+        )
+
+        if not _has_name_keywords_column(session):
+            return {}
+
+        # Flatten (kw_idx, token) pairs
+        flat: list[tuple[int, str]] = []
+        for kw_idx, tokens in jieba_tokens_map.items():
+            for token in tokens:
+                flat.append((kw_idx, token))
+
+        if not flat:
+            return {}
+
+        subqueries: list[str] = []
+        params: dict[str, Any] = {}
+        for seq, (kw_idx, token) in enumerate(flat):
+            tsq = _build_char_tsquery(token, ts_operator="|")
+            if not tsq:
+                continue
+            subqueries.append(
+                f"("
+                f"SELECT CAST(:jt_{seq} AS text) AS jt_label, "
+                f"tn.term_id, tn.name_text, tn.name_id, t.term_type_code, "
+                f"ts_rank_cd(tn.name_keywords, q_{seq}, 32) AS score, "
+                f"t.term_code "
+                f"FROM term_name tn, term t, "
+                f"to_tsquery('simple', :jts_{seq}) q_{seq} "
+                f"WHERE tn.name_keywords @@ q_{seq} "
+                f"AND tn.term_id = t.term_id "
+                f"AND tn.name_keywords IS NOT NULL "
+                f"ORDER BY score DESC "
+                f"LIMIT {int(top_k * 2)}"
+                f")"
+            )
+            params[f"jt_{seq}"] = f"{kw_idx}_{seq}"
+            params[f"jts_{seq}"] = tsq
+
+        if not subqueries:
+            return {}
+
+        sql = text(" UNION ALL ".join(subqueries))
+        rows = session.execute(sql, params).fetchall()
+
+        # Group by kw_idx
+        kw_ranked: dict[int, list[tuple[str, str, str, str, str]]] = {}
+        for row in rows:
+            jt_label, term_id, term_name, name_id, tt, _score, tc = row
+            kw_idx = int(str(jt_label).split("_", 1)[0])
+            kw_ranked.setdefault(kw_idx, []).append(
+                (
+                    str(term_id),
+                    str(term_name),
+                    str(name_id),
+                    str(tt),
+                    str(tc or ""),
+                )
+            )
+
+        # Per-kw RRF fuse tokens
+        result: dict[int, list[tuple[str, str, str, str, str]]] = {}
+        for kw_idx, ranked in kw_ranked.items():
+            fused = rrf_fuse([ranked], k=60, top_n=top_k)
+            result[kw_idx] = [
+                (c.term_id, c.term_name, c.name_id, c.term_type_code, c.term_code) for c in fused
+            ]
+
+        return result
+
+    @staticmethod
+    def _vector_batch_union(
+        session: Any,
+        *,
+        vec_map: dict[int, list[float]],
+        top_k: int,
+    ) -> tuple[
+        dict[int, list[tuple[str, str, str, str, str]]],
+        dict[int, dict[str, float]],
+    ]:
+        """Run vector similarity search for multiple keywords via UNION ALL.
+
+        Returns ``(ranked_by_kw, scores_by_kw)``.
+        """
+        subqueries: list[str] = []
+        params: dict[str, Any] = {}
+        for kw_idx, vec in vec_map.items():
+            vec_str = "[" + ",".join(str(round(v, 8)) for v in vec) + "]"
+            subqueries.append(
+                f"("
+                f"SELECT CAST(:vl_{kw_idx} AS text) AS kw_label, "
+                f"tn.term_id, "
+                f"1 - (tn.name_embedding <=> CAST(:vec_{kw_idx} AS vector)) AS score "
+                f"FROM term_name tn "
+                f"WHERE tn.name_embedding IS NOT NULL "
+                f"ORDER BY tn.name_embedding <=> CAST(:vec_{kw_idx} AS vector) "
+                f"LIMIT {int(top_k)}"
+                f")"
+            )
+            params[f"vl_{kw_idx}"] = f"kw_{kw_idx}"
+            params[f"vec_{kw_idx}"] = vec_str
+
+        if not subqueries:
+            return {}, {}
+
+        sql = text(" UNION ALL ".join(subqueries))
+        rows = session.execute(sql, params).fetchall()
+
+        ranked: dict[int, list[tuple[str, str, str, str, str]]] = {}
+        scores: dict[int, dict[str, float]] = {}
+        for row in rows:
+            kw_label, term_id, score = row
+            kw_idx = int(str(kw_label).split("_", 1)[1])
+            ranked.setdefault(kw_idx, []).append((str(term_id), "", "", "", ""))
+            scores.setdefault(kw_idx, {})[str(term_id)] = float(score)
+
+        return ranked, scores
+
+    @staticmethod
+    def _detail_batch(
+        session: Any,
+        *,
+        term_ids: set[str],
+    ) -> dict[str, tuple[Any, ...]]:
+        """One-shot detail query for all candidate term_ids.
+
+        Returns ``{term_id: row_tuple}``.
+        """
+        if not term_ids:
+            return {}
+
+        rows = session.execute(
+            select(
+                Term.term_id,
+                Term.term_code,
+                Term.term_name,
+                Term.term_type_code,
+                Term.library_id,
+                Term.parent_term_id,
+                Term.desc_summary,
+                Term.term_tags,
+                Term.ext_attrs,
+                Term.created_time,
+                Term.updated_time,
+            ).where(Term.term_id.in_(list(term_ids)))
+        ).all()
+
+        return {str(row[0]): row for row in rows}
 
     def get_term_detail(
         self,

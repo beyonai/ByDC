@@ -128,6 +128,23 @@ def _build_platform(mock_backend: Mock | None = None) -> _TestPlatform:
     mock_backend.search_terms.return_value = QueryResult(items=[], total=0)
     mock_backend.get_term_detail.return_value = None
     mock_backend.query_term_relations_tree.return_value = {"data": []}
+    mock_backend.embed_batch.return_value = []
+
+    # Auto-delegate search_terms_batch → search_terms per keyword.
+    # Tests that override search_terms.return_value/side_effect don't need
+    # to also set up search_terms_batch — the delegation handles it.
+    def _batch_delegate(**kwargs: Any) -> dict[str, Any]:
+        keywords: list[str] = kwargs.get("keywords", [])
+        result: dict[str, Any] = {}
+        for kw in keywords:
+            kw_result = mock_backend.search_terms(
+                keyword=kw, **{k: v for k, v in kwargs.items() if k != "keywords"}
+            )
+            result[kw] = kw_result
+        return result
+
+    mock_backend.search_terms_batch.side_effect = _batch_delegate
+
     return _TestPlatform(mock_backend)
 
 
@@ -674,3 +691,76 @@ def test_max_depth_zero_when_no_relations() -> None:
     assert rt["max_depth"] == 0
     assert rt["graph"] == []
     assert result["total_terms"] == 1
+
+
+# ============================================================================
+# 向量检索测试 — search_terms_batch 调用验证
+# ============================================================================
+
+
+def test_keywords_uses_search_terms_batch() -> None:
+    """关键词检索时 search_terms_batch 被调用（替代了旧的 embed_batch + search_terms）。"""
+    backend = Mock()
+    platform = _build_platform(backend)
+
+    item = _make_search_item("term-001", "本体", "ontology")
+    backend.search_terms.return_value = QueryResult(items=[item], total=1)
+    backend.get_term_detail.return_value = _make_term_detail(
+        "term-001", "本体", "ontology"
+    )
+
+    keywords = ["本体", "Agent", "大语言模型"]
+    result = platform.query_knowledge_graph(
+        base_id="test",
+        options=_fresh_options("graph_fast"),
+        keywords=keywords,
+    )
+
+    # 1. search_terms_batch 被调用一次，包含所有 keywords
+    backend.search_terms_batch.assert_called_once()
+    _, batch_kwargs = backend.search_terms_batch.call_args
+    assert batch_kwargs["keywords"] == keywords
+    assert batch_kwargs["query_type"] == "mixed"
+
+    # 2. 有正常的 root_terms 返回
+    root_terms = result["root_terms"]
+    assert len(root_terms) == 1
+
+
+def test_keywords_empty_skips_search_terms_batch() -> None:
+    """无关键词时不调用 search_terms_batch（term_ids 路径）。"""
+    backend = Mock()
+    backend.get_term_detail.return_value = _make_term_detail("term-a", "TermA")
+    platform = _build_platform(backend)
+
+    platform.query_knowledge_graph(
+        base_id="test",
+        options=_fresh_options(),
+        term_ids=["term-a"],
+    )
+
+    backend.search_terms_batch.assert_not_called()
+
+
+def test_search_terms_batch_return_order_respected() -> None:
+    """search_terms_batch 返回的 dict key 顺序对应消歧处理。"""
+    backend = Mock()
+    platform = _build_platform(backend)
+
+    item_a = _make_search_item("term-a", "TermA")
+    item_b = _make_search_item("term-b", "TermB")
+    backend.search_terms.return_value = QueryResult(items=[item_a, item_b], total=2)
+    backend.get_term_detail.return_value = _make_term_detail("term-a", "TermA")
+
+    keywords = ["kw1", "kw2"]
+    result = platform.query_knowledge_graph(
+        base_id="test",
+        options=_fresh_options("graph_fast"),
+        keywords=keywords,
+        disambiguation_mode="return_all",
+    )
+
+    # return_all: each keyword returns all candidates
+    root_terms = result["root_terms"]
+    # kw1 → [term-a, term-b], kw2 → [term-a, term-b] → deduped by root_visited
+    assert len(root_terms) == 2
