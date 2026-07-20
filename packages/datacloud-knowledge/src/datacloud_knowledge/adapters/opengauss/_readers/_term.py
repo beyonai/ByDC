@@ -2023,6 +2023,7 @@ class _TermReader(_ReaderBase):
                         query_type=effective_qtype,
                         query_vector=query_vector,
                         top_k=top_k + offset,
+                        label_filters=label_filters,
                     )
 
                     if candidate_ids is not None:
@@ -2248,6 +2249,7 @@ class _TermReader(_ReaderBase):
                         session,
                         vec_map=vec_map,
                         top_k=top_k + offset,
+                        label_filters=label_filters,
                     )
 
                 # ── Phase 4: Per-keyword RRF fuse ────────────────
@@ -2539,6 +2541,7 @@ class _TermReader(_ReaderBase):
         *,
         vec_map: dict[int, list[float]],
         top_k: int,
+        label_filters: list[LabelFilter] | None = None,
     ) -> tuple[
         dict[int, list[tuple[str, str, str, str, str]]],
         dict[int, dict[str, float]],
@@ -2547,6 +2550,25 @@ class _TermReader(_ReaderBase):
 
         Returns ``(ranked_by_kw, scores_by_kw)``.
         """
+        # ── build label filter SQL clauses ─────────────────────────
+        label_join = ""
+        label_where = ""
+        if label_filters:
+            label_join = "JOIN term t ON t.term_id = tn.term_id"
+            clauses: list[str] = []
+            for i, lf in enumerate(label_filters):
+                if isinstance(lf, dict):
+                    key = str(lf.get("field_code", ""))
+                    fv = lf.get("filter_value")
+                else:
+                    key = lf.field_code
+                    fv = lf.filter_value
+                if key and fv is not None:
+                    pname = f"bvlf_{i}"
+                    clauses.append(f"t.term_tags->>'{key}' = :{pname}")
+            if clauses:
+                label_where = "AND " + " AND ".join(clauses)
+
         subqueries: list[str] = []
         params: dict[str, Any] = {}
         for kw_idx, vec in vec_map.items():
@@ -2557,13 +2579,25 @@ class _TermReader(_ReaderBase):
                 f"tn.term_id, "
                 f"1 - (tn.name_embedding <=> CAST(:vec_{kw_idx} AS vector)) AS score "
                 f"FROM term_name tn "
+                f"{label_join} "
                 f"WHERE tn.name_embedding IS NOT NULL "
+                f"{label_where} "
                 f"ORDER BY tn.name_embedding <=> CAST(:vec_{kw_idx} AS vector) "
                 f"LIMIT {int(top_k)}"
                 f")"
             )
             params[f"vl_{kw_idx}"] = f"kw_{kw_idx}"
             params[f"vec_{kw_idx}"] = vec_str
+            # Bind label filter param values into each subquery
+            if label_filters:
+                for i, lf in enumerate(label_filters):
+                    if isinstance(lf, dict):  # noqa: SIM108
+                        fv_val = lf.get("filter_value")
+                    else:
+                        fv_val = lf.filter_value
+                    if fv_val is not None:
+                        pname = f"bvlf_{i}"
+                        params.setdefault(pname, str(fv_val))
 
         if not subqueries:
             return {}, {}
@@ -3339,6 +3373,7 @@ class _TermReader(_ReaderBase):
         query_type: QueryType,
         query_vector: list[float] | None = None,
         top_k: int = 500,
+        label_filters: list[LabelFilter] | None = None,
     ) -> tuple[set[str], dict[str, float]]:
         """Unified text search entry — returns ``(candidate_term_ids, score_map)``.
 
@@ -3350,6 +3385,27 @@ class _TermReader(_ReaderBase):
         kw = keyword.strip()
         if not kw:
             return set(), {}
+
+        # ── build label filter SQL clauses ─────────────────────────
+        label_join = ""
+        label_where = ""
+        label_params: dict[str, str] = {}
+        if label_filters:
+            label_join = "JOIN term t ON t.term_id = tn.term_id"
+            clauses: list[str] = []
+            for i, lf in enumerate(label_filters):
+                if isinstance(lf, dict):
+                    key = str(lf.get("field_code", ""))
+                    fv = lf.get("filter_value")
+                else:
+                    key = lf.field_code
+                    fv = lf.filter_value
+                if key and fv is not None:
+                    pname = f"lf_{i}"
+                    clauses.append(f"t.term_tags->>'{key}' = :{pname}")
+                    label_params[pname] = str(fv)
+            if clauses:
+                label_where = "AND " + " AND ".join(clauses)
 
         # ── exact ──────────────────────────────────────────────────
         if query_type == "exact":
@@ -3366,17 +3422,20 @@ class _TermReader(_ReaderBase):
                 )
                 return set(), {}
             sql = text(
-                """
+                f"""
                 SELECT tn.term_id,
                        1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
                 FROM term_name tn
+                {label_join}
                 WHERE tn.name_embedding IS NOT NULL
+                {label_where}
                 ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
                 LIMIT :limit
                 """
             )
             vec_str = "[" + ",".join(str(round(v, 8)) for v in query_vector) + "]"
-            rows = session.execute(sql, {"vector": vec_str, "limit": top_k}).all()
+            params: dict[str, object] = {"vector": vec_str, "limit": top_k, **label_params}
+            rows = session.execute(sql, params).all()
             return {str(r[0]) for r in rows}, {str(r[0]): float(r[1]) for r in rows}
 
         # ── fulltext / mixed ───────────────────────────────────────
@@ -3400,17 +3459,20 @@ class _TermReader(_ReaderBase):
         vec_scores: dict[str, float] = {}
         if query_type == "mixed" and query_vector is not None:
             vec_sql = text(
-                """
+                f"""
                 SELECT tn.term_id,
                        1 - (tn.name_embedding <=> CAST(:vector AS vector)) AS score
                 FROM term_name tn
+                {label_join}
                 WHERE tn.name_embedding IS NOT NULL
+                {label_where}
                 ORDER BY tn.name_embedding <=> CAST(:vector AS vector)
                 LIMIT :limit
                 """
             )
             vec_str = "[" + ",".join(str(round(v, 8)) for v in query_vector) + "]"
-            vec_rows = session.execute(vec_sql, {"vector": vec_str, "limit": top_k}).all()
+            params = {"vector": vec_str, "limit": top_k, **label_params}
+            vec_rows = session.execute(vec_sql, params).all()
             if vec_rows:
                 ranked_lists.append([(str(r[0]), "", "", "", "") for r in vec_rows])
                 vec_scores = {str(r[0]): float(r[1]) for r in vec_rows}
