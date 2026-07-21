@@ -71,7 +71,6 @@ class _TermSearchRow:
     term_type_code: str
     desc_summary: str | None
     term_tags: dict[str, Any]
-    owl_doc_id: str | None
     created_time: Any | None
     updated_time: Any | None
     score: float | None = None
@@ -147,7 +146,6 @@ class _TermReader(_ReaderBase):
                         Term.term_type_code,
                         Term.desc_summary,
                         Term.term_tags,
-                        Term.owl_doc_id,
                         Term.created_time,
                         Term.updated_time,
                     )
@@ -178,7 +176,6 @@ class _TermReader(_ReaderBase):
                     term_type_code=row.term_type_code,
                     desc_summary=row.desc_summary,
                     term_tags=row.term_tags,
-                    owl_doc_id=row.owl_doc_id,
                     created_time=row.created_time,
                     updated_time=row.updated_time,
                     score=row.score,
@@ -252,7 +249,6 @@ class _TermReader(_ReaderBase):
                             Term.term_type_code,
                             Term.desc_summary,
                             Term.term_tags,
-                            Term.owl_doc_id,
                             Term.created_time,
                             Term.updated_time,
                         )
@@ -302,7 +298,6 @@ class _TermReader(_ReaderBase):
                     term_type_code=row.term_type_code,
                     desc_summary=row.desc_summary,
                     term_tags=row.term_tags,
-                    owl_doc_id=row.owl_doc_id,
                     created_time=row.created_time,
                     updated_time=row.updated_time,
                     score=row.score,
@@ -1707,7 +1702,7 @@ class _TermReader(_ReaderBase):
         term_ids: Sequence[str] | None = None,
         term_codes: Sequence[str] | None = None,
     ) -> Sequence[dict[str, object]]:
-        """批量查询术语的基本字段（term_id, term_code, term_name, term_type_code, parent_term_id, owl_doc_id, domain_ids）。
+        """批量查询术语的基本字段（term_id, term_code, term_name, term_type_code, parent_term_id, domain_ids）。
 
         支持按 term_ids 或 term_codes 查询。
         """
@@ -3571,9 +3566,8 @@ class _TermReader(_ReaderBase):
             term_type_code=str(row[3]),
             desc_summary=row[4],
             term_tags=term_tags,
-            owl_doc_id=row[6],
-            created_time=row[7],
-            updated_time=row[8],
+            created_time=row[6],
+            updated_time=row[7],
             score=score,
         )
 
@@ -3601,7 +3595,6 @@ class _TermReader(_ReaderBase):
                 Term.term_type_code,
                 Term.desc_summary,
                 Term.term_tags,
-                Term.owl_doc_id,
                 Term.created_time,
                 Term.updated_time,
             ).where(Term.term_id.in_(ordered_term_ids), *filters)

@@ -302,7 +302,6 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
                     obj["term_type_code"],
                     obj.get("parent_term_id"),
                     obj.get("library_code"),
-                    obj.get("owl_doc_file"),
                     term_tags,
                 )
             )
@@ -310,7 +309,7 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
             # 使用临时表 + UPDATE JOIN，避免逐行 SQL
             # OpenGauss 不支持 ON COMMIT DROP，使用 PRESERVE ROWS + 手动删除
             cur.execute(
-                "CREATE TEMP TABLE _tmp_term_upd (term_id VARCHAR, term_code VARCHAR, term_name VARCHAR, desc_summary VARCHAR, domain_ids VARCHAR(64)[], term_type_code VARCHAR, parent_term_id VARCHAR(1000), library_id VARCHAR, owl_doc_id VARCHAR, term_tags JSONB) ON COMMIT PRESERVE ROWS"
+                "CREATE TEMP TABLE _tmp_term_upd (term_id VARCHAR, term_code VARCHAR, term_name VARCHAR, desc_summary VARCHAR, domain_ids VARCHAR(64)[], term_type_code VARCHAR, parent_term_id VARCHAR(1000), library_id VARCHAR, term_tags JSONB) ON COMMIT PRESERVE ROWS"
             )
             _execute_values(
                 cur,
@@ -326,7 +325,6 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
                     term_type_code = tmp.term_type_code,
                     parent_term_id = tmp.parent_term_id,
                     library_id     = tmp.library_id,
-                    owl_doc_id     = tmp.owl_doc_id,
                     term_tags      = tmp.term_tags,
                     updated_time   = CURRENT_TIMESTAMP
                 FROM _tmp_term_upd tmp
@@ -349,7 +347,6 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
                     obj["term_type_code"],
                     obj.get("parent_term_id"),
                     obj.get("library_code"),
-                    obj.get("owl_doc_file"),
                     term_tags,
                     obj.get("ext_field"),
                 )
@@ -358,7 +355,7 @@ def _batch_process_term(cur: Cursor, objs: list[dict[str, Any]], stats: dict[str
             cur,
             """INSERT INTO term
                    (term_id, term_code, term_name, desc_summary, domain_ids,
-                    term_type_code, parent_term_id, library_id, owl_doc_id, term_tags, ext_attrs)
+                    term_type_code, parent_term_id, library_id, term_tags, ext_attrs)
                VALUES %s""",
             insert_rows,
             page_size=1000,  # 增大 page_size

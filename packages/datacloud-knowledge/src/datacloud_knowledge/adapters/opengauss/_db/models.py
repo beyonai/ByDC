@@ -20,7 +20,6 @@ class Term(Base):
     term_name: Mapped[str] = mapped_column(String(255), nullable=False)
     desc_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     parent_term_id: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    owl_doc_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     domain_ids: Mapped[list[str]] = mapped_column(ARRAY(String(64)), nullable=False, default=list)
     term_type_code: Mapped[str] = mapped_column(String(32), nullable=False)
     library_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
