@@ -626,6 +626,33 @@ def build_update_kb_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]
     }
 
 
+def build_delete_kb_schema(scope_name: str) -> dict[str, Any]:
+    """生成 delete_kb_* 知识库删除动作 inputSchema。
+
+    支持单文件删除（source_path）和批量删除（source_paths）。
+    """
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "description": (
+            f"删除{scope_name}知识库中的文档。"
+            "通过 source_paths 指定待删除文件路径列表；"
+            "删除操作不可恢复，请确认路径准确后再调用。"
+        ),
+        "x-dc-action-family": "delete_kb",
+        "x-dc-scope-type": "object",
+        "properties": {
+            "source_paths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string"},
+                "description": "待删除的文件路径列表，每项以 / 开头；单个文件也传列表。",
+            },
+        },
+        "required": ["source_paths"],
+    }
+
+
 def build_insert_schema(scope_name: str, fields: list[Any]) -> dict[str, Any]:
     """生成 insert_* 动态表新增动作 inputSchema。"""
     writable = _writable_fields(fields, include_primary_key=False)
