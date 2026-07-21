@@ -2,21 +2,6 @@
 CREATE INDEX IF NOT EXISTS idx_lib_name
     ON term_library(library_name);
 
--- domain
-CREATE INDEX IF NOT EXISTS idx_domain_parent
-    ON domain(parent_id);
-
-CREATE INDEX IF NOT EXISTS idx_domain_name
-    ON domain(domain_name);
-
--- domain_library
-CREATE INDEX IF NOT EXISTS idx_dl_library
-    ON domain_library(library_id);
-
--- domain_term_type
-CREATE INDEX IF NOT EXISTS idx_dtt_type
-    ON domain_term_type(type_code);
-
 -- term_type
 CREATE INDEX IF NOT EXISTS idx_type_name
     ON term_type(type_name);
