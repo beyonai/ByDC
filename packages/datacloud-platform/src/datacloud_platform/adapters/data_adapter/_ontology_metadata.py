@@ -1312,6 +1312,274 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         _ = base_id, object_code, select, where
         return {"data": [], "totalCount": 0}
 
+    def search_object_instances_unstructured(
+        self,
+        *,
+        base_id: str,
+        object_code: str | None = None,
+        query: str,
+        top_k: int = 20,
+        enable_chunk_recall: bool = True,
+        kb_configs: dict[str, Any] | None = None,
+    ) -> list[Any]:  # 实际返回 list[ObjectInstanceHit]；Any 避免 mypy 交叉类型推断
+        """非结构化对象实例检索 — 双路召回 + 简单分数融合。
+
+        实现 Ticket-22: object_code=None 全局跨类型检索。
+
+        路1: 术语实例检索 → match_type="term_instance"
+        - object_code 非 None: search_terms(term_type_code=object_code, keyword=tokens[i])
+        - object_code=None:   search_terms_batch(keywords=tokens, term_type=None)
+
+        路2: chunk → term 检索 → match_type="chunk_to_term"
+        - object_code 非 None: 通过 EntityStore 获取 kb_id，限定 KB 搜索
+        - object_code=None: 不限 KB (kb_id=None)，全库 chunk 搜索
+
+        Note: 返回 list[ObjectInstanceHit] 但内部以 list[dict] 形式传递。
+        _fuse_path_results 在融合后统一映射为 ObjectInstanceHit。
+        """
+
+        # ── Tokenize query ──────────────────────────────────────────────
+        tokens = _tokenize_query(query)
+        if not tokens:
+            return []
+
+        # ── Path 1: term instance search ────────────────────────────────
+        path1_hits: list[dict[str, Any]] = []
+        if object_code is not None:
+            # 单类型检索
+            path1_hits = self._path1_term_instance_search(
+                object_code=object_code,
+                query=query,
+                tokens=tokens,
+                top_k=top_k,
+            )
+        else:
+            # 跨全类型批量检索
+            path1_hits = self._path1_global_term_instance_search(
+                tokens=tokens,
+                top_k=top_k,
+            )
+
+        # ── Path 2: chunk → term search ────────────────────────────────
+        path2_hits: list[dict[str, Any]] = []
+        if enable_chunk_recall:
+            if object_code is not None:
+                path2_hits = self._path2_chunk_to_term_search(
+                    base_id=base_id,
+                    object_code=object_code,
+                    query=query,
+                    top_k=top_k,
+                    kb_configs=kb_configs,
+                )
+            else:
+                path2_hits = self._path2_global_chunk_to_term_search(
+                    query=query,
+                    top_k=top_k,
+                    kb_configs=kb_configs,
+                )
+
+        # ── Fuse: simple score-based merge ──────────────────────────────
+        fused = _fuse_path_results(path1_hits, path2_hits, top_k=top_k)
+        return fused
+
+    # ── Path 1 helpers ──────────────────────────────────────────────────
+
+    def _path1_term_instance_search(
+        self,
+        *,
+        object_code: str,
+        query: str,
+        tokens: list[str],
+        top_k: int,
+    ) -> list[dict[str, Any]]:
+        """路1 单类型术语实例检索。
+
+        对每个 token 调用 search_terms(term_type_code=object_code, keyword=token)，
+        收集所有结果并去重。
+        """
+        reader = self._get_knowledge_reader()
+        seen: set[str] = set()
+        results: list[dict[str, Any]] = []
+
+        for token in tokens:
+            try:
+                raw = reader.search_terms(
+                    term_type_code=object_code,
+                    keyword=token,
+                    top_k=top_k,
+                )
+            except Exception:
+                logger.warning(
+                    "_path1: search_terms failed for type=%s kw=%s",
+                    object_code,
+                    token,
+                    exc_info=True,
+                )
+                continue
+
+            items = _extract_items(raw)
+            for item in items:
+                tid = item.get("term_id", "")
+                if tid and tid not in seen:
+                    seen.add(tid)
+                    results.append({
+                        "term_id": tid,
+                        "term_name": item.get("term_name", ""),
+                        "term_type_code": item.get("term_type_code", object_code),
+                        "match_type": "term_instance",
+                        "score": float(item.get("score", 0)),
+                    })
+
+        return results
+
+    def _path1_global_term_instance_search(
+        self,
+        *,
+        tokens: list[str],
+        top_k: int,
+    ) -> list[dict[str, Any]]:
+        """路1 跨全类型批量术语检索。
+
+        调用 search_terms_batch(keywords=tokens, term_type=None)，
+        一次 UNION ALL 覆盖所有类型。
+        """
+        reader = self._get_knowledge_reader()
+        seen: set[str] = set()
+        results: list[dict[str, Any]] = []
+
+        try:
+            batch = reader.search_terms_batch(
+                keywords=tokens,
+                term_type=None,
+                top_k=top_k,
+            )
+        except Exception:
+            logger.warning("_path1_global: search_terms_batch failed", exc_info=True)
+            return []
+
+        # batch returns {keyword: QueryResult, ...}
+        if isinstance(batch, dict):
+            for kw, qr in batch.items():
+                items = _extract_items(qr)
+                for item in items:
+                    tid = item.get("term_id", "")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        results.append({
+                            "term_id": tid,
+                            "term_name": item.get("term_name", ""),
+                            "term_type_code": item.get("term_type_code", ""),
+                            "match_type": "term_instance",
+                            "score": float(item.get("score", 0)),
+                        })
+
+        return results
+
+    # ── Path 2 helpers ──────────────────────────────────────────────────
+
+    def _path2_chunk_to_term_search(
+        self,
+        *,
+        base_id: str,
+        object_code: str,
+        query: str,
+        top_k: int,
+        kb_configs: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        """路2 限定 KB chunk 搜索 → term 匹配。
+
+        通过 EntityStore 获取 object_code 对应的 ext_property.kb_id，
+        限定在该 KB 内进行 chunk 向量搜索。
+        """
+        # 获取 kb_id
+        kb_id: str | None = None
+        try:
+            store = self._entity_store
+            obj_data = store.get("objects", object_code)
+            if obj_data:
+                ext = obj_data.get("ext_property", {}) or {}
+                kb_id = ext.get("kb_id")
+        except Exception:
+            logger.debug(
+                "_path2: entity_store.get('objects', %s) failed",
+                object_code,
+                exc_info=True,
+            )
+
+        if not kb_id:
+            return []
+
+        return self._do_chunk_search(
+            query=query,
+            kb_id=kb_id,
+            top_k=top_k,
+            kb_configs=kb_configs,
+        )
+
+    def _path2_global_chunk_to_term_search(
+        self,
+        *,
+        query: str,
+        top_k: int,
+        kb_configs: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        """路2 不限 KB 全库 chunk 搜索 → term 匹配。
+
+        kb_id=None 表示不限定知识库，全库 chunk 向量搜索。
+        """
+        return self._do_chunk_search(
+            query=query,
+            kb_id=None,
+            top_k=top_k,
+            kb_configs=kb_configs,
+        )
+
+    def _do_chunk_search(
+        self,
+        *,
+        query: str,
+        kb_id: str | None,
+        top_k: int,
+        kb_configs: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        """执行 chunk 向量搜索 → 匹配 term 的通用方法。
+
+        当前为桩实现 — 通过 entity_store.search() 做关键词兜底。
+        完整实现需要向量检索 + term 映射（后续迭代）。
+        """
+        try:
+            store = self._entity_store
+            # Fallback: entity_store keyword search
+            hits, _ = store.search(
+                "objects",
+                keyword=query,
+                page=1,
+                page_size=min(top_k, 50),
+            )
+        except Exception:
+            logger.warning(
+                "_do_chunk_search failed (kb_id=%s, query=%s)",
+                kb_id,
+                query,
+                exc_info=True,
+            )
+            return []
+
+        results: list[dict[str, Any]] = []
+        for hit in hits:
+            name = hit.get("object_name", "")
+            code = hit.get("object_code", "")
+            if name or code:
+                results.append({
+                    "term_id": code,
+                    "term_name": name,
+                    "term_type_code": hit.get("source_type", ""),
+                    "match_type": "chunk_to_term",
+                    "score": float(hit.get("score", 0.5)),
+                })
+
+        return results[:top_k]
+
     def graph_path(
         self,
         base_id: str,
@@ -1325,3 +1593,74 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         """Find shortest path between two objects — not yet implemented."""
         _ = base_id, scene_id, match_by, start_node, end_node, direction
         return {"path": [], "edges": [], "hops": -1}
+
+
+# ============================================================================
+# Module-level helpers for search_object_instances_unstructured
+# ============================================================================
+
+
+def _tokenize_query(query: str) -> list[str]:
+    """将非结构化查询文本拆分为搜索 token 列表。
+
+    使用简单的空白分割 + 过滤空串。完整实现可用 jieba 分词。
+    """
+    tokens = query.strip().split()
+    return [t for t in tokens if t]
+
+
+def _extract_items(raw: Any) -> list[Any]:
+    """从 search_terms / QueryResult 中提取 items 列表。
+
+    兼容 dict（含 'items' 键）、具有 .items 属性的对象、以及直接的 list。
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, dict):
+        return raw.get("items", [])
+    if isinstance(raw, list):
+        return raw
+    items = getattr(raw, "items", None)
+    if items is not None and callable(items):
+        return list(items())
+    if items is not None:
+        return items
+    return []
+
+
+def _fuse_path_results(
+    path1: list[dict[str, Any]],
+    path2: list[dict[str, Any]],
+    top_k: int = 20,
+) -> list[Any]:
+    """简单去重 + 分数排序融合两条路径的结果，返回 ObjectInstanceHit 列表。
+
+    按 term_id 去重（同 ID 保留最高分），然后按 score 降序取 top_k。
+    后续迭代可升级为完整 RRF 融合。
+    """
+    from datacloud_platform.models.shared import ObjectInstanceHit
+
+    merged: dict[str, dict[str, Any]] = {}
+
+    for hit in path1 + path2:
+        tid = hit.get("term_id", "")
+        if not tid:
+            continue
+        if tid not in merged or hit.get("score", 0) > merged[tid].get("score", 0):
+            merged[tid] = hit.copy()
+
+    sorted_hits = sorted(
+        merged.values(),
+        key=lambda h: h.get("score", 0),
+        reverse=True,
+    )
+    return [
+        ObjectInstanceHit(
+            term_id=h["term_id"],
+            term_name=h["term_name"],
+            term_type_code=h["term_type_code"],
+            match_type=h["match_type"],
+            score=h["score"],
+        )
+        for h in sorted_hits[:top_k]
+    ]

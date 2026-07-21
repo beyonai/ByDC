@@ -847,6 +847,30 @@ class FakeOntologyBackend:
         """Return empty results."""
         return {"data": [], "totalCount": 0}
 
+    def search_object_instances_unstructured(
+        self,
+        *,
+        base_id: str = "",  # noqa: ARG002
+        object_code: str | None = None,
+        query: str = "",
+        top_k: int = 20,
+        enable_chunk_recall: bool = True,
+        kb_configs: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """返回预设的 _unstructured_hits 或空列表。
+
+        测试代码可以在调用前设置 ``_unstructured_hits`` 来控制返回值。
+        """
+        _ = (top_k, enable_chunk_recall, kb_configs)
+        # 按 object_code 过滤（可选）
+        hits = getattr(self, "_unstructured_hits", [])
+        if object_code is not None:
+            hits = [
+                h for h in hits
+                if h.get("term_type_code") == object_code
+            ]
+        return list(hits)
+
     def graph_path(
         self,
         base_id: str,  # noqa: ARG002

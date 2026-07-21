@@ -128,3 +128,26 @@ class ScoreUpdateRecord:
 
     name_id: str
     success: bool
+
+
+@dataclass(frozen=True)
+class ObjectInstanceHit:
+    """非结构化对象实例检索命中结果。
+
+    同时服务于路1（术语实例检索）和路2（chunk → term 检索）两条召回路径。
+    """
+
+    term_id: str
+    """术语/实例 ID。"""
+
+    term_name: str
+    """术语/实例显示名。"""
+
+    term_type_code: str
+    """术语类型编码（如 by_opportunity）。"""
+
+    match_type: str
+    """匹配来源标识: term_instance | chunk_to_term。"""
+
+    score: float
+    """融合/归一化后的置信度分数。"""

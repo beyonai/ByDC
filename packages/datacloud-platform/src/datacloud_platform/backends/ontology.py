@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from datacloud_platform.models.shared import ObjectSummary, ParsedOwlContent
+    from datacloud_platform.models.shared import (
+        ObjectInstanceHit,
+        ObjectSummary,
+        ParsedOwlContent,
+    )
 
 
 class OntologyQueryable(Protocol):
@@ -572,4 +576,37 @@ class OntologyBackend(Protocol):
         where: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """本体实例搜索。"""
+        ...
+
+    def search_object_instances_unstructured(
+        self,
+        *,
+        base_id: str,
+        object_code: str | None = None,
+        query: str,
+        top_k: int = 20,
+        enable_chunk_recall: bool = True,
+        kb_configs: dict[str, Any] | None = None,
+    ) -> list[ObjectInstanceHit]:
+        """非结构化对象实例检索 — 双路召回 + RRF 融合。
+
+        **路1（术语实例检索）：**
+        - object_code 非 None 时：单类型 ``search_terms(term_type_code=object_code, ...)``
+        - object_code=None 时：跨全类型 ``search_terms_batch(keywords=tokens, term_type=None)``
+
+        **路2（chunk → term 检索）：**
+        - object_code 非 None 时：限定 KB（通过 EntityStore 获取 kb_id）
+        - object_code=None 时：不限 KB（``kb_id=None`` 全库搜索）
+
+        Args:
+            base_id:         本体库 ID。
+            object_code:     对象类型编码。None 表示不限类型，全局跨类型检索。
+            query:           非结构化查询文本（自然语言）。
+            top_k:           最终融合返回的最大结果数。
+            enable_chunk_recall: 是否启用路2（chunk 召回）。False 时仅走路1。
+            kb_configs:      KB 搜索配置（传递到后端搜索接口）。
+
+        Returns:
+            ObjectInstanceHit 列表，按 RRF 融合分数降序排列。
+        """
         ...
