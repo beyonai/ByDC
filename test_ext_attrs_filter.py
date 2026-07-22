@@ -5,8 +5,10 @@ import sys
 sys.path.insert(0, "D:/data/code/baiying/by-datacloud/packages/datacloud-platform/src")
 sys.path.insert(0, "D:/data/code/baiying/by-datacloud/packages/datacloud-data/src")
 
+from typing import Any
+
 from datacloud_platform.platform import DatacloudPlatform
-from datacloud_platform.backends.presets import create_composite_backend
+from datacloud_platform.backends.presets import create_composite_backend  # type: ignore[attr-defined]
 
 backend = create_composite_backend("D:/data/code/baiying/byclaw-all/byclaw-data/.by/datacloud")
 platform = DatacloudPlatform(backend)
@@ -24,7 +26,7 @@ print("测试 1: 查询 byDC 术语，不带过滤条件")
 print("=" * 80)
 
 result1 = platform.search_terms("1", keyword="byDC", top_k=10)
-items1 = result1.items if hasattr(result1, "items") else result1.get("items", [])
+items1: Any = result1.items if hasattr(result1, "items") else result1.get("items", [])
 
 for idx, item in enumerate(items1):
     term_name = item.term_name if hasattr(item, "term_name") else item.get("term_name")
@@ -49,10 +51,8 @@ print(f"过滤条件: kb_id={filter_kb_id}, kb_file_path={filter_kb_file_path}")
 
 for keyword in params["keywords"]:
     search_result = platform.search_terms("1", keyword=keyword, top_k=10)
-    result_items = (
-        search_result.items
-        if hasattr(search_result, "items")
-        else search_result.get("items", [])
+    result_items: Any = (
+        search_result.items if hasattr(search_result, "items") else search_result.get("items", [])
     )
 
     print(f"\n搜索关键词: {keyword}, 找到 {len(result_items)} 个结果")
@@ -65,7 +65,9 @@ for keyword in params["keywords"]:
         detail = platform.get_term_detail("1", library_id="1", term_id=term_id)
         ext_attrs = None
         if detail:
-            ext_attrs = detail.ext_attrs if hasattr(detail, "ext_attrs") else detail.get("ext_attrs")
+            ext_attrs = (
+                detail.ext_attrs if hasattr(detail, "ext_attrs") else detail.get("ext_attrs")
+            )
 
         # 应用过滤逻辑
         if filter_kb_id or filter_kb_file_path:

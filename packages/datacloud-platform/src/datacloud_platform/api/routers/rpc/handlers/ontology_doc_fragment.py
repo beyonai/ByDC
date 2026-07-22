@@ -65,7 +65,9 @@ def _batch_create(
         for item in raw_items
     ]
 
-    ids = platform.batch_create_fragments(DEFAULT_BASE_ID, items=items, created_by=created_by)
+    ids = platform.batch_create_fragments(
+        DEFAULT_BASE_ID, items=items, created_by=created_by
+    )
     return ok(data=ids, message="created")
 
 

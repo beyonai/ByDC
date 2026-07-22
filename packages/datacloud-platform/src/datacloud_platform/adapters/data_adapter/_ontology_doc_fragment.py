@@ -17,7 +17,6 @@ from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
-    Integer,
     SmallInteger,
     String,
     Text,
@@ -132,7 +131,9 @@ class OntologyDocFragmentAdapter:
                 rows_out.append(_row_to_dict(row))
             session.commit()
 
-        logger.info("OntologyDocFragmentAdapter.batch_create: inserted %d rows", len(rows_out))
+        logger.info(
+            "OntologyDocFragmentAdapter.batch_create: inserted %d rows", len(rows_out)
+        )
         return rows_out
 
     def list_by_instance_ids(
@@ -204,7 +205,7 @@ class OntologyDocFragmentAdapter:
                 .values(status=status, updated_time=now, updated_by=updated_by)
             )
             session.commit()
-            updated = result.rowcount
+            updated: int = result.rowcount  # type: ignore[attr-defined]
 
         logger.info(
             "OntologyDocFragmentAdapter.update_status_by_ids: updated %d rows to status=%d",
