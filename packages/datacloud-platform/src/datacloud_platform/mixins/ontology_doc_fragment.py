@@ -101,6 +101,7 @@ class OntologyDocFragmentMixin:
             content: str = item.get("content") or ""
 
             instance_name = _extract_term_name(term_cache.get(instance_id))
+            object_code = _extract_term_type_code(term_cache.get(instance_id))
 
             origin_file: dict[str, Any] = {}
             if origin_instance_id:
@@ -110,6 +111,7 @@ class OntologyDocFragmentMixin:
                 {
                     "instance_id": instance_id,
                     "instance_name": instance_name,
+                    "object_code": object_code,
                     "content": content,
                     "status": 0,
                     "origin_instance_id": origin_instance_id,
@@ -146,6 +148,7 @@ class OntologyDocFragmentMixin:
 
         Returns:
             {"total": int, "data": [fragment_dict, ...]}
+            Each fragment_dict includes object_code stored at creation time.
         """
         from datacloud_platform.adapters.data_adapter._ontology_doc_fragment import (  # noqa: PLC0415
             OntologyDocFragmentAdapter,
@@ -186,6 +189,15 @@ class OntologyDocFragmentMixin:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Private helpers
 # ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _extract_term_type_code(detail: Any) -> str:
+    """Extract term_type_code from a term detail dict or dataclass."""
+    if not detail:
+        return ""
+    if isinstance(detail, dict):
+        return str(detail.get("term_type") or "")
+    return str(getattr(detail, "term_type", "") or "")
 
 
 def _extract_term_name(detail: Any) -> str:
