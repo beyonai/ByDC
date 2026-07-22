@@ -212,12 +212,11 @@ class OntologyQueryMixin:
         self: _HasOntologyBackend,
         base_id: str,
         *,
-        object_code: str | None = None,
+        object_codes: list[str] | None = None,
         query: str | None = None,
         queries: list[str] | None = None,
         top_k: int = 20,
         enable_chunk_recall: bool = True,
-        kb_configs: dict[str, Any] | None = None,
     ) -> Any:  # ObjectInstanceSearchResult
         """非结构化对象实例检索 — 委托到 OntologyBackend。
 
@@ -226,10 +225,9 @@ class OntologyQueryMixin:
         """
         return await self._ontology_for(base_id).search_object_instances_unstructured(
             base_id=base_id,
-            object_code=object_code,
+            object_codes=object_codes,
             query=query,
             queries=queries,
             top_k=top_k,
             enable_chunk_recall=enable_chunk_recall,
-            kb_configs=kb_configs,
         )

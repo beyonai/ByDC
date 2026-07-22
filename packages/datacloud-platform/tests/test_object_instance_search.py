@@ -242,14 +242,14 @@ class TestFakeOntologyBackendSearch:
                 _make_hit("t2", "结果2", term_type_code="by_company"),
             ]
             return await fake.search_object_instances_unstructured(
-                base_id="test", object_code=None, query="查询"
+                base_id="test", object_codes=None, query="查询"
             )
 
         result = asyncio.run(_t())
         assert "查询" in result.results
         assert len(result.results["查询"]) == 2
 
-    def test_preset_hits_filtered_by_object_code(self) -> None:
+    def test_preset_hits_filtered_by_object_codes(self) -> None:
         async def _t() -> Any:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [
@@ -257,11 +257,42 @@ class TestFakeOntologyBackendSearch:
                 _make_hit("t2", "结果2", term_type_code="by_company"),
             ]
             return await fake.search_object_instances_unstructured(
-                base_id="test", object_code="by_opportunity", query="查询"
+                base_id="test", object_codes=["by_opportunity"], query="查询"
             )
 
         result = asyncio.run(_t())
         assert len(result.results["查询"]) == 1
+
+    def test_object_codes_multiple_types(self) -> None:
+        async def _t() -> Any:
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [
+                _make_hit("t1", "A", term_type_code="Ability"),
+                _make_hit("t2", "B", term_type_code="ArticleAnalysis"),
+                _make_hit("t3", "C", term_type_code="OtherType"),
+            ]
+            return await fake.search_object_instances_unstructured(
+                base_id="test",
+                object_codes=["Ability", "ArticleAnalysis"],
+                query="查询",
+            )
+
+        result = asyncio.run(_t())
+        assert len(result.results["查询"]) == 2
+
+    def test_object_codes_empty_list(self) -> None:
+        async def _t() -> Any:
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [
+                _make_hit("t1", "A", term_type_code="by_opp"),
+            ]
+            return await fake.search_object_instances_unstructured(
+                base_id="test", object_codes=[], query="查询"
+            )
+
+        result = asyncio.run(_t())
+        assert isinstance(result, ObjectInstanceSearchResult)
+        assert result.results == {}
 
     def test_global_vs_specific_scope(self) -> None:
         async def _t() -> Any:
@@ -272,10 +303,10 @@ class TestFakeOntologyBackendSearch:
                 _make_hit("t3", "C", term_type_code="by_city"),
             ]
             g = await fake.search_object_instances_unstructured(
-                base_id="test", object_code=None, query="查询"
+                base_id="test", object_codes=None, query="查询"
             )
             s = await fake.search_object_instances_unstructured(
-                base_id="test", object_code="by_opp", queries=["查询"]
+                base_id="test", object_codes=["by_opp"], queries=["查询"]
             )
             return g, s
 
@@ -288,7 +319,7 @@ class TestFakeOntologyBackendSearch:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [_make_hit("t1", "A", term_type_code="by_opp")]
             return await fake.search_object_instances_unstructured(
-                base_id="test", object_code=None, queries=["OCR", "Agent"]
+                base_id="test", object_codes=None, queries=["OCR", "Agent"]
             )
 
         result = asyncio.run(_t())
@@ -302,7 +333,7 @@ class TestFakeOntologyBackendSearch:
             ]
             return await fake.search_object_instances_unstructured(
                 base_id="test",
-                object_code=None,
+                object_codes=None,
                 query="搜索",
                 enable_chunk_recall=False,
             )
@@ -317,7 +348,7 @@ class TestFakeOntologyBackendSearch:
                 _make_hit("t1", "路1命中", term_type_code="by_opp")
             ]
             return await fake.search_object_instances_unstructured(
-                base_id="test", object_code=None, query="搜索"
+                base_id="test", object_codes=None, query="搜索"
             )
 
         result = asyncio.run(_t())
@@ -332,21 +363,25 @@ class TestFakeOntologyBackendSearch:
 class TestNoopBackend:
     def test_noop_returns_empty(self) -> None:
         from datacloud_platform.adapters.none_adapters import _NoopOntologyBackend
+        from datacloud_platform.models.shared import ObjectInstanceSearchResult
 
         backend = _NoopOntologyBackend()
         result = backend.search_object_instances_unstructured(
             base_id="test", query="任意"
         )
-        assert result == []
+        assert isinstance(result, ObjectInstanceSearchResult)
+        assert result.results == {}
 
-    def test_noop_with_object_code(self) -> None:
+    def test_noop_with_object_codes(self) -> None:
         from datacloud_platform.adapters.none_adapters import _NoopOntologyBackend
+        from datacloud_platform.models.shared import ObjectInstanceSearchResult
 
         backend = _NoopOntologyBackend()
         result = backend.search_object_instances_unstructured(
-            base_id="test", object_code="by_opp", query="任意"
+            base_id="test", object_codes=["by_opp"], query="任意"
         )
-        assert result == []
+        assert isinstance(result, ObjectInstanceSearchResult)
+        assert result.results == {}
 
 
 # ============================================================================
@@ -457,39 +492,24 @@ class TestRRFFusion:
 
 
 class TestDowngradeStrategies:
-    def test_kb_configs_none_skips_path2(self) -> None:
-        from datacloud_platform.adapters.data_adapter._ontology_metadata import (
-            _should_run_path2,
-        )
-
-        assert _should_run_path2(True, None) is False
-
     def test_enable_chunk_recall_false_skips_path2(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+        assert _should_run_path2(False) is False
 
-        assert _should_run_path2(False, {"kb": "test"}) is False
-
-    def test_both_enabled_returns_true(self) -> None:
+    def test_enable_chunk_recall_true_allows_path2(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
-
-        assert _should_run_path2(True, {"kb": "test"}) is True
+        assert _should_run_path2(True) is True
 
     def test_path2_no_kb_id_returns_empty(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _fuse_path_results_rrf,
         )
-
         result = _fuse_path_results_rrf([], [], k=60)
         assert result == []
-
-
-# ============================================================================
-# 全局检索 + RRF 测试
-# ============================================================================
 
 
 class TestGlobalSearchRRF:

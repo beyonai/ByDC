@@ -588,22 +588,24 @@ class _NoopOntologyBackend:
         self,
         *,
         base_id: str,
-        object_code: str | None = None,
-        query: str,
+        object_codes: list[str] | None = None,
+        query: str | None = None,
+        queries: list[str] | None = None,
         top_k: int = 20,
         enable_chunk_recall: bool = True,
-        kb_configs: dict[str, Any] | None = None,
-    ) -> list[Any]:
-        """返回空列表 — 非结构化对象实例检索在当前后端无数据。"""
+    ) -> Any:  # ObjectInstanceSearchResult
+        """返回空结果 — 非结构化对象实例检索在当前后端无数据。"""
+        from datacloud_platform.models.shared import ObjectInstanceSearchResult
+
         _ = (
             base_id,
-            object_code,
+            object_codes,
             query,
+            queries,
             top_k,
             enable_chunk_recall,
-            kb_configs,
         )
-        return []
+        return ObjectInstanceSearchResult(results={})
 
 
 class _NoopTermBackend:
@@ -635,7 +637,7 @@ class _NoopTermBackend:
         *,
         keywords: list[str],
         dataset_ids: list[str] | None = None,
-        term_type: str | None = None,
+        term_type_codes: list[str] | None = None,
         query_type: str = "mixed",
         parent_term_code: str | None = None,
         label_filters: list[dict[str, Any]] | None = None,
