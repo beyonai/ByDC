@@ -37,13 +37,15 @@ def parse_object_instance_build_result(
     if not isinstance(raw_labels, dict):
         raise ObjectInstanceBuildLabelValidationError("labels must be a JSON object")
 
-    labels = _normalize_labels(raw_labels, label_schema)
+    labels, ignored_label_fields = _normalize_labels(raw_labels, label_schema)
 
     diagnostics = payload.get("diagnostics") or {}
     if not isinstance(diagnostics, dict):
         diagnostics = {}
     diagnostics = dict(diagnostics)
     diagnostics["retry_count"] = retry_count
+    if ignored_label_fields:
+        diagnostics["ignored_label_fields"] = ignored_label_fields
 
     confidence = payload.get("confidence")
     return ObjectInstanceBuildResult(
@@ -59,17 +61,19 @@ def parse_object_instance_build_result(
 def _normalize_labels(
     labels: dict[str, Any],
     label_schema: dict[str, Any],
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], list[str]]:
     normalized: dict[str, Any] = {}
+    ignored_fields: list[str] = []
     for field_code, value in labels.items():
         if field_code not in label_schema:
-            raise ObjectInstanceBuildLabelValidationError(f"unsupported label field: {field_code}")
+            ignored_fields.append(field_code)
+            continue
         field_schema = label_schema[field_code]
         if not isinstance(field_schema, dict):
             normalized[field_code] = value
             continue
         normalized[field_code] = _normalize_label_value(field_code, value, field_schema)
-    return normalized
+    return normalized, ignored_fields
 
 
 def _normalize_label_value(

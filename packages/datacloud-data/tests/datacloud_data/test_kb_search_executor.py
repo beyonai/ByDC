@@ -173,7 +173,30 @@ def test_render_markdown_with_front_matter_skips_empty_values() -> None:
         "会议内容",
     )
 
-    assert rendered == ('---\nstatus: "active"\nis_active: false\ncount: 0\n---\n\n会议内容')
+    assert rendered == ("---\nstatus: active\nis_active: false\ncount: 0\n---\n\n会议内容")
+
+
+def test_render_markdown_with_front_matter_keeps_nested_relations() -> None:
+    rendered = _render_markdown_with_front_matter(
+        {
+            "name": "Ontology",
+            "product_code": "byDC",
+            "relations": {"maps-to": {"Concept": ["Ontology Reasoning"]}},
+        },
+        "# Ontology",
+    )
+
+    assert rendered == (
+        "---\n"
+        "name: Ontology\n"
+        "product_code: byDC\n"
+        "relations:\n"
+        "  maps-to:\n"
+        "    Concept:\n"
+        "      - Ontology Reasoning\n"
+        "---\n\n"
+        "# Ontology"
+    )
 
 
 @pytest.mark.asyncio

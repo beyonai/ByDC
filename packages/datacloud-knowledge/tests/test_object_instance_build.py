@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import pytest
@@ -13,7 +14,10 @@ from datacloud_knowledge.object_instance_build.parser import (
     ObjectInstanceBuildLabelValidationError,
     parse_object_instance_build_result,
 )
-from datacloud_knowledge.object_instance_build.prompts import build_enum_prompt_constraints
+from datacloud_knowledge.object_instance_build.prompts import (
+    build_enum_prompt_constraints,
+    build_object_instance_prompt,
+)
 
 
 def _label_schema(enum_count: int = 3) -> dict[str, Any]:
@@ -84,6 +88,142 @@ def test_enum_prompt_constraints_limit_large_enum_values_to_50() -> None:
     assert constraints["owner_type"]["enum_prompt_values"][0]["code"] == "public"
 
 
+def test_object_instance_prompt_uses_object_template_as_merge_constraint() -> None:
+    request = ObjectInstanceBuildRequest(
+        instance_id="term-agent",
+        origin_instance_id="origin-agent",
+        term_detail={"term_name": "Agent", "term_type": "Concept"},
+        object_schema={"objectCode": "Concept"},
+        label_schema=_label_schema(),
+        object_template=(
+            "---\n"
+            'name: "{{value}}"\n'
+            'owner_type: "{{value}}"\n'
+            "---\n\n"
+            "# {{name}}\n\n"
+            "## 对象说明\n\n"
+            "{{object_description}}\n"
+        ),
+        template_constraints="## 2. 头部字段填写说明\n\n字段必须与 object.schema.yaml 一致。",
+        existing_content=(
+            "---\n"
+            "name: Agent\n"
+            "relations:\n"
+            "  maps-to:\n"
+            "  - Concept: []\n"
+            "---\n\n"
+            "# Agent\n\n"
+            "## 投标标签\n\n"
+            "原有投标标签内容。\n"
+        ),
+        source_content="Agent source content",
+        fragments=[
+            ObjectInstanceFragment(
+                fragment_id="fragment-agent-001",
+                content="Agent fragment content",
+                origin_file={"file_path": "/Concept/Agent.md"},
+            )
+        ],
+    )
+
+    prompt = build_object_instance_prompt(request)
+
+    assert '"object_template"' in prompt
+    assert '"template_constraints"' in prompt
+    assert '"existing_content"' in prompt
+    assert "# {{name}}" in prompt
+    assert "## 投标标签" in prompt
+    assert "字段必须与 object.schema.yaml 一致" in prompt
+    assert "existing_content 是当前对象实例已有 Markdown" in prompt
+    assert "只有 existing_content 为空时，才按照 object_template" in prompt
+    assert (
+        "不得删除 existing_content 中已有的 frontmatter 字段、relations、标题和正文段落" in prompt
+    )
+
+
+@pytest.mark.asyncio
+async def test_build_object_instance_retries_when_existing_content_is_deleted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class FakeLLM:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def ainvoke(self, prompt: str) -> FakeMessage:
+            self.calls.append(prompt)
+            if len(self.calls) == 1:
+                return FakeMessage(
+                    json.dumps(
+                        {
+                            "content": (
+                                "---\nname: Agent\n---\n\n# Agent\n\n## 对象说明\n\n缩水后的内容。"
+                            ),
+                            "labels": {"name": "Agent", "owner_type": "public"},
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+            return FakeMessage(
+                json.dumps(
+                    {
+                        "content": (
+                            "---\n"
+                            "name: Agent\n"
+                            "relations:\n"
+                            "  maps-to:\n"
+                            "  - Concept: []\n"
+                            "---\n\n"
+                            "# Agent\n\n"
+                            "## 投标标签\n\n"
+                            "原有投标标签内容。\n\n"
+                            "## 对象说明\n\n"
+                            "增强后的内容。"
+                        ),
+                        "labels": {"name": "Agent", "owner_type": "public"},
+                    },
+                    ensure_ascii=False,
+                )
+            )
+
+    fake_llm = FakeLLM()
+    monkeypatch.setattr(
+        "datacloud_knowledge.object_instance_build.service.build_llm",
+        lambda: fake_llm,
+    )
+    request = _request(_label_schema())
+    request = ObjectInstanceBuildRequest(
+        instance_id=request.instance_id,
+        origin_instance_id=request.origin_instance_id,
+        term_detail=request.term_detail,
+        object_schema=request.object_schema,
+        label_schema=request.label_schema,
+        existing_content=(
+            "---\n"
+            "name: Agent\n"
+            "relations:\n"
+            "  maps-to:\n"
+            "  - Concept: []\n"
+            "---\n\n"
+            "# Agent\n\n"
+            "## 投标标签\n\n"
+            "原有投标标签内容。"
+        ),
+        source_content=request.source_content,
+        fragments=request.fragments,
+    )
+
+    result = await build_object_instance(request)
+
+    assert "## 投标标签" in result.content
+    assert "relations:" in result.content
+    assert result.diagnostics["retry_count"] == 1
+    assert len(fake_llm.calls) == 2
+
+
 def test_parse_result_normalizes_enum_name_to_code() -> None:
     payload = {
         "content": "Agent 是通用概念。",
@@ -99,6 +239,23 @@ def test_parse_result_normalizes_enum_name_to_code() -> None:
     )
 
     assert result.labels["owner_type"] == "public"
+
+
+def test_parse_result_ignores_labels_outside_schema() -> None:
+    payload = {
+        "content": "Agent is a common concept.",
+        "labels": {"name": "Agent", "kb_id": "97"},
+        "diagnostics": {"used_fragment_ids": ["fragment-agent-001"]},
+    }
+
+    result = parse_object_instance_build_result(
+        payload=payload,
+        label_schema=_label_schema(),
+        retry_count=0,
+    )
+
+    assert result.labels == {"name": "Agent"}
+    assert result.diagnostics["ignored_label_fields"] == ["kb_id"]
 
 
 def test_parse_result_rejects_enum_value_outside_full_enum_values() -> None:
@@ -196,3 +353,72 @@ async def test_build_object_instance_retries_invalid_enum_then_succeeds(
     assert result.labels["owner_type"] == "public"
     assert result.diagnostics["retry_count"] == 1
     assert len(fake_llm.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_build_object_instance_extracts_json_from_text_part_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeMessage:
+        def __init__(self, content: list[dict[str, str]]) -> None:
+            self.content = content
+
+    class FakeLLM:
+        async def ainvoke(self, prompt: str) -> FakeMessage:
+            payload = json.dumps(
+                {
+                    "content": "Agent is a common concept.",
+                    "labels": {"name": "Agent", "owner_type": "public"},
+                    "file_description": "Agent concept object instance",
+                },
+                ensure_ascii=False,
+            )
+            return FakeMessage(
+                [
+                    {
+                        "type": "text",
+                        "text": f"下面是生成结果：\n{payload}\n请验收。",
+                    }
+                ]
+            )
+
+    monkeypatch.setattr(
+        "datacloud_knowledge.object_instance_build.service.build_llm",
+        FakeLLM,
+    )
+
+    result = await build_object_instance(_request(_label_schema()))
+
+    assert result.content == "Agent is a common concept."
+    assert result.labels["owner_type"] == "public"
+
+
+@pytest.mark.asyncio
+async def test_build_object_instance_logs_raw_output_summary_on_parse_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class FakeMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class FakeLLM:
+        async def ainvoke(self, prompt: str) -> FakeMessage:
+            return FakeMessage("这不是 JSON，也没有 content/labels 字段。")
+
+    monkeypatch.setattr(
+        "datacloud_knowledge.object_instance_build.service.build_llm",
+        FakeLLM,
+    )
+    caplog.set_level(
+        logging.WARNING,
+        logger="datacloud_knowledge.object_instance_build.service",
+    )
+
+    with pytest.raises(Exception, match="LLM output must be a JSON object"):
+        await build_object_instance(_request(_label_schema()))
+
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "object_instance_build llm_parse_failed retry_count=0" in messages
+    assert '"raw_output_length"' in messages
+    assert "这不是 JSON" in messages

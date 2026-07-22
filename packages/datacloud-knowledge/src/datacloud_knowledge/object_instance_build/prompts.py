@@ -52,6 +52,9 @@ def build_object_instance_prompt(request: ObjectInstanceBuildRequest) -> str:
         "object_schema": request.object_schema,
         "label_schema": request.label_schema,
         "enum_prompt_constraints": enum_constraints,
+        "existing_content": request.existing_content,
+        "object_template": request.object_template,
+        "template_constraints": request.template_constraints,
         "source_content": request.source_content,
         "fragments": fragments,
     }
@@ -62,8 +65,16 @@ def build_object_instance_prompt(request: ObjectInstanceBuildRequest) -> str:
         f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n"
         "输出要求:\n"
         "1. content 必须是融合后的新 Markdown 文档，不是片段简单拼接。\n"
-        "2. labels 只能包含 label_schema 中允许的字段。\n"
-        "3. 枚举字段输出值必须使用枚举 code。\n"
+        "2. existing_content 是当前对象实例已有 Markdown；如果 existing_content 非空，"
+        "必须以 existing_content 为基准做增强，保留已有信息并把 source_content/fragments 中的新信息补充进去。\n"
+        "3. 不得删除 existing_content 中已有的 frontmatter 字段、relations、标题和正文段落；"
+        "除非新片段明确指出原内容错误，否则只能补充、扩写、追加或局部修订。\n"
+        "4. object_template 是新建对象实例时的模板；只有 existing_content 为空时，"
+        "才按照 object_template 的 Markdown/frontmatter 结构组织输出。\n"
+        "5. template_constraints 是填写要求、字段说明、关系说明、常见错误和检查清单，"
+        "必须作为生成 content 和 labels 的约束，不要把这些说明文字原样复制到最终 content。\n"
+        "6. labels 只能包含 label_schema 中允许的字段。\n"
+        "7. 枚举字段输出值必须使用枚举 code。\n"
     )
 
 
@@ -82,7 +93,7 @@ def build_object_instance_retry_prompt(
     }
     return (
         f"{original_prompt}\n\n"
-        "上一次输出不符合要求，请只返回合法 JSON。错误信息如下：\n"
+        "上一次输出不符合要求，请只返回合法 JSON。错误信息如下:\n"
         f"{json.dumps(retry_context, ensure_ascii=False, indent=2)}"
     )
 
@@ -90,6 +101,9 @@ def build_object_instance_retry_prompt(
 def _build_matching_context(request: ObjectInstanceBuildRequest) -> str:
     parts = [
         json.dumps(request.term_detail, ensure_ascii=False),
+        request.existing_content,
+        request.object_template,
+        request.template_constraints,
         request.source_content,
         *(fragment.content for fragment in request.fragments),
     ]
@@ -104,7 +118,9 @@ def _select_enum_prompt_values(
     options = [option for option in normalized_options if option is not None]
     matched = [option for option in options if _option_matches_context(option, context)]
     selected = matched + [
-        option for option in options if option.get("code") not in {m.get("code") for m in matched}
+        option
+        for option in options
+        if option.get("code") not in {matched_item.get("code") for matched_item in matched}
     ]
     return selected[:MAX_ENUM_PROMPT_VALUES]
 

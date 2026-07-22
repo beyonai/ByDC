@@ -31,11 +31,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _USER_CODE_HEADER = "X-User-Code"
+_BEYOND_TOKEN_HEADER = "beyond-token"
 
 
 def _user_code(req: Request) -> str:
     """Extract operator identifier from X-User-Code header."""
     return req.headers.get(_USER_CODE_HEADER, "")
+
+
+def _beyond_token(req: Request) -> str:
+    """Extract Beyond-Token header required by downstream UserFS writes."""
+    return req.headers.get(_BEYOND_TOKEN_HEADER, "").strip()
 
 
 # ── batchCreate ───────────────────────────────────────────────────────────────
@@ -164,6 +170,8 @@ async def _build_object_instance(
     operator = _user_code(req)
     if not operator:
         raise ValueError(f"Request header '{_USER_CODE_HEADER}' is required")
+    if not _beyond_token(req):
+        raise ValueError(f"Request header '{_BEYOND_TOKEN_HEADER}' is required")
 
     service = get_object_instance_build_task_service(platform)
     task = await service.submit(

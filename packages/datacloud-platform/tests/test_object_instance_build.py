@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from datacloud_knowledge.contracts.term_provider_types import TermDetail
 from datacloud_knowledge.object_instance_build import ObjectInstanceBuildResult
 from datacloud_platform.api.routers.rpc.router import create_rpc_router
 from datacloud_platform.constants import DEFAULT_BASE_ID
@@ -54,6 +56,26 @@ class FailingSecondBuildKnowledgeClient:
             content=f"# {request.instance_id}",
             labels={"name": request.instance_id, "owner_type": "public"},
             file_description="object instance",
+        )
+
+
+class FrontmatterDroppingKnowledgeClient:
+    def __init__(self) -> None:
+        self.requests: list[Any] = []
+
+    async def build_object_instance(self, request: Any) -> ObjectInstanceBuildResult:
+        self.requests.append(request)
+        return ObjectInstanceBuildResult(
+            content=(
+                "---\n"
+                'name: "Ontology"\n'
+                'product_code: "BYCLAW_DATACLOUD"\n'
+                "---\n\n"
+                "# Ontology\n\n"
+                "Merged content."
+            ),
+            labels={"name": "Ontology", "product_code": "BYCLAW_DATACLOUD"},
+            file_description="Ontology object instance",
         )
 
 
@@ -165,12 +187,40 @@ class FakeBuildPlatform:
             "term_type": "Concept",
             "term_type_code": "Concept",
             "library_id": library_id,
+            "ext_attrs": {
+                "kb_resource_id": "target-resource",
+                "kb_file_path": "/Concept/Agent.md",
+            },
         }
 
     def get_object_detail(self, base_id: str, object_code: str) -> dict[str, Any]:
         return {
             "object_code": object_code,
             "object_name": object_code,
+            "extProperty": {
+                "template": (
+                    "---\n"
+                    "template_type: object_instance_template\n"
+                    "---\n\n"
+                    "# Concept 实例卡片模板\n\n"
+                    "## 1. 模板说明\n\n"
+                    "本模板用于编写 Concept 对象实例卡片。\n\n"
+                    "## 2. 头部字段填写说明\n\n"
+                    "字段必须与 object.schema.yaml 保持一致。\n\n"
+                    "## 5. 实例卡片模板\n\n"
+                    "```markdown\n"
+                    "---\n"
+                    'name: "{{value}}"\n'
+                    'owner_type: "{{value}}"\n'
+                    "---\n\n"
+                    "# {{name}}\n\n"
+                    "## 对象说明\n\n"
+                    "{{object_description}}\n"
+                    "```\n\n"
+                    "## 6. 常见错误与检查清单\n\n"
+                    "- 使用了 object.schema.yaml 中未声明的头部字段。\n"
+                )
+            },
             "properties": [
                 {
                     "property_code": "name",
@@ -214,6 +264,8 @@ class FakeBuildPlatform:
         base_id: str,
         origin_file: dict[str, Any],
     ) -> str:
+        if origin_file.get("kb_resource_id") == "target-resource":
+            return "# Agent\n\n## 投标标签\n\n原有投标标签内容。"
         return f"Full source from {base_id}: {origin_file['file_path']}"
 
     def update_fragment_status_by_ids(
@@ -257,6 +309,97 @@ class FakeBuildPlatform:
             }
         )
         return {"data": {"records": [{"id": "kb-agent"}], "total": 1}}
+
+
+class FrontmatterBuildPlatform(FakeBuildPlatform):
+    def get_term_detail(
+        self,
+        base_id: str,
+        *,
+        library_id: str,
+        term_id: str,
+    ) -> dict[str, Any] | None:
+        if term_id == "term-reasoning":
+            return {
+                "term_id": term_id,
+                "term_code": "Ontology Reasoning",
+                "term_name": "Ontology Reasoning",
+                "term_type": "Concept",
+                "term_type_code": "Concept",
+                "library_id": library_id,
+            }
+        if term_id == "term-bydc":
+            return {
+                "term_id": term_id,
+                "term_code": "byDC",
+                "term_name": "byDC",
+                "term_type": "Product",
+                "term_type_code": "Product",
+                "library_id": library_id,
+            }
+        return {
+            "term_id": term_id,
+            "term_code": "Ontology",
+            "term_name": "Ontology",
+            "term_type": "Methodology",
+            "term_type_code": "Methodology",
+            "library_id": library_id,
+            "ext_attrs": {
+                "kb_resource_id": "target-resource",
+                "kb_file_path": "/Methodology/Ontology.md",
+            },
+        }
+
+    def get_object_detail(self, base_id: str, object_code: str) -> dict[str, Any]:
+        return {
+            "object_code": object_code,
+            "object_name": object_code,
+            "extProperty": {},
+            "properties": [
+                {
+                    "property_code": "name",
+                    "property_name": "Name",
+                    "data_type": "STRING",
+                    "required": True,
+                },
+                {
+                    "property_code": "product_code",
+                    "property_name": "Product Code",
+                    "data_type": "STRING",
+                    "required": True,
+                },
+            ],
+        }
+
+    def read_source_document(
+        self,
+        base_id: str,
+        origin_file: dict[str, Any],
+    ) -> str:
+        if origin_file.get("kb_resource_id") == "target-resource":
+            return "# Ontology\n\nExisting content without frontmatter."
+        return f"Full source from {base_id}: {origin_file['file_path']}"
+
+    def list_term_relations(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        if kwargs.get("source_term_id") != "term-ontology":
+            return {"data": [], "totalCount": 0}
+        return {
+            "data": [
+                {
+                    "source_term_id": "term-ontology",
+                    "target_term_id": "term-reasoning",
+                    "relation_name": "maps-to",
+                    "relation_category": "BUSINESS",
+                },
+                {
+                    "source_term_id": "term-ontology",
+                    "target_term_id": "term-bydc",
+                    "relation_name": "所属产品",
+                    "relation_category": "ONTOLOGY",
+                },
+            ],
+            "totalCount": 2,
+        }
 
 
 def _fragment(
@@ -308,6 +451,21 @@ def test_sql_task_repository_maps_protocol_fields_to_task_rows() -> None:
     assert repository.get(task.task_id).operator == "alice"
 
 
+def test_orchestrator_extracts_object_code_from_slots_term_detail_dataclass() -> None:
+    term_detail = TermDetail(
+        term_id="74e82f0a-b5bc-47ce-b0ef-deef7f6c14d4",
+        term_code="本体论",
+        term_name="本体论",
+        term_type="Methodology",
+        dataset_id=DEFAULT_BASE_ID,
+        library_id=DEFAULT_BASE_ID,
+    )
+
+    detail_dict = orchestrator_module._to_dict(term_detail)  # noqa: SLF001
+
+    assert orchestrator_module._object_code_from_term(detail_dict) == "Methodology"  # noqa: SLF001
+
+
 def test_orchestrator_label_schema_keeps_multi_enum_marker() -> None:
     platform = FakeBuildPlatform(fragments=[])
     repository = InMemoryObjectInstanceBuildTaskRepository()
@@ -357,6 +515,144 @@ def test_orchestrator_reads_source_content_from_storage_result() -> None:
     )
 
     assert orchestrator._read_source_content(group) == "Full source bytes"  # noqa: SLF001
+
+
+def test_orchestrator_falls_back_to_fragment_content_when_source_file_missing() -> None:
+    class MissingStoragePlatform:
+        def get_result(self, base_id: str, file_id: str) -> bytes:
+            assert base_id == DEFAULT_BASE_ID
+            assert file_id == "10000795"
+            raise FileNotFoundError("Result file not found: 10000795")
+
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=MissingStoragePlatform(),  # type: ignore[arg-type]
+        task_repository=InMemoryObjectInstanceBuildTaskRepository(),
+        knowledge_client=FakeBuildKnowledgeClient(),
+    )
+    group = orchestrator_module._FragmentGroup(  # noqa: SLF001
+        instance_id="term-agent",
+        origin_instance_id="origin-agent",
+        fragments=[_fragment(101, "term-agent"), _fragment(102, "term-agent")],
+    )
+
+    assert orchestrator._read_source_content(group) == "fragment 101\n\nfragment 102"  # noqa: SLF001
+
+
+def test_orchestrator_reads_existing_content_from_runtime_file_storage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class RuntimeFileStorage:
+        storage_type = "byclaw_api"
+
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def read_text(
+            self,
+            file_path: str,
+            begin_line: int = 0,
+            end_line: int = -1,
+        ) -> str:
+            assert begin_line == 0
+            assert end_line == -1
+            self.calls.append(file_path)
+            return "# Agent\n\nExisting target content."
+
+    storage = RuntimeFileStorage()
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_runtime_result_file_storage",
+        lambda: storage,
+        raising=False,
+    )
+
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=object(),  # type: ignore[arg-type]
+        task_repository=InMemoryObjectInstanceBuildTaskRepository(),
+        knowledge_client=FakeBuildKnowledgeClient(),
+    )
+
+    content = orchestrator._read_existing_content(  # noqa: SLF001
+        {
+            "ext_attrs": {
+                "kb_resource_id": "target-resource",
+                "kb_file_path": "/Concept/Agent.md",
+            }
+        }
+    )
+
+    assert content == "# Agent\n\nExisting target content."
+    assert storage.calls == ["/Concept/Agent.md"]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_reads_existing_content_from_kb_document_reader(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class KbExistingDocumentPlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["ext_attrs"] = {
+                "kb_id": "97",
+                "kb_file_path": "/Concept/Agent.md",
+            }
+            return detail
+
+        def read_source_document(
+            self,
+            base_id: str,
+            origin_file: dict[str, Any],
+        ) -> str:
+            if origin_file.get("kb_id") == "97":
+                raise AssertionError("KB document reader must be used first")
+            return f"Full source from {base_id}: {origin_file['file_path']}"
+
+    class FakeKbDocumentReader:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def read_text(self, *, kn_code: str, file_path: str) -> str:
+            self.calls.append((kn_code, file_path))
+            return "# Agent\n\nExisting KB target content."
+
+    kb_reader = FakeKbDocumentReader()
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: kb_reader,
+        raising=False,
+    )
+    platform = KbExistingDocumentPlatform(fragments=[_fragment(101, "term-agent")])
+    repository = InMemoryObjectInstanceBuildTaskRepository()
+    task = repository.create(
+        instance_ids=["term-agent"],
+        batch_size=20,
+        operator="alice",
+    )
+    knowledge_client = FakeBuildKnowledgeClient()
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        task_repository=repository,
+        knowledge_client=knowledge_client,
+    )
+
+    await orchestrator.run(task.task_id)
+
+    assert kb_reader.calls == [("97", "/Concept/Agent.md")]
+    assert knowledge_client.requests[0].existing_content == (
+        "# Agent\n\nExisting KB target content."
+    )
 
 
 @pytest.mark.asyncio
@@ -411,6 +707,173 @@ async def test_task_service_builds_instance_and_marks_fragments_merged() -> None
     ]
     assert platform.term_calls[0]["library_id"] == DEFAULT_BASE_ID
     assert platform.term_calls[1]["library_id"] == "default_term"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_preserves_relation_frontmatter_and_product_code() -> None:
+    platform = FrontmatterBuildPlatform(fragments=[_fragment(101, "term-ontology")])
+    repository = InMemoryObjectInstanceBuildTaskRepository()
+    task = repository.create(
+        instance_ids=["term-ontology"],
+        batch_size=20,
+        operator="alice",
+    )
+    knowledge_client = FrontmatterDroppingKnowledgeClient()
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        task_repository=repository,
+        knowledge_client=knowledge_client,
+    )
+
+    await orchestrator.run(task.task_id)
+
+    written_arguments = platform.executed_actions[0]["arguments"]
+    written_content = written_arguments["content"]
+    assert 'product_code: "BYCLAW_DATACLOUD"' not in written_content
+    assert "product_code: byDC" in written_content
+    assert "relations:" in written_content
+    assert "maps-to:" in written_content
+    assert "- Concept:" in written_content
+    assert "  - Ontology Reasoning" in written_content
+    assert written_arguments["labels"]["product_code"] == "byDC"
+    assert written_arguments["labels"]["relations"] == {
+        "maps-to": {"Concept": ["Ontology Reasoning"]}
+    }
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_logs_task_stage_summaries(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
+    repository = InMemoryObjectInstanceBuildTaskRepository()
+    task = repository.create(
+        instance_ids=["term-agent"],
+        batch_size=20,
+        operator="alice",
+    )
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        task_repository=repository,
+        knowledge_client=FakeBuildKnowledgeClient(),
+    )
+    caplog.set_level(logging.INFO, logger=orchestrator_module.logger.name)
+
+    await orchestrator.run(task.task_id)
+
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert f"task_id={task.task_id}" in messages
+    for stage in (
+        "run_start",
+        "load_fragment_groups",
+        "load_term_detail",
+        "load_object_schema",
+        "build_label_schema",
+        "read_source_content",
+        "split_object_template",
+        "knowledge_build",
+        "validate_build_result",
+        "write_object_action",
+        "update_fragment_status",
+        "run_finish",
+    ):
+        assert f"stage={stage}" in messages
+    assert '"fragment_ids": [101]' in messages
+    assert '"content_length": 23' in messages
+    assert '"labels": {"name": "Agent", "owner_type": "public"}' in messages
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_passes_existing_target_document_to_knowledge_request() -> (
+    None
+):
+    platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
+    repository = InMemoryObjectInstanceBuildTaskRepository()
+    task = repository.create(
+        instance_ids=["term-agent"],
+        batch_size=20,
+        operator="alice",
+    )
+    knowledge_client = FakeBuildKnowledgeClient()
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        task_repository=repository,
+        knowledge_client=knowledge_client,
+    )
+
+    await orchestrator.run(task.task_id)
+
+    request = knowledge_client.requests[0]
+    assert "## 投标标签" in request.existing_content
+    assert (
+        request.source_content
+        == f"Full source from {DEFAULT_BASE_ID}: /Concept/Agent.md"
+    )
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_does_not_write_when_existing_target_document_is_missing() -> (
+    None
+):
+    class MissingExistingDocumentPlatform(FakeBuildPlatform):
+        def read_source_document(
+            self,
+            base_id: str,
+            origin_file: dict[str, Any],
+        ) -> str:
+            if origin_file.get("kb_resource_id") == "target-resource":
+                return ""
+            return super().read_source_document(base_id, origin_file)
+
+        def get_result(self, base_id: str, file_id: str) -> bytes:
+            raise FileNotFoundError(f"Result file not found: {file_id}")
+
+    platform = MissingExistingDocumentPlatform(fragments=[_fragment(101, "term-agent")])
+    repository = InMemoryObjectInstanceBuildTaskRepository()
+    task = repository.create(
+        instance_ids=["term-agent"],
+        batch_size=20,
+        operator="alice",
+    )
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        task_repository=repository,
+        knowledge_client=FakeBuildKnowledgeClient(),
+    )
+
+    await orchestrator.run(task.task_id)
+
+    final_task = repository.get(task.task_id)
+    assert final_task.status == "failed"
+    assert "existing object content not found" in final_task.error_message
+    assert platform.executed_actions == []
+    assert platform.updated_status == []
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_passes_object_template_from_object_ext_property() -> None:
+    platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
+    repository = InMemoryObjectInstanceBuildTaskRepository()
+    task = repository.create(
+        instance_ids=["term-agent"],
+        batch_size=20,
+        operator="alice",
+    )
+    knowledge_client = FakeBuildKnowledgeClient()
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        task_repository=repository,
+        knowledge_client=knowledge_client,
+    )
+
+    await orchestrator.run(task.task_id)
+
+    request = knowledge_client.requests[0]
+    assert request.object_template == ""
+    assert "# {{name}}" not in request.object_template
+    assert "## 2. 头部字段填写说明" in request.template_constraints
+    assert "## 6. 常见错误与检查清单" in request.template_constraints
+    assert "```markdown" not in request.template_constraints
 
 
 @pytest.mark.asyncio
@@ -613,7 +1076,7 @@ def test_rpc_build_object_instance_and_query_task_protocol(
     build_resp = client.post(
         "/api/v1/rpc/ontologyDocFragment/buildObjectInstance",
         json={"params": {"instance_ids": ["term-agent"], "batch_size": 20}},
-        headers={"X-User-Code": "alice"},
+        headers={"X-User-Code": "alice", "beyond-token": "token-alice"},
     )
     build_body = build_resp.json()
 
@@ -632,3 +1095,32 @@ def test_rpc_build_object_instance_and_query_task_protocol(
 
     assert task_body["success"] is True
     assert task_body["data"]["status"] == "succeeded"
+
+
+def test_rpc_build_object_instance_requires_beyond_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from datacloud_platform.api.routers.rpc.handlers import ontology_doc_fragment
+
+    service = FakeRpcTaskService()
+    monkeypatch.setattr(
+        ontology_doc_fragment,
+        "get_object_instance_build_task_service",
+        lambda platform: service,
+        raising=False,
+    )
+    app = FastAPI()
+    app.include_router(create_rpc_router(platform=object()))  # type: ignore[arg-type]
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/rpc/ontologyDocFragment/buildObjectInstance",
+        json={"params": {"instance_ids": ["term-agent"], "batch_size": 20}},
+        headers={"X-User-Code": "alice"},
+    )
+    body = response.json()
+
+    assert body["code"] == 400
+    assert body["message"] == "Request header 'beyond-token' is required"
+    assert body["data"] is None
+    assert service.submitted is None

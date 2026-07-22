@@ -27,6 +27,9 @@ class ObjectInstanceBuildRequest:
     label_schema: dict[str, Any]
     source_content: str
     fragments: list[ObjectInstanceFragment]
+    existing_content: str = ""
+    object_template: str = ""
+    template_constraints: str = ""
 
 
 @dataclass(frozen=True)
