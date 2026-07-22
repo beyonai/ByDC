@@ -127,6 +127,78 @@ def create_app(
         ],
     )
 
+    # ── Request context middleware ───────────────────────────────────────────
+    # Injects two ContextVars on every HTTP request:
+    #   1. InvocationContext (datacloud_data_sdk) — tenant/user/token/language etc.
+    #   2. byclaw_userfs_storage ContextVar — Beyond-Token for UserFS file ops.
+    # Both imports are guarded so the platform works when those packages are absent.
+
+    _has_invocation_ctx = False
+    _has_userfs = False
+
+    try:
+        from datacloud_data_sdk.context import InvocationContext  # type: ignore[import-not-found]
+
+        _has_invocation_ctx = True
+    except ImportError:
+        logger.debug(
+            "datacloud_data_sdk not available — InvocationContext middleware skipped"
+        )
+
+    try:
+        from byclaw_userfs_storage import (  # type: ignore[import-not-found]
+            reset_byclaw_userfs_headers,
+            set_byclaw_userfs_headers,
+        )
+
+        _has_userfs = True
+    except ImportError:
+        logger.debug(
+            "byclaw_userfs_storage not available — UserFS header middleware skipped"
+        )
+
+    if _has_invocation_ctx or _has_userfs:
+
+        @app.middleware("http")
+        async def _request_context_middleware(request: Any, call_next: Any) -> Any:
+            headers = request.headers
+
+            # ── InvocationContext ──
+            inv_ctx: Any = None
+            if _has_invocation_ctx:
+                beyond_token = headers.get("beyond-token", "").strip()
+                tool_mode = headers.get("x-tool-list-mode", "unified")
+                if tool_mode not in ("unified", "per_object"):
+                    tool_mode = "unified"
+                inv_ctx = InvocationContext(  # type: ignore[possibly-undefined]
+                    tenant_id=headers.get("x-tenant-id", ""),
+                    user_id=headers.get("x-user-code", ""),
+                    session_id=headers.get("x-session-id", ""),
+                    token=beyond_token,
+                    system_code=headers.get("x-system-code", ""),
+                    cookie=headers.get("cookie", ""),
+                    tool_list_mode=tool_mode,
+                    language=headers.get(
+                        "x-language", headers.get("accept-language", "")
+                    ),
+                )
+                inv_ctx.__enter__()
+
+            # ── ByClaw UserFS ──
+            userfs_token: Any = None
+            if _has_userfs:
+                userfs_token = set_byclaw_userfs_headers(  # type: ignore[possibly-undefined]
+                    {"beyond-token": headers.get("beyond-token", "")}
+                )
+
+            try:
+                return await call_next(request)
+            finally:
+                if userfs_token is not None:
+                    reset_byclaw_userfs_headers(userfs_token)  # type: ignore[possibly-undefined]
+                if inv_ctx is not None:
+                    inv_ctx.__exit__(None, None, None)
+
     # ── CORS ────────────────────────────────────────────────────────────────
     cors_val = settings.cors_origins.strip()
     if cors_val:
