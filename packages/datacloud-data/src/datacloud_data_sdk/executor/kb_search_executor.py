@@ -319,15 +319,23 @@ class KbSearchExecutor:
         records = _normalize_action_records(records, cls)
         meta = _standard_action_meta(cls, datasource_alias, query)
 
-        # Enqueue KB term sync for each written document.
-        await self._enqueue_kb_term_sync(write_requests)
+        # Enqueue KB term sync for each written document and collect synced term IDs.
+        synced_term_ids = await self._enqueue_kb_term_sync(write_requests)
 
         # Collect KB file paths from write requests for the summary message.
         kb_file_paths = [
             _to_markdown_file_path(req.file_path, req.kb_directory) for req in write_requests
         ]
         meta["kb_files"] = kb_file_paths
+        if synced_term_ids:
+            meta["synced_term_ids"] = synced_term_ids
         meta["_write_note"] = _write_summary(kb_file_paths, [])
+
+        # Build file_path → term_id mapping for per-record injection.
+        file_path_to_term_id: dict[str, str] = {}
+        for req, term_id in zip(write_requests, synced_term_ids):
+            mk_path = _to_markdown_file_path(req.file_path, req.kb_directory)
+            file_path_to_term_id[mk_path] = term_id
 
         response: dict[str, Any] = {"records": records, "total": len(records), "meta": meta}
         _attach_session_file(response, write_requests)
@@ -343,10 +351,16 @@ class KbSearchExecutor:
         if not any(c.get("name") == "_write_note" for c in columns):
             columns.append({"name": "_write_note", "label": "写入说明", "type": "string"})
             meta["columns"] = columns
+        if file_path_to_term_id and not any(c.get("name") == "term_id" for c in columns):
+            columns.append({"name": "term_id", "label": "术语ID", "type": "string"})
+            meta["columns"] = columns
 
-        # Inject _write_note into every record so callers can surface it directly.
+        # Inject _write_note and term_id into every record so callers can surface them directly.
         for record in response.get("records") or []:
             record["_write_note"] = write_note
+            if file_path_to_term_id:
+                file_path = str(record.get("filePath") or "")
+                record["term_id"] = file_path_to_term_id.get(file_path, "")
 
         return response
 
@@ -732,23 +746,18 @@ class KbSearchExecutor:
                 "_delete_term_ids: delete_terms failed for %d term(s)", len(term_ids), exc_info=True
             )
 
-    async def _enqueue_kb_term_sync(self, write_requests: list[KnowledgeWriteRequest]) -> None:
-        """非阻塞投递 KB 术语同步事件（knowledge 包不可用时静默跳过）。
+    async def _enqueue_kb_term_sync(self, write_requests: list[KnowledgeWriteRequest]) -> list[str]:
+        """导入 KB 术语并返回同步后的 term_id 列表。
+
+        优先通过 platform.import_terms() 同步导入以获取 term_id；
+        platform 不可用时回退到异步队列投递（不返回 term_id）。
 
         对每个写入请求：
         1. 从内容中解析 related_docs 块，构建文档级关联关系。
         2. 从 loader._relations 中获取当前对象的本体关联关系，将术语写入关联对象。
         """
-        try:
-            from datacloud_knowledge.sync import (  # type: ignore[import-untyped]
-                TermSyncEvent,
-                enqueue_sync,
-            )
-
-            from datacloud_data_sdk.constants import DEFAULT_BASE_ID
-        except Exception:  # noqa: BLE001
-            logger.debug("KB 术语同步跳过：knowledge 包不可用")
-            return
+        if not write_requests:
+            return []
         cls = self._loader.get_ontology_class(write_requests[0].object_code)
         term_sync = cls.term_sync
         terms: list[dict[str, Any]] = []
@@ -841,9 +850,36 @@ class KbSearchExecutor:
             terms.append(term)
 
         if not terms:
-            return
+            return []
 
+        # 优先同步导入以获取 term_id
+        platform = getattr(self._loader._config, "platform", None)
+        if platform is not None and hasattr(platform, "import_terms"):
+            try:
+                result = platform.import_terms(
+                    DEFAULT_BASE_ID,
+                    library_id=DEFAULT_BASE_ID,
+                    terms=terms,
+                    backfill=True,
+                )
+                term_ids: list[str] = list(result.get("term_ids") or [])
+                logger.debug(
+                    "KB 术语同步完成: object=%s terms=%d term_ids=%s",
+                    write_requests[0].object_code,
+                    len(terms),
+                    term_ids,
+                )
+                return term_ids
+            except Exception:  # noqa: BLE001
+                logger.warning("KB 术语同步（同步模式）失败，回退到队列投递", exc_info=True)
+
+        # 回退：异步队列投递（不返回 term_id）
         try:
+            from datacloud_knowledge.sync import (  # type: ignore[import-untyped]
+                TermSyncEvent,
+                enqueue_sync,
+            )
+
             await enqueue_sync(
                 TermSyncEvent(
                     op="kb_write",
@@ -854,6 +890,7 @@ class KbSearchExecutor:
             )
         except Exception:  # noqa: BLE001
             logger.debug("KB 术语同步投递失败", exc_info=True)
+        return []
 
     def _get_object_code_by_kb(self, kb_resource_id: str, kb_directory: str) -> str | None:
         if not kb_resource_id:
