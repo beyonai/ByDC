@@ -176,6 +176,38 @@ class OntologyDocFragmentAdapter:
 
         return {"total": total, "data": [_row_to_dict(r) for r in rows]}
 
+    def list_for_build(
+        self,
+        *,
+        instance_ids: list[str],
+        page_index: int = 1,
+        page_size: int = 20,
+        status: int = 0,
+    ) -> dict[str, Any]:
+        """Query fragments for object instance build tasks.
+
+        Empty instance_ids means all unbuilt fragments under the requested status.
+        """
+        engine = self._engine()
+        with Session(engine) as session:
+            query = session.query(OntologyDocFragmentRow).filter(
+                OntologyDocFragmentRow.status == status
+            )
+            if instance_ids:
+                query = query.filter(
+                    OntologyDocFragmentRow.instance_id.in_(instance_ids)
+                )
+            total: int = query.count()
+            offset = (page_index - 1) * page_size
+            rows = (
+                query.order_by(OntologyDocFragmentRow.id)
+                .offset(offset)
+                .limit(page_size)
+                .all()
+            )
+
+        return {"total": total, "data": [_row_to_dict(row) for row in rows]}
+
     def update_status_by_ids(
         self,
         ids: list[int],
