@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
 from datacloud_platform.models.common import ok
 from datacloud_platform.constants import DEFAULT_BASE_ID
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -81,19 +84,23 @@ async def _search_object_instances_unstructured(
     """非结构化对象实例检索 RPC handler。
 
     sentence 模式:
-        {"query": "自然语言句子", "object_code": "by_opportunity", ...}
+        {"query": "自然语言句子", "object_codes": ["by_opportunity"], ...}
 
     word_batch 模式:
-        {"queries": ["词1", "词2"], "object_code": null, ...}
+        {"queries": ["词1", "词2"], "object_codes": null, ...}
     """
+    logger.warning(
+        "searchObjectInstancesUnstructured ENTRY: object_codes=%s query=%r queries=%r top_k=%s chunk=%s",
+        params.get("object_codes"), params.get("query"), params.get("queries"),
+        params.get("top_k", 20), params.get("enable_chunk_recall", True),
+    )
     result = await platform.search_object_instances_unstructured(
         base_id=params.get("base_id", DEFAULT_BASE_ID),
-        object_code=params.get("object_code"),
+        object_codes=params.get("object_codes"),
         query=params.get("query"),
         queries=params.get("queries"),
         top_k=params.get("top_k", 20),
         enable_chunk_recall=params.get("enable_chunk_recall", True),
-        kb_configs=params.get("kb_configs"),
     )
     # Serialize results dict directly — caller gets {keyword: [hit, ...]}
     return ok(data=result.results)
