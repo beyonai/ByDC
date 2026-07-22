@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from datacloud_platform.models.shared import (
-        ObjectInstanceHit,
         ObjectInstanceSearchResult,
         ObjectSummary,
         ParsedOwlContent,

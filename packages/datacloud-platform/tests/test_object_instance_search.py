@@ -223,7 +223,7 @@ class TestFakeOntologyBackendSearch:
     """测试 FakeOntologyBackend.search_object_instances_unstructured (async 包装)。"""
 
     def test_empty_default(self) -> None:
-        async def _t():
+        async def _t() -> Any:
             fake = FakeOntologyBackend()
             return await fake.search_object_instances_unstructured(
                 base_id="test", query="任意查询"
@@ -235,7 +235,7 @@ class TestFakeOntologyBackendSearch:
         assert result.results["任意查询"] == []
 
     def test_preset_hits_no_object_code(self) -> None:
-        async def _t():
+        async def _t() -> Any:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [
                 _make_hit("t1", "结果1", term_type_code="by_opp"),
@@ -250,7 +250,7 @@ class TestFakeOntologyBackendSearch:
         assert len(result.results["查询"]) == 2
 
     def test_preset_hits_filtered_by_object_code(self) -> None:
-        async def _t():
+        async def _t() -> Any:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [
                 _make_hit("t1", "结果1", term_type_code="by_opportunity"),
@@ -264,7 +264,7 @@ class TestFakeOntologyBackendSearch:
         assert len(result.results["查询"]) == 1
 
     def test_global_vs_specific_scope(self) -> None:
-        async def _t():
+        async def _t() -> Any:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [
                 _make_hit("t1", "A", term_type_code="by_opp"),
@@ -284,7 +284,7 @@ class TestFakeOntologyBackendSearch:
         assert len(s.results["查询"]) == 1
 
     def test_word_batch_mode(self) -> None:
-        async def _t():
+        async def _t() -> Any:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [_make_hit("t1", "A", term_type_code="by_opp")]
             return await fake.search_object_instances_unstructured(
@@ -295,7 +295,7 @@ class TestFakeOntologyBackendSearch:
         assert set(result.results.keys()) == {"OCR", "Agent"}
 
     def test_global_no_chunk_recall(self) -> None:
-        async def _t():
+        async def _t() -> Any:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [
                 _make_hit("t1", "仅术语", term_type_code="by_opp")
@@ -311,7 +311,7 @@ class TestFakeOntologyBackendSearch:
         assert isinstance(result, ObjectInstanceSearchResult)
 
     def test_global_chunk_empty_result_not_crash(self) -> None:
-        async def _t():
+        async def _t() -> Any:
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [
                 _make_hit("t1", "路1命中", term_type_code="by_opp")
