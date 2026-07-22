@@ -134,20 +134,36 @@ class ScoreUpdateRecord:
 class ObjectInstanceHit:
     """非结构化对象实例检索命中结果。
 
-    同时服务于路1（术语实例检索）和路2（chunk → term 检索）两条召回路径。
+    每个实例对应一个知识库文件（term_tags.kb_resource_id 唯一绑定）。
     """
 
-    term_id: str
-    """术语/实例 ID。"""
+    instance_id: str
+    """实例 ID（term_id，全局唯一）。"""
 
-    term_name: str
-    """术语/实例显示名。"""
+    instance_code: str
+    """实例编码（term_code，业务编码）。"""
 
-    term_type_code: str
-    """术语类型编码（如 by_opportunity）。"""
+    instance_name: str
+    """实例名称（term_name）。"""
 
-    match_type: str
-    """匹配来源标识: term_instance | chunk_to_term。"""
+    object_code: str
+    """对象类型编码（term_type / object_code）。"""
+
+    file_name: str | None
+    """对应的知识库文件路径（ext_attrs.kb_file_path）。None 表示无文件关联。"""
 
     score: float
-    """融合/归一化后的置信度分数。"""
+    """检索分数（双路 RRF 融合时为 fusion_score，单路时为该路原始分数）。"""
+
+
+@dataclass(frozen=True)
+class ObjectInstanceSearchResult:
+    """非结构化对象实例检索批量结果。
+
+    统一返回格式：{keyword: [ObjectInstanceHit, ...]}
+    sentence 模式时 dict 只有一个 key（原始 query 文本）。
+    word_batch 模式时每个词一个 key。
+    """
+
+    results: dict[str, list[ObjectInstanceHit]]
+
