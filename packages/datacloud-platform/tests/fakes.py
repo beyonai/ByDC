@@ -847,29 +847,39 @@ class FakeOntologyBackend:
         """Return empty results."""
         return {"data": [], "totalCount": 0}
 
-    def search_object_instances_unstructured(
+    async def search_object_instances_unstructured(
         self,
         *,
         base_id: str = "",  # noqa: ARG002
         object_code: str | None = None,
-        query: str = "",
+        query: str | None = None,
+        queries: list[str] | None = None,
         top_k: int = 20,
         enable_chunk_recall: bool = True,
         kb_configs: dict[str, Any] | None = None,
-    ) -> list[Any]:
-        """返回预设的 _unstructured_hits 或空列表。
+    ) -> Any:  # ObjectInstanceSearchResult
+        """返回预设的 _unstructured_hits 或空结果。
 
         测试代码可以在调用前设置 ``_unstructured_hits`` 来控制返回值。
         """
         _ = (top_k, enable_chunk_recall, kb_configs)
-        # 按 object_code 过滤（可选）
+        from datacloud_platform.models.shared import ObjectInstanceSearchResult
+
         hits = getattr(self, "_unstructured_hits", [])
         if object_code is not None:
-            hits = [
-                h for h in hits
-                if h.get("term_type_code") == object_code
-            ]
-        return list(hits)
+            hits = [h for h in hits if h.get("term_type_code") == object_code]
+
+        # Determine keywords
+        if queries:
+            keywords = [q.strip() for q in queries if q and q.strip()]
+        elif query and query.strip():
+            keywords = [query.strip()]
+        else:
+            return ObjectInstanceSearchResult(results={})
+
+        return ObjectInstanceSearchResult(
+            results={kw: list(hits) for kw in keywords}
+        )
 
     def graph_path(
         self,

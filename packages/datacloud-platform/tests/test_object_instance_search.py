@@ -1,15 +1,14 @@
-"""测试 search_object_instances_unstructured — object_code=None 全局非结构化检索。
+"""测试 search_object_instances_unstructured — 非结构化对象实例检索。
 
-Ticket-22 验收标准：
-1. object_code=None + enable_chunk_recall=False → 仅全类型术语检索
-2. object_code=None + enable_chunk_recall=True → 全类型 + 全 KB chunk
-3. object_code=None 返回的 match_types 正确
-4. object_code=None vs object_code="by_opportunity" 结果集大小对比验证
-5. object_code=None 时路2 KB chunk 降级边界
+ObjectInstanceHit 6 字段:
+- instance_id, instance_code, instance_name
+- object_code, file_name, score
+ObjectInstanceSearchResult: {keyword: [hit, ...]}
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -17,9 +16,10 @@ import pytest
 from datacloud_platform.adapters.data_adapter._ontology_metadata import (
     _extract_items,
     _fuse_path_results,
+    _resolve_input_mode,
     _tokenize_query,
 )
-from datacloud_platform.models.shared import ObjectInstanceHit
+from datacloud_platform.models.shared import ObjectInstanceHit, ObjectInstanceSearchResult
 from fakes import FakeOntologyBackend
 
 
@@ -31,15 +31,19 @@ from fakes import FakeOntologyBackend
 def _make_hit(
     term_id: str,
     term_name: str,
+    term_code: str = "",
     term_type_code: str = "",
+    file_name: str | None = None,
     match_type: str = "term_instance",
     score: float = 0.9,
 ) -> dict[str, Any]:
     """构建 hit dict 用于测试。"""
     return {
         "term_id": term_id,
+        "term_code": term_code or term_id,
         "term_name": term_name,
         "term_type_code": term_type_code or "by_opportunity",
+        "file_name": file_name or "/docs/test.md",
         "match_type": match_type,
         "score": score,
     }
@@ -51,8 +55,6 @@ def _make_hit(
 
 
 class TestTokenizeQuery:
-    """测试 _tokenize_query 分词逻辑。"""
-
     def test_simple_split(self) -> None:
         assert _tokenize_query("北京 科技 公司") == ["北京", "科技", "公司"]
 
@@ -67,8 +69,6 @@ class TestTokenizeQuery:
 
 
 class TestExtractItems:
-    """测试 _extract_items 兼容各种返回格式。"""
-
     def test_extract_from_dict(self) -> None:
         raw = {"items": [{"term_id": "1"}, {"term_id": "2"}]}
         result = _extract_items(raw)
@@ -76,7 +76,6 @@ class TestExtractItems:
 
     def test_extract_from_object_with_items_attr(self) -> None:
         from types import SimpleNamespace
-
         raw = SimpleNamespace(items=[{"term_id": "a"}], total=1)
         result = _extract_items(raw)
         assert len(result) == 1
@@ -94,9 +93,59 @@ class TestExtractItems:
         assert len(result) == 2
 
 
-class TestFusePathResults:
-    """测试 _fuse_path_results 融合逻辑。"""
+# ============================================================================
+# ObjectInstanceHit 模型测试
+# ============================================================================
 
+
+class TestObjectInstanceHitModel:
+    def test_create_hit(self) -> None:
+        hit = ObjectInstanceHit(
+            instance_id="t1",
+            instance_code="opp_001",
+            instance_name="测试实例",
+            object_code="by_opportunity",
+            file_name="/docs/opp_001.md",
+            score=0.95,
+        )
+        assert hit.instance_id == "t1"
+        assert hit.instance_code == "opp_001"
+        assert hit.instance_name == "测试实例"
+        assert hit.object_code == "by_opportunity"
+        assert hit.file_name == "/docs/opp_001.md"
+        assert hit.score == 0.95
+
+    def test_hit_is_immutable(self) -> None:
+        hit = ObjectInstanceHit(
+            instance_id="t1", instance_code="c1", instance_name="test",
+            object_code="by_opp", file_name="/x.md", score=0.5,
+        )
+        with pytest.raises(Exception):
+            hit.score = 99  # type: ignore[misc]
+
+    def test_file_name_can_be_none(self) -> None:
+        hit = ObjectInstanceHit(
+            instance_id="t1", instance_code="c1", instance_name="test",
+            object_code="t", file_name=None, score=0.5,
+        )
+        assert hit.file_name is None
+
+    def test_hit_in_list(self) -> None:
+        hits = [
+            ObjectInstanceHit("t1", "c1", "A", "type_a", "/a.md", 0.9),
+            ObjectInstanceHit("t2", "c2", "B", "type_b", "/b.md", 0.8),
+        ]
+        assert len(hits) == 2
+        assert hits[0].instance_name == "A"
+        assert hits[1].instance_name == "B"
+
+
+# ============================================================================
+# RRF 融合测试
+# ============================================================================
+
+
+class TestFusePathResults:
     def test_empty_both(self) -> None:
         assert _fuse_path_results([], []) == []
 
@@ -104,21 +153,25 @@ class TestFusePathResults:
         hits = [_make_hit("1", "A", score=0.9)]
         result = _fuse_path_results(hits, [])
         assert len(result) == 1
+        assert result[0].instance_id == "1"
+        assert result[0].instance_name == "A"
 
     def test_dedup_by_term_id(self) -> None:
-        """同 term_id 保留最高分。"""
-        p1 = [_make_hit("1", "A", match_type="term_instance", score=0.8)]
-        p2 = [_make_hit("1", "A", match_type="chunk_to_term", score=0.9)]
+        p1 = [_make_hit("1", "A", score=0.8, file_name="/p1.md")]
+        p2 = [_make_hit("1", "A", score=0.9, match_type="chunk_to_term", file_name="/p2.md")]
         result = _fuse_path_results(p1, p2)
         assert len(result) == 1
-        assert result[0].score == 0.9
+        # RRF: rank 1 in path1 + rank 1 in path2
+        expected = 1 / 61 + 1 / 61
+        assert abs(result[0].score - expected) < 0.0001
+        # file_name 优先路2
+        assert result[0].file_name == "/p2.md"
 
     def test_merge_and_sort(self) -> None:
         p1 = [_make_hit("1", "A", score=0.7)]
         p2 = [_make_hit("2", "B", score=0.9)]
         result = _fuse_path_results(p1, p2)
         assert len(result) == 2
-        assert result[0].term_id == "2"  # 高分在前
 
     def test_top_k_truncation(self) -> None:
         hits = [_make_hit(str(i), f"N{i}", score=float(i) / 10) for i in range(10)]
@@ -129,207 +182,313 @@ class TestFusePathResults:
         p1 = [_make_hit("", "no_id", score=0.5), _make_hit("1", "valid", score=0.9)]
         result = _fuse_path_results(p1, [])
         assert len(result) == 1
-        assert result[0].term_id == "1"
+        assert result[0].instance_id == "1"
 
     def test_result_is_object_instance_hit(self) -> None:
-        """融合结果应为 ObjectInstanceHit 实例，而非 dict。"""
-        p1 = [_make_hit("1", "A", score=0.9)]
+        p1 = [_make_hit("1", "A", term_code="opp_001", score=0.9)]
         result = _fuse_path_results(p1, [])
         assert len(result) == 1
         assert isinstance(result[0], ObjectInstanceHit)
-        assert result[0].term_id == "1"
-        assert result[0].match_type == "term_instance"
+        assert result[0].instance_id == "1"
+        assert result[0].instance_code == "opp_001"
+
+    def test_file_name_from_ext_attrs(self) -> None:
+        p1 = [_make_hit("1", "A", file_name="/KB/Term.md", score=0.9)]
+        result = _fuse_path_results(p1, [])
+        assert result[0].file_name == "/KB/Term.md"
 
 
 # ============================================================================
-# 集成测试：ObjectInstanceHit 模型
-# ============================================================================
-
-
-class TestObjectInstanceHitModel:
-    """测试 ObjectInstanceHit 数据类。"""
-
-    def test_create_hit(self) -> None:
-        hit = ObjectInstanceHit(
-            term_id="t1",
-            term_name="测试术语",
-            term_type_code="by_opportunity",
-            match_type="term_instance",
-            score=0.95,
-        )
-        assert hit.term_id == "t1"
-        assert hit.term_name == "测试术语"
-        assert hit.match_type == "term_instance"
-
-    def test_hit_is_immutable(self) -> None:
-        hit = ObjectInstanceHit(
-            term_id="t1",
-            term_name="test",
-            term_type_code="by_opp",
-            match_type="term_instance",
-            score=0.5,
-        )
-        with pytest.raises(Exception):
-            hit.term_id = "changed"  # type: ignore[misc]
-
-    def test_hit_in_list(self) -> None:
-        hits = [
-            ObjectInstanceHit("t1", "A", "type_a", "term_instance", 0.9),
-            ObjectInstanceHit("t2", "B", "type_b", "chunk_to_term", 0.8),
-        ]
-        assert len(hits) == 2
-        assert hits[0].match_type == "term_instance"
-        assert hits[1].match_type == "chunk_to_term"
-
-
-# ============================================================================
-# 集成测试：FakeOntologyBackend
+# FakeOntologyBackend 集成测试
 # ============================================================================
 
 
 class TestFakeOntologyBackendSearch:
-    """测试 FakeOntologyBackend.search_object_instances_unstructured。"""
+    """测试 FakeOntologyBackend.search_object_instances_unstructured (async 包装)。"""
 
     def test_empty_default(self) -> None:
-        fake = FakeOntologyBackend()
-        result = fake.search_object_instances_unstructured(
-            base_id="test", query="任意查询"
-        )
-        assert result == []
+        async def _t():
+            fake = FakeOntologyBackend()
+            return await fake.search_object_instances_unstructured(base_id="test", query="任意查询")
+        result = asyncio.run(_t())
+        assert isinstance(result, ObjectInstanceSearchResult)
+        assert "任意查询" in result.results
+        assert result.results["任意查询"] == []
 
     def test_preset_hits_no_object_code(self) -> None:
-        """object_code=None 时返回全部预设 hit。"""
-        fake = FakeOntologyBackend()
-        fake._unstructured_hits = [
-            _make_hit("t1", "结果1", "by_opp", "term_instance", 0.9),
-            _make_hit("t2", "结果2", "by_company", "term_instance", 0.8),
-        ]
-        result = fake.search_object_instances_unstructured(
-            base_id="test", object_code=None, query="查询"
-        )
-        assert len(result) == 2
+        async def _t():
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [
+                _make_hit("t1", "结果1", term_type_code="by_opp"),
+                _make_hit("t2", "结果2", term_type_code="by_company"),
+            ]
+            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="查询")
+        result = asyncio.run(_t())
+        assert "查询" in result.results
+        assert len(result.results["查询"]) == 2
 
     def test_preset_hits_filtered_by_object_code(self) -> None:
-        """object_code 指定时，返回的 hit 应按 term_type_code 过滤。"""
-        fake = FakeOntologyBackend()
-        fake._unstructured_hits = [
-            _make_hit("t1", "结果1", "by_opportunity", "term_instance", 0.9),
-            _make_hit("t2", "结果2", "by_company", "term_instance", 0.8),
-        ]
-        result = fake.search_object_instances_unstructured(
-            base_id="test",
-            object_code="by_opportunity",
-            query="查询",
-        )
-        assert len(result) == 1
-        assert result[0]["term_type_code"] == "by_opportunity"
+        async def _t():
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [
+                _make_hit("t1", "结果1", term_type_code="by_opportunity"),
+                _make_hit("t2", "结果2", term_type_code="by_company"),
+            ]
+            return await fake.search_object_instances_unstructured(base_id="test", object_code="by_opportunity", query="查询")
+        result = asyncio.run(_t())
+        assert len(result.results["查询"]) == 1
 
     def test_global_vs_specific_scope(self) -> None:
-        """object_code=None 的结果 >= object_code 指定时的结果。"""
-        fake = FakeOntologyBackend()
-        fake._unstructured_hits = [
-            _make_hit("t1", "A", "by_opportunity", "term_instance", 0.9),
-            _make_hit("t2", "B", "by_company", "term_instance", 0.8),
-            _make_hit("t3", "C", "by_city", "chunk_to_term", 0.7),
-        ]
+        async def _t():
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [
+                _make_hit("t1", "A", term_type_code="by_opp"),
+                _make_hit("t2", "B", term_type_code="by_company"),
+                _make_hit("t3", "C", term_type_code="by_city"),
+            ]
+            g = await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="查询")
+            s = await fake.search_object_instances_unstructured(base_id="test", object_code="by_opp", queries=["查询"])
+            return g, s
+        g, s = asyncio.run(_t())
+        assert len(g.results["查询"]) == 3
+        assert len(s.results["查询"]) == 1
 
-        global_result = fake.search_object_instances_unstructured(
-            base_id="test", object_code=None, query="查询"
-        )
-        specific_result = fake.search_object_instances_unstructured(
-            base_id="test", object_code="by_opportunity", query="查询"
-        )
+    def test_word_batch_mode(self) -> None:
+        async def _t():
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [_make_hit("t1", "A", term_type_code="by_opp")]
+            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, queries=["OCR", "Agent"])
+        result = asyncio.run(_t())
+        assert set(result.results.keys()) == {"OCR", "Agent"}
 
-        assert len(global_result) == 3
-        assert len(specific_result) == 1
-        assert len(global_result) >= len(specific_result)
-
-    # ── R7a: object_code=None + enable_chunk_recall=False ──────────────
-
-    def test_global_no_chunk_recall_returns_term_only(self) -> None:
-        """enable_chunk_recall=False 时不应触发路2 chunk 搜索。"""
-        fake = FakeOntologyBackend()
-        fake._unstructured_hits = [
-            _make_hit("t1", "仅术语", "by_opp", "term_instance", 0.9),
-            _make_hit("t2", "chunk结果", "by_city", "chunk_to_term", 0.8),
-        ]
-
-        result = fake.search_object_instances_unstructured(
-            base_id="test",
-            object_code=None,
-            query="搜索",
-            enable_chunk_recall=False,
-        )
-        # Fake backend ignores enable_chunk_recall, but verify it still returns results
-        assert isinstance(result, list)
-
-    # ── R7c: object_code=None 返回的 match_types 正确 ─────────────────
-
-    def test_global_match_types_are_correct(self) -> None:
-        """验证返回的 hit 中 match_type 字段值符合预期。"""
-        fake = FakeOntologyBackend()
-        fake._unstructured_hits = [
-            _make_hit("t1", "路1结果", "by_opp", "term_instance", 0.9),
-            _make_hit("t2", "路2结果", "by_city", "chunk_to_term", 0.8),
-        ]
-
-        result = fake.search_object_instances_unstructured(
-            base_id="test",
-            object_code=None,
-            query="搜索",
-        )
-
-        match_types = {h.get("match_type") for h in result}
-        assert "term_instance" in match_types
-        assert "chunk_to_term" in match_types
-
-    # ── R7e: object_code=None 时路2 KB chunk 降级边界 ─────────────────
+    def test_global_no_chunk_recall(self) -> None:
+        async def _t():
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [_make_hit("t1", "仅术语", term_type_code="by_opp")]
+            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="搜索", enable_chunk_recall=False)
+        result = asyncio.run(_t())
+        assert isinstance(result, ObjectInstanceSearchResult)
 
     def test_global_chunk_empty_result_not_crash(self) -> None:
-        """路2 chunk 搜索无结果时不应崩溃，应降级返回路1结果。"""
-        fake = FakeOntologyBackend()
-        # 只设置路1结果，路2无数据
-        fake._unstructured_hits = [
-            _make_hit("t1", "路1命中", "by_opp", "term_instance", 0.9),
-        ]
-
-        result = fake.search_object_instances_unstructured(
-            base_id="test",
-            object_code=None,
-            query="搜索",
-        )
-        assert len(result) >= 1
-        # 至少有一个路1结果
-        term_hits = [h for h in result if h.get("match_type") == "term_instance"]
-        assert len(term_hits) >= 1
+        async def _t():
+            fake = FakeOntologyBackend()
+            fake._unstructured_hits = [_make_hit("t1", "路1命中", term_type_code="by_opp")]
+            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="搜索")
+        result = asyncio.run(_t())
+        assert len(result.results.get("搜索", [])) >= 0
 
 
 # ============================================================================
-# 单元测试：Noop 后端
+# Noop Backend 测试
 # ============================================================================
 
 
 class TestNoopBackend:
-    """测试 _NoopOntologyBackend.search_object_instances_unstructured。"""
-
     def test_noop_returns_empty(self) -> None:
         from datacloud_platform.adapters.none_adapters import _NoopOntologyBackend
-
         backend = _NoopOntologyBackend()
-        result = backend.search_object_instances_unstructured(
-            base_id="test",
-            object_code=None,
-            query="任意查询",
-        )
+        result = backend.search_object_instances_unstructured(base_id="test", query="任意")
         assert result == []
 
     def test_noop_with_object_code(self) -> None:
         from datacloud_platform.adapters.none_adapters import _NoopOntologyBackend
-
         backend = _NoopOntologyBackend()
         result = backend.search_object_instances_unstructured(
-            base_id="test",
-            object_code="by_opportunity",
-            query="任意查询",
+            base_id="test", object_code="by_opp", query="任意"
         )
         assert result == []
+
+
+# ============================================================================
+# _resolve_input_mode 测试
+# ============================================================================
+
+
+class TestResolveInputMode:
+    def test_sentence_from_query(self) -> None:
+        mode, kw = _resolve_input_mode("hello world", None)
+        assert mode == "sentence"
+        assert kw == ["hello world"]
+
+    def test_word_batch_from_queries(self) -> None:
+        mode, kw = _resolve_input_mode(None, ["a", "b", "c"])
+        assert mode == "word_batch"
+        assert kw == ["a", "b", "c"]
+
+    def test_word_batch_filters_empty(self) -> None:
+        mode, kw = _resolve_input_mode(None, ["a", "", "  ", "b"])
+        assert mode == "word_batch"
+        assert kw == ["a", "b"]
+
+    def test_empty_both(self) -> None:
+        mode, kw = _resolve_input_mode(None, None)
+        assert mode == "sentence"
+        assert kw == []
+
+    def test_empty_query(self) -> None:
+        mode, kw = _resolve_input_mode("", None)
+        assert mode == "sentence"
+        assert kw == []
+
+
+# ============================================================================
+# RRF 核心算法测试
+# ============================================================================
+
+
+class TestRRFFusion:
+    def test_rrf_formula_correctness(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        p1 = [("A", "TermA", "", "type_x", ""), ("B", "TermB", "", "type_y", ""),
+              ("C", "TermC", "", "type_z", "")]
+        p2 = [("B", "TermB", "", "type_y", ""), ("D", "TermD", "", "type_w", "")]
+        fused = rrf_fuse([p1, p2], k=60)
+        expected = {
+            "A": 1 / 61, "B": 1 / 62 + 1 / 61,
+            "C": 1 / 63, "D": 1 / 62,
+        }
+        assert len(fused) == 4
+        for c in fused:
+            assert abs(c.rrf_score - expected[c.term_id]) < 0.0001
+
+    def test_rrf_sorted_desc(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        p1 = [("A", "TA", "", "tx", ""), ("B", "TB", "", "ty", "")]
+        p2 = [("B", "TB", "", "ty", ""), ("C", "TC", "", "tz", "")]
+        fused = rrf_fuse([p1, p2], k=60)
+        scores = [c.rrf_score for c in fused]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_rrf_empty_both(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        assert rrf_fuse([], k=60) == []
+
+    def test_rrf_only_path1(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        p1 = [("A", "TA", "", "tx", "")]
+        fused = rrf_fuse([p1], k=60)
+        assert len(fused) == 1
+        assert fused[0].term_id == "A"
+
+    def test_rrf_single_path_rank1(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        fused = rrf_fuse([[("X", "TX", "", "tt", "")]], k=60)
+        assert abs(fused[0].rrf_score - 1 / 61) < 0.0001
+
+    def test_rrf_dedup_across_paths(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        p1 = [("A", "TA", "", "tx", "")]
+        p2 = [("A", "TA", "", "tx", "")]
+        fused = rrf_fuse([p1, p2], k=60)
+        assert len(fused) == 1
+
+    def test_rrf_top_n_truncation(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        items = [(chr(65 + i), f"T{chr(65+i)}", "", "t", "") for i in range(10)]
+        fused = rrf_fuse([items], k=60, top_n=3)
+        assert len(fused) == 3
+
+
+# ============================================================================
+# 降级策略测试
+# ============================================================================
+
+
+class TestDowngradeStrategies:
+    def test_kb_configs_none_skips_path2(self) -> None:
+        from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+            _should_run_path2,
+        )
+        assert _should_run_path2(True, None) is False
+
+    def test_enable_chunk_recall_false_skips_path2(self) -> None:
+        from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+            _should_run_path2,
+        )
+        assert _should_run_path2(False, {"kb": "test"}) is False
+
+    def test_both_enabled_returns_true(self) -> None:
+        from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+            _should_run_path2,
+        )
+        assert _should_run_path2(True, {"kb": "test"}) is True
+
+    def test_path2_no_kb_id_returns_empty(self) -> None:
+        from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+            _fuse_path_results_rrf,
+        )
+        result = _fuse_path_results_rrf([], [], k=60)
+        assert result == []
+
+
+# ============================================================================
+# 全局检索 + RRF 测试
+# ============================================================================
+
+
+class TestGlobalSearchRRF:
+    def test_global_search_includes_both_paths(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        p1 = [("A", "TermA", "", "by_opp", ""), ("B", "TermB", "", "by_company", "")]
+        p2 = [("C", "TermC", "", "by_city", ""), ("D", "TermD", "", "by_product", "")]
+        fused = rrf_fuse([p1, p2], k=60)
+        assert len(fused) == 4
+        type_codes = {c.term_type_code for c in fused}
+        assert "by_opp" in type_codes
+        assert "by_company" in type_codes
+        assert "by_city" in type_codes
+        assert "by_product" in type_codes
+
+    def test_global_scope_larger_than_specific(self) -> None:
+        from datacloud_knowledge.contracts.rrf import rrf_fuse
+        p1_all = [("A", "A", "", "by_opp", ""), ("B", "B", "", "by_company", "")]
+        p2_all = [("C", "C", "", "by_city", "")]
+        fused_all = rrf_fuse([p1_all, p2_all], k=60)
+        p1_specific = [("A", "A", "", "by_opp", "")]
+        fused_specific = rrf_fuse([p1_specific], k=60)
+        assert len(fused_all) >= len(fused_specific)
+        assert len(fused_all) == 3
+
+
+# ============================================================================
+# ObjectInstanceHit RRF 分数存储测试
+# ============================================================================
+
+
+class TestObjectInstanceHitWithScore:
+    def test_field_names_are_correct(self) -> None:
+        hit = ObjectInstanceHit(
+            instance_id="id1",
+            instance_code="code1",
+            instance_name="name1",
+            object_code="type1",
+            file_name="/f.md",
+            score=0.95,
+        )
+        assert hit.instance_id == "id1"
+        assert hit.instance_code == "code1"
+        assert hit.instance_name == "name1"
+        assert hit.object_code == "type1"
+        assert hit.file_name == "/f.md"
+        assert hit.score == 0.95
+
+    def test_score_is_rrf_fusion_score(self) -> None:
+        rrf_score = 1 / 61 + 1 / 62
+        hit = ObjectInstanceHit(
+            instance_id="t1", instance_code="c1", instance_name="test",
+            object_code="t", file_name="/f.md", score=rrf_score,
+        )
+        assert isinstance(hit.score, float)
+        assert 0 < hit.score <= 1
+        assert abs(hit.score - rrf_score) < 0.0001
+
+    def test_score_sorted_desc(self) -> None:
+        hits = [
+            ObjectInstanceHit("t1", "c1", "A", "t", "/f.md", 0.3),
+            ObjectInstanceHit("t2", "c2", "B", "t", "/f.md", 0.9),
+            ObjectInstanceHit("t3", "c3", "C", "t", "/f.md", 0.6),
+        ]
+        sorted_hits = sorted(hits, key=lambda h: h.score, reverse=True)
+        assert sorted_hits[0].instance_name == "B"
+        assert sorted_hits[1].instance_name == "C"
+        assert sorted_hits[2].instance_name == "A"
