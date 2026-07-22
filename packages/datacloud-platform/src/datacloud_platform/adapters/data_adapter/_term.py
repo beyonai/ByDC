@@ -96,7 +96,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         *,
         keywords: list[str],
         dataset_ids: list[str] | None = None,
-        term_type: str | None = None,
+        term_type_codes: list[str] | None = None,
         query_type: QueryType = "mixed",
         parent_term_code: str | None = None,
         label_filters: list[LabelFilter] | None = None,
@@ -110,7 +110,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         Args:
             keywords:         搜索关键词列表。
             dataset_ids:      术语库 ID 列表。
-            term_type:        术语类型编码。
+            term_type_codes:  术语类型编码列表（IN 过滤）。None=不限类型。
             query_type:       检索策略（fulltext/exact/embedding/mixed）。
             parent_term_code: 父术语编码过滤。
             label_filters:    标签过滤条件列表。
@@ -135,7 +135,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         batch_results = reader.query_terms_batch(
             keywords=keywords,
             dataset_ids=dataset_ids,
-            term_type=term_type,
+            term_type_codes=term_type_codes,
             query_type=query_type,
             parent_term_code=parent_term_code,
             label_filters=label_filters,
@@ -151,6 +151,49 @@ class TermBackendMixin(DataCloudDataBackendBase):
         for keyword, qr in zip(keywords, batch_results):
             result[keyword] = qr
         return result
+
+    def search_terms_by_labels(
+        self,
+        *,
+        label_filters: list[LabelFilter],
+        label_condition: LabelCondition = "or",
+        term_type_codes: list[str] | None = None,
+        top_k: int = 200,
+    ) -> list[dict[str, Any]]:
+        """纯标签过滤检索 — 不需要关键词。
+
+        直接使用 reader.query_terms_by_labels() 做纯 WHERE term_tags->>'key' = 'value' 过滤。
+        返回 term dict 列表。
+        """
+        from datacloud_knowledge.contracts.term_provider_types import LabelFilter as _LF
+
+        reader = create_reader()
+        cfgs: list[Any] = []
+        for lf in label_filters:
+            if isinstance(lf, dict):
+                cfgs.append(_LF(field_code=lf["field_code"], filter_value=str(lf["filter_value"])))
+            else:
+                cfgs.append(lf)
+
+        items = reader.query_terms_by_labels(
+            label_filters=cfgs,
+            label_condition=label_condition,
+            term_type_codes=term_type_codes,
+            top_k=top_k,
+        )
+        # query_terms_by_labels returns list[dict] (not pydantic model)
+        return [
+            {
+                "term_id": it["term_id"],
+                "term_code": it["term_code"],
+                "term_name": it["term_name"],
+                "term_type": it["term_type"],
+                "ext_attrs": it.get("ext_attrs", {}),
+                "term_tags": it.get("term_tags", {}),
+                "score": it.get("score", 1.0),
+            }
+            for it in items
+        ]
 
     def get_term_detail(
         self, *, library_id: str, term_id: str
