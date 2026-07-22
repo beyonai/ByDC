@@ -1679,7 +1679,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         if not tokens:
             return {}
         if object_codes is not None:
-            return self._path1_scoped_batched(object_codes, tokens, top_k)
+            return self._path1_scoped_batched(object_codes=object_codes, tokens=tokens, top_k=top_k)
         return self._path1_global_batched(tokens, top_k)
 
     def _path1_scoped_batched(
