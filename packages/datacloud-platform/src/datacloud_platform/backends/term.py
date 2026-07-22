@@ -48,7 +48,7 @@ class TermBackend(Protocol):
         *,
         keywords: list[str],
         dataset_ids: list[str] | None = None,
-        term_type: str | None = None,
+        term_type_codes: list[str] | None = None,
         query_type: str = "mixed",
         parent_term_code: str | None = None,
         label_filters: list[dict[str, Any]] | None = None,
