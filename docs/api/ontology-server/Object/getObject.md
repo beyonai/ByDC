@@ -90,7 +90,13 @@ GetObjectResponse
           }
         ]
       }
-    ]
+    ],
+    "extProperty": {
+      "use_domain": "ods",
+      "kb_resource_id": "res_001",
+      "kb_id": "kb_001",
+      "kb_file_path": "/knowledge/crm/customer.md"
+    }
   }
 }
 ```
@@ -110,6 +116,11 @@ GetObjectResponse
 | `data.conceptType` | string | No | 概念类型。 |
 | `data.properties` | array | No | 属性列表。 |
 | `data.actions` | array | No | 动作列表。 |
+| `data.extProperty` | object | No | 扩展属性。知识库类型对象时存在。 |
+| `data.extProperty.use_domain` | string | No | 数据域，知识库类型对象专用。可选值：`ods`、`ads`。 |
+| `data.extProperty.kb_resource_id` | string | No | 知识库资源 ID。 |
+| `data.extProperty.kb_id` | string | No | 知识库 ID。 |
+| `data.extProperty.kb_file_path` | string | No | 知识库文件路径。 |
 
 > `data.properties` 元素定义见 [Property](../../ontology-protocol/models/Property.md)
 > `data.actions` 元素定义见 [Action](../../ontology-protocol/models/Action.md)
@@ -186,7 +197,13 @@ curl -X GET \
           }
         ]
       }
-    ]
+    ],
+    "extProperty": {
+      "use_domain": "ods",
+      "kb_resource_id": "res_001",
+      "kb_id": "kb_001",
+      "kb_file_path": "/knowledge/crm/customer.md"
+    }
   }
 }
 ```
