@@ -65,6 +65,7 @@ def _build_registry() -> dict[str, dict[str, RpcHandler]]:
     from datacloud_platform.api.routers.rpc.handlers import (
         action as action_handlers,
         datasource as datasource_handlers,
+        kb_action as kb_action_handlers,
         object_type,
         ontology,
         ontology_build,
@@ -103,6 +104,7 @@ def _build_registry() -> dict[str, dict[str, RpcHandler]]:
         "ontologyBuild": ontology_build.REGISTRY,
         "workspace": workspace_handlers.REGISTRY,
         "ontologyDocFragment": ontology_doc_fragment_handlers.REGISTRY,
+        "kb": kb_action_handlers.REGISTRY,
     }
 
 
