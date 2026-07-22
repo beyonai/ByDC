@@ -21,7 +21,7 @@ from datacloud_platform.models import ObjectSummary, ParsedOwlContent
 from datacloud_platform.models.action import Action, ActionParam
 from datacloud_platform.models.datasource import Datasource, DbConnection
 from datacloud_platform.models.object_type import ObjectType
-from datacloud_platform.models.property import Property
+from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
 
@@ -70,6 +70,34 @@ def _ensure_default_datasource(loader: Any, objects: list[dict[str, Any]]) -> No
         },
     )
     loader._config.datasource_configs = existing
+
+
+def _build_property(f: Any, cls: Any) -> Property:
+    """Build a Property from an OntologyField, reconstructing terminology if available."""
+    _TERM_MASTER_MAP: dict[str, str] = {"enum": "DICT_TERM", "lookup": "LIST_TERM"}
+    term_set: str | None = getattr(f, "term_set", None)
+    term_type: str | None = getattr(f, "term_type", None)
+    term_field: str | None = getattr(f, "term_field", None)
+    terminology: TermMeta | None = None
+    if term_set and term_field and term_type:
+        term_type_code = term_set.rsplit(".", 1)[0] if "." in term_set else term_set
+        terminology = TermMeta(
+            termMasterType=_TERM_MASTER_MAP.get(term_type, ""),
+            termTypeCode=term_type_code,
+            termField=term_field,
+        )
+    return Property(
+        propertyName=f.field_name,
+        propertyCode=f.field_code,
+        propertyDesc=getattr(f, "description", None) or None,
+        dataType=f.field_type,
+        dataFormat=getattr(f, "data_format", None),
+        isRequired=1 if getattr(f, "required", False) else 0,
+        businessKey=1 if f.is_primary_key else 0,
+        sourceColumn=getattr(f, "source_column", None),
+        dbId=getattr(cls, "datasource_alias", None),
+        terminology=terminology,
+    )
 
 
 class OntologyBackendMixin(DataCloudDataBackendBase):
@@ -485,20 +513,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             userCode=(ext.get("user_code") or getattr(cls, "user_code", None)),
             baseId="",
             extProperty=ext,
-            properties=[
-                Property(
-                    propertyName=f.field_name,
-                    propertyCode=f.field_code,
-                    propertyDesc=getattr(f, "description", None) or None,
-                    dataType=f.field_type,
-                    dataFormat=getattr(f, "data_format", None),
-                    isRequired=1 if getattr(f, "required", False) else 0,
-                    businessKey=1 if f.is_primary_key else 0,
-                    sourceColumn=getattr(f, "source_column", None),
-                    dbId=getattr(cls, "datasource_alias", None),
-                )
-                for f in cls.fields
-            ],
+            properties=[_build_property(f, cls) for f in cls.fields],
             actions=[
                 Action(
                     actionCode=a.action_code,
