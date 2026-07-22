@@ -128,3 +128,41 @@ class ScoreUpdateRecord:
 
     name_id: str
     success: bool
+
+
+@dataclass(frozen=True)
+class ObjectInstanceHit:
+    """非结构化对象实例检索命中结果。
+
+    每个实例对应一个知识库文件（term_tags.kb_resource_id 唯一绑定）。
+    """
+
+    instance_id: str
+    """实例 ID（term_id，全局唯一）。"""
+
+    instance_code: str
+    """实例编码（term_code，业务编码）。"""
+
+    instance_name: str
+    """实例名称（term_name）。"""
+
+    object_code: str
+    """对象类型编码（term_type / object_code）。"""
+
+    file_name: str | None
+    """对应的知识库文件路径（ext_attrs.kb_file_path）。None 表示无文件关联。"""
+
+    score: float
+    """检索分数（双路 RRF 融合时为 fusion_score，单路时为该路原始分数）。"""
+
+
+@dataclass(frozen=True)
+class ObjectInstanceSearchResult:
+    """非结构化对象实例检索批量结果。
+
+    统一返回格式：{keyword: [ObjectInstanceHit, ...]}
+    sentence 模式时 dict 只有一个 key（原始 query 文本）。
+    word_batch 模式时每个词一个 key。
+    """
+
+    results: dict[str, list[ObjectInstanceHit]]

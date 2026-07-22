@@ -118,7 +118,6 @@ def _new_to_old_term_item(new_item: NewTermItem) -> OldTermItem:
         term_type_code=new_item.term_type,
         desc_summary=new_item.desc or None,
         term_tags=dict(new_item.labels),
-        owl_doc_id=None,
         created_time=None,
         updated_time=None,
         score=new_item.score,

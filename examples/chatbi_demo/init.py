@@ -1,6 +1,6 @@
 """chatbi_demo 初始化脚本。
 
-从 .demo_env 读取环境变量，将 SQL 文件和 OWL 数据源文件中的占位符替换为实际值，
+从 .demo_env 读取环境变量, 将 SQL 文件和 OWL 数据源文件中的占位符替换为实际值,
 然后通过 psycopg 执行 SQL 完成数据库初始化。
 
 用法：

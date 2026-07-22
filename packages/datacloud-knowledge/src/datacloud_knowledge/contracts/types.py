@@ -63,7 +63,6 @@ class TermBrief(BaseModel):
 
     term_id: str
     term_name: str
-    owl_doc_id: str
 
 
 class TermItem(BaseModel):
@@ -75,9 +74,8 @@ class TermItem(BaseModel):
         term_name: 术语标准名称。
         term_type_code: 术语类型编码。
         desc_summary: 描述摘要（前 100 字）。
-        term_tags: 术语标签属性（JSONB）。
-        owl_doc_id: OWL 本体定义文件 ID。
-        created_time: 创建时间。
+    term_tags: 术语标签属性（JSONB）。
+    created_time: 创建时间。
         updated_time: 更新时间。
         score: 搜索相关性分数（可选）。
     """
@@ -90,7 +88,6 @@ class TermItem(BaseModel):
     term_type_code: str
     desc_summary: str | None = None
     term_tags: dict[str, Any] = Field(default_factory=dict)
-    owl_doc_id: str | None = None
     created_time: Any | None = None
     updated_time: Any | None = None
     score: float | None = None

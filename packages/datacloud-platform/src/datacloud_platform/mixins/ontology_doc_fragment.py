@@ -75,17 +75,17 @@ class OntologyDocFragmentMixin:
                 if detail:
                     if hasattr(detail, "__dict__") and not isinstance(detail, dict):
                         detail = vars(detail)
-                    term_cache[tid] = detail  # type: ignore[assignment]
+                    term_cache[tid] = detail
             except Exception:
                 logger.warning(
-                    "batch_create_fragments: failed to fetch term_id=%s", tid, exc_info=True
+                    "batch_create_fragments: failed to fetch term_id=%s",
+                    tid,
+                    exc_info=True,
                 )
 
         # ── 2a. validate all instance_ids exist ────────────────────────────
         instance_ids_in_items = {
-            item.get("instance_id") or ""
-            for item in items
-            if item.get("instance_id")
+            item.get("instance_id") or "" for item in items if item.get("instance_id")
         }
         missing = sorted(instance_ids_in_items - term_cache.keys())
         if missing:

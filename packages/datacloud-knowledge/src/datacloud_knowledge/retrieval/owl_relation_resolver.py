@@ -65,21 +65,17 @@ def resolve_related_owl_terms(
             else:
                 _collect_from_obj_root(reader, tid, collected)
 
-    # 最终一次性取回 term_name/owl_doc_id，并过滤 owl_doc_id 非空
+    # 最终一次性取回 term_name
     if not collected:
         return []
     rows = reader.get_terms_batch_raw(term_ids=sorted(collected))
 
     out: list[TermBrief] = []
     for row in rows:
-        owl = (row.get("owl_doc_id") or "").strip()
-        if not owl:
-            continue
         out.append(
             TermBrief(
                 term_id=row["term_id"] or "",
                 term_name=row["term_name"] or "",
-                owl_doc_id=owl,
             )
         )
 

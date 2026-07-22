@@ -584,6 +584,27 @@ class _NoopOntologyBackend:
         """Return empty result."""
         return {"data": [], "totalCount": 0}
 
+    def search_object_instances_unstructured(
+        self,
+        *,
+        base_id: str,
+        object_code: str | None = None,
+        query: str,
+        top_k: int = 20,
+        enable_chunk_recall: bool = True,
+        kb_configs: dict[str, Any] | None = None,
+    ) -> list[Any]:
+        """返回空列表 — 非结构化对象实例检索在当前后端无数据。"""
+        _ = (
+            base_id,
+            object_code,
+            query,
+            top_k,
+            enable_chunk_recall,
+            kb_configs,
+        )
+        return []
+
 
 class _NoopTermBackend:
     """Term backend where all reads return empty/null and mutations are no-ops."""

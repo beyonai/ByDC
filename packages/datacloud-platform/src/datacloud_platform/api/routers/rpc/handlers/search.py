@@ -75,10 +75,35 @@ def _search_instances(
     )
 
 
+async def _search_object_instances_unstructured(
+    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+) -> Any:
+    """非结构化对象实例检索 RPC handler。
+
+    sentence 模式:
+        {"query": "自然语言句子", "object_code": "by_opportunity", ...}
+
+    word_batch 模式:
+        {"queries": ["词1", "词2"], "object_code": null, ...}
+    """
+    result = await platform.search_object_instances_unstructured(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        object_code=params.get("object_code"),
+        query=params.get("query"),
+        queries=params.get("queries"),
+        top_k=params.get("top_k", 20),
+        enable_chunk_recall=params.get("enable_chunk_recall", True),
+        kb_configs=params.get("kb_configs"),
+    )
+    # Serialize results dict directly — caller gets {keyword: [hit, ...]}
+    return ok(data=result.results)
+
+
 REGISTRY: dict[str, Any] = {
     "searchOntology": _search_ontology,
     "searchScene": _search_scene,
     "searchInstances": _search_instances,
+    "searchObjectInstancesUnstructured": _search_object_instances_unstructured,
 }
 
 

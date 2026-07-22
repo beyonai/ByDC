@@ -598,9 +598,7 @@ class KbSearchExecutor:
             term_ids = await self._resolve_kb_term_ids(cls, detail)
             if term_ids is None:
                 # 术语查询报错，跳过该文件删除，避免删文件后术语变孤立
-                logger.warning(
-                    "delete_kb: term lookup failed, skipping file: %s", source_path
-                )
+                logger.warning("delete_kb: term lookup failed, skipping file: %s", source_path)
                 skipped_paths.append(source_path)
                 continue
 
@@ -670,7 +668,9 @@ class KbSearchExecutor:
             logger.debug("get_file_metadata failed for %s", source_path, exc_info=True)
             return None
 
-    async def _resolve_kb_term_ids(self, cls: Any, detail: KnowledgeFileMetadata) -> list[str] | None:
+    async def _resolve_kb_term_ids(
+        self, cls: Any, detail: KnowledgeFileMetadata
+    ) -> list[str] | None:
         """查询与该文件对应的术语 ID 列表（读阶段，不删除任何数据）。
 
         - 开启 term_sync：用 term_code_field（优先）或 term_name_field 的 label 值作为 keyword。
