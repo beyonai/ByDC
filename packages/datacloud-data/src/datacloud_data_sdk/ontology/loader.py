@@ -749,8 +749,8 @@ class OntologyLoader:
     def _parse_term_meta(
         raw: dict[str, Any],
     ) -> tuple[str | None, str | None, str | None, int | None, int | None]:
-        """从 termMeta 或 term_set 解析，返回 (term_set, term_type, term_field, dataset_id, library_id)。"""
-        tm = raw.get("termMeta") or raw.get("term_meta")
+        """从 termMeta / terminology / term_set 解析，返回 (term_set, term_type, term_field, dataset_id, library_id)。"""
+        tm = raw.get("termMeta") or raw.get("term_meta") or raw.get("terminology")
         if tm and isinstance(tm, dict):
             tc = tm.get("termTypeCode") or tm.get("term_type_code")
             tf = tm.get("termField") or tm.get("term_field")
@@ -819,8 +819,8 @@ class OntologyLoader:
                 is_primary_key=f.get("is_primary_key", False),
                 source_column=f.get("source_column") or f.get("sourceColumn"),
                 term_set=term_set,
-                term_type=tt,
-                term_field=tf,
+                term_type=tt if tt is not None else f.get("term_type"),
+                term_field=tf if tf is not None else f.get("term_field"),
                 dataset_id=did,
                 library_id=lid,
                 physical_mappings=[
