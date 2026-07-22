@@ -207,3 +207,29 @@ class OntologyQueryMixin:
     ) -> dict[str, Any]:
         """本体实例搜索。"""
         return self._ontology_for(base_id).search_instances(base_id, **kwargs)
+
+    async def search_object_instances_unstructured(
+        self: _HasOntologyBackend,
+        base_id: str,
+        *,
+        object_code: str | None = None,
+        query: str | None = None,
+        queries: list[str] | None = None,
+        top_k: int = 20,
+        enable_chunk_recall: bool = True,
+        kb_configs: dict[str, Any] | None = None,
+    ) -> Any:  # ObjectInstanceSearchResult
+        """非结构化对象实例检索 — 委托到 OntologyBackend。
+
+        sentence (query) / word_batch (queries) 双模式。
+        返回 ObjectInstanceSearchResult(results={kw: [hit, ...], ...})。
+        """
+        return await self._ontology_for(base_id).search_object_instances_unstructured(
+            base_id=base_id,
+            object_code=object_code,
+            query=query,
+            queries=queries,
+            top_k=top_k,
+            enable_chunk_recall=enable_chunk_recall,
+            kb_configs=kb_configs,
+        )
