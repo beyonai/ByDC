@@ -92,14 +92,14 @@ async def _search_object_instances_unstructured(
     logger.warning(
         "searchObjectInstancesUnstructured ENTRY: object_codes=%s query=%r queries=%r top_k=%s chunk=%s",
         params.get("object_codes"), params.get("query"), params.get("queries"),
-        params.get("top_k", 20), params.get("enable_chunk_recall", True),
+        params.get("top_k", 5), params.get("enable_chunk_recall", True),
     )
     result = await platform.search_object_instances_unstructured(
         base_id=params.get("base_id", DEFAULT_BASE_ID),
         object_codes=params.get("object_codes"),
         query=params.get("query"),
         queries=params.get("queries"),
-        top_k=params.get("top_k", 20),
+        top_k=params.get("top_k", 5),
         enable_chunk_recall=params.get("enable_chunk_recall", True),
     )
     # Serialize results dict directly — caller gets {keyword: [hit, ...]}
