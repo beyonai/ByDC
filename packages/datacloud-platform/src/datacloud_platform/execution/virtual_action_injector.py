@@ -400,12 +400,13 @@ def _inject_kb_object_actions(
 ) -> None:
     """为 KB 对象注入 search_* 和 write_* 动作。"""
     from datacloud_data_sdk.virtual_action.generator import (
+        build_delete_kb_schema,
         build_file_name_chunk_search_description,
         build_file_name_chunk_search_schema,
         build_kb_write_schema,
-        build_update_kb_schema,
         build_search_description,
         build_search_schema,
+        build_update_kb_schema,
     )
     from datacloud_data_sdk.virtual_action.registry import ActionRoute
 
@@ -489,6 +490,25 @@ def _inject_kb_object_actions(
         cls.actions.append(action)
         registry.register(update_kb_code, ActionRoute("object", obj_code, "update_kb"))
         logger.debug("注入 %s", update_kb_code)
+
+    delete_kb_code = f"delete_kb_{obj_code}"
+    if delete_kb_code not in existing_codes:
+        schema = build_delete_kb_schema(obj_name)
+        action = _make_action(
+            action_code=delete_kb_code,
+            action_name=f"删除{obj_name}文档",
+            description=schema.get("description", f"删除{obj_name}文档"),
+            belong_class=obj_code,
+            action_family="delete_kb",
+            virtual_backend="kb_search",
+            scope_type="object",
+            scope_code=obj_code,
+            input_schema=schema,
+            action_type="operation",
+        )
+        cls.actions.append(action)
+        registry.register(delete_kb_code, ActionRoute("object", obj_code, "delete_kb"))
+        logger.debug("注入 %s", delete_kb_code)
 
     legacy_code = f"query_{obj_code}"
     if not registry.get(legacy_code):

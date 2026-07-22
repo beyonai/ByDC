@@ -24,6 +24,10 @@ from datacloud_data_sdk.constants import DEFAULT_BASE_ID
 from datacloud_data_sdk.exceptions import KbExecutionError
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
+    KnowledgeDeleteBackend,
+    KnowledgeDeleteRequest,
+    KnowledgeFileMetadata,
+    KnowledgeFileMetadataRequest,
     KnowledgeFileNameSearchRequest,
     KnowledgeSearchBackend,
     KnowledgeSearchRequest,
@@ -495,6 +499,238 @@ class KbSearchExecutor:
             record["_write_note"] = write_note
 
         return response
+
+    async def delete_kb(
+        self,
+        object_code: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute delete_kb_* action.
+
+        流程分两阶段，读写分离：
+
+        读阶段（不改任何数据）：
+          对每个 source_path：
+          1. get_file_metadata → 判断文件是否存在，取 labels
+          2. platform.search_terms → 查对应 term_ids
+          文件不存在的路径收入 skipped_paths，不参与后续删除。
+
+        写阶段（顺序执行，文件先于术语）：
+          1. backend.delete_files 批量删除 KB 文件（外部服务，先删）
+          2. platform.delete_terms 批量删除术语（内部数据，后删）
+          先删文件后删术语：若文件删成功但术语删失败，残留的是孤立术语（可重试清理）；
+          反之若术语先删但文件删失败，会导致文件仍存在却缺少术语指针，状态更难恢复。
+        """
+        cls = self._loader.get_ontology_class(object_code)
+        kb_configs = getattr(self._loader._config, "kb_source_configs", None)
+        configured_backend = getattr(self._loader._config, "kb_search_backend", None)
+        datasource_alias = self._get_datasource_alias(cls)
+        query = ""
+        kb_id = self._get_kb_id(cls)
+        kb_directory = self._get_kb_directory(cls)
+
+        if not kb_id:
+            return self._empty_response(
+                object_code,
+                arguments,
+                "knowledge base id not configured",
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        backend = self._resolve_backend(cls, kb_configs, configured_backend)
+        if not hasattr(backend, "delete_files"):
+            return self._empty_response(
+                object_code,
+                arguments,
+                "knowledge backend does not support delete_files",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        raw_paths: list[Any] = arguments.get("source_paths") or []
+        source_paths = [str(p) for p in raw_paths if str(p).startswith("/")]
+        invalid = [str(p) for p in raw_paths if not str(p).startswith("/")]
+        if invalid:
+            return self._empty_response(
+                object_code,
+                arguments,
+                f"source_paths contains invalid entries (must start with /): {invalid}",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+        if not source_paths:
+            return self._empty_response(
+                object_code,
+                arguments,
+                "source_paths is required and must not be empty",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        # ── 读阶段：收集文件详情 + 术语 ID，不修改任何数据 ────────────────
+        paths_to_delete: list[str] = []
+        skipped_paths: list[str] = []
+        all_term_ids: list[str] = []
+
+        for source_path in source_paths:
+            detail = await self._get_file_metadata(
+                backend, cls, datasource_alias, kb_id, kb_directory, source_path
+            )
+            if detail is None or not detail.exists:
+                logger.info("delete_kb: file not found, skipping: %s", source_path)
+                skipped_paths.append(source_path)
+                continue
+
+            term_ids = await self._resolve_kb_term_ids(cls, detail)
+            if term_ids is None:
+                # 术语查询报错，跳过该文件删除，避免删文件后术语变孤立
+                logger.warning(
+                    "delete_kb: term lookup failed, skipping file: %s", source_path
+                )
+                skipped_paths.append(source_path)
+                continue
+
+            paths_to_delete.append(source_path)
+            all_term_ids.extend(term_ids)
+
+        if not paths_to_delete:
+            meta = _standard_action_meta(cls, datasource_alias, query)
+            meta["skipped_paths"] = skipped_paths
+            return {"records": [], "total": 0, "meta": meta}
+
+        # ── 写阶段第一步：删除 KB 文件（外部服务）────────────────────────
+        delete_request = KnowledgeDeleteRequest(
+            object_code=cls.object_code,
+            datasource_alias=datasource_alias,
+            kb_id=kb_id,
+            kb_directory=kb_directory,
+            file_paths=paths_to_delete,
+        )
+        try:
+            delete_backend = cast(KnowledgeDeleteBackend, backend)
+            result = await delete_backend.delete_files(delete_request)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("knowledge base delete failed: object_code=%s", object_code)
+            return self._empty_response(
+                object_code,
+                arguments,
+                str(exc),
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
+
+        # ── 写阶段第二步：删除术语（内部数据，文件删成功后执行）──────────
+        if all_term_ids:
+            await self._delete_term_ids(all_term_ids)
+
+        meta = _standard_action_meta(cls, datasource_alias, query)
+        meta["deleted_paths"] = result.deleted_paths
+        if skipped_paths:
+            meta["skipped_paths"] = skipped_paths
+        return result.to_response() | {"meta": meta}
+
+    async def _get_file_metadata(
+        self,
+        backend: Any,
+        cls: Any,
+        datasource_alias: str,
+        kb_id: str,
+        kb_directory: str | None,
+        source_path: str,
+    ) -> KnowledgeFileMetadata | None:
+        """Query file metadata via get_file_metadata if backend supports it."""
+        get_detail = getattr(backend, "get_file_metadata", None)
+        if not callable(get_detail):
+            return None
+        try:
+            return await get_detail(
+                KnowledgeFileMetadataRequest(
+                    object_code=cls.object_code,
+                    datasource_alias=datasource_alias,
+                    kb_id=kb_id,
+                    kb_directory=kb_directory,
+                    file_path=source_path,
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("get_file_metadata failed for %s", source_path, exc_info=True)
+            return None
+
+    async def _resolve_kb_term_ids(self, cls: Any, detail: KnowledgeFileMetadata) -> list[str] | None:
+        """查询与该文件对应的术语 ID 列表（读阶段，不删除任何数据）。
+
+        - 开启 term_sync：用 term_code_field（优先）或 term_name_field 的 label 值作为 keyword。
+        - 未开启 term_sync：用文件名（去掉扩展名）作为 keyword。
+
+        search_terms(query_type="exact") 底层匹配 term_code == kw OR term_name == kw，
+        两者取并集，所以查回来的结果需要二次过滤：只保留 term_code 或 term_name 与
+        keyword 完全相等的条目，避免误删同名但属于其他对象的术语。
+        term_type=object_code 限制类型，dataset_ids 限制库，两者都已传入。
+        """
+        platform = getattr(self._loader._config, "platform", None)
+        if platform is None:
+            return []
+
+        term_sync = getattr(cls, "term_sync", None)
+        object_code = str(cls.object_code)
+        file_stem = PurePosixPath(detail.file_path).stem or detail.file_path
+
+        if term_sync is not None and getattr(term_sync, "enabled", False):
+            term_code_field = str(getattr(term_sync, "term_code_field", "") or "")
+            term_name_field = str(getattr(term_sync, "term_name_field", "") or "")
+            keyword = str(
+                detail.labels.get(term_code_field)
+                or detail.labels.get(term_name_field)
+                or file_stem
+            )
+        else:
+            keyword = file_stem
+
+        if not keyword:
+            return []
+
+        try:
+            result = platform.search_terms(
+                term_type=object_code,
+                base_id=DEFAULT_BASE_ID,
+                dataset_ids=[DEFAULT_BASE_ID],
+                keyword=keyword,
+                query_type="exact",
+                top_k=20,
+            )
+            items = getattr(result, "items", None) or []
+            # 二次过滤：term_code 或 term_name 必须与 keyword 完全相等，
+            # 防止 exact 模式并集语义把不相关条目带入。
+            return [
+                str(item.term_id)
+                for item in items
+                if getattr(item, "term_id", None)
+                and (
+                    str(getattr(item, "term_code", "") or "") == keyword
+                    or str(getattr(item, "term_name", "") or "") == keyword
+                )
+            ]
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "_resolve_kb_term_ids: search_terms failed keyword=%s object=%s",
+                keyword,
+                object_code,
+                exc_info=True,
+            )
+            return None
+
+    async def _delete_term_ids(self, term_ids: list[str]) -> None:
+        """批量删除术语，失败只记 warning，不阻断主流程。"""
+        platform = getattr(self._loader._config, "platform", None)
+        if platform is None or not term_ids:
+            return
+        try:
+            platform.delete_terms(base_id=DEFAULT_BASE_ID, term_ids=term_ids)
+            logger.debug("_delete_term_ids: deleted %d term(s)", len(term_ids))
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "_delete_term_ids: delete_terms failed for %d term(s)", len(term_ids), exc_info=True
+            )
 
     async def _enqueue_kb_term_sync(self, write_requests: list[KnowledgeWriteRequest]) -> None:
         """非阻塞投递 KB 术语同步事件（knowledge 包不可用时静默跳过）。

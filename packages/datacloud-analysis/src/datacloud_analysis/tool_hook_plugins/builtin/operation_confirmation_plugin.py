@@ -77,6 +77,7 @@ _KB_WRITE_CONTENT_FIELD = "content"
 _KB_UPDATE_KB_DISPLAY_PAIRS: tuple[tuple[str, str], ...] = (
     ("original_source_path", "original_content"),
     ("current_source_path", "current_content"),
+    ("source_path", "content"),
 )
 
 logger = logging.getLogger(__name__)
@@ -148,8 +149,8 @@ async def _try_fill_update_kb_file_content(
 
     for path_field, content_field in _KB_UPDATE_KB_DISPLAY_PAIRS:
         path_value = str(patched.get(path_field) or "").strip()
-        if not path_value:
-            continue
+        # if not path_value:
+        #     continue
         try:
             with inv_ctx:
                 file_content: str = await _read_file_via_storage(path_value, storage)

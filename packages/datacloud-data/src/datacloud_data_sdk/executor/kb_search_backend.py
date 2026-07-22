@@ -156,6 +156,60 @@ class KnowledgeUpdateBackend(Protocol):
         """Update an existing document in a knowledge base without delete + re-import."""
 
 
+@dataclass(frozen=True)
+class KnowledgeDeleteRequest:
+    """Structured request for deleting documents from a knowledge base."""
+
+    object_code: str
+    datasource_alias: str
+    kb_id: str
+    file_paths: list[str]
+    kb_directory: str | None = None
+
+
+@dataclass(frozen=True)
+class KnowledgeDeleteResult:
+    """Normalized result for a knowledge-base document deletion."""
+
+    deleted_paths: list[str]
+    meta: dict[str, Any] = field(default_factory=dict)
+
+    def to_response(self) -> dict[str, Any]:
+        """Return the MCP/tool response payload shape."""
+        return {
+            "records": [{"filePath": p} for p in self.deleted_paths],
+            "total": len(self.deleted_paths),
+            "meta": self.meta,
+        }
+
+
+class KnowledgeDeleteBackend(Protocol):
+    """Protocol for knowledge-base document deletion implementations."""
+
+    async def delete_files(self, request: KnowledgeDeleteRequest) -> KnowledgeDeleteResult:
+        """Delete one or more documents from a knowledge base."""
+
+
+@dataclass(frozen=True)
+class KnowledgeFileMetadataRequest:
+    """Structured request for fetching a single file's metadata from the knowledge base."""
+
+    object_code: str
+    datasource_alias: str
+    kb_id: str
+    file_path: str
+    kb_directory: str | None = None
+
+
+@dataclass(frozen=True)
+class KnowledgeFileMetadata:
+    """Metadata record for a single knowledge-base file."""
+
+    file_path: str
+    labels: dict[str, Any] = field(default_factory=dict)
+    exists: bool = True
+
+
 class HttpKnowledgeSearchBackend:
     """Default metadata service backend using knowledgeItems search/import APIs."""
 
@@ -457,6 +511,181 @@ class HttpKnowledgeSearchBackend:
             },
         )
 
+    async def delete_files(self, request: KnowledgeDeleteRequest) -> KnowledgeDeleteResult:
+        """Delete one or more documents from the knowledge base by file path."""
+        config = self._get_config(request.datasource_alias)
+        deleted: list[str] = []
+
+        endpoint = self._resolve_endpoint(config)
+        for file_path in request.file_paths:
+            markdown_file_path = _to_markdown_file_path(file_path, request.kb_directory)
+            delete_body = {"knCode": request.kb_id, "filePath": markdown_file_path}
+            if endpoint:
+                delete_url = self._build_delete_url(endpoint, config)
+                try:
+                    async with httpx.AsyncClient(
+                        headers=self._get_beyond_token_header(), timeout=30.0
+                    ) as client:
+                        log_curl("POST", delete_url, body=delete_body)
+                        resp = await client.post(delete_url, json=delete_body)
+                        body = self._parse_response_body(resp, request.datasource_alias)
+                        self._ensure_success(body, request.datasource_alias)
+                except httpx.HTTPError as exc:
+                    raise KbExecutionError(request.datasource_alias, str(exc)) from exc
+            else:
+                service_name = self._resolve_service_name(config, request.datasource_alias)
+                await self._delete_file_by_discovery(
+                    service_name=service_name,
+                    config=config,
+                    datasource_alias=request.datasource_alias,
+                    kb_id=request.kb_id,
+                    markdown_file_path=markdown_file_path,
+                )
+            deleted.append(markdown_file_path)
+
+        return KnowledgeDeleteResult(
+            deleted_paths=deleted,
+            meta={
+                "object_code": request.object_code,
+                "datasource_alias": request.datasource_alias,
+            },
+        )
+
+    async def _delete_file_by_discovery(
+        self,
+        *,
+        service_name: str,
+        config: dict[str, Any],
+        datasource_alias: str,
+        kb_id: str,
+        markdown_file_path: str,
+    ) -> None:
+        """Delete a single document via service-discovery."""
+        try:
+            from by_framework.common.redis_client import init_redis
+            from by_framework.core.discovery import DiscoveryClient
+            from by_framework.util.discovery_http_client import DiscoveryHttpClient
+            from by_framework.util.http_client import RetryConfig
+        except ImportError as exc:
+            raise KbExecutionError(
+                datasource_alias,
+                "redis service discovery requires by_framework dependency",
+            ) from exc
+
+        redis_config = self._redis_config
+        init_redis(
+            host=redis_config.host,
+            port=redis_config.port,
+            db=redis_config.database,
+            password=redis_config.password,
+            username=redis_config.username,
+        )
+        discovery_client = DiscoveryClient(cache_interval=5)
+        retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
+        try:
+            instance = await discovery_client.discover(service_name, health_threshold_ms=-1)
+            if not instance:
+                raise KbExecutionError(
+                    datasource_alias,
+                    f"knowledge service instance not found: {service_name}",
+                )
+            json_headers = {
+                **self._build_discovery_headers(instance),
+                **self._get_beyond_token_header(),
+            }
+            delete_path = self._build_delete_path(config)
+            delete_body = {"knCode": kb_id, "filePath": markdown_file_path}
+            async with DiscoveryHttpClient(
+                discovery_client,
+                retry_config=retry_config,
+                health_threshold_ms=-1,
+            ) as client:
+                log_curl("POST", delete_path, body=delete_body)
+                resp = await client.post(
+                    service_name, delete_path, headers=json_headers, json=delete_body
+                )
+                body = self._parse_discovery_response_body(resp, datasource_alias)
+                self._ensure_success(body, datasource_alias)
+        finally:
+            await discovery_client.close()
+
+    async def get_file_metadata(
+        self, request: KnowledgeFileMetadataRequest
+    ) -> KnowledgeFileMetadata | None:
+        """Fetch metadata for a single file via POST /api/v1/knowledgeItems/metadata/get.
+
+        Returns None when the file does not exist or the request fails.
+        The metadata/get endpoint returns only the metadata values for the given file,
+        no vector search is involved.
+        """
+        config = self._get_config(request.datasource_alias)
+        markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
+
+        body: dict[str, Any] = {
+            "knCode": request.kb_id,
+            "filePath": markdown_file_path,
+        }
+
+        try:
+            endpoint = self._resolve_endpoint(config)
+            if endpoint:
+                url = self._build_metadata_get_url(endpoint, config)
+                data = await self._post_json(url, body, request.datasource_alias)
+            else:
+                service_name = self._resolve_service_name(config, request.datasource_alias)
+                data = await self._post_json_by_discovery(
+                    service_name=service_name,
+                    path=self._build_metadata_get_path(config),
+                    body=body,
+                    datasource_alias=request.datasource_alias,
+                )
+        except KbExecutionError:
+            logger.debug("get_file_metadata: metadata/get failed for %s", markdown_file_path)
+            return None
+
+        # 非 0 resultCode 视为文件不存在（接口规范：文件不存在时返回非 0）
+        if data.get("resultCode") not in (None, "0", 0):
+            logger.debug(
+                "get_file_metadata: file not found resultCode=%s path=%s",
+                data.get("resultCode"),
+                markdown_file_path,
+            )
+            return KnowledgeFileMetadata(file_path=markdown_file_path, exists=False)
+
+        result_object = data.get("resultObject")
+        if not isinstance(result_object, dict):
+            return KnowledgeFileMetadata(file_path=markdown_file_path, exists=False)
+
+        raw_metadata = result_object.get("metadata")
+        if not isinstance(raw_metadata, dict):
+            # resultObject 存在但 metadata 为空，文件存在但无元数据
+            return KnowledgeFileMetadata(file_path=markdown_file_path, exists=True)
+
+        # 响应格式：{"field": {"valueType": "string", "value": ...}}
+        labels = {k: v.get("value") if isinstance(v, dict) else v for k, v in raw_metadata.items()}
+        return KnowledgeFileMetadata(file_path=markdown_file_path, labels=labels, exists=True)
+
+    @staticmethod
+    def _build_metadata_get_url(endpoint: str, config: dict[str, Any]) -> str:
+        explicit_url = config.get("metadata_get_url") or config.get("metadataGetUrl")
+        if explicit_url:
+            return str(explicit_url)
+        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/metadata/get"):
+            return endpoint.rstrip("/")
+        path = str(
+            config.get("metadata_get_path")
+            or config.get("metadataGetPath")
+            or "/api/v1/knowledgeItems/metadata/get"
+        )
+        return endpoint.rstrip("/") + "/" + path.lstrip("/")
+
+    @staticmethod
+    def _build_metadata_get_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(config.get("metadata_get_path"), config.get("metadataGetPath")),
+            "/api/v1/knowledgeItems/metadata/get",
+        )
+
     async def _update_by_discovery(
         self,
         *,
@@ -496,6 +725,10 @@ class HttpKnowledgeSearchBackend:
                     request.datasource_alias,
                     f"knowledge service instance not found: {service_name}",
                 )
+            json_headers = {
+                **self._build_discovery_headers(instance),
+                **self._get_beyond_token_header(),
+            }
             upload_headers = {
                 **self._build_discovery_upload_headers(instance),
                 **self._get_beyond_token_header(),
@@ -529,6 +762,14 @@ class HttpKnowledgeSearchBackend:
                 )
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
                 self._ensure_success(body, request.datasource_alias)
+                await self._trigger_file_build_by_discovery(
+                    client,
+                    service_name,
+                    config,
+                    request,
+                    markdown_file_path,
+                    json_headers,
+                )
         finally:
             await discovery_client.close()
 
@@ -608,7 +849,7 @@ class HttpKnowledgeSearchBackend:
         client: Any,
         service_name: str,
         config: dict[str, Any],
-        request: KnowledgeWriteRequest,
+        request: KnowledgeWriteRequest | KnowledgeUpdateRequest,
         file_path: str,
         headers: dict[str, str],
     ) -> dict[str, Any]:

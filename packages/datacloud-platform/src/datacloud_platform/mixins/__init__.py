@@ -15,6 +15,7 @@ from datacloud_platform.mixins.scene import SceneMixin
 from datacloud_platform.mixins.scene_loader import SceneLoaderMixin
 from datacloud_platform.mixins.scene_service import SceneServiceMixin
 from datacloud_platform.mixins.storage import StorageMixin
+from datacloud_platform.mixins.ontology_doc_fragment import OntologyDocFragmentMixin
 from datacloud_platform.mixins.term import TermMixin
 from datacloud_platform.mixins.term_network import TermConnectionNetworkMixin
 from datacloud_platform.mixins.view import ViewMixin
@@ -28,6 +29,7 @@ __all__ = [
     "LibraryMixin",
     "OntologyBuildMixin",
     "OntologyCRUDMixin",
+    "OntologyDocFragmentMixin",
     "OntologyQueryMixin",
     "OntologyWorkspaceMixin",
     "OrchestrationMixin",

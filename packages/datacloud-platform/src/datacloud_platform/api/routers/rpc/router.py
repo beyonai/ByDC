@@ -68,6 +68,7 @@ def _build_registry() -> dict[str, dict[str, RpcHandler]]:
         object_type,
         ontology,
         ontology_build,
+        ontology_doc_fragment as ontology_doc_fragment_handlers,
         query as query_handlers,
         relation as relation_handlers,
         scene,
@@ -101,6 +102,7 @@ def _build_registry() -> dict[str, dict[str, RpcHandler]]:
         "skills": skills_handlers.REGISTRY,
         "ontologyBuild": ontology_build.REGISTRY,
         "workspace": workspace_handlers.REGISTRY,
+        "ontologyDocFragment": ontology_doc_fragment_handlers.REGISTRY,
     }
 
 
