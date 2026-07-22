@@ -877,9 +877,7 @@ class FakeOntologyBackend:
         else:
             return ObjectInstanceSearchResult(results={})
 
-        return ObjectInstanceSearchResult(
-            results={kw: list(hits) for kw in keywords}
-        )
+        return ObjectInstanceSearchResult(results={kw: list(hits) for kw in keywords})
 
     def graph_path(
         self,

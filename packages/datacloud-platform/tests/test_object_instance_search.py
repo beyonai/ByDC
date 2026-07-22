@@ -19,7 +19,10 @@ from datacloud_platform.adapters.data_adapter._ontology_metadata import (
     _resolve_input_mode,
     _tokenize_query,
 )
-from datacloud_platform.models.shared import ObjectInstanceHit, ObjectInstanceSearchResult
+from datacloud_platform.models.shared import (
+    ObjectInstanceHit,
+    ObjectInstanceSearchResult,
+)
 from fakes import FakeOntologyBackend
 
 
@@ -76,6 +79,7 @@ class TestExtractItems:
 
     def test_extract_from_object_with_items_attr(self) -> None:
         from types import SimpleNamespace
+
         raw = SimpleNamespace(items=[{"term_id": "a"}], total=1)
         result = _extract_items(raw)
         assert len(result) == 1
@@ -117,16 +121,24 @@ class TestObjectInstanceHitModel:
 
     def test_hit_is_immutable(self) -> None:
         hit = ObjectInstanceHit(
-            instance_id="t1", instance_code="c1", instance_name="test",
-            object_code="by_opp", file_name="/x.md", score=0.5,
+            instance_id="t1",
+            instance_code="c1",
+            instance_name="test",
+            object_code="by_opp",
+            file_name="/x.md",
+            score=0.5,
         )
         with pytest.raises(Exception):
             hit.score = 99  # type: ignore[misc]
 
     def test_file_name_can_be_none(self) -> None:
         hit = ObjectInstanceHit(
-            instance_id="t1", instance_code="c1", instance_name="test",
-            object_code="t", file_name=None, score=0.5,
+            instance_id="t1",
+            instance_code="c1",
+            instance_name="test",
+            object_code="t",
+            file_name=None,
+            score=0.5,
         )
         assert hit.file_name is None
 
@@ -158,7 +170,11 @@ class TestFusePathResults:
 
     def test_dedup_by_term_id(self) -> None:
         p1 = [_make_hit("1", "A", score=0.8, file_name="/p1.md")]
-        p2 = [_make_hit("1", "A", score=0.9, match_type="chunk_to_term", file_name="/p2.md")]
+        p2 = [
+            _make_hit(
+                "1", "A", score=0.9, match_type="chunk_to_term", file_name="/p2.md"
+            )
+        ]
         result = _fuse_path_results(p1, p2)
         assert len(result) == 1
         # RRF: rank 1 in path1 + rank 1 in path2
@@ -209,7 +225,10 @@ class TestFakeOntologyBackendSearch:
     def test_empty_default(self) -> None:
         async def _t():
             fake = FakeOntologyBackend()
-            return await fake.search_object_instances_unstructured(base_id="test", query="任意查询")
+            return await fake.search_object_instances_unstructured(
+                base_id="test", query="任意查询"
+            )
+
         result = asyncio.run(_t())
         assert isinstance(result, ObjectInstanceSearchResult)
         assert "任意查询" in result.results
@@ -222,7 +241,10 @@ class TestFakeOntologyBackendSearch:
                 _make_hit("t1", "结果1", term_type_code="by_opp"),
                 _make_hit("t2", "结果2", term_type_code="by_company"),
             ]
-            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="查询")
+            return await fake.search_object_instances_unstructured(
+                base_id="test", object_code=None, query="查询"
+            )
+
         result = asyncio.run(_t())
         assert "查询" in result.results
         assert len(result.results["查询"]) == 2
@@ -234,7 +256,10 @@ class TestFakeOntologyBackendSearch:
                 _make_hit("t1", "结果1", term_type_code="by_opportunity"),
                 _make_hit("t2", "结果2", term_type_code="by_company"),
             ]
-            return await fake.search_object_instances_unstructured(base_id="test", object_code="by_opportunity", query="查询")
+            return await fake.search_object_instances_unstructured(
+                base_id="test", object_code="by_opportunity", query="查询"
+            )
+
         result = asyncio.run(_t())
         assert len(result.results["查询"]) == 1
 
@@ -246,9 +271,14 @@ class TestFakeOntologyBackendSearch:
                 _make_hit("t2", "B", term_type_code="by_company"),
                 _make_hit("t3", "C", term_type_code="by_city"),
             ]
-            g = await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="查询")
-            s = await fake.search_object_instances_unstructured(base_id="test", object_code="by_opp", queries=["查询"])
+            g = await fake.search_object_instances_unstructured(
+                base_id="test", object_code=None, query="查询"
+            )
+            s = await fake.search_object_instances_unstructured(
+                base_id="test", object_code="by_opp", queries=["查询"]
+            )
             return g, s
+
         g, s = asyncio.run(_t())
         assert len(g.results["查询"]) == 3
         assert len(s.results["查询"]) == 1
@@ -257,23 +287,39 @@ class TestFakeOntologyBackendSearch:
         async def _t():
             fake = FakeOntologyBackend()
             fake._unstructured_hits = [_make_hit("t1", "A", term_type_code="by_opp")]
-            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, queries=["OCR", "Agent"])
+            return await fake.search_object_instances_unstructured(
+                base_id="test", object_code=None, queries=["OCR", "Agent"]
+            )
+
         result = asyncio.run(_t())
         assert set(result.results.keys()) == {"OCR", "Agent"}
 
     def test_global_no_chunk_recall(self) -> None:
         async def _t():
             fake = FakeOntologyBackend()
-            fake._unstructured_hits = [_make_hit("t1", "仅术语", term_type_code="by_opp")]
-            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="搜索", enable_chunk_recall=False)
+            fake._unstructured_hits = [
+                _make_hit("t1", "仅术语", term_type_code="by_opp")
+            ]
+            return await fake.search_object_instances_unstructured(
+                base_id="test",
+                object_code=None,
+                query="搜索",
+                enable_chunk_recall=False,
+            )
+
         result = asyncio.run(_t())
         assert isinstance(result, ObjectInstanceSearchResult)
 
     def test_global_chunk_empty_result_not_crash(self) -> None:
         async def _t():
             fake = FakeOntologyBackend()
-            fake._unstructured_hits = [_make_hit("t1", "路1命中", term_type_code="by_opp")]
-            return await fake.search_object_instances_unstructured(base_id="test", object_code=None, query="搜索")
+            fake._unstructured_hits = [
+                _make_hit("t1", "路1命中", term_type_code="by_opp")
+            ]
+            return await fake.search_object_instances_unstructured(
+                base_id="test", object_code=None, query="搜索"
+            )
+
         result = asyncio.run(_t())
         assert len(result.results.get("搜索", [])) >= 0
 
@@ -286,12 +332,16 @@ class TestFakeOntologyBackendSearch:
 class TestNoopBackend:
     def test_noop_returns_empty(self) -> None:
         from datacloud_platform.adapters.none_adapters import _NoopOntologyBackend
+
         backend = _NoopOntologyBackend()
-        result = backend.search_object_instances_unstructured(base_id="test", query="任意")
+        result = backend.search_object_instances_unstructured(
+            base_id="test", query="任意"
+        )
         assert result == []
 
     def test_noop_with_object_code(self) -> None:
         from datacloud_platform.adapters.none_adapters import _NoopOntologyBackend
+
         backend = _NoopOntologyBackend()
         result = backend.search_object_instances_unstructured(
             base_id="test", object_code="by_opp", query="任意"
@@ -339,13 +389,19 @@ class TestResolveInputMode:
 class TestRRFFusion:
     def test_rrf_formula_correctness(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
-        p1 = [("A", "TermA", "", "type_x", ""), ("B", "TermB", "", "type_y", ""),
-              ("C", "TermC", "", "type_z", "")]
+
+        p1 = [
+            ("A", "TermA", "", "type_x", ""),
+            ("B", "TermB", "", "type_y", ""),
+            ("C", "TermC", "", "type_z", ""),
+        ]
         p2 = [("B", "TermB", "", "type_y", ""), ("D", "TermD", "", "type_w", "")]
         fused = rrf_fuse([p1, p2], k=60)
         expected = {
-            "A": 1 / 61, "B": 1 / 62 + 1 / 61,
-            "C": 1 / 63, "D": 1 / 62,
+            "A": 1 / 61,
+            "B": 1 / 62 + 1 / 61,
+            "C": 1 / 63,
+            "D": 1 / 62,
         }
         assert len(fused) == 4
         for c in fused:
@@ -353,6 +409,7 @@ class TestRRFFusion:
 
     def test_rrf_sorted_desc(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
+
         p1 = [("A", "TA", "", "tx", ""), ("B", "TB", "", "ty", "")]
         p2 = [("B", "TB", "", "ty", ""), ("C", "TC", "", "tz", "")]
         fused = rrf_fuse([p1, p2], k=60)
@@ -361,10 +418,12 @@ class TestRRFFusion:
 
     def test_rrf_empty_both(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
+
         assert rrf_fuse([], k=60) == []
 
     def test_rrf_only_path1(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
+
         p1 = [("A", "TA", "", "tx", "")]
         fused = rrf_fuse([p1], k=60)
         assert len(fused) == 1
@@ -372,11 +431,13 @@ class TestRRFFusion:
 
     def test_rrf_single_path_rank1(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
+
         fused = rrf_fuse([[("X", "TX", "", "tt", "")]], k=60)
         assert abs(fused[0].rrf_score - 1 / 61) < 0.0001
 
     def test_rrf_dedup_across_paths(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
+
         p1 = [("A", "TA", "", "tx", "")]
         p2 = [("A", "TA", "", "tx", "")]
         fused = rrf_fuse([p1, p2], k=60)
@@ -384,7 +445,8 @@ class TestRRFFusion:
 
     def test_rrf_top_n_truncation(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
-        items = [(chr(65 + i), f"T{chr(65+i)}", "", "t", "") for i in range(10)]
+
+        items = [(chr(65 + i), f"T{chr(65 + i)}", "", "t", "") for i in range(10)]
         fused = rrf_fuse([items], k=60, top_n=3)
         assert len(fused) == 3
 
@@ -399,24 +461,28 @@ class TestDowngradeStrategies:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+
         assert _should_run_path2(True, None) is False
 
     def test_enable_chunk_recall_false_skips_path2(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+
         assert _should_run_path2(False, {"kb": "test"}) is False
 
     def test_both_enabled_returns_true(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+
         assert _should_run_path2(True, {"kb": "test"}) is True
 
     def test_path2_no_kb_id_returns_empty(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _fuse_path_results_rrf,
         )
+
         result = _fuse_path_results_rrf([], [], k=60)
         assert result == []
 
@@ -429,6 +495,7 @@ class TestDowngradeStrategies:
 class TestGlobalSearchRRF:
     def test_global_search_includes_both_paths(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
+
         p1 = [("A", "TermA", "", "by_opp", ""), ("B", "TermB", "", "by_company", "")]
         p2 = [("C", "TermC", "", "by_city", ""), ("D", "TermD", "", "by_product", "")]
         fused = rrf_fuse([p1, p2], k=60)
@@ -441,6 +508,7 @@ class TestGlobalSearchRRF:
 
     def test_global_scope_larger_than_specific(self) -> None:
         from datacloud_knowledge.contracts.rrf import rrf_fuse
+
         p1_all = [("A", "A", "", "by_opp", ""), ("B", "B", "", "by_company", "")]
         p2_all = [("C", "C", "", "by_city", "")]
         fused_all = rrf_fuse([p1_all, p2_all], k=60)
@@ -475,8 +543,12 @@ class TestObjectInstanceHitWithScore:
     def test_score_is_rrf_fusion_score(self) -> None:
         rrf_score = 1 / 61 + 1 / 62
         hit = ObjectInstanceHit(
-            instance_id="t1", instance_code="c1", instance_name="test",
-            object_code="t", file_name="/f.md", score=rrf_score,
+            instance_id="t1",
+            instance_code="c1",
+            instance_name="test",
+            object_code="t",
+            file_name="/f.md",
+            score=rrf_score,
         )
         assert isinstance(hit.score, float)
         assert 0 < hit.score <= 1

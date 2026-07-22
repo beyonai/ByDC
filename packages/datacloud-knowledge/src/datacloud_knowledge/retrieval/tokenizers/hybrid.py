@@ -24,7 +24,8 @@ def _get_bimm() -> Any | None:
     global _BIMM, _BIMM_LOADED
     if not _BIMM_LOADED:
         try:
-            import bimm  # type: ignore[import-untyped]
+            import bimm
+
             _BIMM = bimm
         except ImportError:
             logger.warning("bimm not installed, falling back to jieba-only tokenization")
@@ -47,7 +48,7 @@ _cached_tokenizer: HybridTokenizer | None = None
 
 def get_tokenizer(
     vocab_words: frozenset[str] | None = None,
-) -> "HybridTokenizer":
+) -> HybridTokenizer:
     """获取缓存的 HybridTokenizer 实例。
 
     避免每次调用重复 jieba.add_word() 初始化。

@@ -166,4 +166,3 @@ class ObjectInstanceSearchResult:
     """
 
     results: dict[str, list[ObjectInstanceHit]]
-

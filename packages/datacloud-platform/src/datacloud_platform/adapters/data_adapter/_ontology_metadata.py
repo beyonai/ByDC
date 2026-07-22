@@ -1358,7 +1358,12 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
             path1 = self._do_path1(object_code, tokens, top_k)
             path2 = await self._do_path2(
-                base_id, object_code, keywords[0], top_k, kb_configs, _run_p2,
+                base_id,
+                object_code,
+                keywords[0],
+                top_k,
+                kb_configs,
+                _run_p2,
             )
             hits = _fuse_path_results_rrf(path1, path2, k=60, top_k=top_k)
             return ObjectInstanceSearchResult(results={keywords[0]: list(hits)})
@@ -1370,8 +1375,11 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         # Fire all chunk searches concurrently
         if _run_p2:
             import asyncio
+
             async def _p2_for_word(w: str) -> tuple[str, list[dict[str, Any]]]:
-                p2 = await self._do_path2(base_id, object_code, w, top_k, kb_configs, True)
+                p2 = await self._do_path2(
+                    base_id, object_code, w, top_k, kb_configs, True
+                )
                 return w, p2
 
             chunk_tasks = [_p2_for_word(w) for w in keywords]
@@ -1401,7 +1409,10 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         """路1 术语实例检索：单 token 模式。"""
         if object_code is not None:
             return self._path1_term_instance_search(
-                object_code=object_code, query="", tokens=tokens, top_k=top_k,
+                object_code=object_code,
+                query="",
+                tokens=tokens,
+                top_k=top_k,
             )
         return self._path1_global_term_instance_search(tokens=tokens, top_k=top_k)
 
@@ -1420,11 +1431,16 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         try:
             if object_code is not None:
                 return self._path2_chunk_to_term_search(
-                    base_id=base_id, object_code=object_code,
-                    query=query, top_k=top_k, kb_configs=kb_configs,
+                    base_id=base_id,
+                    object_code=object_code,
+                    query=query,
+                    top_k=top_k,
+                    kb_configs=kb_configs,
                 )
             return self._path2_global_chunk_to_term_search(
-                query=query, top_k=top_k, kb_configs=kb_configs,
+                query=query,
+                top_k=top_k,
+                kb_configs=kb_configs,
             )
         except Exception:
             logger.warning("Path 2 KB chunk search failed", exc_info=True)
@@ -1471,15 +1487,21 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                 if tid and tid not in seen:
                     seen.add(tid)
                     ext = _attr(item, "ext_attrs", {})
-                    results.append({
-                        "term_id": tid,
-                        "term_code": _attr(item, "term_code", ""),
-                        "term_name": _attr(item, "term_name", ""),
-                        "term_type_code": _attr(item, "term_type_code", object_code),
-                        "file_name": ext.get("kb_file_path") if isinstance(ext, dict) else None,
-                        "match_type": "term_instance",
-                        "score": float(_attr(item, "score", 0)),
-                    })
+                    results.append(
+                        {
+                            "term_id": tid,
+                            "term_code": _attr(item, "term_code", ""),
+                            "term_name": _attr(item, "term_name", ""),
+                            "term_type_code": _attr(
+                                item, "term_type_code", object_code
+                            ),
+                            "file_name": ext.get("kb_file_path")
+                            if isinstance(ext, dict)
+                            else None,
+                            "match_type": "term_instance",
+                            "score": float(_attr(item, "score", 0)),
+                        }
+                    )
 
         return results
 
@@ -1505,7 +1527,9 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                     top_k=top_k,
                 )
             except Exception:
-                logger.warning("_path1_global: search_terms_batch failed", exc_info=True)
+                logger.warning(
+                    "_path1_global: search_terms_batch failed", exc_info=True
+                )
                 return self._path1_global_fallback(tokens, top_k)
 
             seen: set[str] = set()
@@ -1518,19 +1542,25 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                         if tid and tid not in seen:
                             seen.add(tid)
                             ext = _attr(item, "ext_attrs", {})
-                            results.append({
-                                "term_id": tid,
-                                "term_code": _attr(item, "term_code", ""),
-                                "term_name": _attr(item, "term_name", ""),
-                                "term_type_code": _attr(item, "term_type_code", ""),
-                                "file_name": ext.get("kb_file_path") if isinstance(ext, dict) else None,
-                                "match_type": "term_instance",
-                                "score": float(_attr(item, "score", 0)),
-                            })
+                            results.append(
+                                {
+                                    "term_id": tid,
+                                    "term_code": _attr(item, "term_code", ""),
+                                    "term_name": _attr(item, "term_name", ""),
+                                    "term_type_code": _attr(item, "term_type_code", ""),
+                                    "file_name": ext.get("kb_file_path")
+                                    if isinstance(ext, dict)
+                                    else None,
+                                    "match_type": "term_instance",
+                                    "score": float(_attr(item, "score", 0)),
+                                }
+                            )
             return results
 
         # 降级：逐 token，不带 term_type 过滤
-        logger.info("_path1_global: search_terms_batch unavailable, falling back to per-token")
+        logger.info(
+            "_path1_global: search_terms_batch unavailable, falling back to per-token"
+        )
         return self._path1_global_fallback(tokens, top_k)
 
     def _path1_global_fallback(
@@ -1560,15 +1590,19 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                 if tid and tid not in seen:
                     seen.add(tid)
                     ext = _attr(item, "ext_attrs", {})
-                    results.append({
-                        "term_id": tid,
-                        "term_code": _attr(item, "term_code", ""),
-                        "term_name": _attr(item, "term_name", ""),
-                        "term_type_code": _attr(item, "term_type_code", ""),
-                        "file_name": ext.get("kb_file_path") if isinstance(ext, dict) else None,
-                        "match_type": "term_instance",
-                        "score": float(_attr(item, "score", 0)),
-                    })
+                    results.append(
+                        {
+                            "term_id": tid,
+                            "term_code": _attr(item, "term_code", ""),
+                            "term_name": _attr(item, "term_name", ""),
+                            "term_type_code": _attr(item, "term_type_code", ""),
+                            "file_name": ext.get("kb_file_path")
+                            if isinstance(ext, dict)
+                            else None,
+                            "match_type": "term_instance",
+                            "score": float(_attr(item, "score", 0)),
+                        }
+                    )
 
         return results
 
@@ -1718,9 +1752,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
         if not resource_ids:
             # Fallback: return simple results from chunk metadata
-            return self._chunk_to_simple_hits(
-                list(file_best.values()), top_k
-            )
+            return self._chunk_to_simple_hits(list(file_best.values()), top_k)
 
         return self._match_chunks_to_terms(
             resource_ids=resource_ids,
@@ -1769,11 +1801,13 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         # Handle async backend
         if hasattr(backend, "search"):
             import inspect
+
             if inspect.iscoroutinefunction(backend.search):
                 try:
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
                         import concurrent.futures
+
                         with concurrent.futures.ThreadPoolExecutor() as executor:
                             future = executor.submit(
                                 asyncio.run, backend.search(request)
@@ -1789,9 +1823,9 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             return []
 
         if hasattr(result, "records"):
-            return result.records
+            return cast("list[dict[str, Any]]", result.records)
         if isinstance(result, dict):
-            return result.get("records", [])
+            return cast("list[dict[str, Any]]", result.get("records", []))
         return []
 
     def _chunk_to_simple_hits(
@@ -1805,15 +1839,17 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             name = rec.get("fileName") or rec.get("file_name", "")
             rid = rec.get("resourceId") or rec.get("resource_id", "")
             if name or rid:
-                results.append({
-                    "term_id": rid or name,
-                    "term_code": "",
-                    "term_name": name,
-                    "term_type_code": "",
-                    "file_name": rec.get("filePath") or rec.get("file_path"),
-                    "match_type": "chunk_to_term",
-                    "score": float(rec.get("score", 0.5)),
-                })
+                results.append(
+                    {
+                        "term_id": rid or name,
+                        "term_code": "",
+                        "term_name": name,
+                        "term_type_code": "",
+                        "file_name": rec.get("filePath") or rec.get("file_path"),
+                        "match_type": "chunk_to_term",
+                        "score": float(rec.get("score", 0.5)),
+                    }
+                )
         return results[:top_k]
 
     def _match_chunks_to_terms(
@@ -1851,15 +1887,19 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             if kb_rid in resource_ids:
                 seen.add(tid)
                 ext = item.get("ext_attrs", {}) or {}
-                results.append({
-                    "term_id": tid,
-                    "term_code": item.get("term_code", ""),
-                    "term_name": item.get("term_name", ""),
-                    "term_type_code": item.get("term_type_code", ""),
-                    "file_name": ext.get("kb_file_path") if isinstance(ext, dict) else None,
-                    "match_type": "chunk_to_term",
-                    "score": float(item.get("score", 0.5)),
-                })
+                results.append(
+                    {
+                        "term_id": tid,
+                        "term_code": item.get("term_code", ""),
+                        "term_name": item.get("term_name", ""),
+                        "term_type_code": item.get("term_type_code", ""),
+                        "file_name": ext.get("kb_file_path")
+                        if isinstance(ext, dict)
+                        else None,
+                        "match_type": "chunk_to_term",
+                        "score": float(item.get("score", 0.5)),
+                    }
+                )
 
         # If no results matched via tags, try generic keyword search
         if not results and resource_ids:
@@ -1878,15 +1918,19 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                     if tid and tid not in seen:
                         seen.add(tid)
                         ext = item.get("ext_attrs", {}) or {}
-                        results.append({
-                            "term_id": tid,
-                            "term_code": item.get("term_code", ""),
-                            "term_name": item.get("term_name", ""),
-                            "term_type_code": item.get("term_type_code", ""),
-                            "file_name": ext.get("kb_file_path") if isinstance(ext, dict) else None,
-                            "match_type": "chunk_to_term",
-                            "score": float(item.get("score", 0.3)),
-                        })
+                        results.append(
+                            {
+                                "term_id": tid,
+                                "term_code": item.get("term_code", ""),
+                                "term_name": item.get("term_name", ""),
+                                "term_type_code": item.get("term_type_code", ""),
+                                "file_name": ext.get("kb_file_path")
+                                if isinstance(ext, dict)
+                                else None,
+                                "match_type": "chunk_to_term",
+                                "score": float(item.get("score", 0.3)),
+                            }
+                        )
 
         return results[:top_k]
 
@@ -1973,14 +2017,14 @@ def _extract_items(raw: Any) -> list[Any]:
     if raw is None:
         return []
     if isinstance(raw, dict):
-        return raw.get("items", [])
+        return cast("list[Any]", raw.get("items", []))
     if isinstance(raw, list):
         return raw
     items = getattr(raw, "items", None)
     if items is not None and callable(items):
         return list(items())
     if items is not None:
-        return items
+        return cast("list[Any]", items)
     return []
 
 
@@ -2014,7 +2058,9 @@ def _fuse_path_results_rrf(
     for h in path1:
         tid = h.get("term_id", "")
         if tid:
-            p1_tuples.append((tid, h.get("term_name", ""), "", h.get("term_type_code", ""), ""))
+            p1_tuples.append(
+                (tid, h.get("term_name", ""), "", h.get("term_type_code", ""), "")
+            )
             if tid not in meta:
                 meta[tid] = {
                     "instance_id": tid,
@@ -2032,7 +2078,9 @@ def _fuse_path_results_rrf(
     for h in path2:
         tid = h.get("term_id", "")
         if tid:
-            p2_tuples.append((tid, h.get("term_name", ""), "", h.get("term_type_code", ""), ""))
+            p2_tuples.append(
+                (tid, h.get("term_name", ""), "", h.get("term_type_code", ""), "")
+            )
             if tid not in meta:
                 meta[tid] = {
                     "instance_id": tid,
@@ -2134,7 +2182,9 @@ def _do_chunk_search(
             KnowledgeSearchRequest,
         )
     except ImportError:
-        logger.debug("_do_chunk_search: datacloud_data_sdk not available", exc_info=True)
+        logger.debug(
+            "_do_chunk_search: datacloud_data_sdk not available", exc_info=True
+        )
         return []
 
     backend = _kb_search_backend
@@ -2158,10 +2208,9 @@ def _do_chunk_search(
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(
-                            asyncio.run, backend.search(request)
-                        )
+                        future = executor.submit(asyncio.run, backend.search(request))
                         result = future.result(timeout=30)
                 else:
                     result = loop.run_until_complete(backend.search(request))
@@ -2171,9 +2220,9 @@ def _do_chunk_search(
             result = backend.search(request)
 
         if hasattr(result, "records"):
-            return result.records
+            return cast("list[dict[str, Any]]", result.records)
         if isinstance(result, dict):
-            return result.get("records", [])
+            return cast("list[dict[str, Any]]", result.get("records", []))
     except Exception:
         logger.warning(
             "_do_chunk_search: KB search failed (kb_id=%s)",
