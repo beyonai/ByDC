@@ -171,7 +171,12 @@ class TermBackendMixin(DataCloudDataBackendBase):
         cfgs: list[Any] = []
         for lf in label_filters:
             if isinstance(lf, dict):
-                cfgs.append(_LF(field_code=lf["field_code"], filter_value=str(lf["filter_value"])))
+                cfgs.append(
+                    _LF(
+                        field_code=lf["field_code"],
+                        filter_value=str(lf["filter_value"]),
+                    )
+                )
             else:
                 cfgs.append(lf)
 
