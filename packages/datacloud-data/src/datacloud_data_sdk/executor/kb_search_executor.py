@@ -280,6 +280,7 @@ class KbSearchExecutor:
                 )
 
             labels = self._resolve_label_terms(item.get("labels") or {}, cls)
+            labels = self._filter_labels_to_fields(labels, cls)
             markdown_file_path = _to_markdown_file_path(file_path, self._get_kb_directory(cls))
             labels = self._inject_primary_key_label(labels, cls, markdown_file_path)
             write_requests.append(
@@ -1005,6 +1006,15 @@ class KbSearchExecutor:
         if getattr(self._loader._config, "default_kb_backend", None):
             return True
         return bool(getattr(self._loader._config, "kb_backends", {}) or {})
+
+    @staticmethod
+    def _filter_labels_to_fields(labels: dict[str, Any], cls: Any) -> dict[str, Any]:
+        field_codes = {
+            str(getattr(field, "field_code", ""))
+            for field in getattr(cls, "fields", [])
+            if str(getattr(field, "field_code", ""))
+        }
+        return {k: v for k, v in labels.items() if k in field_codes}
 
     def _resolve_label_terms(self, labels: Any, cls: Any) -> dict[str, Any]:
         if not isinstance(labels, dict):
