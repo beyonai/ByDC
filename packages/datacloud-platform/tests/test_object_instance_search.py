@@ -1,8 +1,8 @@
 """测试 search_object_instances_unstructured — 非结构化对象实例检索。
 
-ObjectInstanceHit 6 字段:
+ObjectInstanceHit 8 字段:
 - instance_id, instance_code, instance_name
-- object_code, file_name, score
+- object_code, file_name, kb_resource_id, kb_id, score
 ObjectInstanceSearchResult: {keyword: [hit, ...]}
 """
 
@@ -110,6 +110,8 @@ class TestObjectInstanceHitModel:
             instance_name="测试实例",
             object_code="by_opportunity",
             file_name="/docs/opp_001.md",
+            kb_resource_id=None,
+            kb_id=None,
             score=0.95,
         )
         assert hit.instance_id == "t1"
@@ -117,6 +119,8 @@ class TestObjectInstanceHitModel:
         assert hit.instance_name == "测试实例"
         assert hit.object_code == "by_opportunity"
         assert hit.file_name == "/docs/opp_001.md"
+        assert hit.kb_resource_id is None
+        assert hit.kb_id is None
         assert hit.score == 0.95
 
     def test_hit_is_immutable(self) -> None:
@@ -126,6 +130,8 @@ class TestObjectInstanceHitModel:
             instance_name="test",
             object_code="by_opp",
             file_name="/x.md",
+            kb_resource_id=None,
+            kb_id=None,
             score=0.5,
         )
         with pytest.raises(Exception):
@@ -138,14 +144,30 @@ class TestObjectInstanceHitModel:
             instance_name="test",
             object_code="t",
             file_name=None,
+            kb_resource_id=None,
+            kb_id=None,
             score=0.5,
         )
         assert hit.file_name is None
 
+    def test_hit_with_kb_resource_id(self) -> None:
+        hit = ObjectInstanceHit(
+            instance_id="t1",
+            instance_code="c1",
+            instance_name="带KB资源",
+            object_code="by_opportunity",
+            file_name="/docs/kb.md",
+            kb_resource_id="kb_res_001",
+            kb_id="kb_123",
+            score=0.95,
+        )
+        assert hit.kb_resource_id == "kb_res_001"
+        assert hit.kb_id == "kb_123"
+
     def test_hit_in_list(self) -> None:
         hits = [
-            ObjectInstanceHit("t1", "c1", "A", "type_a", "/a.md", 0.9),
-            ObjectInstanceHit("t2", "c2", "B", "type_b", "/b.md", 0.8),
+            ObjectInstanceHit("t1", "c1", "A", "type_a", "/a.md", None, None, 0.9),
+            ObjectInstanceHit("t2", "c2", "B", "type_b", "/b.md", None, None, 0.8),
         ]
         assert len(hits) == 2
         assert hits[0].instance_name == "A"
@@ -496,18 +518,21 @@ class TestDowngradeStrategies:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+
         assert _should_run_path2(False) is False
 
     def test_enable_chunk_recall_true_allows_path2(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+
         assert _should_run_path2(True) is True
 
     def test_path2_no_kb_id_returns_empty(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _fuse_path_results_rrf,
         )
+
         result = _fuse_path_results_rrf([], [], k=60)
         assert result == []
 
@@ -551,6 +576,8 @@ class TestObjectInstanceHitWithScore:
             instance_name="name1",
             object_code="type1",
             file_name="/f.md",
+            kb_resource_id=None,
+            kb_id=None,
             score=0.95,
         )
         assert hit.instance_id == "id1"
@@ -558,6 +585,8 @@ class TestObjectInstanceHitWithScore:
         assert hit.instance_name == "name1"
         assert hit.object_code == "type1"
         assert hit.file_name == "/f.md"
+        assert hit.kb_resource_id is None
+        assert hit.kb_id is None
         assert hit.score == 0.95
 
     def test_score_is_rrf_fusion_score(self) -> None:
@@ -568,6 +597,8 @@ class TestObjectInstanceHitWithScore:
             instance_name="test",
             object_code="t",
             file_name="/f.md",
+            kb_resource_id=None,
+            kb_id=None,
             score=rrf_score,
         )
         assert isinstance(hit.score, float)
@@ -576,9 +607,9 @@ class TestObjectInstanceHitWithScore:
 
     def test_score_sorted_desc(self) -> None:
         hits = [
-            ObjectInstanceHit("t1", "c1", "A", "t", "/f.md", 0.3),
-            ObjectInstanceHit("t2", "c2", "B", "t", "/f.md", 0.9),
-            ObjectInstanceHit("t3", "c3", "C", "t", "/f.md", 0.6),
+            ObjectInstanceHit("t1", "c1", "A", "t", "/f.md", None, None, 0.3),
+            ObjectInstanceHit("t2", "c2", "B", "t", "/f.md", None, None, 0.9),
+            ObjectInstanceHit("t3", "c3", "C", "t", "/f.md", None, None, 0.6),
         ]
         sorted_hits = sorted(hits, key=lambda h: h.score, reverse=True)
         assert sorted_hits[0].instance_name == "B"
