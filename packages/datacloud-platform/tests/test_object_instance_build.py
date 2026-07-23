@@ -811,6 +811,11 @@ async def test_orchestrator_uses_template_for_new_term_without_kb_file_reference
             detail["ext_attrs"] = {}
             return detail
 
+        def get_object_detail(self, base_id: str, object_code: str) -> dict[str, Any]:
+            detail = super().get_object_detail(base_id, object_code)
+            detail["extProperty"]["kb_directory"] = "/Concept"
+            return detail
+
     platform = NewObjectPlatform(fragments=[_fragment(101, "term-agent")])
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
@@ -824,6 +829,9 @@ async def test_orchestrator_uses_template_for_new_term_without_kb_file_reference
     assert request.existing_content == ""
     assert "# {{name}}" in request.object_template
     assert platform.executed_actions
+    assert (
+        platform.executed_actions[0]["arguments"]["source_path"] == "/Concept/Agent.md"
+    )
     assert platform.updated_status == [
         {
             "base_id": DEFAULT_BASE_ID,
@@ -832,6 +840,54 @@ async def test_orchestrator_uses_template_for_new_term_without_kb_file_reference
             "updated_by": "alice",
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_writes_new_term_to_object_kb_directory() -> None:
+    class NewObjectPlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["term_code"] = "Ontology"
+            detail["term_name"] = "本体论"
+            detail["ext_attrs"] = {}
+            return detail
+
+        def get_object_detail(self, base_id: str, object_code: str) -> dict[str, Any]:
+            detail = super().get_object_detail(base_id, object_code)
+            detail["extProperty"]["kb_directory"] = "/Methodology"
+            return detail
+
+    fragment = _fragment(101, "term-ontology")
+    fragment["instance_name"] = "本体论"
+    fragment["origin_file"] = {
+        "kb_file_path": "/Document/会议纪要.md",
+        "file_path": "/Document/会议纪要.md",
+        "kb_resource_id": "source-meeting",
+    }
+    platform = NewObjectPlatform(fragments=[fragment])
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        knowledge_client=FakeBuildKnowledgeClient(),
+    )
+
+    await orchestrator.run(_run_request(instance_ids=["term-ontology"]))
+
+    assert platform.executed_actions
+    assert (
+        platform.executed_actions[0]["arguments"]["source_path"]
+        == "/Methodology/本体论.md"
+    )
 
 
 def test_merge_related_docs_block_deduplicates_existing_records() -> None:

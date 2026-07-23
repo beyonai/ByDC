@@ -749,15 +749,13 @@ class _TermWriter(_WriterBase):
                     term_code = self._generate_term_code()
 
                 term_type_code = (
-                    t.get("term_type_code")
-                    or t.get("termTypeCode")
-                    or t.get("term_type")
+                    t.get("term_type_code") or t.get("termTypeCode") or t.get("term_type")
                 )
 
                 if not term_type_code:
-                   skipped += 1
-                   errors.append(f"term_type_code is required for term {term_name}")
-                   continue
+                    skipped += 1
+                    errors.append(f"term_type_code is required for term {term_name}")
+                    continue
                 parent_term_code = t.get("parent_term_code") or t.get("parentTermCode") or ""
                 parent_term_id: str | None = None
                 if parent_term_code:
@@ -914,7 +912,7 @@ class _TermWriter(_WriterBase):
                     #             existing_tid,
                     #         )
                     # else:
-                        # Insert new
+                    # Insert new
                     term_id = self._new_id()
                     self.session.execute(
                         text(

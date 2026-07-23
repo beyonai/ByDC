@@ -534,7 +534,7 @@ class ObjectInstanceBuildOrchestrator:
             elapsed_ms=_elapsed_ms(stage_started),
         )
 
-        source_path = _source_path(group, object_code, term_detail)
+        source_path = _source_path(group, object_code, term_detail, object_schema_dict)
         stage_started = perf_counter()
         write_result = await invoke_object_write_action(
             platform=self._platform,
@@ -1706,6 +1706,7 @@ def _source_path(
     group: _FragmentGroup,
     object_code: str,
     term_detail: dict[str, Any],
+    object_schema: dict[str, Any],
 ) -> str:
     term_file = _term_file_reference(term_detail)
     term_file_path = _pick_str(
@@ -1716,14 +1717,46 @@ def _source_path(
             term_file_path if term_file_path.startswith("/") else f"/{term_file_path}"
         )
 
-    origin_file = _origin_file(group.fragments[0]) if group.fragments else {}
-    file_path = _pick_str(
-        origin_file, "file_path", "filePath", "kb_file_path", "kbFilePath"
+    kb_directory = _object_kb_directory(object_schema)
+    if not kb_directory:
+        raise ValueError(
+            f"object kb_directory not found for new object instance: object_code={object_code}"
+        )
+    instance_name = _source_instance_name(group, term_detail)
+    return _join_kb_directory_path(kb_directory, instance_name)
+
+
+def _object_kb_directory(object_schema: dict[str, Any]) -> str:
+    ext_property = _to_dict(
+        object_schema.get("extProperty") or object_schema.get("ext_property") or {}
     )
-    if file_path:
-        return file_path if file_path.startswith("/") else f"/{file_path}"
-    term_code = _pick_str(term_detail, "term_code", "termCode") or group.instance_id
-    return f"/{object_code}/{term_code}.md"
+    return _pick_str(ext_property, "kb_directory", "kbDirectory")
+
+
+def _source_instance_name(
+    group: _FragmentGroup,
+    term_detail: dict[str, Any],
+) -> str:
+    for fragment in _sort_fragments(group.fragments):
+        instance_name = _pick_str(fragment, "instance_name", "instanceName")
+        if instance_name:
+            return instance_name
+    return (
+        _pick_str(term_detail, "term_name", "termName")
+        or _pick_str(term_detail, "term_code", "termCode")
+        or group.instance_id
+    )
+
+
+def _join_kb_directory_path(kb_directory: str, instance_name: str) -> str:
+    directory = kb_directory.strip().replace("\\", "/").strip()
+    if not directory.startswith("/"):
+        directory = f"/{directory}"
+    directory = directory.rstrip("/")
+    file_name = instance_name.strip().replace("\\", "/").strip("/")
+    if not file_name.lower().endswith(".md"):
+        file_name = f"{file_name}.md"
+    return f"{directory}/{file_name}" if directory else f"/{file_name}"
 
 
 def _object_code_from_term(term_detail: dict[str, Any]) -> str:
