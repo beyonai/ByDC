@@ -1330,12 +1330,11 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         self,
         *,
         base_id: str,
-        object_code: str | None = None,
+        object_codes: list[str] | None = None,
         query: str | None = None,
         queries: list[str] | None = None,
         top_k: int = 20,
         enable_chunk_recall: bool = True,
-        kb_configs: dict[str, Any] | None = None,
     ) -> Any:  # ObjectInstanceSearchResult
         """非结构化对象实例检索 — 双路召回 + RRF(k=60) 融合。
 
@@ -1348,7 +1347,16 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         if not keywords:
             return ObjectInstanceSearchResult(results={})
 
-        _run_p2 = _should_run_path2(enable_chunk_recall, kb_configs)
+        # Empty object_codes → no results
+        if object_codes is not None and not object_codes:
+            return ObjectInstanceSearchResult(results={})
+
+        _run_p2 = _should_run_path2(enable_chunk_recall)
+
+        # ── Collect kb_ids for path 2 (only when object_codes is provided) ─
+        kb_ids: dict[str, dict] = {}
+        if _run_p2 and object_codes is not None:
+            kb_ids = self._collect_kb_ids(base_id, object_codes)
 
         if input_mode == "sentence":
             # ── sentence: jieba 分词 → multi-token term search → RRF ─
@@ -1356,30 +1364,28 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             if not tokens:
                 return ObjectInstanceSearchResult(results={})
 
-            path1 = self._do_path1(object_code, tokens, top_k)
+            path1 = self._do_path1(object_codes, tokens, top_k)
             path2 = await self._do_path2(
-                base_id,
-                object_code,
+                kb_ids,
                 keywords[0],
                 top_k,
-                kb_configs,
-                _run_p2,
             )
             hits = _fuse_path_results_rrf(path1, path2, k=60, top_k=top_k)
             return ObjectInstanceSearchResult(results={keywords[0]: list(hits)})
 
-        # ── word_batch: each word → term search + concurrent chunk ────
+        # ── word_batch: 一次 batch + 并发 chunk ────
         results: dict[str, list[Any]] = {}
-        path2_futures: dict[str, list[dict[str, Any]]] = {}
 
-        # Fire all chunk searches concurrently
-        if _run_p2:
+        # 路1：一次 batch 调用，按 keyword 分组返回
+        all_path1 = self._do_path1_batched(object_codes, keywords, top_k)
+
+        # 路2：asyncio.gather 并发
+        path2_futures: dict[str, list[dict[str, Any]]] = {}
+        if kb_ids:
             import asyncio
 
             async def _p2_for_word(w: str) -> tuple[str, list[dict[str, Any]]]:
-                p2 = await self._do_path2(
-                    base_id, object_code, w, top_k, kb_configs, True
-                )
+                p2 = await self._do_path2(kb_ids, w, top_k)
                 return w, p2
 
             chunk_tasks = [_p2_for_word(w) for w in keywords]
@@ -1391,7 +1397,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                     path2_futures[item[0]] = item[1]
 
         for word in keywords:
-            path1 = self._do_path1(object_code, [word], top_k)
+            path1 = all_path1.get(word, [])
             path2 = path2_futures.get(word, [])
             hits = _fuse_path_results_rrf(path1, path2, k=60, top_k=top_k)
             results[word] = list(hits)
@@ -1402,15 +1408,14 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
     def _do_path1(
         self,
-        object_code: str | None,
+        object_codes: list[str] | None,
         tokens: list[str],
         top_k: int,
     ) -> list[dict[str, Any]]:
-        """路1 术语实例检索：单 token 模式。"""
-        if object_code is not None:
-            return self._path1_term_instance_search(
-                object_code=object_code,
-                query="",
+        """路1 术语实例检索：多类型原生 IN 过滤。"""
+        if object_codes is not None:
+            return self._path1_scoped_term_search(
+                object_codes=object_codes,
                 tokens=tokens,
                 top_k=top_k,
             )
@@ -1418,35 +1423,128 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
     async def _do_path2(
         self,
-        base_id: str,
-        object_code: str | None,
+        kb_info: dict[str, dict],
         query: str,
         top_k: int,
-        kb_configs: dict[str, Any] | None,
-        enabled: bool,
     ) -> list[dict[str, Any]]:
-        """路2 KB chunk 搜索：统一入口。"""
-        if not enabled:
+        """路2 KB chunk 搜索：对收集的 kb_ids 逐个搜索并合并。"""
+        if not kb_info:
             return []
-        try:
-            if object_code is not None:
-                return self._path2_chunk_to_term_search(
-                    base_id=base_id,
-                    object_code=object_code,
+        logger.info("_do_path2: kb_ids=%s query=%s top_k=%s", list(kb_info.keys()), query, top_k)
+        all_results: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for kb_id, info in kb_info.items():
+            try:
+                chunk_hits = await self._do_chunk_search(
                     query=query,
+                    kb_id=kb_id,
                     top_k=top_k,
-                    kb_configs=kb_configs,
+                    kb_directory=info.get("kb_directory"),
+                    term_type_codes=info.get("object_codes"),
                 )
-            return self._path2_global_chunk_to_term_search(
-                query=query,
-                top_k=top_k,
-                kb_configs=kb_configs,
-            )
-        except Exception:
-            logger.warning("Path 2 KB chunk search failed", exc_info=True)
-            return []
+                logger.warning("_do_path2: kb_id=%s → %d chunk hits", kb_id, len(chunk_hits))
+                for hit in chunk_hits:
+                    tid = hit.get("term_id", "")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        all_results.append(hit)
+            except Exception:
+                logger.warning(
+                    "_do_path2: chunk search failed for kb_id=%s", kb_id, exc_info=True
+                )
+        return all_results
+
+    # ── kb_ids collector ────────────────────────────────────────────────
+
+    def _collect_kb_ids(
+        self,
+        base_id: str,
+        object_codes: list[str],
+    ) -> dict[str, dict]:
+        """遍历对象列表，提取 kb_id → {kb_directory, object_codes} 映射。"""
+        result: dict[str, dict] = {}
+        store = self._entity_store.sub_store(base_id)
+        for oc in object_codes:
+            try:
+                obj = store.get("objects", oc)
+            except Exception:
+                logger.debug("_collect_kb_ids: store.get('objects', %s) failed", oc)
+                continue
+            if obj:
+                ext = obj.get("ext_property", obj.get("extProperty", {}))
+                if isinstance(ext, dict):
+                    kb_id = ext.get("kb_id")
+                    if kb_id:
+                        kid = str(kb_id)
+                        kb_directory = ext.get("kb_directory")
+                        if kid in result:
+                            if oc not in result[kid]["object_codes"]:
+                                result[kid]["object_codes"].append(oc)
+                        else:
+                            result[kid] = {
+                                "kb_directory": kb_directory if isinstance(kb_directory, str) else None,
+                                "object_codes": [oc],
+                            }
+        return result
 
     # ── Path 1 helpers ──────────────────────────────────────────────────
+
+    def _path1_scoped_term_search(
+        self,
+        *,
+        object_codes: list[str],
+        tokens: list[str],
+        top_k: int,
+    ) -> list[dict[str, Any]]:
+        """路1 多类型术语实例检索：使用 search_terms_batch 原生 IN 过滤。"""
+        batch_method = getattr(self, "search_terms_batch", None)
+        if not callable(batch_method):
+            return self._path1_scoped_fallback(object_codes, tokens, top_k)
+
+        try:
+            batch = batch_method(
+                keywords=tokens,
+                term_type_codes=object_codes,
+                top_k=top_k,
+            )
+        except Exception:
+            logger.warning("_path1_scoped: search_terms_batch failed", exc_info=True)
+            return self._path1_scoped_fallback(object_codes, tokens, top_k)
+
+        seen: set[str] = set()
+        results: list[dict[str, Any]] = []
+        if isinstance(batch, dict):
+            for kw, qr in batch.items():
+                items = _extract_items(qr)
+                for item in items:
+                    tid = _attr(item, "term_id", "")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        results.append(_make_path1_hit(item))
+        return results
+
+    def _path1_scoped_fallback(
+        self,
+        object_codes: list[str],
+        tokens: list[str],
+        top_k: int,
+    ) -> list[dict[str, Any]]:
+        """降级：逐类型逐 token 调用 search_terms 再合并。"""
+        reader = self._get_knowledge_reader()
+        seen: set[str] = set()
+        results: list[dict[str, Any]] = []
+        for oc in object_codes:
+            for token in tokens:
+                try:
+                    raw = reader.search_terms(term_type_code=oc, keyword=token, limit=top_k)
+                except Exception:
+                    continue
+                for item in _extract_items(raw):
+                    tid = _attr(item, "term_id", "")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        results.append(_make_path1_hit(item))
+        return results
 
     def _path1_term_instance_search(
         self,
@@ -1486,22 +1584,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                 tid = _attr(item, "term_id", "")
                 if tid and tid not in seen:
                     seen.add(tid)
-                    ext = _attr(item, "ext_attrs", {})
-                    results.append(
-                        {
-                            "term_id": tid,
-                            "term_code": _attr(item, "term_code", ""),
-                            "term_name": _attr(item, "term_name", ""),
-                            "term_type_code": _attr(
-                                item, "term_type_code", object_code
-                            ),
-                            "file_name": ext.get("kb_file_path")
-                            if isinstance(ext, dict)
-                            else None,
-                            "match_type": "term_instance",
-                            "score": float(_attr(item, "score", 0)),
-                        }
-                    )
+                    results.append(_make_path1_hit(item))
 
         return results
 
@@ -1523,7 +1606,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             try:
                 batch = batch_method(
                     keywords=tokens,
-                    term_type=None,
+                    term_type_codes=None,
                     top_k=top_k,
                 )
             except Exception:
@@ -1541,20 +1624,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                         tid = _attr(item, "term_id", "")
                         if tid and tid not in seen:
                             seen.add(tid)
-                            ext = _attr(item, "ext_attrs", {})
-                            results.append(
-                                {
-                                    "term_id": tid,
-                                    "term_code": _attr(item, "term_code", ""),
-                                    "term_name": _attr(item, "term_name", ""),
-                                    "term_type_code": _attr(item, "term_type_code", ""),
-                                    "file_name": ext.get("kb_file_path")
-                                    if isinstance(ext, dict)
-                                    else None,
-                                    "match_type": "term_instance",
-                                    "score": float(_attr(item, "score", 0)),
-                                }
-                            )
+                            results.append(_make_path1_hit(item))
             return results
 
         # 降级：逐 token，不带 term_type 过滤
@@ -1576,7 +1646,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         for token in tokens:
             try:
                 raw = reader.search_terms(
-                    term_type_code="",  # 空字符串可能触发全类型搜索
+                    term_type_code="*",  # wildcard to trigger full-text match
                     keyword=token,
                     limit=top_k,
                 )
@@ -1589,33 +1659,156 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                 tid = _attr(item, "term_id", "")
                 if tid and tid not in seen:
                     seen.add(tid)
-                    ext = _attr(item, "ext_attrs", {})
-                    results.append(
-                        {
-                            "term_id": tid,
-                            "term_code": _attr(item, "term_code", ""),
-                            "term_name": _attr(item, "term_name", ""),
-                            "term_type_code": _attr(item, "term_type_code", ""),
-                            "file_name": ext.get("kb_file_path")
-                            if isinstance(ext, dict)
-                            else None,
-                            "match_type": "term_instance",
-                            "score": float(_attr(item, "score", 0)),
-                        }
-                    )
+                    results.append(_make_path1_hit(item))
 
+        return results
+
+    # ── Path 1 batched helpers ──────────────────────────────────────────
+
+    def _do_path1_batched(
+        self,
+        object_codes: list[str] | None,
+        tokens: list[str],
+        top_k: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """路1 批量术语检索 — 按 keyword 分组返回。
+
+        与 _do_path1 不同，此方法保留 search_terms_batch 的 per-keyword
+        分组结构，用于 word_batch 模式避免 N 次 batch 调用。
+        """
+        if not tokens:
+            return {}
+        if object_codes is not None:
+            return self._path1_scoped_batched(object_codes=object_codes, tokens=tokens, top_k=top_k)
+        return self._path1_global_batched(tokens, top_k)
+
+    def _path1_scoped_batched(
+        self,
+        *,
+        object_codes: list[str],
+        tokens: list[str],
+        top_k: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """指定类型批量 — search_terms_batch 一次调用，按 kw 分组。"""
+        batch_method = getattr(self, "search_terms_batch", None)
+        if not callable(batch_method):
+            return self._path1_scoped_fallback_batched(object_codes, tokens, top_k)
+
+        try:
+            batch = batch_method(
+                keywords=tokens,
+                term_type_codes=object_codes,
+                top_k=top_k,
+            )
+        except Exception:
+            logger.warning("_path1_scoped_batched: batch failed", exc_info=True)
+            return self._path1_scoped_fallback_batched(object_codes, tokens, top_k)
+
+        results: dict[str, list[dict[str, Any]]] = {}
+        if isinstance(batch, dict):
+            for kw, qr in batch.items():
+                seen: set[str] = set()
+                hits: list[dict[str, Any]] = []
+                for item in _extract_items(qr):
+                    tid = _attr(item, "term_id", "")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        hits.append(_make_path1_hit(item))
+                results[kw] = hits
+        return results
+
+    def _path1_scoped_fallback_batched(
+        self,
+        object_codes: list[str],
+        tokens: list[str],
+        top_k: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """降级：逐类型逐 token → 按 token 分组。"""
+        reader = self._get_knowledge_reader()
+        results: dict[str, list[dict[str, Any]]] = {t: [] for t in tokens}
+
+        for oc in object_codes:
+            for token in tokens:
+                try:
+                    raw = reader.search_terms(
+                        term_type_code=oc, keyword=token, limit=top_k
+                    )
+                except Exception:
+                    continue
+                seen = {h["term_id"] for h in results[token] if h.get("term_id")}
+                for item in _extract_items(raw):
+                    tid = _attr(item, "term_id", "")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        results[token].append(_make_path1_hit(item))
+        return results
+
+    def _path1_global_batched(
+        self,
+        tokens: list[str],
+        top_k: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """全类型批量 — search_terms_batch(type=None) 一次调用，按 kw 分组。"""
+        batch_method = getattr(self, "search_terms_batch", None)
+        if not callable(batch_method):
+            return self._path1_global_fallback_batched(tokens, top_k)
+
+        try:
+            batch = batch_method(
+                keywords=tokens, term_type_codes=None, top_k=top_k
+            )
+        except Exception:
+            logger.warning("_path1_global_batched: batch failed", exc_info=True)
+            return self._path1_global_fallback_batched(tokens, top_k)
+
+        results: dict[str, list[dict[str, Any]]] = {}
+        if isinstance(batch, dict):
+            for kw, qr in batch.items():
+                seen: set[str] = set()
+                hits: list[dict[str, Any]] = []
+                for item in _extract_items(qr):
+                    tid = _attr(item, "term_id", "")
+                    if tid and tid not in seen:
+                        seen.add(tid)
+                        hits.append(_make_path1_hit(item))
+                results[kw] = hits
+        return results
+
+    def _path1_global_fallback_batched(
+        self,
+        tokens: list[str],
+        top_k: int,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """降级：逐 token wildcard search → 按 token 分组。"""
+        reader = self._get_knowledge_reader()
+        results: dict[str, list[dict[str, Any]]] = {}
+
+        for token in tokens:
+            seen: set[str] = set()
+            hits: list[dict[str, Any]] = []
+            try:
+                raw = reader.search_terms(
+                    term_type_code="*", keyword=token, limit=top_k
+                )
+            except Exception:
+                raw = None
+            for item in _extract_items(raw):
+                tid = _attr(item, "term_id", "")
+                if tid and tid not in seen:
+                    seen.add(tid)
+                    hits.append(_make_path1_hit(item))
+            results[token] = hits
         return results
 
     # ── Path 2 helpers ──────────────────────────────────────────────────
 
-    def _path2_chunk_to_term_search(
+    async def _path2_chunk_to_term_search(
         self,
         *,
         base_id: str,
         object_code: str,
         query: str,
         top_k: int,
-        kb_configs: dict[str, Any] | None,
     ) -> list[dict[str, Any]]:
         """路2 限定 KB chunk 搜索 → term 匹配。
 
@@ -1643,21 +1836,19 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         if obj_data:
             datasource_alias = obj_data.get("datasource_alias", "")
 
-        return self._do_chunk_search(
+        return await self._do_chunk_search(
             query=query,
             kb_id=kb_id,
             top_k=top_k,
-            kb_configs=kb_configs,
             datasource_alias=datasource_alias,
             object_code=object_code,
         )
 
-    def _path2_global_chunk_to_term_search(
+    async def _path2_global_chunk_to_term_search(
         self,
         *,
         query: str,
         top_k: int,
-        kb_configs: dict[str, Any] | None,
     ) -> list[dict[str, Any]]:
         """路2 不限 KB 全库 chunk 搜索 → term 匹配。
 
@@ -1665,24 +1856,24 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         object_code="" 表示不限对象类型。
         datasource_alias 使用默认值。
         """
-        return self._do_chunk_search(
+        return await self._do_chunk_search(
             query=query,
             kb_id=None,
             top_k=top_k,
-            kb_configs=kb_configs,
             datasource_alias="",
             object_code="",
         )
 
-    def _do_chunk_search(
+    async def _do_chunk_search(
         self,
         *,
         query: str,
         kb_id: str | None,
         top_k: int,
-        kb_configs: dict[str, Any] | None,
         datasource_alias: str = "",
         object_code: str = "",
+        kb_directory: str | None = None,
+        term_type_codes: list[str] | None = None,
         _kb_search_backend: Any = None,
     ) -> list[dict[str, Any]]:
         """执行真实 KB chunk 向量搜索 → term 匹配。
@@ -1700,20 +1891,22 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             query: 搜索查询文本。
             kb_id: 限定 KB ID，None 表示不限 KB。
             top_k: 返回结果上限。
-            kb_configs: KB 后端配置。
+
             datasource_alias: 数据源别名（从 obj dict 提取）。
             object_code: 对象编码。
+            kb_directory: 知识库目录过滤。
+            term_type_codes: 限定反查的 term 类型列表，None 不限。
             _kb_search_backend: 测试用注入的 mock backend。
         """
         # ── Step 1: KB chunk search ─────────────────────────────────
         try:
-            chunk_records = self._exec_kb_search(
+            chunk_records = await self._exec_kb_search(
                 query=query,
                 kb_id=kb_id,
                 top_k=top_k * 2,  # 多召回供聚合
-                kb_configs=kb_configs,
                 datasource_alias=datasource_alias,
                 object_code=object_code,
+                kb_directory=kb_directory,
                 _kb_search_backend=_kb_search_backend,
             )
         except Exception:
@@ -1742,49 +1935,46 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
         if not file_best:
             return []
-
-        # ── Step 3: Extract resource_ids → search_terms → term_tags match
-        resource_ids: set[str] = set()
+        # ── Step 3: Match filePath → ext_attrs.kb_file_path ────
+        # KB chunk records contain filePath but NOT resourceId.
+        # Match against TermItem.ext_attrs.kb_file_path directly.
+        file_scores: dict[str, float] = {}
         for rec in file_best.values():
-            rid = rec.get("resourceId") or rec.get("resource_id", "")
-            if rid:
-                resource_ids.add(rid)
+            fp = rec.get("filePath") or rec.get("file_path", "")
+            s = float(rec.get("score", 0))
+            if fp and (fp not in file_scores or s > file_scores[fp]):
+                file_scores[fp] = s
 
-        if not resource_ids:
-            # Fallback: return simple results from chunk metadata
-            return self._chunk_to_simple_hits(list(file_best.values()), top_k)
-
-        return self._match_chunks_to_terms(
-            resource_ids=resource_ids,
-            top_k=top_k,
+        logger.info(
+            "_do_chunk_search: %d unique filePaths to match", len(file_scores),
         )
 
-    def _exec_kb_search(
+        return self._match_chunks_to_terms_by_filepath(
+            file_scores=file_scores,
+            top_k=top_k,
+            term_type_codes=term_type_codes,
+        )
+
+
+    async def _exec_kb_search(
         self,
         *,
         query: str,
         kb_id: str | None,
         top_k: int,
-        kb_configs: dict[str, Any] | None,
         datasource_alias: str,
         object_code: str,
+        kb_directory: str | None = None,
         _kb_search_backend: Any = None,
     ) -> list[dict[str, Any]]:
-        """Execute KB chunk search via HttpKnowledgeSearchBackend.
-
-        Args:
-            _kb_search_backend: Injected mock backend for testing.
-        """
-        # Lazy import HttpKnowledgeSearchBackend
+        """Execute KB chunk search via HttpKnowledgeSearchBackend (async)."""
         if _kb_search_backend is not None:
             backend = _kb_search_backend
         else:
             from datacloud_data_sdk.executor.kb_search_backend import (
                 HttpKnowledgeSearchBackend,
-                KnowledgeSearchRequest,
             )
-
-            backend = HttpKnowledgeSearchBackend(kb_configs)
+            backend = HttpKnowledgeSearchBackend(None)
 
         from datacloud_data_sdk.executor.kb_search_backend import (
             KnowledgeSearchRequest,
@@ -1796,37 +1986,28 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             query=query,
             limit=top_k,
             kb_id=kb_id if kb_id else None,
+            kb_directory=kb_directory,
         )
 
-        # Handle async backend
-        if hasattr(backend, "search"):
-            import inspect
+        result = await backend.search(request)
 
-            if inspect.iscoroutinefunction(backend.search):
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        import concurrent.futures
-
-                        with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(
-                                asyncio.run, backend.search(request)
-                            )
-                            result = future.result(timeout=30)
-                    else:
-                        result = loop.run_until_complete(backend.search(request))
-                except RuntimeError:
-                    result = asyncio.run(backend.search(request))
-            else:
-                result = backend.search(request)
-        else:
-            return []
-
+        records: list[dict[str, Any]] = []
         if hasattr(result, "records"):
-            return cast("list[dict[str, Any]]", result.records)
-        if isinstance(result, dict):
-            return cast("list[dict[str, Any]]", result.get("records", []))
-        return []
+            records = cast("list[dict[str, Any]]", result.records)
+        elif isinstance(result, dict):
+            records = cast("list[dict[str, Any]]", result.get("records", []))
+
+        if records:
+            logger.info(
+                "_exec_kb_search OK: kb_id=%s query=%s → %d records",
+                kb_id, query, len(records),
+            )
+        else:
+            logger.warning(
+                "_exec_kb_search OK: kb_id=%s query=%s → 0 records (empty response)",
+                kb_id, query,
+            )
+        return records
 
     def _chunk_to_simple_hits(
         self,
@@ -1844,95 +2025,75 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                         "term_id": rid or name,
                         "term_code": "",
                         "term_name": name,
-                        "term_type_code": "",
+                        "term_type_code": _term_type_code(item, ""),
                         "file_name": rec.get("filePath") or rec.get("file_path"),
                         "match_type": "chunk_to_term",
                         "score": float(rec.get("score", 0.5)),
                     }
                 )
-        return results[:top_k]
+                return sorted(results, key=lambda h: h["score"], reverse=True)[:top_k]
 
-    def _match_chunks_to_terms(
+    def _match_chunks_to_terms_by_filepath(
         self,
         *,
-        resource_ids: set[str],
+        file_scores: dict[str, float],
         top_k: int,
+        term_type_codes: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """用 resource_ids 匹配 term_tags 中的 kb_resource_id。
+        """用 filePath 匹配 term_tags.kb_file_path。
 
-        调用 reader.search_terms(limit=200) 拉取术语，
-        内存过滤 term_tags.get("kb_resource_id") in resource_ids。
+        通过 search_terms_by_labels（纯 label_filter SQL）直接过滤，
+        不需要关键词、不需要 Python 后过滤。
         """
-        reader = self._get_knowledge_reader()
-        seen: set[str] = set()
-        results: list[dict[str, Any]] = []
-
-        try:
-            page1 = reader.search_terms(
-                term_type_code="",
-                keyword=None,
-                limit=200,
-            )
-        except Exception:
-            logger.warning("_match_chunks_to_terms: search_terms failed", exc_info=True)
+        label_method = getattr(self, "search_terms_by_labels", None)
+        if not callable(label_method):
+            logger.warning("_match_chunks_to_terms_by_filepath: search_terms_by_labels unavailable")
             return []
 
-        items = _extract_items(page1)
+        label_filters = [
+            {"field_code": "kb_file_path", "filter_value": fp}
+            for fp in file_scores
+        ]
+
+        try:
+            items = label_method(
+                label_filters=label_filters,
+                label_condition="or",
+                term_type_codes=term_type_codes,
+                top_k=top_k * len(file_scores),
+            )
+        except Exception:
+            logger.warning(
+                "_match_chunks_to_terms_by_filepath: search_terms_by_labels failed",
+                exc_info=True,
+            )
+            return []
+
+        seen: set[str] = set()
+        results: list[dict[str, Any]] = []
         for item in items:
             tid = item.get("term_id", "")
             if not tid or tid in seen:
                 continue
-            term_tags = item.get("term_tags", {}) or {}
-            kb_rid = term_tags.get("kb_resource_id", "")
-            if kb_rid in resource_ids:
+            tp = _term_type_code(item, "")
+            fp = item.get("ext_attrs", {}).get("kb_file_path", "") if isinstance(item.get("ext_attrs"), dict) else ""
+            if fp and fp in file_scores:
                 seen.add(tid)
-                ext = item.get("ext_attrs", {}) or {}
-                results.append(
-                    {
-                        "term_id": tid,
-                        "term_code": item.get("term_code", ""),
-                        "term_name": item.get("term_name", ""),
-                        "term_type_code": item.get("term_type_code", ""),
-                        "file_name": ext.get("kb_file_path")
-                        if isinstance(ext, dict)
-                        else None,
-                        "match_type": "chunk_to_term",
-                        "score": float(item.get("score", 0.5)),
-                    }
-                )
+                results.append({
+                    "term_id": tid,
+                    "term_code": item.get("term_code", ""),
+                    "term_name": item.get("term_name", ""),
+                    "term_type_code": tp,
+                    "file_name": fp,
+                    "match_type": "chunk_to_term",
+                    "score": file_scores[fp],
+                })
 
-        # If no results matched via tags, try generic keyword search
-        if not results and resource_ids:
-            for rid in list(resource_ids)[:5]:  # limit to 5 to avoid flooding
-                try:
-                    raw = reader.search_terms(
-                        term_type_code="",
-                        keyword=rid,
-                        limit=top_k,
-                    )
-                except Exception:
-                    continue
-                items = _extract_items(raw)
-                for item in items:
-                    tid = item.get("term_id", "")
-                    if tid and tid not in seen:
-                        seen.add(tid)
-                        ext = item.get("ext_attrs", {}) or {}
-                        results.append(
-                            {
-                                "term_id": tid,
-                                "term_code": item.get("term_code", ""),
-                                "term_name": item.get("term_name", ""),
-                                "term_type_code": item.get("term_type_code", ""),
-                                "file_name": ext.get("kb_file_path")
-                                if isinstance(ext, dict)
-                                else None,
-                                "match_type": "chunk_to_term",
-                                "score": float(item.get("score", 0.3)),
-                            }
-                        )
-
-        return results[:top_k]
+        logger.info(
+            "_match_chunks_to_terms_by_filepath: %d filePaths × label_filter → %d term matches",
+            len(file_scores), len(results),
+        )
+        return sorted(results, key=lambda h: h["score"], reverse=True)[:top_k]
 
     def graph_path(
         self,
@@ -2009,6 +2170,17 @@ def _attr(obj: Any, name: str, default: Any = "") -> Any:
     return getattr(obj, name, default)
 
 
+def _term_type_code(item: Any, default: str = "") -> str:
+    """从 TermItem 中安全获取 term_type_code，兼容 term_type 字段。"""
+    val = _attr(item, "term_type_code", None)
+    if val is not None and val != "":
+        return str(val)
+    val = _attr(item, "term_type", None)
+    if val is not None:
+        return str(val)
+    return default
+
+
 def _extract_items(raw: Any) -> list[Any]:
     """从 search_terms / QueryResult 中提取 items 列表。
 
@@ -2026,6 +2198,20 @@ def _extract_items(raw: Any) -> list[Any]:
     if items is not None:
         return cast("list[Any]", items)
     return []
+
+
+def _make_path1_hit(item: Any) -> dict[str, Any]:
+    """将 TermItem 转换为路1 hit dict（统一格式）。"""
+    ext = _attr(item, "ext_attrs", {})
+    return {
+        "term_id": _attr(item, "term_id", ""),
+        "term_code": _attr(item, "term_code", ""),
+        "term_name": _attr(item, "term_name", ""),
+        "term_type_code": _term_type_code(item, ""),
+        "file_name": ext.get("kb_file_path") if isinstance(ext, dict) else None,
+        "match_type": "term_instance",
+        "score": float(_attr(item, "score", 0)),
+    }
 
 
 def _fuse_path_results(
@@ -2127,19 +2313,9 @@ def _fuse_path_results_rrf(
 
 def _should_run_path2(
     enable_chunk_recall: bool,
-    kb_configs: dict[str, Any] | None,
 ) -> bool:
-    """判断是否执行路2 KB chunk 搜索。
-
-    降级条件:
-    - enable_chunk_recall=False → 仅路1
-    - kb_configs=None → 仅路1
-    """
-    if not enable_chunk_recall:
-        return False
-    if kb_configs is None:
-        return False
-    return True
+    """判断是否执行路2 KB chunk 搜索。"""
+    return enable_chunk_recall
 
 
 def _resolve_kb_id_for_object(
@@ -2162,34 +2338,26 @@ def _resolve_kb_id_for_object(
     return None
 
 
-def _do_chunk_search(
+async def _do_chunk_search(
     query: str,
     kb_id: str | None,
     top_k: int,
-    kb_configs: dict[str, Any] | None,
     datasource_alias: str = "",
     object_code: str = "",
+    kb_directory: str | None = None,
     _kb_search_backend: Any = None,
 ) -> list[dict[str, Any]]:
-    """独立函数形式的 _do_chunk_search（供测试直接调用）。
-
-    当没有 OntologyMetadataMixin 实例时使用此独立版本。
-    """
-    # Lazy import
+    """独立函数形式的 _do_chunk_search（供测试直接调用）。"""
     try:
         from datacloud_data_sdk.executor.kb_search_backend import (
             HttpKnowledgeSearchBackend,
             KnowledgeSearchRequest,
         )
     except ImportError:
-        logger.debug(
-            "_do_chunk_search: datacloud_data_sdk not available", exc_info=True
-        )
+        logger.debug("_do_chunk_search: datacloud_data_sdk not available", exc_info=True)
         return []
 
-    backend = _kb_search_backend
-    if backend is None:
-        backend = HttpKnowledgeSearchBackend(kb_configs)
+    backend = _kb_search_backend or HttpKnowledgeSearchBackend(None)
 
     try:
         request = KnowledgeSearchRequest(
@@ -2198,26 +2366,10 @@ def _do_chunk_search(
             query=query,
             limit=top_k,
             kb_id=kb_id if kb_id else None,
+            kb_directory=kb_directory,
         )
 
-        import asyncio
-        import inspect
-
-        if inspect.iscoroutinefunction(backend.search):
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    import concurrent.futures
-
-                    with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(asyncio.run, backend.search(request))
-                        result = future.result(timeout=30)
-                else:
-                    result = loop.run_until_complete(backend.search(request))
-            except RuntimeError:
-                result = asyncio.run(backend.search(request))
-        else:
-            result = backend.search(request)
+        result = await backend.search(request)
 
         if hasattr(result, "records"):
             return cast("list[dict[str, Any]]", result.records)

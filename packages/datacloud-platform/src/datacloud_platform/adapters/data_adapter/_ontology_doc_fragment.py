@@ -41,7 +41,8 @@ class OntologyDocFragmentRow(_FragmentBase):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     instance_id = Column(String(128), nullable=False)
-    instance_name = Column(String(128), nullable=False)
+    instance_name = Column(String(512), nullable=False)
+    object_code = Column(String(128), nullable=True)
     content = Column(Text, nullable=False)
     status = Column(SmallInteger, nullable=False, default=0)
     origin_instance_id = Column(String(128), nullable=True)
@@ -119,6 +120,7 @@ class OntologyDocFragmentAdapter:
                 row = OntologyDocFragmentRow(
                     instance_id=rec["instance_id"],
                     instance_name=rec["instance_name"],
+                    object_code=rec.get("object_code") or "",
                     content=rec["content"],
                     status=rec.get("status", 0),
                     origin_instance_id=rec.get("origin_instance_id"),
@@ -265,6 +267,7 @@ def _row_to_dict(row: OntologyDocFragmentRow) -> dict[str, Any]:
         "id": row.id,
         "instance_id": row.instance_id,
         "instance_name": row.instance_name,
+        "object_code": row.object_code or "",
         "content": row.content,
         "status": row.status,
         "origin_instance_id": row.origin_instance_id,

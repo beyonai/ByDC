@@ -2037,7 +2037,7 @@ class _TermReader(_ReaderBase):
                 # ── Step 2: 元数据过滤 ─────────────────────────────
                 filters = self._apply_metadata_filters(
                     candidate_ids=candidate_ids,
-                    term_type=canonical_type,
+                    term_type_codes=[canonical_type] if canonical_type else None,
                     dataset_ids=dataset_ids,
                     parent_term_code=parent_term_code,
                     ext_attrs=ext_attrs,
@@ -2120,7 +2120,7 @@ class _TermReader(_ReaderBase):
         *,
         keywords: list[str],
         dataset_ids: list[str] | None = None,
-        term_type: str | None = None,
+        term_type_codes: list[str] | None = None,
         query_type: QueryType = "fulltext",
         parent_term_code: str | None = None,
         label_filters: list[LabelFilter] | None = None,
@@ -2135,7 +2135,7 @@ class _TermReader(_ReaderBase):
         Args:
             keywords: 搜索关键词列表。
             dataset_ids: 术语库 ID 列表。
-            term_type: 术语类型编码。
+            term_type_codes: 术语类型编码列表（IN 过滤）。None=不限，[]=空结果。
             query_type: 检索策略（exact/fulltext/embedding/mixed）。
             parent_term_code: 父术语 ID 过滤。
             label_filters: 标签过滤条件列表。
@@ -2150,6 +2150,10 @@ class _TermReader(_ReaderBase):
         """
         if not keywords:
             return []
+
+        # Empty term_type_codes list → no results
+        if term_type_codes is not None and not term_type_codes:
+            return [QueryResult(total=0, items=[])] * len(keywords)
 
         from datacloud_knowledge.adapters.opengauss.bm25 import (
             _build_char_tsquery,
@@ -2179,7 +2183,9 @@ class _TermReader(_ReaderBase):
             effective_type = query_type
             query_vectors = None
 
-        canonical_type = self._normalize_type_code(term_type) if term_type else None
+        canonical_types: list[str] | None = None
+        if term_type_codes is not None:
+            canonical_types = [self._normalize_type_code(t) for t in term_type_codes]
         n = len(keywords)
 
         # ── Build empty results array ────────────────────────────
@@ -2226,6 +2232,7 @@ class _TermReader(_ReaderBase):
                         session,
                         tsquery_map=tsquery_map,
                         top_k=top_k + offset,
+                        term_type_codes=canonical_types,
                     )
 
                 # ── Phase 2: Jieba batch (UNION ALL) ─────────────
@@ -2235,6 +2242,7 @@ class _TermReader(_ReaderBase):
                         session,
                         jieba_tokens_map=jieba_tokens_map,
                         top_k=top_k + offset,
+                        term_type_codes=canonical_types,
                     )
 
                 # ── Phase 3: Vector batch (UNION ALL) ────────────
@@ -2246,7 +2254,7 @@ class _TermReader(_ReaderBase):
                         vec_map=vec_map,
                         top_k=top_k + offset,
                         label_filters=label_filters,
-                        term_type=canonical_type,
+                        term_type_codes=canonical_types,
                     )
 
                 # ── Phase 4: Per-keyword RRF fuse ────────────────
@@ -2305,7 +2313,7 @@ class _TermReader(_ReaderBase):
 
                     filters = self._apply_metadata_filters(
                         candidate_ids=set(candidate_ids_i.keys()),
-                        term_type=canonical_type,
+                        term_type_codes=canonical_types,
                         dataset_ids=dataset_ids,
                         parent_term_code=parent_term_code,
                         ext_attrs=ext_attrs,
@@ -2382,9 +2390,9 @@ class _TermReader(_ReaderBase):
 
         except Exception:
             logger.exception(
-                "query_terms_batch failed: keywords=%s term_type=%s query_type=%s",
+                "query_terms_batch failed: keywords=%s term_type_codes=%s query_type=%s",
                 keywords,
-                term_type,
+                term_type_codes,
                 query_type,
             )
             raise
@@ -2399,6 +2407,7 @@ class _TermReader(_ReaderBase):
         *,
         tsquery_map: dict[int, str],
         top_k: int,
+        term_type_codes: list[str] | None = None,
     ) -> dict[int, list[tuple[str, str, str, str, str]]]:
         """Run BM25 search for multiple keywords via UNION ALL.
 
@@ -2412,8 +2421,19 @@ class _TermReader(_ReaderBase):
             logger.error("BM25 requires term_name.name_keywords column")
             return {}
 
+        # Build term_type_codes IN clause
+        term_type_where = ""
+        if term_type_codes is not None:
+            if not term_type_codes:
+                return {}
+            placeholders = ", ".join(f":_bm25_tt_{i}" for i in range(len(term_type_codes)))
+            term_type_where = f"AND t.term_type_code IN ({placeholders})"
+
         subqueries: list[str] = []
         params: dict[str, Any] = {}
+        if term_type_codes is not None:
+            for i, tc in enumerate(term_type_codes):
+                params[f"_bm25_tt_{i}"] = tc
         for idx, tsquery in tsquery_map.items():
             subqueries.append(
                 f"("
@@ -2426,6 +2446,7 @@ class _TermReader(_ReaderBase):
                 f"WHERE tn.name_keywords @@ q_{idx} "
                 f"AND tn.term_id = t.term_id "
                 f"AND tn.name_keywords IS NOT NULL "
+                f"{term_type_where} "
                 f"ORDER BY score DESC "
                 f"LIMIT {int(top_k)}"
                 f")"
@@ -2454,6 +2475,7 @@ class _TermReader(_ReaderBase):
         *,
         jieba_tokens_map: dict[int, list[str]],
         top_k: int,
+        term_type_codes: list[str] | None = None,
     ) -> dict[int, list[tuple[str, str, str, str, str]]]:
         """Run jieba-token BM25 batch for multiple keywords via UNION ALL.
 
@@ -2468,6 +2490,14 @@ class _TermReader(_ReaderBase):
         if not _has_name_keywords_column(session):
             return {}
 
+        # Build term_type_codes IN clause
+        term_type_where = ""
+        if term_type_codes is not None:
+            if not term_type_codes:
+                return {}
+            placeholders = ", ".join(f":_jieba_tt_{i}" for i in range(len(term_type_codes)))
+            term_type_where = f"AND t.term_type_code IN ({placeholders})"
+
         # Flatten (kw_idx, token) pairs
         flat: list[tuple[int, str]] = []
         for kw_idx, tokens in jieba_tokens_map.items():
@@ -2479,6 +2509,9 @@ class _TermReader(_ReaderBase):
 
         subqueries: list[str] = []
         params: dict[str, Any] = {}
+        if term_type_codes is not None:
+            for i, tc in enumerate(term_type_codes):
+                params[f"_jieba_tt_{i}"] = tc
         for seq, (kw_idx, token) in enumerate(flat):
             tsq = _build_char_tsquery(token, ts_operator="|")
             if not tsq:
@@ -2494,6 +2527,7 @@ class _TermReader(_ReaderBase):
                 f"WHERE tn.name_keywords @@ q_{seq} "
                 f"AND tn.term_id = t.term_id "
                 f"AND tn.name_keywords IS NOT NULL "
+                f"{term_type_where} "
                 f"ORDER BY score DESC "
                 f"LIMIT {int(top_k * 2)}"
                 f")"
@@ -2539,24 +2573,25 @@ class _TermReader(_ReaderBase):
         vec_map: dict[int, list[float]],
         top_k: int,
         label_filters: list[LabelFilter] | None = None,
-        term_type: str | None = None,
+        term_type_codes: list[str] | None = None,
     ) -> tuple[
         dict[int, list[tuple[str, str, str, str, str]]],
         dict[int, dict[str, float]],
     ]:
         """Run vector similarity search for multiple keywords via UNION ALL.
 
-        ``term_type`` and ``label_filters`` are pushed into the SQL so vector
-        scan is scoped to the target term type.
+        ``term_type_codes`` and ``label_filters`` are pushed into the SQL so vector
+        scan is scoped to the target term types.
 
         Returns ``(ranked_by_kw, scores_by_kw)``.
         """
-        # ── build SQL clauses for term_type + label_filters ─────────
+        # ── build SQL clauses for term_type_codes + label_filters ─────────
         need_term_join = False
         extra_where_parts: list[str] = []
-        if term_type:
+        if term_type_codes is not None and term_type_codes:
             need_term_join = True
-            extra_where_parts.append("t.term_type_code = :_batch_term_type")
+            placeholders = ", ".join(f":_batch_term_type_{i}" for i in range(len(term_type_codes)))
+            extra_where_parts.append(f"t.term_type_code IN ({placeholders})")
         if label_filters:
             need_term_join = True
             for i, lf in enumerate(label_filters):
@@ -2574,8 +2609,9 @@ class _TermReader(_ReaderBase):
 
         subqueries: list[str] = []
         params: dict[str, Any] = {}
-        if term_type:
-            params["_batch_term_type"] = term_type
+        if term_type_codes is not None and term_type_codes:
+            for i, tc in enumerate(term_type_codes):
+                params[f"_batch_term_type_{i}"] = tc
         for kw_idx, vec in vec_map.items():
             vec_str = "[" + ",".join(str(round(v, 8)) for v in vec) + "]"
             subqueries.append(
@@ -2616,6 +2652,88 @@ class _TermReader(_ReaderBase):
             scores.setdefault(kw_idx, {})[str(term_id)] = float(score)
 
         return ranked, scores
+
+    def query_terms_by_labels(
+        self,
+        *,
+        label_filters: list[LabelFilter],
+        label_condition: LabelCondition = "or",
+        term_type_codes: list[str] | None = None,
+        top_k: int = 200,
+    ) -> list[TermItem]:
+        """纯标签过滤检索 — 不需要关键词。
+
+        SQL: WHERE term_tags->>'key' = 'value' [OR/AND ...] [+ term_type_code IN (...)]
+        不做 BM25/jieba/vector 子查询，直接 label_filter 作为 WHERE 条件。
+        """
+        canonical_types: list[str] | None = None
+        if term_type_codes is not None and term_type_codes:
+            canonical_types = [self._normalize_type_code(t) for t in term_type_codes]
+
+        try:
+            with self._get_session() as session:
+                label_parts: list[str] = []
+                label_params: dict[str, Any] = {}
+                for i, lf in enumerate(label_filters):
+                    key = str(
+                        lf.field_code if hasattr(lf, "field_code") else lf.get("field_code", "")
+                    )
+                    fv = lf.filter_value if hasattr(lf, "filter_value") else lf.get("filter_value")
+                    if key and fv is not None:
+                        pname = f"_lbl_{i}"
+                        label_parts.append(f"t.term_tags->>'{key}' = :{pname}")
+                        label_params[pname] = str(fv)
+
+                if not label_parts:
+                    return []
+
+                where = (
+                    " AND ".join(label_parts)
+                    if label_condition == "and"
+                    else f"({' OR '.join(label_parts)})"
+                )
+
+                term_type_where = ""
+                if canonical_types is not None:
+                    if not canonical_types:
+                        return []
+                    placeholders = ", ".join(f":_lbl_tt_{i}" for i in range(len(canonical_types)))
+                    term_type_where = f"AND t.term_type_code IN ({placeholders})"
+                    for i, tc in enumerate(canonical_types):
+                        label_params[f"_lbl_tt_{i}"] = tc
+
+                sql = f"""
+                    SELECT t.term_id, t.term_code, t.term_name, t.term_type_code,
+                           t.library_id, t.term_tags, t.ext_attrs, t.desc_summary,
+                           t.created_time, t.updated_time
+                    FROM term t
+                    WHERE {where} {term_type_where}
+                    LIMIT :_lbl_limit
+                """
+                label_params["_lbl_limit"] = top_k
+
+                rows = session.execute(text(sql), label_params).all()
+
+                results: list[dict[str, Any]] = []
+                for r in rows:
+                    tt = dict(r[5]) if r[5] else {}
+                    ea = dict(r[6]) if r[6] else {}
+                    results.append(
+                        {
+                            "term_id": str(r[0]),
+                            "term_code": str(r[1] or ""),
+                            "term_name": str(r[2] or ""),
+                            "term_type": str(r[3] or ""),
+                            "term_tags": tt,
+                            "ext_attrs": ea,
+                            "score": 1.0,
+                        }
+                    )
+                return results  # type: ignore[return-value]
+
+        except Exception:
+            logger.exception("query_terms_by_labels failed")
+            return []
 
     @staticmethod
     def _detail_batch(
@@ -3514,7 +3632,7 @@ class _TermReader(_ReaderBase):
     def _apply_metadata_filters(
         *,
         candidate_ids: set[str] | None = None,
-        term_type: str | None = None,
+        term_type_codes: list[str] | None = None,
         dataset_ids: list[str] | None = None,
         parent_term_code: str | None = None,
         ext_attrs: dict[str, Any] | None = None,
@@ -3530,8 +3648,8 @@ class _TermReader(_ReaderBase):
         if candidate_ids is not None:
             filters.append(Term.term_id.in_(list(candidate_ids)))
 
-        if term_type:
-            filters.append(Term.term_type_code == term_type)
+        if term_type_codes:
+            filters.append(Term.term_type_code.in_(term_type_codes))
 
         if dataset_ids:
             filters.append(Term.library_id.in_(dataset_ids))

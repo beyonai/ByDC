@@ -398,7 +398,7 @@ def query_terms_batch(
     *,
     keywords: list[str],
     dataset_ids: list[str] | None = None,
-    term_type: str | None = None,
+    term_type_codes: list[str] | None = None,
     query_type: QueryType = "fulltext",
     parent_term_code: str | None = None,
     label_filters: list[LabelFilter] | None = None,
@@ -416,7 +416,7 @@ def query_terms_batch(
     Args:
         keywords:         搜索关键词列表。
         dataset_ids:      术语库 ID 列表。None/空 = 不限制。
-        term_type:        术语类型编码。None = 不限制类型。
+        term_type_codes:  术语类型编码列表。None = 不限制类型，空列表 = 返回空。
         query_type:       检索策略（fulltext/exact/embedding/mixed）。
         parent_term_code: 父术语编码过滤。None = 不限制。
         label_filters:    标签过滤条件列表。
@@ -433,7 +433,7 @@ def query_terms_batch(
     return reader.query_terms_batch(
         keywords=keywords,
         dataset_ids=dataset_ids,
-        term_type=term_type,
+        term_type_codes=term_type_codes,
         query_type=query_type,
         parent_term_code=parent_term_code,
         label_filters=label_filters,

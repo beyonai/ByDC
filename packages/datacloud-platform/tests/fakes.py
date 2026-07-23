@@ -851,23 +851,23 @@ class FakeOntologyBackend:
         self,
         *,
         base_id: str = "",  # noqa: ARG002
-        object_code: str | None = None,
+        object_codes: list[str] | None = None,
         query: str | None = None,
         queries: list[str] | None = None,
         top_k: int = 20,
         enable_chunk_recall: bool = True,
-        kb_configs: dict[str, Any] | None = None,
     ) -> Any:  # ObjectInstanceSearchResult
         """返回预设的 _unstructured_hits 或空结果。
 
         测试代码可以在调用前设置 ``_unstructured_hits`` 来控制返回值。
         """
-        _ = (top_k, enable_chunk_recall, kb_configs)
         from datacloud_platform.models.shared import ObjectInstanceSearchResult
 
         hits = getattr(self, "_unstructured_hits", [])
-        if object_code is not None:
-            hits = [h for h in hits if h.get("term_type_code") == object_code]
+        if object_codes is not None:
+            if not object_codes:
+                return ObjectInstanceSearchResult(results={})
+            hits = [h for h in hits if h.get("term_type_code") in object_codes]
 
         # Determine keywords
         if queries:

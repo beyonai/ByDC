@@ -319,23 +319,33 @@ class KbSearchExecutor:
         records = _normalize_action_records(records, cls)
         meta = _standard_action_meta(cls, datasource_alias, query)
 
-        # Enqueue KB term sync for each written document and collect synced term IDs.
-        synced_term_ids = await self._enqueue_kb_term_sync(write_requests)
+        # Sync KB terms and collect term_code → term_id mapping.
+        term_code_to_id = await self._enqueue_kb_term_sync(write_requests)
 
         # Collect KB file paths from write requests for the summary message.
         kb_file_paths = [
             _to_markdown_file_path(req.file_path, req.kb_directory) for req in write_requests
         ]
         meta["kb_files"] = kb_file_paths
-        if synced_term_ids:
-            meta["synced_term_ids"] = synced_term_ids
+        if term_code_to_id:
+            meta["synced_term_ids"] = list(term_code_to_id.values())
         meta["_write_note"] = _write_summary(kb_file_paths, [])
 
-        # Build file_path → term_id mapping for per-record injection.
+        # Build file_path → term_id mapping via term_code for per-record injection.
+        # term_code is derived from the markdown file stem, same as in _enqueue_kb_term_sync.
         file_path_to_term_id: dict[str, str] = {}
-        for req, term_id in zip(write_requests, synced_term_ids):
+        for req in write_requests:
             mk_path = _to_markdown_file_path(req.file_path, req.kb_directory)
-            file_path_to_term_id[mk_path] = term_id
+            file_stem = PurePosixPath(mk_path).stem or mk_path
+            cls_obj = self._loader.get_ontology_class(req.object_code)
+            term_sync = getattr(cls_obj, "term_sync", None)
+            if term_sync is not None and getattr(term_sync, "enabled", False):
+                term_code = str(req.labels.get(term_sync.term_code_field) or file_stem)
+            else:
+                term_code = file_stem
+            tid = term_code_to_id.get(term_code, "")
+            if tid:
+                file_path_to_term_id[mk_path] = tid
 
         response: dict[str, Any] = {"records": records, "total": len(records), "meta": meta}
         _attach_session_file(response, write_requests)
@@ -746,18 +756,21 @@ class KbSearchExecutor:
                 "_delete_term_ids: delete_terms failed for %d term(s)", len(term_ids), exc_info=True
             )
 
-    async def _enqueue_kb_term_sync(self, write_requests: list[KnowledgeWriteRequest]) -> list[str]:
-        """导入 KB 术语并返回同步后的 term_id 列表。
+    async def _enqueue_kb_term_sync(
+        self, write_requests: list[KnowledgeWriteRequest]
+    ) -> dict[str, str]:
+        """导入 KB 术语并返回 term_code → term_id 映射。
 
-        优先通过 platform.import_terms() 同步导入以获取 term_id；
-        platform 不可用时回退到异步队列投递（不返回 term_id）。
+        优先通过 platform.import_terms() 同步导入，再用 search_terms 逐 term_code 补查
+        映射关系（import 返回的 term_ids 列表因 dedup/skip 不保证与输入顺序一致）；
+        platform 不可用时回退到异步队列投递，返回空映射。
 
         对每个写入请求：
         1. 从内容中解析 related_docs 块，构建文档级关联关系。
         2. 从 loader._relations 中获取当前对象的本体关联关系，将术语写入关联对象。
         """
         if not write_requests:
-            return []
+            return {}
         cls = self._loader.get_ontology_class(write_requests[0].object_code)
         term_sync = cls.term_sync
         terms: list[dict[str, Any]] = []
@@ -850,28 +863,56 @@ class KbSearchExecutor:
             terms.append(term)
 
         if not terms:
-            return []
+            return {}
 
-        # 优先同步导入以获取 term_id
+        # 优先同步导入，再按 term_code 补查 term_id（import 返回列表无位置保证）
         platform = getattr(self._loader._config, "platform", None)
         if platform is not None and hasattr(platform, "import_terms"):
             try:
-                result = platform.import_terms(
+                platform.import_terms(
                     DEFAULT_BASE_ID,
                     library_id=DEFAULT_BASE_ID,
                     terms=terms,
                     backfill=True,
                 )
-                term_ids: list[str] = list(result.get("term_ids") or [])
-                logger.debug(
-                    "KB 术语同步完成: object=%s terms=%d term_ids=%s",
-                    write_requests[0].object_code,
-                    len(terms),
-                    term_ids,
-                )
-                return term_ids
             except Exception:  # noqa: BLE001
                 logger.warning("KB 术语同步（同步模式）失败，回退到队列投递", exc_info=True)
+            else:
+                # 按 term_code 逐一查询 term_id，规避 import 返回列表的顺序不确定性
+                object_code = write_requests[0].object_code
+                term_code_to_id: dict[str, str] = {}
+                for t in terms:
+                    tc = str(t.get("term_code") or "")
+                    if not tc:
+                        continue
+                    try:
+                        search_result = platform.search_terms(
+                            term_type=object_code,
+                            base_id=DEFAULT_BASE_ID,
+                            dataset_ids=[DEFAULT_BASE_ID],
+                            keyword=tc,
+                            query_type="exact",
+                            top_k=1,
+                        )
+                        items = getattr(search_result, "items", None) or []
+                        for item in items:
+                            if (
+                                str(getattr(item, "term_code", "") or "") == tc
+                                or str(getattr(item, "term_name", "") or "") == tc
+                            ) and getattr(item, "term_id", None):
+                                term_code_to_id[tc] = str(item.term_id)
+                                break
+                    except Exception:  # noqa: BLE001
+                        logger.warning(
+                            "_enqueue_kb_term_sync: search_terms failed term_code=%s", tc, exc_info=True
+                        )
+                logger.debug(
+                    "KB 术语同步完成: object=%s terms=%d mapped=%d",
+                    object_code,
+                    len(terms),
+                    len(term_code_to_id),
+                )
+                return term_code_to_id
 
         # 回退：异步队列投递（不返回 term_id）
         try:
@@ -890,7 +931,7 @@ class KbSearchExecutor:
             )
         except Exception:  # noqa: BLE001
             logger.debug("KB 术语同步投递失败", exc_info=True)
-        return []
+        return {}
 
     def _get_object_code_by_kb(self, kb_resource_id: str, kb_directory: str) -> str | None:
         if not kb_resource_id:
