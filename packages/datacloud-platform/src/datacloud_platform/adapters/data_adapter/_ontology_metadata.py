@@ -2036,7 +2036,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                         "term_id": rid or name,
                         "term_code": "",
                         "term_name": name,
-                        "term_type_code": "",
+                        "term_type_code": _term_type_code(rec, ""),
                         "file_name": rec.get("filePath") or rec.get("file_path"),
                         "match_type": "chunk_to_term",
                         "score": float(rec.get("score", 0.5)),
@@ -2096,17 +2096,15 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             )
             if fp and fp in file_scores:
                 seen.add(tid)
-                results.append(
-                    {
-                        "term_id": tid,
-                        "term_code": item.get("term_code", ""),
-                        "term_name": item.get("term_name", ""),
-                        "term_type_code": tp,
-                        "file_name": fp,
-                        "match_type": "chunk_to_term",
-                        "score": file_scores[fp],
-                    }
-                )
+                results.append({
+                    "term_id": tid,
+                    "term_code": item.get("term_code", ""),
+                    "term_name": item.get("term_name", ""),
+                    "term_type_code": tp,
+                    "file_name": fp,
+                    "match_type": "chunk_to_term",
+                    "score": file_scores[fp],
+                })
 
         logger.info(
             "_match_chunks_to_terms_by_filepath: %d filePaths × label_filter → %d term matches",
@@ -2223,12 +2221,20 @@ def _extract_items(raw: Any) -> list[Any]:
 def _make_path1_hit(item: Any) -> dict[str, Any]:
     """将 TermItem 转换为路1 hit dict（统一格式）。"""
     ext = _attr(item, "ext_attrs", {})
+    ext_attrs = ext if isinstance(ext, dict) else {}
+    labels = _attr(item, "labels", {})
+    labels = labels if isinstance(labels, dict) else {}
     return {
         "term_id": _attr(item, "term_id", ""),
         "term_code": _attr(item, "term_code", ""),
         "term_name": _attr(item, "term_name", ""),
         "term_type_code": _term_type_code(item, ""),
-        "file_name": ext.get("kb_file_path") if isinstance(ext, dict) else None,
+        "file_name": ext_attrs.get("kb_file_path"),
+        "kb_resource_id": ext_attrs.get("kb_resource_id")
+        or ext_attrs.get("resource_id")
+        or labels.get("kb_resource_id")
+        or labels.get("resource_id"),
+        "kb_id": ext_attrs.get("kb_id") or labels.get("kb_id"),
         "match_type": "term_instance",
         "score": float(_attr(item, "score", 0)),
     }
@@ -2274,6 +2280,8 @@ def _fuse_path_results_rrf(
                     "instance_name": h.get("term_name", ""),
                     "object_code": h.get("term_type_code", ""),
                     "file_name": h.get("file_name"),
+                    "kb_resource_id": h.get("kb_resource_id") or "",
+                    "kb_id": h.get("kb_id") or "",
                     "term_instance_score": float(h.get("score", 0)),
                     "chunk_score": 0,
                 }
@@ -2294,6 +2302,8 @@ def _fuse_path_results_rrf(
                     "instance_name": h.get("term_name", ""),
                     "object_code": h.get("term_type_code", ""),
                     "file_name": h.get("file_name"),
+                    "kb_resource_id": h.get("kb_resource_id") or "",
+                    "kb_id": h.get("kb_id") or "",
                     "term_instance_score": 0,
                     "chunk_score": float(h.get("score", 0)),
                 }
@@ -2302,6 +2312,8 @@ def _fuse_path_results_rrf(
                 meta[tid]["chunk_score"] = float(h.get("score", 0))
                 if h.get("file_name"):
                     meta[tid]["file_name"] = h.get("file_name")
+                if h.get("kb_resource_id"):
+                    meta[tid]["kb_resource_id"] = h.get("kb_resource_id")
 
     ranked_lists: list[list[tuple[str, str, str, str, str]]] = []
     if p1_tuples:
@@ -2324,6 +2336,8 @@ def _fuse_path_results_rrf(
                 instance_name=m.get("instance_name", c.term_name),
                 object_code=m.get("object_code", c.term_type_code),
                 file_name=m.get("file_name"),
+                kb_resource_id=m.get("kb_resource_id") or None,
+                kb_id=m.get("kb_id") or None,
                 score=c.rrf_score,
             )
         )

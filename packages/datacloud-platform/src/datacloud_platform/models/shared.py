@@ -152,6 +152,12 @@ class ObjectInstanceHit:
     file_name: str | None
     """对应的知识库文件路径（ext_attrs.kb_file_path）。None 表示无文件关联。"""
 
+    kb_resource_id: str | None
+    """知识库资源 ID（ext_attrs.kb_resource_id）。用于下载。None 表示未知。"""
+
+    kb_id: str | None
+    """知识库 ID（ext_attrs.kb_id）。用于角色映射和下载路由。None 表示未知。"""
+
     score: float
     """检索分数（双路 RRF 融合时为 fusion_score，单路时为该路原始分数）。"""
 
