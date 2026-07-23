@@ -250,7 +250,7 @@ def _extract_origin_file(detail: Any) -> dict[str, Any]:
         return {}
 
     result: dict[str, Any] = {}
-    for key in ("kb_resource_id", "kb_id", "file_path"):
+    for key in ("kb_resource_id", "kb_id", "kb_file_path"):
         val = ext_attrs.get(key)
         if val is not None:
             result[key] = val
