@@ -27,6 +27,7 @@ class ObjectInstanceBuildRequest:
     label_schema: dict[str, Any]
     source_content: str
     fragments: list[ObjectInstanceFragment]
+    related_docs: dict[str, Any] = field(default_factory=dict)
     existing_content: str = ""
     object_template: str = ""
     template_constraints: str = ""

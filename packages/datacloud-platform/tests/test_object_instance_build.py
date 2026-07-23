@@ -418,6 +418,7 @@ def _fragment(
         "instance_name": "Agent",
         "origin_instance_id": origin_instance_id,
         "origin_file": {
+            "kb_file_path": "/Concept/Agent.md",
             "file_path": "/Concept/Agent.md",
             "kb_resource_id": "10000795",
         },
@@ -535,7 +536,7 @@ def test_orchestrator_falls_back_to_fragment_content_when_source_file_missing() 
     assert orchestrator._read_source_content(group) == "fragment 101\n\nfragment 102"  # noqa: SLF001
 
 
-def test_orchestrator_reads_existing_content_from_runtime_file_storage(
+def test_orchestrator_treats_term_without_kb_id_as_new_object_baseline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class RuntimeFileStorage:
@@ -577,8 +578,8 @@ def test_orchestrator_reads_existing_content_from_runtime_file_storage(
         }
     )
 
-    assert content == "# Agent\n\nExisting target content."
-    assert storage.calls == ["/Concept/Agent.md"]
+    assert content == ""
+    assert storage.calls == []
 
 
 @pytest.mark.asyncio
@@ -642,6 +643,237 @@ async def test_orchestrator_reads_existing_content_from_kb_document_reader(
     assert knowledge_client.requests[0].existing_content == (
         "# Agent\n\nExisting KB target content."
     )
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_uses_term_file_as_baseline_and_origin_as_related_doc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class TermBaselinePlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["ext_attrs"] = {
+                "kb_id": "97",
+                "kb_file_path": "/Concept/Agent-target.md",
+                "kb_resource_id": "target-resource",
+            }
+            return detail
+
+    class FakeKbDocumentReader:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def read_text(self, *, kn_code: str, file_path: str) -> str:
+            self.calls.append((kn_code, file_path))
+            return "# Agent\n\nExisting baseline from term detail."
+
+    fragment = _fragment(101, "term-agent")
+    fragment["origin_file"] = {
+        "kb_file_path": "/会议纪要/Agent补充.md",
+        "file_path": "/会议纪要/Agent补充.md",
+        "kb_resource_id": "source-resource",
+    }
+    kb_reader = FakeKbDocumentReader()
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: kb_reader,
+        raising=False,
+    )
+    platform = TermBaselinePlatform(fragments=[fragment])
+    knowledge_client = FakeBuildKnowledgeClient()
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        knowledge_client=knowledge_client,
+    )
+
+    await orchestrator.run(_run_request(instance_ids=["term-agent"]))
+
+    request = knowledge_client.requests[0]
+    written_content = platform.executed_actions[0]["arguments"]["content"]
+    assert kb_reader.calls == [("97", "/Concept/Agent-target.md")]
+    assert request.existing_content == "# Agent\n\nExisting baseline from term detail."
+    assert request.source_content == (
+        f"Full source from {DEFAULT_BASE_ID}: /会议纪要/Agent补充.md"
+    )
+    assert request.related_docs == {
+        "doc_id": "Agent",
+        "related_docs": [
+            {
+                "target_doc_id": "/会议纪要/Agent补充.md",
+                "relation": "part-of",
+                "kb_resource_id": "source-resource",
+            }
+        ],
+    }
+    assert "--- related_docs ---" in written_content
+    assert "doc_id: Agent" in written_content
+    assert "target_doc_id: /会议纪要/Agent补充.md" in written_content
+    assert "relation: part-of" in written_content
+    assert "kb_resource_id: source-resource" in written_content
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_fails_when_term_kb_document_missing_without_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class MissingKbDocumentReader:
+        def read_text(self, *, kn_code: str, file_path: str) -> str:
+            raise orchestrator_module.KbDocumentReadError("file not found")
+
+    class StorageFallbackPlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["ext_attrs"] = {
+                "kb_id": "97",
+                "kb_file_path": "/Concept/Agent.md",
+                "kb_resource_id": "target-resource",
+            }
+            return detail
+
+        def read_source_document(
+            self,
+            base_id: str,
+            origin_file: dict[str, Any],
+        ) -> str:
+            if origin_file.get("kb_resource_id") == "target-resource":
+                return ""
+            return super().read_source_document(base_id, origin_file)
+
+        def get_result(self, base_id: str, file_id: str) -> bytes:
+            assert file_id == "target-resource"
+            return b"# Agent\n\nStorage fallback must not be used."
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: MissingKbDocumentReader(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_read_runtime_result_file_storage",
+        lambda file_path: "",
+        raising=False,
+    )
+    platform = StorageFallbackPlatform(fragments=[_fragment(101, "term-agent")])
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        knowledge_client=FakeBuildKnowledgeClient(),
+    )
+
+    await orchestrator.run(_run_request(instance_ids=["term-agent"]))
+
+    assert platform.executed_actions == []
+    assert platform.updated_status == []
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_uses_template_for_new_term_without_kb_file_reference() -> (
+    None
+):
+    class NewObjectPlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["ext_attrs"] = {}
+            return detail
+
+    platform = NewObjectPlatform(fragments=[_fragment(101, "term-agent")])
+    knowledge_client = FakeBuildKnowledgeClient()
+    orchestrator = ObjectInstanceBuildOrchestrator(
+        platform=platform,
+        knowledge_client=knowledge_client,
+    )
+
+    await orchestrator.run(_run_request(instance_ids=["term-agent"]))
+
+    request = knowledge_client.requests[0]
+    assert request.existing_content == ""
+    assert "# {{name}}" in request.object_template
+    assert platform.executed_actions
+    assert platform.updated_status == [
+        {
+            "base_id": DEFAULT_BASE_ID,
+            "ids": [101],
+            "status": 1,
+            "updated_by": "alice",
+        }
+    ]
+
+
+def test_merge_related_docs_block_deduplicates_existing_records() -> None:
+    content = (
+        "# Agent\n\n"
+        "--- related_docs ---\n\n"
+        "doc_id: Agent\n"
+        "related_docs:\n\n"
+        "- target_doc_id: /会议纪要/Agent补充.md\n"
+        "  relation: part-of\n"
+        "  kb_resource_id: source-resource\n"
+        "- target_doc_id: /方案/Agent方案.md\n"
+        "  relation: supports\n"
+        "  kb_resource_id: plan-resource\n\n"
+        "--- related_docs ---\n"
+    )
+    related_docs = {
+        "doc_id": "Agent",
+        "related_docs": [
+            {
+                "target_doc_id": "/会议纪要/Agent补充.md",
+                "relation": "part-of",
+                "kb_resource_id": "source-resource",
+            },
+            {
+                "target_doc_id": "/产品/Agent产品.md",
+                "relation": "part-of",
+                "kb_resource_id": "",
+            },
+        ],
+    }
+
+    merged = orchestrator_module._merge_related_docs_block(  # noqa: SLF001
+        content,
+        related_docs,
+    )
+
+    assert merged.count("target_doc_id: /会议纪要/Agent补充.md") == 1
+    assert "target_doc_id: /方案/Agent方案.md" in merged
+    assert "relation: supports" in merged
+    assert "target_doc_id: /产品/Agent产品.md" in merged
+    assert "kb_resource_id: \n" not in merged
 
 
 @pytest.mark.asyncio
@@ -756,10 +988,41 @@ async def test_orchestrator_logs_task_stage_summaries(
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_passes_existing_target_document_to_knowledge_request() -> (
-    None
-):
-    platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
+async def test_orchestrator_passes_existing_target_document_to_knowledge_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ExistingTargetPlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["ext_attrs"] = {
+                "kb_id": "97",
+                "kb_file_path": "/Concept/Agent.md",
+                "kb_resource_id": "target-resource",
+            }
+            return detail
+
+    class FakeKbDocumentReader:
+        def read_text(self, *, kn_code: str, file_path: str) -> str:
+            return "# Agent\n\n## 投标标签\n\n原有投标标签内容。"
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: FakeKbDocumentReader(),
+        raising=False,
+    )
+    platform = ExistingTargetPlatform(fragments=[_fragment(101, "term-agent")])
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
@@ -777,10 +1040,30 @@ async def test_orchestrator_passes_existing_target_document_to_knowledge_request
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_does_not_write_when_existing_target_document_is_missing() -> (
-    None
-):
+async def test_orchestrator_does_not_write_when_existing_target_document_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class MissingExistingDocumentPlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["ext_attrs"] = {
+                "kb_id": "97",
+                "kb_file_path": "/Concept/Agent.md",
+                "kb_resource_id": "target-resource",
+            }
+            return detail
+
         def read_source_document(
             self,
             base_id: str,
@@ -793,6 +1076,16 @@ async def test_orchestrator_does_not_write_when_existing_target_document_is_miss
         def get_result(self, base_id: str, file_id: str) -> bytes:
             raise FileNotFoundError(f"Result file not found: {file_id}")
 
+    class MissingKbDocumentReader:
+        def read_text(self, *, kn_code: str, file_path: str) -> str:
+            raise orchestrator_module.KbDocumentReadError("file not found")
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: MissingKbDocumentReader(),
+        raising=False,
+    )
     platform = MissingExistingDocumentPlatform(fragments=[_fragment(101, "term-agent")])
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
@@ -806,8 +1099,41 @@ async def test_orchestrator_does_not_write_when_existing_target_document_is_miss
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_passes_object_template_from_object_ext_property() -> None:
-    platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
+async def test_orchestrator_passes_object_template_from_object_ext_property(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ExistingTargetPlatform(FakeBuildPlatform):
+        def get_term_detail(
+            self,
+            base_id: str,
+            *,
+            library_id: str,
+            term_id: str,
+        ) -> dict[str, Any] | None:
+            detail = super().get_term_detail(
+                base_id,
+                library_id=library_id,
+                term_id=term_id,
+            )
+            assert detail is not None
+            detail["ext_attrs"] = {
+                "kb_id": "97",
+                "kb_file_path": "/Concept/Agent.md",
+                "kb_resource_id": "target-resource",
+            }
+            return detail
+
+    class FakeKbDocumentReader:
+        def read_text(self, *, kn_code: str, file_path: str) -> str:
+            return "# Agent\n\nExisting target content."
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: FakeKbDocumentReader(),
+        raising=False,
+    )
+    platform = ExistingTargetPlatform(fragments=[_fragment(101, "term-agent")])
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
@@ -896,14 +1222,28 @@ async def test_orchestrator_logs_partial_failed_error_details(
 
 
 @pytest.mark.asyncio
-async def test_invoke_object_write_action_uses_datacloud_data_action_pipeline() -> None:
+async def test_invoke_object_write_action_logs_object_action_arguments(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     platform = FakeBuildPlatform(fragments=[])
+    content = (
+        "# Agent\n\n"
+        "Built content.\n\n"
+        "--- related_docs ---\n\n"
+        "doc_id: Agent\n"
+        "related_docs:\n\n"
+        "- target_doc_id: /Concept/Agent-source.md\n"
+        "  relation: part-of\n"
+        "  kb_resource_id: source-resource\n\n"
+        "--- related_docs ---"
+    )
+    caplog.set_level(logging.INFO, logger="datacloud_platform.services.object_action")
 
     result = await invoke_object_write_action(
         platform=platform,
         base_id=DEFAULT_BASE_ID,
         object_code="Concept",
-        content="# Agent",
+        content=content,
         labels={"owner_type": "public"},
         file_description="Agent object instance",
         source_path="/Concept/Agent.md",
@@ -918,12 +1258,22 @@ async def test_invoke_object_write_action_uses_datacloud_data_action_pipeline() 
             "action_code": "write_Concept",
             "arguments": {
                 "source_path": "/Concept/Agent.md",
-                "content": "# Agent",
+                "content": content,
                 "labels": {"owner_type": "public"},
                 "file_description": "Agent object instance",
             },
         }
     ]
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "object_action invoke start" in messages
+    assert "object_action invoke succeeded" in messages
+    assert "object_code=Concept" in messages
+    assert "action_code=write_Concept" in messages
+    assert '"source_path": "/Concept/Agent.md"' in messages
+    assert '"labels": {"owner_type": "public"}' in messages
+    assert f'"content_length": {len(content)}' in messages
+    assert '"content_tail_preview":' in messages
+    assert "--- related_docs ---" in messages
 
 
 @pytest.mark.asyncio

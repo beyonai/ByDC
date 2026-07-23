@@ -49,6 +49,12 @@ PRODUCT_RELATION_FALLBACK_NAMES = (
     "\u5f52\u5c5e\u4ea7\u54c1",
 )
 PROTECTED_LABEL_FIELDS = frozenset({"relations"})
+RELATED_DOCS_BOUNDARY = "--- related_docs ---"
+RELATED_DOCS_RELATION = "part-of"
+_RELATED_DOCS_BLOCK_PATTERN = re.compile(
+    rf"\n?{re.escape(RELATED_DOCS_BOUNDARY)}\n(?P<body>.*?)\n{re.escape(RELATED_DOCS_BOUNDARY)}\n?",
+    re.DOTALL,
+)
 _INSTANCE_TEMPLATE_HEADING_PATTERN = re.compile(
     r"(?m)^##\s*5[.．、]?\s*实例卡片模板\s*$"
 )
@@ -374,7 +380,7 @@ class ObjectInstanceBuildOrchestrator:
             output_data=_text_summary(existing_content),
             elapsed_ms=_elapsed_ms(stage_started),
         )
-        if _has_document_reference(term_file_ref) and not existing_content.strip():
+        if _has_kb_document_reference(term_file_ref) and not existing_content.strip():
             raise ValueError(
                 f"existing object content not found for instance_id={group.instance_id}"
             )
@@ -390,6 +396,25 @@ class ObjectInstanceBuildOrchestrator:
                 "fragment_ids": _fragment_ids(group.fragments),
             },
             output_data=_text_summary(source_content),
+            elapsed_ms=_elapsed_ms(stage_started),
+        )
+        stage_started = perf_counter()
+        related_docs = _build_related_docs_from_group(
+            group=group,
+            term_detail=term_detail,
+        )
+        _log_task_stage(
+            task_id=task_id,
+            stage="build_related_docs",
+            status="succeeded",
+            instance_id=group.instance_id,
+            input_data={
+                "fragment_ids": _fragment_ids(group.fragments),
+            },
+            output_data={
+                "doc_id": related_docs.get("doc_id") or "",
+                "related_doc_count": len(_related_doc_items(related_docs)),
+            },
             elapsed_ms=_elapsed_ms(stage_started),
         )
         stage_started = perf_counter()
@@ -418,6 +443,7 @@ class ObjectInstanceBuildOrchestrator:
             label_schema=label_schema,
             object_template=request_object_template,
             template_constraints=template_constraints,
+            related_docs=related_docs,
             existing_content=existing_content,
             source_content=source_content,
             fragments=[
@@ -476,6 +502,23 @@ class ObjectInstanceBuildOrchestrator:
                 },
                 elapsed_ms=_elapsed_ms(stage_started),
             )
+        stage_started = perf_counter()
+        result = _apply_related_docs_to_build_result(
+            result=result,
+            related_docs=related_docs,
+        )
+        _log_task_stage(
+            task_id=task_id,
+            stage="merge_related_docs",
+            status="succeeded",
+            instance_id=group.instance_id,
+            input_data={
+                "doc_id": related_docs.get("doc_id") or "",
+                "related_doc_count": len(_related_doc_items(related_docs)),
+            },
+            output_data=_text_summary(result.content),
+            elapsed_ms=_elapsed_ms(stage_started),
+        )
         stage_started = perf_counter()
         _validate_build_result(result, label_schema)
         _log_task_stage(
@@ -647,10 +690,10 @@ class ObjectInstanceBuildOrchestrator:
         )
 
     def _read_existing_content(self, term_detail: dict[str, Any]) -> str:
-        return self._read_content_from_file_reference(
-            _term_file_reference(term_detail),
-            missing_log_template="existing object file not found: file_id=%s",
-        )
+        file_ref = _term_file_reference(term_detail)
+        if not _has_kb_document_reference(file_ref):
+            return ""
+        return _read_kb_document_from_reference(file_ref)
 
     def _read_content_from_file_reference(
         self,
@@ -1382,9 +1425,255 @@ def _validate_build_result(
         )
 
 
+def _apply_related_docs_to_build_result(
+    *,
+    result: ObjectInstanceBuildResult,
+    related_docs: dict[str, Any],
+) -> ObjectInstanceBuildResult:
+    entries = _related_doc_items(related_docs)
+    if not entries:
+        return result
+
+    diagnostics = dict(result.diagnostics)
+    diagnostics["related_docs"] = {
+        "doc_id": _pick_str(related_docs, "doc_id", "docId"),
+        "related_doc_count": len(entries),
+    }
+    return ObjectInstanceBuildResult(
+        content=_merge_related_docs_block(result.content, related_docs),
+        labels=result.labels,
+        file_description=result.file_description,
+        confidence=result.confidence,
+        model_name=result.model_name,
+        diagnostics=diagnostics,
+    )
+
+
 def _origin_file(fragment: dict[str, Any]) -> dict[str, Any]:
     origin_file = fragment.get("origin_file") or fragment.get("originFile") or {}
     return _to_dict(origin_file)
+
+
+def _build_related_docs_from_group(
+    *,
+    group: _FragmentGroup,
+    term_detail: dict[str, Any],
+) -> dict[str, Any]:
+    entries: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for fragment in _sort_fragments(group.fragments):
+        origin_file = _origin_file(fragment)
+        target_doc_id = _pick_str(
+            origin_file,
+            "kb_file_path",
+            "kbFilePath",
+            "file_path",
+            "filePath",
+        )
+        fragment_id = str(fragment.get("id") or "").strip()
+        if not target_doc_id:
+            logger.info(
+                "object_instance_build related_doc skipped: instance_id=%s "
+                "fragment_id=%s reason=missing_origin_file_path origin_file=%s",
+                group.instance_id,
+                fragment_id,
+                _json_for_log(origin_file),
+            )
+            continue
+
+        kb_resource_id = _pick_str(
+            origin_file,
+            "kb_resource_id",
+            "kbResourceId",
+            "resource_id",
+            "resourceId",
+            "file_id",
+            "fileId",
+        )
+        entry = {
+            "target_doc_id": target_doc_id,
+            "relation": RELATED_DOCS_RELATION,
+            "kb_resource_id": kb_resource_id,
+        }
+        key = _related_doc_key(entry)
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(entry)
+
+    return {
+        "doc_id": _related_docs_doc_id(group=group, term_detail=term_detail),
+        "related_docs": entries,
+    }
+
+
+def _related_docs_doc_id(
+    *,
+    group: _FragmentGroup,
+    term_detail: dict[str, Any],
+) -> str:
+    for fragment in _sort_fragments(group.fragments):
+        doc_id = _pick_str(fragment, "instance_name", "instanceName")
+        if doc_id:
+            return doc_id
+    return (
+        _pick_str(term_detail, "term_name", "termName")
+        or _pick_str(term_detail, "term_code", "termCode")
+        or group.instance_id
+    )
+
+
+def _merge_related_docs_block(
+    content: str,
+    related_docs: dict[str, Any],
+) -> str:
+    normalized = content.replace("\r\n", "\n").replace("\r", "\n")
+    existing_doc_id = ""
+    existing_entries: list[dict[str, str]] = []
+    for match in _RELATED_DOCS_BLOCK_PATTERN.finditer(normalized):
+        block_doc_id, block_entries = _parse_related_docs_block(match.group("body"))
+        if block_doc_id and not existing_doc_id:
+            existing_doc_id = block_doc_id
+        existing_entries.extend(block_entries)
+
+    merged_entries = _dedupe_related_doc_entries(
+        [*existing_entries, *_related_doc_items(related_docs)]
+    )
+    without_blocks = _RELATED_DOCS_BLOCK_PATTERN.sub("\n", normalized)
+    without_blocks = re.sub(r"\n{3,}", "\n\n", without_blocks).strip()
+    if not merged_entries:
+        return without_blocks
+
+    doc_id = _pick_str(related_docs, "doc_id", "docId") or existing_doc_id
+    rendered_block = _render_related_docs_block(
+        doc_id=doc_id,
+        entries=merged_entries,
+    )
+    if not without_blocks:
+        return rendered_block
+    return f"{without_blocks}\n\n{rendered_block}"
+
+
+def _parse_related_docs_block(body: str) -> tuple[str, list[dict[str, str]]]:
+    doc_id = ""
+    entries: list[dict[str, str]] = []
+    current_entry: dict[str, str] = {}
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("doc_id:"):
+            doc_id = _parse_related_doc_scalar(line)
+            continue
+        if line.startswith("- target_doc_id:"):
+            if current_entry:
+                normalized = _normalize_related_doc_entry(current_entry)
+                if normalized is not None:
+                    entries.append(normalized)
+            current_entry = {"target_doc_id": _parse_related_doc_scalar(line)}
+            continue
+        if line.startswith("relation:") and current_entry:
+            current_entry["relation"] = _parse_related_doc_scalar(line)
+            continue
+        if line.startswith("kb_resource_id:") and current_entry:
+            current_entry["kb_resource_id"] = _parse_related_doc_scalar(line)
+
+    if current_entry:
+        normalized = _normalize_related_doc_entry(current_entry)
+        if normalized is not None:
+            entries.append(normalized)
+    return doc_id, entries
+
+
+def _parse_related_doc_scalar(line: str) -> str:
+    value = line.split(":", 1)[1].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def _related_doc_items(related_docs: dict[str, Any]) -> list[dict[str, str]]:
+    raw_items = related_docs.get("related_docs") or related_docs.get("relatedDocs")
+    if not isinstance(raw_items, list):
+        return []
+    items: list[dict[str, str]] = []
+    for raw_item in raw_items:
+        normalized = _normalize_related_doc_entry(_to_dict(raw_item))
+        if normalized is not None:
+            items.append(normalized)
+    return items
+
+
+def _normalize_related_doc_entry(entry: dict[str, Any]) -> dict[str, str] | None:
+    target_doc_id = _pick_str(
+        entry,
+        "target_doc_id",
+        "targetDocId",
+        "kb_file_path",
+        "kbFilePath",
+        "file_path",
+        "filePath",
+    )
+    if not target_doc_id:
+        return None
+
+    return {
+        "target_doc_id": target_doc_id,
+        "relation": _pick_str(entry, "relation") or RELATED_DOCS_RELATION,
+        "kb_resource_id": _pick_str(
+            entry,
+            "kb_resource_id",
+            "kbResourceId",
+            "resource_id",
+            "resourceId",
+            "file_id",
+            "fileId",
+        ),
+    }
+
+
+def _dedupe_related_doc_entries(
+    entries: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    deduped: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for entry in entries:
+        key = _related_doc_key(entry)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(entry)
+    return deduped
+
+
+def _related_doc_key(entry: dict[str, str]) -> tuple[str, str, str]:
+    return (
+        entry.get("target_doc_id", ""),
+        entry.get("relation", ""),
+        entry.get("kb_resource_id", ""),
+    )
+
+
+def _render_related_docs_block(
+    *,
+    doc_id: str,
+    entries: list[dict[str, str]],
+) -> str:
+    lines = [
+        RELATED_DOCS_BOUNDARY,
+        "",
+        f"doc_id: {_yaml_scalar(doc_id)}",
+        "related_docs:",
+        "",
+    ]
+    for entry in entries:
+        lines.append(f"- target_doc_id: {_yaml_scalar(entry['target_doc_id'])}")
+        lines.append(f"  relation: {_yaml_scalar(entry['relation'])}")
+        kb_resource_id = entry.get("kb_resource_id", "")
+        if kb_resource_id:
+            lines.append(f"  kb_resource_id: {_yaml_scalar(kb_resource_id)}")
+    lines.extend(["", RELATED_DOCS_BOUNDARY])
+    return "\n".join(lines)
 
 
 def _term_file_reference(term_detail: dict[str, Any]) -> dict[str, Any]:
@@ -1406,19 +1695,10 @@ def _term_file_reference(term_detail: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _has_document_reference(file_ref: dict[str, Any]) -> bool:
+def _has_kb_document_reference(file_ref: dict[str, Any]) -> bool:
     return bool(
-        _pick_str(
-            file_ref,
-            "kb_resource_id",
-            "kbResourceId",
-            "file_id",
-            "fileId",
-            "file_path",
-            "filePath",
-            "kb_file_path",
-            "kbFilePath",
-        )
+        _pick_str(file_ref, "kb_id", "kbId", "knCode")
+        and _pick_str(file_ref, "kb_file_path", "kbFilePath", "file_path", "filePath")
     )
 
 

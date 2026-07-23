@@ -55,6 +55,7 @@ def build_object_instance_prompt(request: ObjectInstanceBuildRequest) -> str:
         "existing_content": request.existing_content,
         "object_template": request.object_template,
         "template_constraints": request.template_constraints,
+        "related_docs": request.related_docs,
         "source_content": request.source_content,
         "fragments": fragments,
     }
@@ -83,8 +84,10 @@ def build_object_instance_prompt(request: ObjectInstanceBuildRequest) -> str:
         "才按照 object_template 的 Markdown/frontmatter 结构组织输出。\n"
         "6. template_constraints 是填写要求、字段说明、关系说明、常见错误和检查清单，"
         "必须作为生成 content 和 labels 的约束，不要把这些说明文字原样复制到最终 content。\n"
-        "7. labels 只能包含 label_schema 中允许的字段。\n"
-        "8. 枚举字段输出值必须使用枚举 code。\n"
+        "7. related_docs 是 Platform 根据 fragment.origin_file 生成的来源关系；"
+        "不要编造、删除或改写 related_docs 里的 relation、target_doc_id、kb_resource_id。\n"
+        "8. labels 只能包含 label_schema 中允许的字段。\n"
+        "9. 枚举字段输出值必须使用枚举 code。\n"
     )
 
 
@@ -122,6 +125,7 @@ def _build_matching_context(request: ObjectInstanceBuildRequest) -> str:
         request.existing_content,
         request.object_template,
         request.template_constraints,
+        json.dumps(request.related_docs, ensure_ascii=False),
         request.source_content,
         *(fragment.content for fragment in request.fragments),
     ]
