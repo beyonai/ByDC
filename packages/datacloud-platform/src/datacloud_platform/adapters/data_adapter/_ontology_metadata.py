@@ -1353,7 +1353,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         _run_p2 = _should_run_path2(enable_chunk_recall)
 
         # ── Collect kb_ids for path 2 (only when object_codes is provided) ─
-        kb_ids: dict[str, dict] = {}
+        kb_ids: dict[str, dict[str, Any]] = {}
         if _run_p2 and object_codes is not None:
             kb_ids = self._collect_kb_ids(base_id, object_codes)
 
@@ -1422,7 +1422,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
     async def _do_path2(
         self,
-        kb_info: dict[str, dict],
+        kb_info: dict[str, dict[str, Any]],
         query: str,
         top_k: int,
     ) -> list[dict[str, Any]]:
@@ -1463,9 +1463,9 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         self,
         base_id: str,
         object_codes: list[str],
-    ) -> dict[str, dict]:
+    ) -> dict[str, dict[str, Any]]:
         """遍历对象列表，提取 kb_id → {kb_directory, object_codes} 映射。"""
-        result: dict[str, dict] = {}
+        result: dict[str, dict[str, Any]] = {}
         store = self._entity_store.sub_store(base_id)
         for oc in object_codes:
             try:
@@ -2043,6 +2043,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                     }
                 )
                 return sorted(results, key=lambda h: h["score"], reverse=True)[:top_k]
+        return []
 
     def _match_chunks_to_terms_by_filepath(
         self,
@@ -2095,34 +2096,15 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             )
             if fp and fp in file_scores:
                 seen.add(tid)
-                ext_attrs = (
-                    item.get("ext_attrs", {})
-                    if isinstance(item.get("ext_attrs"), dict)
-                    else {}
-                )
-                labels = (
-                    item.get("labels", {})
-                    if isinstance(item.get("labels"), dict)
-                    else {}
-                )
-                results.append(
-                    {
-                        "term_id": tid,
-                        "term_code": item.get("term_code", ""),
-                        "term_name": item.get("term_name", ""),
-                        "term_type_code": tp,
-                        "file_name": fp,
-                        "kb_resource_id": (
-                            ext_attrs.get("kb_resource_id")
-                            or ext_attrs.get("resource_id")
-                            or labels.get("kb_resource_id")
-                            or labels.get("resource_id")
-                        ),
-                        "kb_id": ext_attrs.get("kb_id") or labels.get("kb_id"),
-                        "match_type": "chunk_to_term",
-                        "score": file_scores[fp],
-                    }
-                )
+                results.append({
+                    "term_id": tid,
+                    "term_code": item.get("term_code", ""),
+                    "term_name": item.get("term_name", ""),
+                    "term_type_code": tp,
+                    "file_name": fp,
+                    "match_type": "chunk_to_term",
+                    "score": file_scores[fp],
+                })
 
         logger.info(
             "_match_chunks_to_terms_by_filepath: %d filePaths × label_filter → %d term matches",

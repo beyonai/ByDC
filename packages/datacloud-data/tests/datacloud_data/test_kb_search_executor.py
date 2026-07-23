@@ -173,7 +173,30 @@ def test_render_markdown_with_front_matter_skips_empty_values() -> None:
         "会议内容",
     )
 
-    assert rendered == ('---\nstatus: "active"\nis_active: false\ncount: 0\n---\n\n会议内容')
+    assert rendered == ("---\nstatus: active\nis_active: false\ncount: 0\n---\n\n会议内容")
+
+
+def test_render_markdown_with_front_matter_keeps_nested_relations() -> None:
+    rendered = _render_markdown_with_front_matter(
+        {
+            "name": "Ontology",
+            "product_code": "byDC",
+            "relations": {"maps-to": {"Concept": ["Ontology Reasoning"]}},
+        },
+        "# Ontology",
+    )
+
+    assert rendered == (
+        "---\n"
+        "name: Ontology\n"
+        "product_code: byDC\n"
+        "relations:\n"
+        "  maps-to:\n"
+        "    Concept:\n"
+        "      - Ontology Reasoning\n"
+        "---\n\n"
+        "# Ontology"
+    )
 
 
 @pytest.mark.asyncio
@@ -1055,6 +1078,63 @@ async def test_http_kb_write_imports_markdown_file_with_front_matter() -> None:
     assert content.decode("utf-8").startswith('---\nstatus: "active"\n---\n\n会议内容')
     assert calls[2].kwargs["json"] == {"knCode": "kb-sales", "filePath": "/sales/meeting.md"}
     assert result.records[0]["filePath"] == "/sales/meeting.md"
+
+
+@pytest.mark.asyncio
+async def test_http_kb_write_keeps_related_docs_block_at_markdown_tail() -> None:
+    """related_docs 是文档来源追踪块，应保留在正文末尾，不提升为 front matter。"""
+    list_resp = MagicMock()
+    list_resp.status_code = 200
+    list_resp.json.return_value = {
+        "resultCode": "0",
+        "resultMsg": "success",
+        "resultObject": {"data": [{"propertyName": "name", "valueType": "string"}]},
+    }
+    import_resp = MagicMock()
+    import_resp.status_code = 200
+    import_resp.json.return_value = {"resultCode": "0", "resultMsg": "success", "resultObject": {}}
+    build_resp = MagicMock()
+    build_resp.status_code = 200
+    build_resp.json.return_value = {"resultCode": "0", "resultMsg": "success", "resultObject": {}}
+    related_docs_block = (
+        "--- related_docs ---\n\n"
+        "doc_id: 本体论\n"
+        "related_docs:\n\n"
+        "- target_doc_id: /Document/会议纪要.md\n"
+        "  relation: part-of\n"
+        "  kb_resource_id: 11010017\n\n"
+        "--- related_docs ---"
+    )
+    backend = HttpKnowledgeSearchBackend({"endpoint_url": "http://kb-service"})
+    request = KnowledgeWriteRequest(
+        object_code="kb_object",
+        datasource_alias="kb_docs",
+        kb_id="97",
+        kb_resource_id="10000795",
+        file_path="/Methodology/本体论.md",
+        labels={"name": "本体论", "product_code": "byDC"},
+        content=f"# 本体论\n\n正文内容。\n\n{related_docs_block}",
+        metadata_properties=[
+            {
+                "propertyName": "name",
+                "valueType": "string",
+                "description": "名称",
+            }
+        ],
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        side_effect=[list_resp, import_resp, build_resp],
+    ) as mock_post:
+        await backend.write(request)
+
+    _filename, content, _content_type = mock_post.call_args_list[1].kwargs["files"]["fileContent"]
+    markdown = content.decode("utf-8")
+    assert "part-of:" not in markdown.split("---", 2)[1]
+    assert markdown.endswith(related_docs_block)
+    assert markdown.index("# 本体论") < markdown.index("--- related_docs ---")
 
 
 @pytest.mark.asyncio

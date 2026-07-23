@@ -4,6 +4,7 @@ Methods:
   - batchCreate: batch-create fragments (instance_id, origin_instance_id, content)
   - listByInstanceIds: paginated query by instance_id list
   - updateStatus: bulk status update by primary-key id list
+  - buildObjectInstance: submit object instance build work in the background
 
 User identity is read from the ``X-User-Code`` request header.
 base_id always uses the global DEFAULT_BASE_ID — callers must not pass it.
@@ -18,6 +19,10 @@ from fastapi import Request
 
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.common import ok
+from datacloud_platform.services.object_instance_build_task_service import (
+    SubmitObjectInstanceBuildTaskRequest,
+    get_object_instance_build_task_service,
+)
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -25,11 +30,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _USER_CODE_HEADER = "X-User-Code"
+_BEYOND_TOKEN_HEADER = "beyond-token"
 
 
 def _user_code(req: Request) -> str:
     """Extract operator identifier from X-User-Code header."""
     return req.headers.get(_USER_CODE_HEADER, "")
+
+
+def _beyond_token(req: Request) -> str:
+    """Extract Beyond-Token header required by downstream UserFS writes."""
+    return req.headers.get(_BEYOND_TOKEN_HEADER, "").strip()
 
 
 # ── batchCreate ───────────────────────────────────────────────────────────────
@@ -146,10 +157,55 @@ def _update_status(
     return ok(data={"updated": updated})
 
 
+async def _build_object_instance(
+    platform: DatacloudPlatform, params: dict[str, Any], req: Request
+) -> Any:
+    """Accept object instance build work and run it after the response."""
+    raw_ids = params.get("instance_ids", [])
+    if not isinstance(raw_ids, list):
+        raise ValueError("instance_ids must be a list")
+    instance_ids = [str(item) for item in raw_ids]
+
+    operator = _user_code(req)
+    if not operator:
+        raise ValueError(f"Request header '{_USER_CODE_HEADER}' is required")
+    beyond_token = _beyond_token(req)
+    if not beyond_token:
+        raise ValueError(f"Request header '{_BEYOND_TOKEN_HEADER}' is required")
+
+    service = get_object_instance_build_task_service(platform)
+    accepted, run_request = service.accept(
+        SubmitObjectInstanceBuildTaskRequest(
+            instance_ids=instance_ids,
+            batch_size=int(params.get("batch_size", 20)),
+            operator=operator,
+            beyond_token=beyond_token,
+        )
+    )
+    background_tasks = getattr(req.state, "background_tasks", None)
+    if background_tasks is None:
+        await service.run(run_request)
+    else:
+        background_tasks.add_task(service.run, run_request)
+    return ok(data=accepted.to_dict(), message="accepted")
+
+
+def _get_object_instance_build_task(
+    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+) -> Any:
+    """Task table status query is no longer supported."""
+    raise NotImplementedError(
+        "getObjectInstanceBuildTask is no longer supported; "
+        "check ontology_doc_fragment.status and service logs instead"
+    )
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 REGISTRY: dict[str, Any] = {
     "batchCreate": _batch_create,
     "listByInstanceIds": _list_by_instance_ids,
     "updateStatus": _update_status,
+    "buildObjectInstance": _build_object_instance,
+    "getObjectInstanceBuildTask": _get_object_instance_build_task,
 }

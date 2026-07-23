@@ -137,7 +137,7 @@ def create_app(
     _has_userfs = False
 
     try:
-        from datacloud_data_sdk.context import InvocationContext  # type: ignore[import-not-found]
+        from datacloud_data_sdk.context import InvocationContext
 
         _has_invocation_ctx = True
     except ImportError:
@@ -146,7 +146,7 @@ def create_app(
         )
 
     try:
-        from byclaw_userfs_storage import (  # type: ignore[import-not-found]
+        from byclaw_userfs_storage import (
             reset_byclaw_userfs_headers,
             set_byclaw_userfs_headers,
         )
@@ -170,7 +170,7 @@ def create_app(
                 tool_mode = headers.get("x-tool-list-mode", "unified")
                 if tool_mode not in ("unified", "per_object"):
                     tool_mode = "unified"
-                inv_ctx = InvocationContext(  # type: ignore[possibly-undefined]
+                inv_ctx = InvocationContext(
                     tenant_id=headers.get("x-tenant-id", ""),
                     user_id=headers.get("x-user-code", ""),
                     session_id=headers.get("x-session-id", ""),
@@ -187,7 +187,7 @@ def create_app(
             # ── ByClaw UserFS ──
             userfs_token: Any = None
             if _has_userfs:
-                userfs_token = set_byclaw_userfs_headers(  # type: ignore[possibly-undefined]
+                userfs_token = set_byclaw_userfs_headers(
                     {"beyond-token": headers.get("beyond-token", "")}
                 )
 
@@ -195,7 +195,7 @@ def create_app(
                 return await call_next(request)
             finally:
                 if userfs_token is not None:
-                    reset_byclaw_userfs_headers(userfs_token)  # type: ignore[possibly-undefined]
+                    reset_byclaw_userfs_headers(userfs_token)
                 if inv_ctx is not None:
                     inv_ctx.__exit__(None, None, None)
 

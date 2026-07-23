@@ -10,7 +10,6 @@ This is the same path that OntologyLoader.invoke_action() uses internally:
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -18,53 +17,12 @@ from fastapi import Request
 
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.models.common import ok
-from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_platform.services.object_action import invoke_object_action
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
 
 logger = logging.getLogger(__name__)
-
-
-def _unwrap_mcp_result(mcp: dict[str, Any]) -> dict[str, Any]:
-    """Unwrap the MCP envelope returned by ActionExecutor.execute().
-
-    ActionExecutor wraps its result as:
-      {"content": [{"type": "text", "text": "<json>"}], "isError": false}
-
-    The inner JSON has shape:
-      {"code": 0, "message": "success", "data": {"result_type": ..., "records": [...], ...}}
-
-    Returns the inner ``data`` dict, or re-raises if the inner code signals failure.
-    """
-    content = mcp.get("content") or []
-    if not content:
-        return mcp
-
-    text = content[0].get("text", "") if isinstance(content[0], dict) else ""
-    if not text:
-        return mcp
-
-    try:
-        inner = json.loads(text)
-    except (json.JSONDecodeError, TypeError):
-        return mcp
-
-    inner_data: dict[str, Any] = inner.get("data") or {}
-    inner_code: int = int(inner.get("code") or 0)
-
-    if inner_code not in (0, 200):
-        raise RuntimeError(
-            inner.get("message") or f"KB action failed (code={inner_code})"
-        )
-
-    return {
-        "records": inner_data.get("records") or [],
-        "total": inner_data.get("total")
-        or inner_data.get("meta", {}).get("total")
-        or 0,
-        "meta": inner_data.get("meta") or {},
-    }
 
 
 # ── invokeAction ──────────────────────────────────────────────────────────────
@@ -104,15 +62,13 @@ async def _invoke_action(
     arguments: dict[str, Any] = params.get("arguments") or {}
     base_id: str = str(params.get("base_id") or DEFAULT_BASE_ID)
 
-    loader = platform._load_ontology_cached(base_id)  # noqa: SLF001
-    if isinstance(loader, OntologyLoader):
-        loader.configure(platform=platform)
-    platform.inject_virtual_actions(base_id, loader)
-
-    mcp_result = await platform.execute_action(
-        base_id, loader, object_code, action_code, arguments
+    data = await invoke_object_action(
+        platform=platform,
+        base_id=base_id,
+        object_code=object_code,
+        action_code=action_code,
+        arguments=arguments,
     )
-    data = _unwrap_mcp_result(mcp_result)
     return ok(data=data)
 
 

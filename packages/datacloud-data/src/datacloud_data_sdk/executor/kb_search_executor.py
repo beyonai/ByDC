@@ -35,11 +35,10 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeUpdateRequest,
     KnowledgeWriteBackend,
     KnowledgeWriteRequest,
-    _merge_related_docs_into_labels,
     _parse_related_docs,
     _related_doc_id_to_term,
     _render_markdown_with_front_matter,
-    _strip_related_docs_blocks,
+    _strip_front_matter,
     _to_markdown_file_path,
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -904,7 +903,9 @@ class KbSearchExecutor:
                                 break
                     except Exception:  # noqa: BLE001
                         logger.warning(
-                            "_enqueue_kb_term_sync: search_terms failed term_code=%s", tc, exc_info=True
+                            "_enqueue_kb_term_sync: search_terms failed term_code=%s",
+                            tc,
+                            exc_info=True,
                         )
                 logger.debug(
                     "KB 术语同步完成: object=%s terms=%d mapped=%d",
@@ -1271,10 +1272,9 @@ def _attach_session_file(
             logical_path = f"/datacloud/kb/{file_name}"
 
             # Render content with YAML front-matter labels, identical to the KB upload.
-            related_docs = _parse_related_docs(req.content)
-            effective_labels = _merge_related_docs_into_labels(req.labels, related_docs)
-            clean_content = _strip_related_docs_blocks(req.content)
-            file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
+            # related_docs stays at the Markdown tail as a source-tracing block.
+            clean_content = _strip_front_matter(req.content)
+            file_content = _render_markdown_with_front_matter(req.labels, clean_content)
 
             storage.write_text(logical_path, file_content)
             written_paths.append(logical_path)

@@ -159,6 +159,28 @@ class OntologyDocFragmentMixin:
             instance_ids, page_index=page_index, page_size=page_size, status=status
         )
 
+    def list_fragments_for_build(
+        self,
+        _base_id: str,  # noqa: ARG002
+        *,
+        instance_ids: list[str],
+        page_index: int = 1,
+        page_size: int = 20,
+        status: int = 0,
+    ) -> dict[str, Any]:
+        """Paginated query of unbuilt fragments for object instance build tasks."""
+        from datacloud_platform.adapters.data_adapter._ontology_doc_fragment import (  # noqa: PLC0415
+            OntologyDocFragmentAdapter,
+        )
+
+        adapter = OntologyDocFragmentAdapter()
+        return adapter.list_for_build(
+            instance_ids=instance_ids,
+            page_index=page_index,
+            page_size=page_size,
+            status=status,
+        )
+
     def update_fragment_status_by_ids(
         self,
         _base_id: str,  # noqa: ARG002
@@ -228,7 +250,7 @@ def _extract_origin_file(detail: Any) -> dict[str, Any]:
         return {}
 
     result: dict[str, Any] = {}
-    for key in ("kb_resource_id", "kb_id", "file_path"):
+    for key in ("kb_resource_id", "kb_id", "kb_file_path"):
         val = ext_attrs.get(key)
         if val is not None:
             result[key] = val

@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
 from starlette import status
 from starlette.concurrency import run_in_threadpool
 
@@ -127,10 +127,12 @@ def create_rpc_router(platform: DatacloudPlatform) -> APIRouter:
         method: str,
         body: dict[str, Any],
         request: Request,
+        background_tasks: BackgroundTasks,
         _bt: None = Depends(extract_beyond_token),
     ) -> Any:
         request.state.rpc_service = service
         request.state.rpc_method = method
+        request.state.background_tasks = background_tasks
         logger.info("RPC dispatch: %s/%s", service, method)
 
         svc_registry = registry.get(service)

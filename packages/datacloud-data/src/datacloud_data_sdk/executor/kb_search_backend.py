@@ -348,15 +348,9 @@ class HttpKnowledgeSearchBackend:
         config = self._get_config(request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
 
-        # Merge relation info parsed from --- related_docs --- fenced blocks into labels.
-        related_docs = _parse_related_docs(request.content)
-        effective_labels = _merge_related_docs_into_labels(request.labels, related_docs)
-
-        # Strip the --- related_docs --- blocks from content before uploading.
-        clean_content = _strip_related_docs_blocks(request.content)
-        # Strip any leading YAML front matter (--- ... ---) so it is not duplicated.
-        clean_content = _strip_front_matter(clean_content)
-        file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
+        # Keep related_docs as a Markdown body block; only remove duplicated leading front matter.
+        clean_content = _strip_front_matter(request.content)
+        file_content = _render_markdown_with_front_matter(request.labels, clean_content)
         filename = PurePosixPath(markdown_file_path).name or "document.md"
         data = {
             "knCode": request.kb_id,
@@ -415,7 +409,7 @@ class HttpKnowledgeSearchBackend:
                 raise KbExecutionError(request.datasource_alias, str(exc)) from exc
 
         record = {
-            **effective_labels,
+            **request.labels,
             "knCode": request.kb_id,
             "filePath": markdown_file_path,
             "content": request.content,
@@ -441,11 +435,9 @@ class HttpKnowledgeSearchBackend:
         config = self._get_config(request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
 
-        related_docs = _parse_related_docs(request.content)
-        effective_labels = _merge_related_docs_into_labels(request.labels, related_docs)
-        clean_content = _strip_related_docs_blocks(request.content)
-        clean_content = _strip_front_matter(clean_content)
-        file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
+        # Keep related_docs as a Markdown body block; only remove duplicated leading front matter.
+        clean_content = _strip_front_matter(request.content)
+        file_content = _render_markdown_with_front_matter(request.labels, clean_content)
         filename = PurePosixPath(markdown_file_path).name or "document.md"
 
         form_data: dict[str, str] = {
@@ -495,7 +487,7 @@ class HttpKnowledgeSearchBackend:
                 raise KbExecutionError(request.datasource_alias, str(exc)) from exc
 
         record: dict[str, Any] = {
-            **effective_labels,
+            **request.labels,
             "knCode": request.kb_id,
             "filePath": markdown_file_path,
             "content": request.content,
@@ -1853,12 +1845,41 @@ def _is_empty_front_matter_value(value: Any) -> bool:
 
 
 def _yaml_lines(key: str, value: Any) -> list[str]:
-    if isinstance(value, list):
-        lines = [f"{key}:"]
-        for item in value:
-            lines.append(f"  - {_yaml_scalar(item)}")
+    return _yaml_value_lines(str(key), value, indent=0)
+
+
+def _yaml_value_lines(key: str, value: Any, *, indent: int) -> list[str]:
+    prefix = " " * indent
+    if isinstance(value, dict):
+        lines = [f"{prefix}{key}:"]
+        for child_key, child_value in value.items():
+            if _is_empty_front_matter_value(child_value):
+                continue
+            lines.extend(_yaml_value_lines(str(child_key), child_value, indent=indent + 2))
         return lines
-    return [f"{key}: {_yaml_scalar(value)}"]
+    if isinstance(value, list):
+        lines = [f"{prefix}{key}:"]
+        for item in value:
+            lines.extend(_yaml_list_item_lines(item, indent=indent + 2))
+        return lines
+    return [f"{prefix}{key}: {_yaml_scalar(value)}"]
+
+
+def _yaml_list_item_lines(value: Any, *, indent: int) -> list[str]:
+    prefix = " " * indent
+    if isinstance(value, dict):
+        lines = [f"{prefix}-"]
+        for child_key, child_value in value.items():
+            if _is_empty_front_matter_value(child_value):
+                continue
+            lines.extend(_yaml_value_lines(str(child_key), child_value, indent=indent + 2))
+        return lines
+    if isinstance(value, list):
+        lines = [f"{prefix}-"]
+        for item in value:
+            lines.extend(_yaml_list_item_lines(item, indent=indent + 2))
+        return lines
+    return [f"{prefix}- {_yaml_scalar(value)}"]
 
 
 def _yaml_scalar(value: Any) -> str:
@@ -1868,7 +1889,12 @@ def _yaml_scalar(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, (int, float)):
         return str(value)
-    return json.dumps(str(value), ensure_ascii=False)
+    text = str(value).strip()
+    if not text:
+        return '""'
+    if re.search(r"[:\r\n]|^\s|\s$|^[\[\]{},&*#?!|>'\"%@`-]", text):
+        return json.dumps(text, ensure_ascii=False)
+    return text
 
 
 _SYSTEM_FIELD_TYPES: dict[str, str] = {
