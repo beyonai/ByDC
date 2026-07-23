@@ -144,6 +144,42 @@ def test_object_instance_prompt_uses_object_template_as_merge_constraint() -> No
     )
 
 
+def test_object_instance_prompt_includes_platform_related_docs_context() -> None:
+    request = ObjectInstanceBuildRequest(
+        instance_id="term-agent",
+        origin_instance_id="origin-agent",
+        term_detail={"term_name": "Agent", "term_type": "Concept"},
+        object_schema={"objectCode": "Concept"},
+        label_schema=_label_schema(),
+        existing_content="# Agent\n\n已有内容。",
+        source_content="Agent 会议纪要补充。",
+        related_docs={
+            "doc_id": "Agent",
+            "related_docs": [
+                {
+                    "target_doc_id": "/会议纪要/Agent补充.md",
+                    "relation": "part-of",
+                    "kb_resource_id": "source-resource",
+                }
+            ],
+        },
+        fragments=[
+            ObjectInstanceFragment(
+                fragment_id="fragment-agent-001",
+                content="Agent fragment content",
+                origin_file={"kb_file_path": "/会议纪要/Agent补充.md"},
+            )
+        ],
+    )
+
+    prompt = build_object_instance_prompt(request)
+
+    assert '"related_docs"' in prompt
+    assert "/会议纪要/Agent补充.md" in prompt
+    assert "related_docs 是 Platform 根据 fragment.origin_file 生成的来源关系" in prompt
+    assert "不要编造、删除或改写 related_docs 里的 relation" in prompt
+
+
 def test_retry_prompt_requires_json_only_and_omits_raw_output() -> None:
     prompt = build_object_instance_retry_prompt(
         original_prompt="ORIGINAL_PROMPT_WITH_existing_content",

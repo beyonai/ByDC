@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
+
+logger = logging.getLogger(__name__)
+CONTENT_PREVIEW_CHARS = 800
 
 
 async def invoke_object_write_action(
@@ -58,18 +62,51 @@ async def invoke_object_action(
     platform.inject_virtual_actions(base_id, loader)
 
     get_object = getattr(loader, "get_object", None)
-    if callable(get_object):
-        target_object = get_object(object_code)
-        action_result = await target_object.invoke_action(action_code, arguments)
-    else:
-        action_result = await platform.execute_action(
+    transport = "loader_object" if callable(get_object) else "platform_execute_action"
+    logger.info(
+        "object_action invoke start: base_id=%s object_code=%s action_code=%s "
+        "transport=%s arguments=%s",
+        base_id,
+        object_code,
+        action_code,
+        transport,
+        _json_for_log(_summarize_arguments(arguments)),
+    )
+    try:
+        if callable(get_object):
+            target_object = get_object(object_code)
+            action_result = await target_object.invoke_action(action_code, arguments)
+        else:
+            action_result = await platform.execute_action(
+                base_id,
+                loader,
+                object_code,
+                action_code,
+                arguments,
+            )
+        result = unwrap_action_result(action_result)
+    except Exception:
+        logger.exception(
+            "object_action invoke failed: base_id=%s object_code=%s action_code=%s "
+            "transport=%s arguments=%s",
             base_id,
-            loader,
             object_code,
             action_code,
-            arguments,
+            transport,
+            _json_for_log(_summarize_arguments(arguments)),
         )
-    return unwrap_action_result(action_result)
+        raise
+
+    logger.info(
+        "object_action invoke succeeded: base_id=%s object_code=%s action_code=%s "
+        "transport=%s result=%s",
+        base_id,
+        object_code,
+        action_code,
+        transport,
+        _json_for_log(_summarize_result(result)),
+    )
+    return result
 
 
 def unwrap_action_result(action_result: dict[str, Any]) -> dict[str, Any]:
@@ -100,3 +137,33 @@ def _normalize_data(data: dict[str, Any]) -> dict[str, Any]:
         "total": data.get("total") or data.get("meta", {}).get("total") or 0,
         "meta": data.get("meta") or {},
     }
+
+
+def _summarize_arguments(arguments: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for key, value in arguments.items():
+        if key == "content":
+            text = str(value or "")
+            summary["content_length"] = len(text)
+            summary["content_head_preview"] = text[:CONTENT_PREVIEW_CHARS]
+            summary["content_tail_preview"] = text[-CONTENT_PREVIEW_CHARS:]
+        else:
+            summary[key] = value
+    return summary
+
+
+def _summarize_result(result: dict[str, Any]) -> dict[str, Any]:
+    records = result.get("records")
+    meta = result.get("meta")
+    return {
+        "record_count": len(records) if isinstance(records, list) else 0,
+        "total": result.get("total") or 0,
+        "meta_keys": sorted(meta) if isinstance(meta, dict) else [],
+    }
+
+
+def _json_for_log(data: dict[str, Any]) -> str:
+    try:
+        return json.dumps(data, ensure_ascii=False, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return json.dumps({"repr": repr(data)}, ensure_ascii=False, sort_keys=True)
