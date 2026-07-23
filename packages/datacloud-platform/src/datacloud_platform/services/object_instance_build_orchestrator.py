@@ -25,8 +25,7 @@ from datacloud_platform.services.kb_document_reader import (
 )
 from datacloud_platform.services.object_action import invoke_object_write_action
 from datacloud_platform.services.object_instance_build_task_service import (
-    ObjectInstanceBuildTaskRepository,
-    TaskStatus,
+    ObjectInstanceBuildRunRequest,
 )
 
 if TYPE_CHECKING:
@@ -109,47 +108,44 @@ class ObjectInstanceBuildOrchestrator:
         self,
         *,
         platform: DatacloudPlatform,
-        task_repository: ObjectInstanceBuildTaskRepository,
         knowledge_client: ObjectInstanceBuildKnowledgeClient | None = None,
         base_id: str = DEFAULT_BASE_ID,
     ) -> None:
         self._platform = platform
-        self._task_repository = task_repository
         self._knowledge_client = (
             knowledge_client or DefaultObjectInstanceBuildKnowledgeClient()
         )
         self._base_id = base_id
 
-    async def run(self, task_id: str) -> None:
-        """Run one object instance build task to a terminal status."""
-        task = self._task_repository.get(task_id)
+    async def run(self, request: ObjectInstanceBuildRunRequest) -> None:
+        """Run one object instance build request to a terminal log status."""
+        request_id = request.request_id
         _log_task_stage(
-            task_id=task_id,
+            task_id=request_id,
             stage="run_start",
             status="started",
             input_data={
-                "instance_ids": task.instance_ids,
-                "batch_size": task.batch_size,
-                "operator": task.operator,
+                "instance_ids": request.instance_ids,
+                "batch_size": request.batch_size,
+                "operator": request.operator,
             },
         )
-        self._task_repository.update(task_id, status="running")
 
         errors: list[dict[str, Any]] = []
         success_count = 0
         failed_count = 0
         stage_started = perf_counter()
         groups = self._load_fragment_groups(
-            instance_ids=task.instance_ids,
-            batch_size=task.batch_size,
+            instance_ids=request.instance_ids,
+            batch_size=request.batch_size,
         )
         _log_task_stage(
-            task_id=task_id,
+            task_id=request_id,
             stage="load_fragment_groups",
             status="succeeded",
             input_data={
-                "instance_ids": task.instance_ids,
-                "batch_size": task.batch_size,
+                "instance_ids": request.instance_ids,
+                "batch_size": request.batch_size,
                 "status": 0,
             },
             output_data={
@@ -159,12 +155,11 @@ class ObjectInstanceBuildOrchestrator:
             },
             elapsed_ms=_elapsed_ms(stage_started),
         )
-        self._task_repository.update(task_id, total_count=len(groups))
 
         for group in groups:
             group_started = perf_counter()
             _log_task_stage(
-                task_id=task_id,
+                task_id=request_id,
                 stage="process_group",
                 status="started",
                 instance_id=group.instance_id,
@@ -176,8 +171,8 @@ class ObjectInstanceBuildOrchestrator:
             try:
                 await self._process_group(
                     group,
-                    operator=task.operator,
-                    task_id=task_id,
+                    operator=request.operator,
+                    task_id=request_id,
                 )
             except Exception as exc:
                 failed_count += 1
@@ -196,7 +191,7 @@ class ObjectInstanceBuildOrchestrator:
                     exc_info=True,
                 )
                 _log_task_stage(
-                    task_id=task_id,
+                    task_id=request_id,
                     stage="process_group",
                     status="failed",
                     instance_id=group.instance_id,
@@ -210,7 +205,7 @@ class ObjectInstanceBuildOrchestrator:
             else:
                 success_count += 1
                 _log_task_stage(
-                    task_id=task_id,
+                    task_id=request_id,
                     stage="process_group",
                     status="succeeded",
                     instance_id=group.instance_id,
@@ -221,25 +216,11 @@ class ObjectInstanceBuildOrchestrator:
                     elapsed_ms=_elapsed_ms(group_started),
                 )
 
-            self._task_repository.update(
-                task_id,
-                success_count=success_count,
-                failed_count=failed_count,
-                errors=errors,
-            )
-
         final_status = _final_status(
             success_count=success_count, failed_count=failed_count
         )
-        error_message = "; ".join(error["message"] for error in errors[:3])
-        self._task_repository.update(
-            task_id,
-            status=final_status,
-            error_message=error_message,
-            errors=errors,
-        )
         _log_task_stage(
-            task_id=task_id,
+            task_id=request_id,
             stage="run_finish",
             status=final_status,
             output_data={
@@ -247,6 +228,7 @@ class ObjectInstanceBuildOrchestrator:
                 "success_count": success_count,
                 "failed_count": failed_count,
                 "error_count": len(errors),
+                "errors": errors,
             },
         )
 
@@ -1126,7 +1108,7 @@ def _yaml_scalar(value: str) -> str:
     return text
 
 
-def _final_status(*, success_count: int, failed_count: int) -> TaskStatus:
+def _final_status(*, success_count: int, failed_count: int) -> str:
     if failed_count == 0:
         return "succeeded"
     if success_count == 0:
@@ -1150,7 +1132,7 @@ def _log_task_stage(
     elapsed_ms: int | None = None,
 ) -> None:
     logger.info(
-        "object_instance_build task_id=%s stage=%s status=%s instance_id=%s "
+        "object_instance_build request_id=%s stage=%s status=%s instance_id=%s "
         "message=%s elapsed_ms=%s input=%s output=%s",
         task_id,
         stage,

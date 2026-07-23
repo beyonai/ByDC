@@ -19,6 +19,7 @@ from .term_provider_types import (
     QueryType,
     TermCreate,
     TermDetail,
+    TermItem,
     TermUpdate,
 )
 from .text import Tokenizer
@@ -505,6 +506,17 @@ class TermReader(Protocol):
         Returns:
             list[QueryResult]，与 keywords 一一对应。
         """
+        ...
+
+    def query_terms_by_labels(
+        self,
+        *,
+        label_filters: list[LabelFilter],
+        label_condition: LabelCondition = "or",
+        term_type_codes: list[str] | None = None,
+        top_k: int = 200,
+    ) -> list[TermItem]:
+        """按标签过滤术语，不需要关键词。"""
         ...
 
     def get_term_detail(

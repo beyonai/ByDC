@@ -171,7 +171,12 @@ class TermBackendMixin(DataCloudDataBackendBase):
         cfgs: list[Any] = []
         for lf in label_filters:
             if isinstance(lf, dict):
-                cfgs.append(_LF(field_code=lf["field_code"], filter_value=str(lf["filter_value"])))
+                cfgs.append(
+                    _LF(
+                        field_code=lf["field_code"],
+                        filter_value=str(lf["filter_value"]),
+                    )
+                )
             else:
                 cfgs.append(lf)
 
@@ -181,19 +186,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             term_type_codes=term_type_codes,
             top_k=top_k,
         )
-        # query_terms_by_labels returns list[dict] (not pydantic model)
-        return [
-            {
-                "term_id": it["term_id"],
-                "term_code": it["term_code"],
-                "term_name": it["term_name"],
-                "term_type": it["term_type"],
-                "ext_attrs": it.get("ext_attrs", {}),
-                "term_tags": it.get("term_tags", {}),
-                "score": it.get("score", 1.0),
-            }
-            for it in items
-        ]
+        return [_term_item_to_dict(item) for item in items]
 
     def get_term_detail(
         self, *, library_id: str, term_id: str
@@ -578,6 +571,28 @@ class TermBackendMixin(DataCloudDataBackendBase):
 
 
 # ── 模块级辅助函数 ──────────────────────────────────────────────────────────────
+
+
+def _term_item_to_dict(item: Any) -> dict[str, Any]:
+    if isinstance(item, dict):
+        return {
+            "term_id": item.get("term_id", ""),
+            "term_code": item.get("term_code", ""),
+            "term_name": item.get("term_name", ""),
+            "term_type": item.get("term_type", ""),
+            "ext_attrs": item.get("ext_attrs", {}),
+            "term_tags": item.get("term_tags") or item.get("labels", {}),
+            "score": item.get("score", 1.0),
+        }
+    return {
+        "term_id": item.term_id,
+        "term_code": item.term_code,
+        "term_name": item.term_name,
+        "term_type": item.term_type,
+        "ext_attrs": item.ext_attrs,
+        "term_tags": item.labels,
+        "score": item.score if item.score is not None else 1.0,
+    }
 
 
 def _dict_to_term_create(term: dict[str, Any]) -> "TermCreate":

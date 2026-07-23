@@ -496,18 +496,21 @@ class TestDowngradeStrategies:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+
         assert _should_run_path2(False) is False
 
     def test_enable_chunk_recall_true_allows_path2(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _should_run_path2,
         )
+
         assert _should_run_path2(True) is True
 
     def test_path2_no_kb_id_returns_empty(self) -> None:
         from datacloud_platform.adapters.data_adapter._ontology_metadata import (
             _fuse_path_results_rrf,
         )
+
         result = _fuse_path_results_rrf([], [], k=60)
         assert result == []
 

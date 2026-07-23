@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from importlib.util import find_spec
 from typing import Any
 
 import pytest
@@ -22,10 +23,9 @@ from datacloud_platform.services.object_instance_build_orchestrator import (
     ObjectInstanceBuildOrchestrator,
 )
 from datacloud_platform.services.object_instance_build_task_service import (
-    InMemoryObjectInstanceBuildTaskRepository,
     InlineObjectInstanceBuildTaskRunner,
+    ObjectInstanceBuildRunRequest,
     ObjectInstanceBuildTaskService,
-    SqlObjectInstanceBuildTaskRepository,
     SubmitObjectInstanceBuildTaskRequest,
 )
 
@@ -80,31 +80,36 @@ class FrontmatterDroppingKnowledgeClient:
 
 
 class FakeAcceptedTask:
-    def __init__(self, *, status: str = "queued") -> None:
-        self.task_id = "task-agent"
+    def __init__(self, *, status: str = "accepted") -> None:
         self.status = status
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "task_id": self.task_id,
+            "instance_ids": ["term-agent"],
+            "batch_size": 20,
+            "created_by": "alice",
             "status": self.status,
-            "total_count": 1,
-            "success_count": 1 if self.status == "succeeded" else 0,
-            "failed_count": 0,
         }
 
 
 class FakeRpcTaskService:
     def __init__(self) -> None:
-        self.submitted: Any | None = None
+        self.accepted: Any | None = None
+        self.started: list[Any] = []
 
-    async def submit(self, request: Any) -> FakeAcceptedTask:
-        self.submitted = request
-        return FakeAcceptedTask()
+    def accept(self, request: Any) -> tuple[FakeAcceptedTask, Any]:
+        self.accepted = request
+        run_request = ObjectInstanceBuildRunRequest(
+            request_id="request-agent",
+            instance_ids=request.instance_ids,
+            batch_size=request.batch_size,
+            operator=request.operator,
+            beyond_token="token-alice",
+        )
+        return FakeAcceptedTask(), run_request
 
-    def get_task(self, task_id: str) -> FakeAcceptedTask:
-        assert task_id == "task-agent"
-        return FakeAcceptedTask(status="succeeded")
+    async def run(self, run_request: Any) -> None:
+        self.started.append(run_request)
 
 
 class FakeBuildPlatform:
@@ -421,34 +426,30 @@ def _fragment(
     }
 
 
-def test_sql_task_repository_maps_protocol_fields_to_task_rows() -> None:
-    class FakeTaskAdapter:
-        def __init__(self) -> None:
-            self.rows: dict[str, dict[str, Any]] = {}
+def _run_request(
+    *,
+    instance_ids: list[str],
+    batch_size: int = 20,
+    operator: str = "alice",
+    request_id: str = "request-test",
+    beyond_token: str = "token-alice",
+) -> ObjectInstanceBuildRunRequest:
+    return ObjectInstanceBuildRunRequest(
+        request_id=request_id,
+        instance_ids=instance_ids,
+        batch_size=batch_size,
+        operator=operator,
+        beyond_token=beyond_token,
+    )
 
-        def create(self, record: dict[str, Any]) -> dict[str, Any]:
-            self.rows[str(record["task_id"])] = dict(record)
-            return dict(record)
 
-        def get(self, task_id: str) -> dict[str, Any] | None:
-            row = self.rows.get(task_id)
-            return dict(row) if row is not None else None
-
-        def update(self, task_id: str, updates: dict[str, Any]) -> dict[str, Any]:
-            self.rows[task_id].update(updates)
-            return dict(self.rows[task_id])
-
-    adapter = FakeTaskAdapter()
-    repository = SqlObjectInstanceBuildTaskRepository(adapter=adapter)
-
-    task = repository.create(instance_ids=[], batch_size=20, operator="alice")
-    updated = repository.update(task.task_id, status="running", total_count=3)
-
-    assert adapter.rows[task.task_id]["created_by"] == "alice"
-    assert adapter.rows[task.task_id]["instance_ids"] == []
-    assert updated.status == "running"
-    assert updated.total_count == 3
-    assert repository.get(task.task_id).operator == "alice"
+def test_object_instance_build_task_table_adapter_is_removed() -> None:
+    assert (
+        find_spec(
+            "datacloud_platform.adapters.data_adapter._object_instance_build_task"
+        )
+        is None
+    )
 
 
 def test_orchestrator_extracts_object_code_from_slots_term_detail_dataclass() -> None:
@@ -468,10 +469,8 @@ def test_orchestrator_extracts_object_code_from_slots_term_detail_dataclass() ->
 
 def test_orchestrator_label_schema_keeps_multi_enum_marker() -> None:
     platform = FakeBuildPlatform(fragments=[])
-    repository = InMemoryObjectInstanceBuildTaskRepository()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=FakeBuildKnowledgeClient(),
     )
 
@@ -505,7 +504,6 @@ def test_orchestrator_reads_source_content_from_storage_result() -> None:
 
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=StorageOnlyPlatform(),  # type: ignore[arg-type]
-        task_repository=InMemoryObjectInstanceBuildTaskRepository(),
         knowledge_client=FakeBuildKnowledgeClient(),
     )
     group = orchestrator_module._FragmentGroup(  # noqa: SLF001
@@ -526,7 +524,6 @@ def test_orchestrator_falls_back_to_fragment_content_when_source_file_missing() 
 
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=MissingStoragePlatform(),  # type: ignore[arg-type]
-        task_repository=InMemoryObjectInstanceBuildTaskRepository(),
         knowledge_client=FakeBuildKnowledgeClient(),
     )
     group = orchestrator_module._FragmentGroup(  # noqa: SLF001
@@ -568,7 +565,6 @@ def test_orchestrator_reads_existing_content_from_runtime_file_storage(
 
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=object(),  # type: ignore[arg-type]
-        task_repository=InMemoryObjectInstanceBuildTaskRepository(),
         knowledge_client=FakeBuildKnowledgeClient(),
     )
 
@@ -634,20 +630,13 @@ async def test_orchestrator_reads_existing_content_from_kb_document_reader(
         raising=False,
     )
     platform = KbExistingDocumentPlatform(fragments=[_fragment(101, "term-agent")])
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=["term-agent"],
-        batch_size=20,
-        operator="alice",
-    )
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=knowledge_client,
     )
 
-    await orchestrator.run(task.task_id)
+    await orchestrator.run(_run_request(instance_ids=["term-agent"]))
 
     assert kb_reader.calls == [("97", "/Concept/Agent.md")]
     assert knowledge_client.requests[0].existing_content == (
@@ -660,15 +649,12 @@ async def test_task_service_builds_instance_and_marks_fragments_merged() -> None
     platform = FakeBuildPlatform(
         fragments=[_fragment(101, "term-agent"), _fragment(102, "term-agent")]
     )
-    repository = InMemoryObjectInstanceBuildTaskRepository()
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=knowledge_client,
     )
     service = ObjectInstanceBuildTaskService(
-        task_repository=repository,
         task_runner=InlineObjectInstanceBuildTaskRunner(orchestrator=orchestrator),
     )
 
@@ -679,13 +665,11 @@ async def test_task_service_builds_instance_and_marks_fragments_merged() -> None
             operator="alice",
         )
     )
-    task = repository.get(accepted.task_id)
 
-    assert accepted.status == "queued"
-    assert task.status == "succeeded"
-    assert task.total_count == 1
-    assert task.success_count == 1
-    assert task.failed_count == 0
+    assert accepted.status == "accepted"
+    assert accepted.instance_ids == ["term-agent"]
+    assert accepted.batch_size == 20
+    assert accepted.operator == "alice"
     assert platform.updated_status == [
         {
             "base_id": DEFAULT_BASE_ID,
@@ -712,20 +696,13 @@ async def test_task_service_builds_instance_and_marks_fragments_merged() -> None
 @pytest.mark.asyncio
 async def test_orchestrator_preserves_relation_frontmatter_and_product_code() -> None:
     platform = FrontmatterBuildPlatform(fragments=[_fragment(101, "term-ontology")])
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=["term-ontology"],
-        batch_size=20,
-        operator="alice",
-    )
     knowledge_client = FrontmatterDroppingKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=knowledge_client,
     )
 
-    await orchestrator.run(task.task_id)
+    await orchestrator.run(_run_request(instance_ids=["term-ontology"]))
 
     written_arguments = platform.executed_actions[0]["arguments"]
     written_content = written_arguments["content"]
@@ -746,23 +723,18 @@ async def test_orchestrator_logs_task_stage_summaries(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=["term-agent"],
-        batch_size=20,
-        operator="alice",
-    )
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=FakeBuildKnowledgeClient(),
     )
     caplog.set_level(logging.INFO, logger=orchestrator_module.logger.name)
 
-    await orchestrator.run(task.task_id)
+    await orchestrator.run(
+        _run_request(instance_ids=["term-agent"], request_id="request-agent")
+    )
 
     messages = "\n".join(record.getMessage() for record in caplog.records)
-    assert f"task_id={task.task_id}" in messages
+    assert "request_id=request-agent" in messages
     for stage in (
         "run_start",
         "load_fragment_groups",
@@ -788,20 +760,13 @@ async def test_orchestrator_passes_existing_target_document_to_knowledge_request
     None
 ):
     platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=["term-agent"],
-        batch_size=20,
-        operator="alice",
-    )
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=knowledge_client,
     )
 
-    await orchestrator.run(task.task_id)
+    await orchestrator.run(_run_request(instance_ids=["term-agent"]))
 
     request = knowledge_client.requests[0]
     assert "## 投标标签" in request.existing_content
@@ -829,23 +794,13 @@ async def test_orchestrator_does_not_write_when_existing_target_document_is_miss
             raise FileNotFoundError(f"Result file not found: {file_id}")
 
     platform = MissingExistingDocumentPlatform(fragments=[_fragment(101, "term-agent")])
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=["term-agent"],
-        batch_size=20,
-        operator="alice",
-    )
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=FakeBuildKnowledgeClient(),
     )
 
-    await orchestrator.run(task.task_id)
+    await orchestrator.run(_run_request(instance_ids=["term-agent"]))
 
-    final_task = repository.get(task.task_id)
-    assert final_task.status == "failed"
-    assert "existing object content not found" in final_task.error_message
     assert platform.executed_actions == []
     assert platform.updated_status == []
 
@@ -853,20 +808,13 @@ async def test_orchestrator_does_not_write_when_existing_target_document_is_miss
 @pytest.mark.asyncio
 async def test_orchestrator_passes_object_template_from_object_ext_property() -> None:
     platform = FakeBuildPlatform(fragments=[_fragment(101, "term-agent")])
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=["term-agent"],
-        batch_size=20,
-        operator="alice",
-    )
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=knowledge_client,
     )
 
-    await orchestrator.run(task.task_id)
+    await orchestrator.run(_run_request(instance_ids=["term-agent"]))
 
     request = knowledge_client.requests[0]
     assert request.object_template == ""
@@ -880,38 +828,32 @@ async def test_orchestrator_passes_object_template_from_object_ext_property() ->
 async def test_orchestrator_fetches_unmerged_fragments_page_by_page() -> None:
     fragments = [_fragment(index, f"term-{index}") for index in range(1, 6)]
     platform = FakeBuildPlatform(fragments=fragments)
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=[f"term-{index}" for index in range(1, 6)],
-        batch_size=2,
-        operator="alice",
-    )
     knowledge_client = FakeBuildKnowledgeClient()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=knowledge_client,
     )
 
-    await orchestrator.run(task.task_id)
+    await orchestrator.run(
+        _run_request(
+            instance_ids=[f"term-{index}" for index in range(1, 6)],
+            batch_size=2,
+        )
+    )
 
     assert [call["page_index"] for call in platform.list_calls] == [1, 2, 3]
     assert len(platform.executed_actions) == 5
-    assert repository.get(task.task_id).success_count == 5
 
 
 @pytest.mark.asyncio
 async def test_empty_instance_ids_processes_all_unmerged_fragments() -> None:
     fragments = [_fragment(1, "term-1"), _fragment(2, "term-2")]
     platform = FakeBuildPlatform(fragments=fragments)
-    repository = InMemoryObjectInstanceBuildTaskRepository()
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=FakeBuildKnowledgeClient(),
     )
     service = ObjectInstanceBuildTaskService(
-        task_repository=repository,
         task_runner=InlineObjectInstanceBuildTaskRunner(orchestrator=orchestrator),
     )
 
@@ -922,45 +864,35 @@ async def test_empty_instance_ids_processes_all_unmerged_fragments() -> None:
             operator="alice",
         )
     )
-    task = repository.get(accepted.task_id)
 
     assert accepted.instance_ids == []
-    assert task.status == "succeeded"
-    assert task.total_count == 2
     assert [call["page_index"] for call in platform.list_for_build_calls] == [1]
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_records_partial_failed_status_and_error_details() -> None:
+async def test_orchestrator_logs_partial_failed_error_details(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     fragments = [_fragment(1, "term-1"), _fragment(2, "term-2")]
     platform = FakeBuildPlatform(fragments=fragments)
-    repository = InMemoryObjectInstanceBuildTaskRepository()
-    task = repository.create(
-        instance_ids=["term-1", "term-2"],
-        batch_size=10,
-        operator="alice",
-    )
     orchestrator = ObjectInstanceBuildOrchestrator(
         platform=platform,
-        task_repository=repository,
         knowledge_client=FailingSecondBuildKnowledgeClient(),
     )
+    caplog.set_level(logging.INFO, logger=orchestrator_module.logger.name)
 
-    await orchestrator.run(task.task_id)
-    final_task = repository.get(task.task_id)
+    await orchestrator.run(
+        _run_request(
+            instance_ids=["term-1", "term-2"],
+            batch_size=10,
+            request_id="request-partial",
+        )
+    )
 
-    assert final_task.status == "partial_failed"
-    assert final_task.success_count == 1
-    assert final_task.failed_count == 1
-    assert final_task.errors == [
-        {
-            "instance_id": "term-2",
-            "origin_instance_id": "origin-agent",
-            "fragment_ids": [2],
-            "stage": "process_group",
-            "message": "LLM output exhausted retries",
-        }
-    ]
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "request_id=request-partial" in messages
+    assert "status=partial_failed" in messages
+    assert "LLM output exhausted retries" in messages
 
 
 @pytest.mark.asyncio
@@ -1057,7 +989,7 @@ async def test_invoke_object_action_calls_loader_object_invoke_action() -> None:
     ]
 
 
-def test_rpc_build_object_instance_and_query_task_protocol(
+def test_rpc_build_object_instance_returns_accepted_without_task_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from datacloud_platform.api.routers.rpc.handlers import ontology_doc_fragment
@@ -1082,10 +1014,17 @@ def test_rpc_build_object_instance_and_query_task_protocol(
 
     assert build_body["success"] is True
     assert build_body["message"] == "accepted"
-    assert build_body["data"]["task_id"] == "task-agent"
-    assert service.submitted.instance_ids == ["term-agent"]
-    assert service.submitted.batch_size == 20
-    assert service.submitted.operator == "alice"
+    assert build_body["data"] == {
+        "instance_ids": ["term-agent"],
+        "batch_size": 20,
+        "created_by": "alice",
+        "status": "accepted",
+    }
+    assert service.accepted.instance_ids == ["term-agent"]
+    assert service.accepted.batch_size == 20
+    assert service.accepted.operator == "alice"
+    assert len(service.started) == 1
+    assert service.started[0].beyond_token == "token-alice"
 
     task_resp = client.post(
         "/api/v1/rpc/ontologyDocFragment/getObjectInstanceBuildTask",
@@ -1093,8 +1032,9 @@ def test_rpc_build_object_instance_and_query_task_protocol(
     )
     task_body = task_resp.json()
 
-    assert task_body["success"] is True
-    assert task_body["data"]["status"] == "succeeded"
+    assert task_body["code"] == 501
+    assert task_body["data"] is None
+    assert "no longer supported" in task_body["message"]
 
 
 def test_rpc_build_object_instance_requires_beyond_token(
@@ -1123,4 +1063,5 @@ def test_rpc_build_object_instance_requires_beyond_token(
     assert body["code"] == 400
     assert body["message"] == "Request header 'beyond-token' is required"
     assert body["data"] is None
-    assert service.submitted is None
+    assert service.accepted is None
+    assert service.started == []

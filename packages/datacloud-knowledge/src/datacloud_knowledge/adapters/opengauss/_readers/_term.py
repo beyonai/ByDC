@@ -2675,10 +2675,12 @@ class _TermReader(_ReaderBase):
                 label_parts: list[str] = []
                 label_params: dict[str, Any] = {}
                 for i, lf in enumerate(label_filters):
-                    key = str(
-                        lf.field_code if hasattr(lf, "field_code") else lf.get("field_code", "")
-                    )
-                    fv = lf.filter_value if hasattr(lf, "filter_value") else lf.get("filter_value")
+                    if isinstance(lf, dict):
+                        key = str(lf.get("field_code", ""))
+                        fv = lf.get("filter_value")
+                    else:
+                        key = lf.field_code
+                        fv = lf.filter_value
                     if key and fv is not None:
                         pname = f"_lbl_{i}"
                         label_parts.append(f"t.term_tags->>'{key}' = :{pname}")

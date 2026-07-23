@@ -904,7 +904,9 @@ class KbSearchExecutor:
                                 break
                     except Exception:  # noqa: BLE001
                         logger.warning(
-                            "_enqueue_kb_term_sync: search_terms failed term_code=%s", tc, exc_info=True
+                            "_enqueue_kb_term_sync: search_terms failed term_code=%s",
+                            tc,
+                            exc_info=True,
                         )
                 logger.debug(
                     "KB 术语同步完成: object=%s terms=%d mapped=%d",

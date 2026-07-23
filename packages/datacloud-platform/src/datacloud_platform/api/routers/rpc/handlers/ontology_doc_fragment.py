@@ -4,8 +4,7 @@ Methods:
   - batchCreate: batch-create fragments (instance_id, origin_instance_id, content)
   - listByInstanceIds: paginated query by instance_id list
   - updateStatus: bulk status update by primary-key id list
-  - buildObjectInstance: submit an object instance build task
-  - getObjectInstanceBuildTask: query object instance build task status
+  - buildObjectInstance: submit object instance build work in the background
 
 User identity is read from the ``X-User-Code`` request header.
 base_id always uses the global DEFAULT_BASE_ID — callers must not pass it.
@@ -161,7 +160,7 @@ def _update_status(
 async def _build_object_instance(
     platform: DatacloudPlatform, params: dict[str, Any], req: Request
 ) -> Any:
-    """Submit an asynchronous object instance build task."""
+    """Accept object instance build work and run it after the response."""
     raw_ids = params.get("instance_ids", [])
     if not isinstance(raw_ids, list):
         raise ValueError("instance_ids must be a list")
@@ -170,30 +169,35 @@ async def _build_object_instance(
     operator = _user_code(req)
     if not operator:
         raise ValueError(f"Request header '{_USER_CODE_HEADER}' is required")
-    if not _beyond_token(req):
+    beyond_token = _beyond_token(req)
+    if not beyond_token:
         raise ValueError(f"Request header '{_BEYOND_TOKEN_HEADER}' is required")
 
     service = get_object_instance_build_task_service(platform)
-    task = await service.submit(
+    accepted, run_request = service.accept(
         SubmitObjectInstanceBuildTaskRequest(
             instance_ids=instance_ids,
             batch_size=int(params.get("batch_size", 20)),
             operator=operator,
+            beyond_token=beyond_token,
         )
     )
-    return ok(data=task.to_dict(), message="accepted")
+    background_tasks = getattr(req.state, "background_tasks", None)
+    if background_tasks is None:
+        await service.run(run_request)
+    else:
+        background_tasks.add_task(service.run, run_request)
+    return ok(data=accepted.to_dict(), message="accepted")
 
 
 def _get_object_instance_build_task(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    """Query an object instance build task by task_id."""
-    task_id = str(params.get("task_id") or "").strip()
-    if not task_id:
-        raise ValueError("task_id is required")
-
-    service = get_object_instance_build_task_service(platform)
-    return ok(data=service.get_task(task_id).to_dict())
+    """Task table status query is no longer supported."""
+    raise NotImplementedError(
+        "getObjectInstanceBuildTask is no longer supported; "
+        "check ontology_doc_fragment.status and service logs instead"
+    )
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────

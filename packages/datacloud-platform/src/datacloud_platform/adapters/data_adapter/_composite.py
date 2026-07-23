@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datacloud_platform.adapters.data_adapter._ontology import OntologyBackendMixin
-from datacloud_platform.adapters.data_adapter._ontology_metadata import OntologyMetadataMixin
+from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+    OntologyMetadataMixin,
+)
 from datacloud_platform.adapters.data_adapter._scene import SceneMixin
 from datacloud_platform.adapters.data_adapter._storage import StorageBackendMixin
 from datacloud_platform.adapters.data_adapter._sync import SyncMixin
