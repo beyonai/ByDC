@@ -60,21 +60,31 @@ def build_object_instance_prompt(request: ObjectInstanceBuildRequest) -> str:
     }
     return (
         "System:\n"
-        "你是对象实例构建助手。只能输出 JSON，不要输出解释性文字。\n\n"
+        "你是对象实例构建助手。只能输出一个 JSON object，不要输出解释性文字。\n\n"
         "User:\n"
         f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n"
-        "输出要求:\n"
+        "输出协议:\n"
+        "1. 只能输出一个 JSON object；第一个非空字符必须是 {，最后一个非空字符必须是 }。\n"
+        "2. 禁止输出 <think>、解释文字、Markdown 代码块或 JSON 之外的任何文本。\n"
+        "3. 禁止直接输出 Markdown 正文；Markdown 只能作为 JSON.content 的字符串值。\n"
+        '4. JSON 顶层字段只能包含 "content", "labels", "file_description", '
+        '"confidence", "model_name", "diagnostics"。\n'
+        '5. 必须包含 "content" 和 "labels"，labels 必须是 JSON object。\n\n'
+        "融合要求:\n"
         "1. content 必须是融合后的新 Markdown 文档，不是片段简单拼接。\n"
         "2. existing_content 是当前对象实例已有 Markdown；如果 existing_content 非空，"
         "必须以 existing_content 为基准做增强，保留已有信息并把 source_content/fragments 中的新信息补充进去。\n"
         "3. 不得删除 existing_content 中已有的 frontmatter 字段、relations、标题和正文段落；"
         "除非新片段明确指出原内容错误，否则只能补充、扩写、追加或局部修订。\n"
-        "4. object_template 是新建对象实例时的模板；只有 existing_content 为空时，"
+        "4. existing_content 非空时，以 existing_content 为唯一结构基准；"
+        "不得因为 template_constraints 或 object_template 新增模板章节，例如 existing_content 原来没有 ## 对象说明，"
+        "最终 content 也不能新增 ## 对象说明。\n"
+        "5. object_template 是新建对象实例时的模板；只有 existing_content 为空时，"
         "才按照 object_template 的 Markdown/frontmatter 结构组织输出。\n"
-        "5. template_constraints 是填写要求、字段说明、关系说明、常见错误和检查清单，"
+        "6. template_constraints 是填写要求、字段说明、关系说明、常见错误和检查清单，"
         "必须作为生成 content 和 labels 的约束，不要把这些说明文字原样复制到最终 content。\n"
-        "6. labels 只能包含 label_schema 中允许的字段。\n"
-        "7. 枚举字段输出值必须使用枚举 code。\n"
+        "7. labels 只能包含 label_schema 中允许的字段。\n"
+        "8. 枚举字段输出值必须使用枚举 code。\n"
     )
 
 
@@ -87,13 +97,21 @@ def build_object_instance_retry_prompt(
 ) -> str:
     """Build retry prompt after invalid LLM output."""
     retry_context = {
-        "raw_output": raw_output,
         "parse_error": parse_error,
         "label_schema": label_schema,
+        "raw_output_length": len(raw_output),
     }
     return (
         f"{original_prompt}\n\n"
-        "上一次输出不符合要求，请只返回合法 JSON。错误信息如下:\n"
+        "上一次输出不符合要求。请忽略上一次输出的文本内容，只根据原始任务重新生成结果。\n"
+        "必须严格遵守输出协议:\n"
+        "1. 只能输出一个 JSON object；第一个非空字符必须是 {，最后一个非空字符必须是 }。\n"
+        "2. 禁止输出 <think>、解释文字、Markdown 代码块或 JSON 之外的任何文本。\n"
+        "3. 禁止直接输出 Markdown 正文；Markdown 只能作为 JSON.content 的字符串值。\n"
+        '4. JSON 顶层字段只能包含 "content", "labels", "file_description", '
+        '"confidence", "model_name", "diagnostics"。\n'
+        "5. 如果 parse_error 包含 missing headings，必须从 original_prompt 的 existing_content 中恢复这些标题。\n"
+        "错误摘要如下:\n"
         f"{json.dumps(retry_context, ensure_ascii=False, indent=2)}"
     )
 

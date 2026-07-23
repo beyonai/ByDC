@@ -803,7 +803,9 @@ def _enrich_relation_target_terms(
     target_cache: dict[str, dict[str, Any]] = {}
     for row in rows:
         enriched = dict(row)
-        target_id = _pick_str(row, "target_term_id", "targetTermId", "target_id", "targetId")
+        target_id = _pick_str(
+            row, "target_term_id", "targetTermId", "target_id", "targetId"
+        )
         if target_id and _relation_row_needs_target_detail(row):
             target_detail = target_cache.get(target_id)
             if target_detail is None:
@@ -820,8 +822,12 @@ def _enrich_relation_target_terms(
 
 def _relation_row_needs_target_detail(row: dict[str, Any]) -> bool:
     return not (
-        _pick_str(row, "target_term_code", "targetTermCode", "target_code", "targetCode")
-        and _pick_str(row, "target_term_name", "targetTermName", "target_name", "targetName")
+        _pick_str(
+            row, "target_term_code", "targetTermCode", "target_code", "targetCode"
+        )
+        and _pick_str(
+            row, "target_term_name", "targetTermName", "target_name", "targetName"
+        )
         and _pick_str(
             row,
             "target_term_type_code",
@@ -866,7 +872,10 @@ def _merge_relation_target_detail(
     field_pairs = (
         ("target_term_code", ("term_code", "termCode", "code")),
         ("target_term_name", ("term_name", "termName", "name")),
-        ("target_term_type_code", ("term_type_code", "termTypeCode", "term_type", "termType")),
+        (
+            "target_term_type_code",
+            ("term_type_code", "termTypeCode", "term_type", "termType"),
+        ),
     )
     for target_key, source_keys in field_pairs:
         if _pick_str(row, target_key):
@@ -1382,7 +1391,9 @@ def _validate_build_result(
         raise ValueError("build result content is required")
     if not isinstance(result.labels, dict):
         raise ValueError("build result labels must be a dict")
-    unsupported = sorted(set(result.labels) - set(label_schema) - PROTECTED_LABEL_FIELDS)
+    unsupported = sorted(
+        set(result.labels) - set(label_schema) - PROTECTED_LABEL_FIELDS
+    )
     if unsupported:
         raise ValueError(
             f"unsupported build result label fields: {', '.join(unsupported)}"

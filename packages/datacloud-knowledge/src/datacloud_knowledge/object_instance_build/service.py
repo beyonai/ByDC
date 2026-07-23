@@ -92,6 +92,7 @@ def _validate_request(request: ObjectInstanceBuildRequest) -> None:
 
 def _extract_json_payload(raw_content: Any) -> dict[str, Any] | None:
     raw_text = _content_to_text(raw_content)
+    raw_text = _strip_think_blocks(raw_text)
 
     payload = _loads_json_object(raw_text)
     if payload is not None:
@@ -102,6 +103,13 @@ def _extract_json_payload(raw_content: Any) -> dict[str, Any] | None:
         return payload
 
     return _extract_embedded_json_object(raw_text)
+
+
+def _strip_think_blocks(raw_text: str) -> str:
+    stripped = re.sub(r"(?is)<think\b[^>]*>.*?</think>\s*", "", raw_text).strip()
+    if re.search(r"(?is)<think\b", stripped):
+        return re.sub(r"(?is)<think\b[^>]*>.*", "", stripped).strip()
+    return stripped
 
 
 def _validate_existing_content_preserved(

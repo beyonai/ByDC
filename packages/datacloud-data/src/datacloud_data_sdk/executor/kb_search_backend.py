@@ -1853,12 +1853,41 @@ def _is_empty_front_matter_value(value: Any) -> bool:
 
 
 def _yaml_lines(key: str, value: Any) -> list[str]:
-    if isinstance(value, list):
-        lines = [f"{key}:"]
-        for item in value:
-            lines.append(f"  - {_yaml_scalar(item)}")
+    return _yaml_value_lines(str(key), value, indent=0)
+
+
+def _yaml_value_lines(key: str, value: Any, *, indent: int) -> list[str]:
+    prefix = " " * indent
+    if isinstance(value, dict):
+        lines = [f"{prefix}{key}:"]
+        for child_key, child_value in value.items():
+            if _is_empty_front_matter_value(child_value):
+                continue
+            lines.extend(_yaml_value_lines(str(child_key), child_value, indent=indent + 2))
         return lines
-    return [f"{key}: {_yaml_scalar(value)}"]
+    if isinstance(value, list):
+        lines = [f"{prefix}{key}:"]
+        for item in value:
+            lines.extend(_yaml_list_item_lines(item, indent=indent + 2))
+        return lines
+    return [f"{prefix}{key}: {_yaml_scalar(value)}"]
+
+
+def _yaml_list_item_lines(value: Any, *, indent: int) -> list[str]:
+    prefix = " " * indent
+    if isinstance(value, dict):
+        lines = [f"{prefix}-"]
+        for child_key, child_value in value.items():
+            if _is_empty_front_matter_value(child_value):
+                continue
+            lines.extend(_yaml_value_lines(str(child_key), child_value, indent=indent + 2))
+        return lines
+    if isinstance(value, list):
+        lines = [f"{prefix}-"]
+        for item in value:
+            lines.extend(_yaml_list_item_lines(item, indent=indent + 2))
+        return lines
+    return [f"{prefix}- {_yaml_scalar(value)}"]
 
 
 def _yaml_scalar(value: Any) -> str:
@@ -1868,7 +1897,12 @@ def _yaml_scalar(value: Any) -> str:
         return "true" if value else "false"
     if isinstance(value, (int, float)):
         return str(value)
-    return json.dumps(str(value), ensure_ascii=False)
+    text = str(value).strip()
+    if not text:
+        return '""'
+    if re.search(r"[:\r\n]|^\s|\s$|^[\[\]{},&*#?!|>'\"%@`-]", text):
+        return json.dumps(text, ensure_ascii=False)
+    return text
 
 
 _SYSTEM_FIELD_TYPES: dict[str, str] = {

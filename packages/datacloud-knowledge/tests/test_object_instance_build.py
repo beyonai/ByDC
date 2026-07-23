@@ -17,6 +17,7 @@ from datacloud_knowledge.object_instance_build.parser import (
 from datacloud_knowledge.object_instance_build.prompts import (
     build_enum_prompt_constraints,
     build_object_instance_prompt,
+    build_object_instance_retry_prompt,
 )
 
 
@@ -136,9 +137,28 @@ def test_object_instance_prompt_uses_object_template_as_merge_constraint() -> No
     assert "字段必须与 object.schema.yaml 一致" in prompt
     assert "existing_content 是当前对象实例已有 Markdown" in prompt
     assert "只有 existing_content 为空时，才按照 object_template" in prompt
+    assert "第一个非空字符必须是 {" in prompt
+    assert "禁止输出 <think>" in prompt
     assert (
         "不得删除 existing_content 中已有的 frontmatter 字段、relations、标题和正文段落" in prompt
     )
+
+
+def test_retry_prompt_requires_json_only_and_omits_raw_output() -> None:
+    prompt = build_object_instance_retry_prompt(
+        original_prompt="ORIGINAL_PROMPT_WITH_existing_content",
+        raw_output="<think>错误推理</think>\n# 本体论\n\n错误 Markdown 正文",
+        parse_error="LLM output must be a JSON object",
+        label_schema={"name": {"field_code": "name"}},
+    )
+
+    assert "ORIGINAL_PROMPT_WITH_existing_content" in prompt
+    assert "忽略上一次输出" in prompt
+    assert "第一个非空字符必须是 {" in prompt
+    assert "最后一个非空字符必须是 }" in prompt
+    assert "禁止输出 <think>" in prompt
+    assert "错误推理" not in prompt
+    assert "错误 Markdown 正文" not in prompt
 
 
 @pytest.mark.asyncio
@@ -222,6 +242,64 @@ async def test_build_object_instance_retries_when_existing_content_is_deleted(
     assert "relations:" in result.content
     assert result.diagnostics["retry_count"] == 1
     assert len(fake_llm.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_build_object_instance_ignores_json_inside_think_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class FakeLLM:
+        async def ainvoke(self, prompt: str) -> FakeMessage:
+            thought_payload = json.dumps(
+                {
+                    "content": "错误的思考过程 JSON",
+                    "labels": {"name": "Wrong", "owner_type": "public"},
+                },
+                ensure_ascii=False,
+            )
+            final_payload = json.dumps(
+                {
+                    "content": "Agent 是通用概念。",
+                    "labels": {"name": "Agent", "owner_type": "public"},
+                },
+                ensure_ascii=False,
+            )
+            return FakeMessage(f"<think>{thought_payload}</think>\n{final_payload}")
+
+    monkeypatch.setattr(
+        "datacloud_knowledge.object_instance_build.service.build_llm",
+        FakeLLM,
+    )
+
+    result = await build_object_instance(_request(_label_schema()))
+
+    assert result.content == "Agent 是通用概念。"
+    assert result.labels["name"] == "Agent"
+
+
+@pytest.mark.asyncio
+async def test_build_object_instance_rejects_markdown_without_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class FakeLLM:
+        async def ainvoke(self, prompt: str) -> FakeMessage:
+            return FakeMessage("# Agent\n\n这是一段 Markdown 正文，不是 JSON。")
+
+    monkeypatch.setattr(
+        "datacloud_knowledge.object_instance_build.service.build_llm",
+        FakeLLM,
+    )
+
+    with pytest.raises(Exception, match="LLM output must be a JSON object"):
+        await build_object_instance(_request(_label_schema()))
 
 
 def test_parse_result_normalizes_enum_name_to_code() -> None:
