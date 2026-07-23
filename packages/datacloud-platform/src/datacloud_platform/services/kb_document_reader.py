@@ -1,4 +1,4 @@
-"""Read full Markdown documents from knowledge bases."""
+"""Download full Markdown documents from knowledge bases."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_READ_FILE_PATH = "/api/v1/readFile"
+DEFAULT_DOWNLOAD_FILE_PATH = "/api/v1/downloadFile"
+DEFAULT_READ_FILE_PATH = DEFAULT_DOWNLOAD_FILE_PATH
 SERVICE_NAME_ENV_VARS = (
     "DATACLOUD_KB_READ_SERVICE_NAME",
     "QA_DOMAINNAME",
@@ -33,7 +34,7 @@ class KbDocumentReadError(RuntimeError):
 
 @dataclass(frozen=True)
 class KbDocumentReader:
-    """Client for knowledge-base ``POST /api/v1/readFile``."""
+    """Client for knowledge-base ``POST /api/v1/downloadFile``."""
 
     base_url: str = ""
     service_name: str = ""
@@ -48,7 +49,8 @@ class KbDocumentReader:
         start_line: int | None = None,
         end_line: int | None = None,
     ) -> str:
-        """Read one knowledge-base document as Markdown text."""
+        """Download one knowledge-base document as Markdown text."""
+        _ = start_line, end_line
         normalized_kn_code = kn_code.strip()
         normalized_file_path = file_path.strip()
         if not normalized_kn_code:
@@ -60,31 +62,27 @@ class KbDocumentReader:
             "knCode": normalized_kn_code,
             "filePath": normalized_file_path,
         }
-        if start_line is not None:
-            body["startLine"] = start_line
-        if end_line is not None:
-            body["endLine"] = end_line
 
         headers = _build_headers()
-        response_body = self._post(body=body, headers=headers)
-        content = _extract_content(response_body)
+        response_payload = self._post(body=body, headers=headers)
+        content = _extract_text(response_payload)
         logger.info(
-            "KB document read succeeded: knCode=%s filePath=%s content_length=%d",
+            "KB document download succeeded: knCode=%s filePath=%s content_length=%d",
             normalized_kn_code,
             normalized_file_path,
             len(content),
         )
         return content
 
-    def _post(self, *, body: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
+    def _post(self, *, body: dict[str, Any], headers: dict[str, str]) -> Any:
         if self.post_json is not None:
-            return _ensure_dict(self.post_json(self.read_path, body, headers))
+            return self.post_json(self.read_path, body, headers)
 
         base_url = self.base_url.strip().rstrip("/")
         if _is_complete_url(base_url):
             url = f"{base_url}{self.read_path}"
             logger.info(
-                "KB document read request: transport=http url=%s knCode=%s "
+                "KB document download request: transport=http url=%s knCode=%s "
                 "filePath=%s has_token=%s",
                 url,
                 body.get("knCode", ""),
@@ -93,17 +91,16 @@ class KbDocumentReader:
             )
             with httpx.Client(timeout=_TIMEOUT_SECONDS, headers=headers) as client:
                 response = client.post(url, json=body)
-                response.raise_for_status()
-                return _ensure_dict(response.json())
+                return _payload_from_httpx_response(response)
 
         service_name = self.service_name.strip() or _default_service_name()
         if not service_name:
             raise KbDocumentReadError(
-                "KB read service name is required: set "
+                "KB download service name is required: set "
                 "DATACLOUD_KB_READ_SERVICE_NAME or QA_DOMAINNAME"
             )
         logger.info(
-            "KB document read request: transport=discovery service_name=%s path=%s "
+            "KB document download request: transport=discovery service_name=%s path=%s "
             "knCode=%s filePath=%s has_token=%s",
             service_name,
             self.read_path,
@@ -111,14 +108,12 @@ class KbDocumentReader:
             body.get("filePath", ""),
             bool(headers.get("Beyond-Token") or headers.get("beyond-token")),
         )
-        return _ensure_dict(
-            _run_async_in_thread(
-                _post_by_discovery(
-                    service_name=service_name,
-                    path=self.read_path,
-                    body=body,
-                    headers=headers,
-                )
+        return _run_async_in_thread(
+            _download_by_discovery(
+                service_name=service_name,
+                path=self.read_path,
+                body=body,
+                headers=headers,
             )
         )
 
@@ -127,19 +122,22 @@ def build_default_kb_document_reader() -> KbDocumentReader:
     """Build the default Platform KB document reader from environment config."""
     return KbDocumentReader(
         base_url=(
-            os.getenv("DATACLOUD_KB_READ_API_BASE_URL")
+            os.getenv("DATACLOUD_KB_DOWNLOAD_API_BASE_URL")
+            or os.getenv("DATACLOUD_KB_READ_API_BASE_URL")
             or os.getenv("DATACLOUD_BYAI_SERVICE_BASE_URL")
             or os.getenv("DATACLOUD_RESULT_FILE_API_BASE_URL")
             or ""
         ).strip(),
         service_name=_default_service_name(),
         read_path=(
-            os.getenv("DATACLOUD_KB_READ_PATH") or DEFAULT_READ_FILE_PATH
+            os.getenv("DATACLOUD_KB_DOWNLOAD_PATH")
+            or os.getenv("DATACLOUD_KB_READ_PATH")
+            or DEFAULT_DOWNLOAD_FILE_PATH
         ).strip(),
     )
 
 
-async def _post_by_discovery(
+async def _download_by_discovery(
     *,
     service_name: str,
     path: str,
@@ -148,14 +146,10 @@ async def _post_by_discovery(
 ) -> Any:
     try:
         from by_framework.core.discovery import DiscoveryClient  # noqa: PLC0415
-        from by_framework.util.discovery_http_client import (  # noqa: PLC0415
-            DiscoveryHttpClient,
-        )
-        from by_framework.util.http_client import RetryConfig  # noqa: PLC0415
         from redis.asyncio import Redis  # noqa: PLC0415
     except ImportError as exc:
         raise KbDocumentReadError(
-            "KB read service discovery dependencies are unavailable"
+            "KB download service discovery dependencies are unavailable"
         ) from exc
 
     redis_client = Redis(
@@ -167,29 +161,121 @@ async def _post_by_discovery(
         decode_responses=True,
     )
     discovery_client = DiscoveryClient(redis_client=redis_client, cache_interval=5)
-    retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
     try:
-        async with DiscoveryHttpClient(
-            discovery_client,
-            retry_config=retry_config,
-            health_threshold_ms=-1,
+        async with httpx.AsyncClient(
+            timeout=_TIMEOUT_SECONDS,
+            headers=headers,
         ) as client:
-            response = await client.post(service_name, path, headers=headers, json=body)
+            last_error: KbDocumentReadError | None = None
+            for _ in range(3):
+                instance = await discovery_client.discover(
+                    service_name,
+                    health_threshold_ms=-1,
+                )
+                if not instance:
+                    raise KbDocumentReadError(
+                        f"No available instances for service: {service_name}"
+                    )
+                url = _build_discovered_url(instance, path)
+                try:
+                    response = await client.post(url, json=body)
+                except httpx.HTTPError as exc:
+                    last_error = KbDocumentReadError(
+                        f"HTTP error calling {service_name}{path}: {exc}"
+                    )
+                    continue
+                if response.is_success or response.status_code not in {502, 503, 504}:
+                    return _payload_from_httpx_response(response)
+            if last_error is not None:
+                raise last_error
+            raise KbDocumentReadError(
+                f"Service request failed after retries: {service_name}{path}"
+            )
     finally:
         await discovery_client.close()
         await redis_client.aclose()
 
-    if not response.is_success:
+
+def _payload_from_httpx_response(response: httpx.Response) -> Any:
+    content_type = response.headers.get("content-type", "").lower()
+    if content_type.startswith("application/json"):
+        try:
+            payload: Any = response.json()
+        except ValueError as exc:
+            raise KbDocumentReadError(
+                "KB download service response must be JSON"
+            ) from exc
+    else:
+        payload = response.content
+
+    if response.is_success:
+        return payload
+
+    if isinstance(payload, dict):
+        _extract_text(payload)
+    raise KbDocumentReadError(
+        f"HTTP {response.status_code} downloading KB document: "
+        f"{_response_preview(payload)}"
+    )
+
+
+def _build_discovered_url(instance: Any, path: str) -> str:
+    protocol = str(getattr(instance, "protocol", "") or "http").strip() or "http"
+    path_segments: list[str] = []
+    path_prefix = str(getattr(instance, "path_prefix", "") or "").strip("/")
+    if path_prefix:
+        path_segments.append(path_prefix)
+    request_path = path.strip("/")
+    if request_path:
+        path_segments.append(request_path)
+    suffix = "/".join(path_segments)
+    base = f"{protocol}://{instance.host}:{instance.port}"
+    return f"{base}/{suffix}" if suffix else base
+
+
+def _extract_text(response_payload: Any) -> str:
+    if isinstance(response_payload, bytes | bytearray | memoryview):
+        return _decode_downloaded_bytes(bytes(response_payload))
+    if isinstance(response_payload, str):
+        json_payload = _try_parse_json_object(response_payload)
+        if json_payload is not None:
+            return _extract_content(json_payload)
+        return response_payload
+    if isinstance(response_payload, dict):
+        return _extract_content(response_payload)
+    raise KbDocumentReadError("KB download service response must be bytes or JSON")
+
+
+def _decode_downloaded_bytes(content: bytes) -> str:
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError as exc:
         raise KbDocumentReadError(
-            f"HTTP {response.status_code} calling {service_name}{path}: {response.data}"
-        )
-    return response.data
+            "KB downloaded document must be UTF-8 Markdown text"
+        ) from exc
+
+
+def _try_parse_json_object(value: str) -> dict[str, Any] | None:
+    stripped = value.lstrip()
+    if not stripped.startswith("{"):
+        return None
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _response_preview(payload: Any) -> str:
+    if isinstance(payload, bytes | bytearray | memoryview):
+        return bytes(payload)[:200].decode("utf-8", errors="replace")
+    return str(payload)[:200]
 
 
 def _extract_content(response_body: dict[str, Any]) -> str:
     result_code = str(response_body.get("resultCode", "0")).strip()
     if result_code not in {"0", "200"}:
-        message = str(response_body.get("resultMsg") or "KB document read failed")
+        message = str(response_body.get("resultMsg") or "KB document download failed")
         raise KbDocumentReadError(message)
 
     result_object = response_body.get("resultObject")
@@ -234,19 +320,6 @@ def _current_context_value(attr_name: str) -> str:
     except (DatacloudError, LookupError, RuntimeError):
         return ""
     return str(getattr(context, attr_name, "") or "").strip()
-
-
-def _ensure_dict(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            decoded = json.loads(value)
-        except json.JSONDecodeError as exc:
-            raise KbDocumentReadError("KB read service response must be JSON") from exc
-        if isinstance(decoded, dict):
-            return decoded
-    raise KbDocumentReadError("KB read service response must be a JSON object")
 
 
 def _run_async_in_thread(coro: Any) -> Any:

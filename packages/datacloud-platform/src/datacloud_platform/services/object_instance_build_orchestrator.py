@@ -1210,7 +1210,7 @@ def _read_kb_document_from_reference(file_ref: dict[str, Any]) -> str:
         )
     except KbDocumentReadError as exc:
         logger.warning(
-            "object_instance_build KB document read failed: knCode=%s filePath=%s "
+            "object_instance_build KB document download failed: knCode=%s filePath=%s "
             "error=%s",
             kn_code,
             file_path,

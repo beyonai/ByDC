@@ -11,27 +11,18 @@ from datacloud_platform.services.kb_document_reader import (
 )
 
 
-def test_kb_document_reader_posts_read_file_request_and_returns_markdown() -> None:
+def test_kb_document_reader_posts_download_file_request_and_returns_markdown() -> None:
     captured: dict[str, Any] = {}
 
     def post_json(
         path: str,
         body: dict[str, Any],
         headers: dict[str, str],
-    ) -> dict[str, Any]:
+    ) -> bytes:
         captured["path"] = path
         captured["body"] = body
         captured["headers"] = headers
-        return {
-            "resultCode": "0",
-            "resultMsg": "success",
-            "resultObject": {
-                "knCode": "97",
-                "filePath": "/Methodology/本体论.md",
-                "data": "# 本体论\n\n现有正文",
-                "reachedEof": True,
-            },
-        }
+        return "# 本体论\n\n现有正文".encode()
 
     reader = KbDocumentReader(post_json=post_json)
 
@@ -41,7 +32,7 @@ def test_kb_document_reader_posts_read_file_request_and_returns_markdown() -> No
     )
 
     assert content == "# 本体论\n\n现有正文"
-    assert captured["path"] == "/api/v1/readFile"
+    assert captured["path"] == "/api/v1/downloadFile"
     assert captured["body"] == {
         "knCode": "97",
         "filePath": "/Methodology/本体论.md",
@@ -60,11 +51,14 @@ def test_default_reader_uses_qa_domainname(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_kb_document_reader_raises_on_non_zero_result_code() -> None:
+    captured: dict[str, Any] = {}
+
     def post_json(
         path: str,
         body: dict[str, Any],
         headers: dict[str, str],
     ) -> dict[str, Any]:
+        captured["path"] = path
         return {
             "resultCode": "-1",
             "resultMsg": "file not found: /Methodology/本体论.md",
@@ -75,3 +69,4 @@ def test_kb_document_reader_raises_on_non_zero_result_code() -> None:
 
     with pytest.raises(KbDocumentReadError, match="file not found"):
         reader.read_text(kn_code="97", file_path="/Methodology/本体论.md")
+    assert captured["path"] == "/api/v1/downloadFile"
