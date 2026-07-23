@@ -35,10 +35,11 @@ from datacloud_data_sdk.executor.kb_search_backend import (
     KnowledgeUpdateRequest,
     KnowledgeWriteBackend,
     KnowledgeWriteRequest,
+    _merge_related_docs_into_labels,
     _parse_related_docs,
     _related_doc_id_to_term,
     _render_markdown_with_front_matter,
-    _strip_front_matter,
+    _strip_related_docs_blocks,
     _to_markdown_file_path,
 )
 from datacloud_data_sdk.ontology.loader import OntologyLoader
@@ -279,6 +280,7 @@ class KbSearchExecutor:
                 )
 
             labels = self._resolve_label_terms(item.get("labels") or {}, cls)
+            labels = self._filter_labels_to_fields(labels, cls)
             markdown_file_path = _to_markdown_file_path(file_path, self._get_kb_directory(cls))
             labels = self._inject_primary_key_label(labels, cls, markdown_file_path)
             write_requests.append(
@@ -1005,6 +1007,15 @@ class KbSearchExecutor:
             return True
         return bool(getattr(self._loader._config, "kb_backends", {}) or {})
 
+    @staticmethod
+    def _filter_labels_to_fields(labels: dict[str, Any], cls: Any) -> dict[str, Any]:
+        field_codes = {
+            str(getattr(field, "field_code", ""))
+            for field in getattr(cls, "fields", [])
+            if str(getattr(field, "field_code", ""))
+        }
+        return {k: v for k, v in labels.items() if k in field_codes}
+
     def _resolve_label_terms(self, labels: Any, cls: Any) -> dict[str, Any]:
         if not isinstance(labels, dict):
             return {}
@@ -1272,9 +1283,10 @@ def _attach_session_file(
             logical_path = f"/datacloud/kb/{file_name}"
 
             # Render content with YAML front-matter labels, identical to the KB upload.
-            # related_docs stays at the Markdown tail as a source-tracing block.
-            clean_content = _strip_front_matter(req.content)
-            file_content = _render_markdown_with_front_matter(req.labels, clean_content)
+            related_docs = _parse_related_docs(req.content)
+            effective_labels = _merge_related_docs_into_labels(req.labels, related_docs)
+            clean_content = _strip_related_docs_blocks(req.content)
+            file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
 
             storage.write_text(logical_path, file_content)
             written_paths.append(logical_path)

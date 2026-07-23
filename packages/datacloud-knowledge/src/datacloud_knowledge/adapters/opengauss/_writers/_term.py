@@ -741,6 +741,7 @@ class _TermWriter(_WriterBase):
                 term_name = (t.get("term_name") or t.get("termName") or "").strip()
                 if not term_name:
                     skipped += 1
+                    errors.append(f"term_name is required for term {t}")
                     continue
 
                 term_code = t.get("term_code") or t.get("termCode") or ""
@@ -751,19 +752,22 @@ class _TermWriter(_WriterBase):
                     t.get("term_type_code")
                     or t.get("termTypeCode")
                     or t.get("term_type")
-                    or "concept"
                 )
 
+                if not term_type_code:
+                   skipped += 1
+                   errors.append(f"term_type_code is required for term {term_name}")
+                   continue
                 parent_term_code = t.get("parent_term_code") or t.get("parentTermCode") or ""
                 parent_term_id: str | None = None
                 if parent_term_code:
                     parent_row = self.session.execute(
                         text(
                             "SELECT term_id FROM term "
-                            "WHERE term_code = :code AND library_id = :lid "
+                            "WHERE term_code = :code AND library_id = :lid AND term_type_code = :type_code "
                             "LIMIT 1"
                         ),
-                        {"code": parent_term_code, "lid": library_id},
+                        {"code": parent_term_code, "lid": library_id, "type_code": term_type_code},
                     ).fetchone()
                     if parent_row:
                         parent_term_id = str(parent_row[0])
@@ -803,11 +807,10 @@ class _TermWriter(_WriterBase):
                 existing = self.session.execute(
                     text(
                         "SELECT term_id, term_name, term_type_code FROM term "
-                        "WHERE term_code = :code AND library_id = :lid "
-                        "AND COALESCE(term_type_code, '') = '' "
+                        "WHERE term_code = :code AND library_id = :lid AND term_type_code = :type_code "
                         "LIMIT 1"
                     ),
-                    {"code": term_code, "lid": library_id},
+                    {"code": term_code, "lid": library_id, "type_code": term_type_code},
                 ).fetchone()
 
                 if existing is not None:
@@ -858,95 +861,94 @@ class _TermWriter(_WriterBase):
                     log.info("Stub upgraded: term_id=%s term_code=%s", existing_term_id, term_code)
                 else:
                     # Regular insert or upsert by (term_code, library_id)
-                    existing_non_stub = self.session.execute(
-                        text(
-                            "SELECT term_id, term_name FROM term "
-                            "WHERE term_code = :code AND library_id = :lid "
-                            "LIMIT 1"
-                        ),
-                        {"code": term_code, "lid": library_id},
-                    ).fetchone()
+                    # existing_non_stub = self.session.execute(
+                    #     text(
+                    #         "SELECT term_id, term_name FROM term "
+                    #         "WHERE term_code = :code AND library_id = :lid "
+                    #         "LIMIT 1"
+                    #     ),
+                    #     {"code": term_code, "lid": library_id},
+                    # ).fetchone()
 
-                    if existing_non_stub is not None:
-                        # Update existing
-                        existing_tid = str(existing_non_stub[0])
-                        existing_name = str(existing_non_stub[1]) if existing_non_stub[1] else ""
-                        self.session.execute(
-                            text(
-                                "UPDATE term SET "
-                                "term_name = :name, term_type_code = :type_code, "
-                                "desc_summary = :desc, domain_ids = :dids, "
-                                "term_tags = CAST(:tags AS jsonb), "
-                                "ext_attrs = CAST(:ext_attrs AS jsonb), "
-                                "parent_term_id = :parent_id, "
-                                "updated_time = :now "
-                                "WHERE term_id = :tid"
-                            ),
-                            {
-                                "name": term_name,
-                                "type_code": term_type_code,
-                                "desc": desc_summary if desc_summary else None,
-                                "dids": domain_ids,
-                                "tags": json.dumps(term_tags),
-                                "ext_attrs": json.dumps(ext_attrs),
-                                "parent_id": parent_term_id,
-                                "now": now,
-                                "tid": existing_tid,
-                            },
-                        )
-                        term_ids.append(existing_tid)
-                        updated += 1
-                        if term_name != existing_name:
-                            name_changed_ids.append(existing_tid)
-                            log.debug(
-                                "_batch_insert: update name changed: %r → %r (term_id=%s)",
-                                existing_name,
-                                term_name,
-                                existing_tid,
-                            )
-                        else:
-                            log.debug(
-                                "_batch_insert: update name unchanged: %r (term_id=%s), skip backfill",
-                                term_name,
-                                existing_tid,
-                            )
-                    else:
+                    # if existing_non_stub is not None:
+                    #     # Update existing
+                    #     existing_tid = str(existing_non_stub[0])
+                    #     existing_name = str(existing_non_stub[1]) if existing_non_stub[1] else ""
+                    #     self.session.execute(
+                    #         text(
+                    #             "UPDATE term SET "
+                    #             "term_name = :name, term_type_code = :type_code, "
+                    #             "desc_summary = :desc, domain_ids = :dids, "
+                    #             "term_tags = CAST(:tags AS jsonb), "
+                    #             "ext_attrs = CAST(:ext_attrs AS jsonb), "
+                    #             "parent_term_id = :parent_id, "
+                    #             "updated_time = :now "
+                    #             "WHERE term_id = :tid"
+                    #         ),
+                    #         {
+                    #             "name": term_name,
+                    #             "type_code": term_type_code,
+                    #             "desc": desc_summary if desc_summary else None,
+                    #             "dids": domain_ids,
+                    #             "tags": json.dumps(term_tags),
+                    #             "ext_attrs": json.dumps(ext_attrs),
+                    #             "parent_id": parent_term_id,
+                    #             "now": now,
+                    #             "tid": existing_tid,
+                    #         },
+                    #     )
+                    #     term_ids.append(existing_tid)
+                    #     updated += 1
+                    #     if term_name != existing_name:
+                    #         name_changed_ids.append(existing_tid)
+                    #         log.debug(
+                    #             "_batch_insert: update name changed: %r → %r (term_id=%s)",
+                    #             existing_name,
+                    #             term_name,
+                    #             existing_tid,
+                    #         )
+                    #     else:
+                    #         log.debug(
+                    #             "_batch_insert: update name unchanged: %r (term_id=%s), skip backfill",
+                    #             term_name,
+                    #             existing_tid,
+                    #         )
+                    # else:
                         # Insert new
-                        term_id = self._new_id()
-                        self.session.execute(
-                            text(
-                                "INSERT INTO term "
-                                "(term_id, term_code, term_name, term_type_code, library_id, "
-                                "domain_ids, parent_term_id, term_tags, ext_attrs, "
-                                "created_time, updated_time) "
-                                "VALUES ("
-                                ":tid, :code, :name, :type_code, :lid, "
-                                ":dids, :parent_id, CAST(:tags AS jsonb), "
-                                "CAST(:ext_attrs AS jsonb), :now, :now"
-                                ")"
-                            ),
-                            {
-                                "tid": term_id,
-                                "code": term_code,
-                                "name": term_name,
-                                "type_code": term_type_code,
-                                "lid": library_id,
-                                "dids": domain_ids,
-                                "parent_id": parent_term_id,
-                                "tags": json.dumps(term_tags),
-                                "ext_attrs": json.dumps(ext_attrs),
-                                "now": now,
-                            },
-                        )
-                        term_ids.append(term_id)
-                        created += 1
-                        name_changed_ids.append(term_id)
-                        log.debug(
-                            "_batch_insert: new term created term_id=%s name=%r",
-                            term_id,
-                            term_name,
-                        )
-
+                    term_id = self._new_id()
+                    self.session.execute(
+                        text(
+                            "INSERT INTO term "
+                            "(term_id, term_code, term_name, term_type_code, library_id, "
+                            "domain_ids, parent_term_id, term_tags, ext_attrs, "
+                            "created_time, updated_time) "
+                            "VALUES ("
+                            ":tid, :code, :name, :type_code, :lid, "
+                            ":dids, :parent_id, CAST(:tags AS jsonb), "
+                            "CAST(:ext_attrs AS jsonb), :now, :now"
+                            ")"
+                        ),
+                        {
+                            "tid": term_id,
+                            "code": term_code,
+                            "name": term_name,
+                            "type_code": term_type_code,
+                            "lid": library_id,
+                            "dids": domain_ids,
+                            "parent_id": parent_term_id,
+                            "tags": json.dumps(term_tags),
+                            "ext_attrs": json.dumps(ext_attrs),
+                            "now": now,
+                        },
+                    )
+                    term_ids.append(term_id)
+                    created += 1
+                    name_changed_ids.append(term_id)
+                    log.debug(
+                        "_batch_insert: new term created term_id=%s name=%r",
+                        term_id,
+                        term_name,
+                    )
                 # Insert standard name as term_name (for keyword/jieba/vector lookup)
                 name_id = self.create_term_name(
                     term_id=term_ids[-1],
