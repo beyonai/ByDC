@@ -344,7 +344,7 @@ class HttpKnowledgeSearchBackend:
         )
 
     async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
-        """Delete any existing document then upload a generated Markdown document."""
+        """Upload a generated Markdown document, updating in-place if it already exists."""
         config = self._get_config(request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
 
@@ -367,27 +367,55 @@ class HttpKnowledgeSearchBackend:
 
         endpoint = self._resolve_endpoint(config)
         if endpoint:
-            import_url = self._build_import_url(endpoint, config)
-            delete_url = self._build_delete_url(endpoint, config)
             try:
                 async with httpx.AsyncClient(
                     headers=self._get_beyond_token_header(), timeout=30.0
                 ) as client:
-                    await self._delete_http(client, delete_url, request, markdown_file_path)
-                    # await self._ensure_metadata_properties_http(client, endpoint, config, request)
-
-                    log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
-                    resp = await client.post(
-                        import_url,
-                        data=data,
-                        files={
-                            "fileContent": (
-                                filename,
-                                file_content.encode("utf-8"),
-                                "text/markdown; charset=utf-8",
-                            )
-                        },
+                    file_exists = await self._file_exists_http(
+                        client,
+                        endpoint,
+                        config,
+                        request.kb_id,
+                        markdown_file_path,
+                        request.datasource_alias,
                     )
+                    if file_exists:
+                        update_url = self._build_update_url(endpoint, config)
+                        form_data: dict[str, str] = {
+                            "knCode": request.kb_id,
+                            "filePath": markdown_file_path,
+                            "processFrontMatter": "true",
+                        }
+                        if request.file_description:
+                            form_data["fileDescription"] = request.file_description
+                        log_curl(
+                            "POST", update_url, body={**form_data, "fileContent": f"@{filename}"}
+                        )
+                        resp = await client.post(
+                            update_url,
+                            data=form_data,
+                            files={
+                                "fileContent": (
+                                    filename,
+                                    file_content.encode("utf-8"),
+                                    "text/markdown; charset=utf-8",
+                                )
+                            },
+                        )
+                    else:
+                        import_url = self._build_import_url(endpoint, config)
+                        log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
+                        resp = await client.post(
+                            import_url,
+                            data=data,
+                            files={
+                                "fileContent": (
+                                    filename,
+                                    file_content.encode("utf-8"),
+                                    "text/markdown; charset=utf-8",
+                                )
+                            },
+                        )
                     body = self._parse_response_body(resp, request.datasource_alias)
                     self._ensure_success(body, request.datasource_alias)
                     build_body = await self._trigger_file_build_http(
@@ -666,6 +694,23 @@ class HttpKnowledgeSearchBackend:
         return KnowledgeFileMetadata(file_path=markdown_file_path, labels=labels, exists=True)
 
     @staticmethod
+    def _build_glob_url(endpoint: str, config: dict[str, Any]) -> str:
+        explicit_url = config.get("glob_url") or config.get("globUrl")
+        if explicit_url:
+            return str(explicit_url)
+        if endpoint.rstrip("/").endswith("/api/v1/glob"):
+            return endpoint.rstrip("/")
+        path = str(config.get("glob_path") or config.get("globPath") or "/api/v1/glob")
+        return endpoint.rstrip("/") + "/" + path.lstrip("/")
+
+    @staticmethod
+    def _build_glob_path(config: dict[str, Any]) -> str:
+        return _normalize_discovery_path(
+            _first_non_empty_str(config.get("glob_path"), config.get("globPath")),
+            "/api/v1/glob",
+        )
+
+    @staticmethod
     def _build_metadata_get_url(endpoint: str, config: dict[str, Any]) -> str:
         explicit_url = config.get("metadata_get_url") or config.get("metadataGetUrl")
         if explicit_url:
@@ -911,6 +956,80 @@ class HttpKnowledgeSearchBackend:
                 body.get("resultMsg"),
             )
 
+    async def _file_exists_http(
+        self,
+        client: httpx.AsyncClient,
+        endpoint: str,
+        config: dict[str, Any],
+        kb_id: str,
+        markdown_file_path: str,
+        datasource_alias: str,
+    ) -> bool:
+        """Return True if the file exists in the knowledge base via POST /api/v1/glob."""
+        glob_url = self._build_glob_url(endpoint, config)
+        # Build the exact-match pattern from the file path.
+        path = PurePosixPath(markdown_file_path)
+        path_rule = str(path) if str(path).startswith("/") else f"/{path}"
+        body: dict[str, Any] = {"knCode": kb_id, "pathRule": path_rule}
+        log_curl("POST", glob_url, body=body)
+        try:
+            resp = await client.post(glob_url, json=body)
+        except httpx.HTTPError:
+            logger.warning(
+                "glob check failed for %s – assuming file does not exist", markdown_file_path
+            )
+            return False
+        if resp.status_code >= 400:
+            logger.warning(
+                "glob check HTTP %s for %s – assuming file does not exist",
+                resp.status_code,
+                markdown_file_path,
+            )
+            return False
+        try:
+            data = resp.json()
+        except ValueError:
+            return False
+        if not isinstance(data, dict) or data.get("resultCode") not in (None, "0", 0):
+            return False
+        result_object = data.get("resultObject")
+        if not isinstance(result_object, dict):
+            return False
+        items = result_object.get("data")
+        return isinstance(items, list) and len(items) > 0
+
+    async def _file_exists_by_discovery(
+        self,
+        client: Any,
+        service_name: str,
+        config: dict[str, Any],
+        kb_id: str,
+        markdown_file_path: str,
+        datasource_alias: str,
+        headers: dict[str, str],
+    ) -> bool:
+        """Return True if the file exists in the knowledge base via discovery glob."""
+        glob_path = self._build_glob_path(config)
+        path = PurePosixPath(markdown_file_path)
+        path_rule = str(path) if str(path).startswith("/") else f"/{path}"
+        body: dict[str, Any] = {"knCode": kb_id, "pathRule": path_rule}
+        log_curl("POST", glob_path, body=body)
+        try:
+            resp = await client.post(service_name, glob_path, headers=headers, json=body)
+        except httpx.HTTPError:
+            logger.warning(
+                "glob check failed for %s – assuming file does not exist", markdown_file_path
+            )
+            return False
+        data = getattr(resp, "data", None)
+        if not isinstance(data, dict) or data.get("resultCode") not in (None, "0", 0):
+            return False
+        result_object = data.get("resultObject")
+        if not isinstance(result_object, dict):
+            return False
+        items = result_object.get("data")
+        return isinstance(items, list) and len(items) > 0
+
     async def _delete_by_discovery(
         self,
         client: Any,
@@ -988,47 +1107,62 @@ class HttpKnowledgeSearchBackend:
                 retry_config=retry_config,
                 health_threshold_ms=-1,
             ) as client:
-                await self._delete_by_discovery(
+                file_exists = await self._file_exists_by_discovery(
                     client,
                     service_name,
                     config,
-                    request,
+                    request.kb_id,
                     markdown_file_path,
+                    request.datasource_alias,
                     json_headers,
                 )
-                # await self._ensure_metadata_properties_by_discovery(
-                #     client,
-                #     service_name,
-                #     config,
-                #     request,
-                #     json_headers,
-                # )
-
-                import_path = self._build_import_path(config)
                 file_bytes = file_content.encode("utf-8")
-                log_curl("UPLOAD", import_path, body={**data, "fileContent": f"@{filename}"})
-                parts: list[tuple[str, Any]] = [
-                    ("knCode", (None, data["knCode"])),
-                    ("filePath", (None, data["filePath"])),
-                ]
-                if request.file_description:
-                    parts.append(("fileDescription", (None, request.file_description)))
-                parts.append(
-                    (
-                        "fileContent",
-                        (
-                            filename,
-                            file_bytes,
-                            "text/markdown; charset=utf-8",
-                        ),
+                if file_exists:
+                    update_path = self._build_update_path(config)
+                    form_data: dict[str, str] = {
+                        "knCode": request.kb_id,
+                        "filePath": markdown_file_path,
+                        "processFrontMatter": "true",
+                    }
+                    if request.file_description:
+                        form_data["fileDescription"] = request.file_description
+                    log_curl(
+                        "UPLOAD", update_path, body={**form_data, "fileContent": f"@{filename}"}
                     )
-                )
-                resp = await client._upload_with_discovery(
-                    service_name,
-                    import_path,
-                    parts,
-                    headers=upload_headers,
-                )
+                    parts: list[tuple[str, Any]] = [
+                        ("knCode", (None, form_data["knCode"])),
+                        ("filePath", (None, form_data["filePath"])),
+                        ("processFrontMatter", (None, form_data["processFrontMatter"])),
+                    ]
+                    if request.file_description:
+                        parts.append(("fileDescription", (None, request.file_description)))
+                    parts.append(
+                        ("fileContent", (filename, file_bytes, "text/markdown; charset=utf-8"))
+                    )
+                    resp = await client._upload_with_discovery(
+                        service_name,
+                        update_path,
+                        parts,
+                        headers=upload_headers,
+                    )
+                else:
+                    import_path = self._build_import_path(config)
+                    log_curl("UPLOAD", import_path, body={**data, "fileContent": f"@{filename}"})
+                    parts = [
+                        ("knCode", (None, data["knCode"])),
+                        ("filePath", (None, data["filePath"])),
+                    ]
+                    if request.file_description:
+                        parts.append(("fileDescription", (None, request.file_description)))
+                    parts.append(
+                        ("fileContent", (filename, file_bytes, "text/markdown; charset=utf-8"))
+                    )
+                    resp = await client._upload_with_discovery(
+                        service_name,
+                        import_path,
+                        parts,
+                        headers=upload_headers,
+                    )
 
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
                 self._ensure_success(body, request.datasource_alias)
