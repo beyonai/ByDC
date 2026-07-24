@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS term_type (
     type_id       BIGSERIAL    NOT NULL PRIMARY KEY,
-    type_code     VARCHAR(32)  NOT NULL,
-    type_name     VARCHAR(255) NOT NULL,
+    type_code     VARCHAR(256)  NOT NULL,
+    type_name     VARCHAR(256) NOT NULL,
     type_desc     TEXT,
     type_category INTEGER      NOT NULL,
     is_builtin    BOOLEAN      NOT NULL DEFAULT FALSE,
