@@ -198,7 +198,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             [
                 (
                     v.get("view_code") or v.get("viewCode") or v.get("view_id", ""),
-                    {**v, "owner_type": v.get("owner_type", "enterprise")},
+                    {
+                        **v,
+                        "view_code": v.get("view_code") or v.get("viewCode") or v.get("view_id", ""),
+                        "owner_type": v.get("owner_type", "enterprise"),
+                    },
                 )
                 for v in views
                 if v.get("view_code") or v.get("viewCode") or v.get("view_id", "")
@@ -2294,7 +2298,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
             data_stmt = (
                 select(
-                    data_col.op("->>")("view_code").label("view_code"),
+                    func.coalesce(
+                        data_col.op("->>")("view_code"),
+                        data_col.op("->>")("view_id"),
+                        text("''"),
+                    ).label("view_code"),
                     data_col.op("->>")("view_name").label("view_name"),
                     func.coalesce(data_col.op("->>")("description"), text("''")).label(
                         "description"
