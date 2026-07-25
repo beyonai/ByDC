@@ -793,9 +793,12 @@ class OntologyAgent:
 
         from datacloud_analysis.langfuse_handler import make_langfuse_callback  # noqa: PLC0415
 
-        # thread_id 通常为 UUID，去掉连字符得到合法 32位 hex trace_id
-        _lf_trace_id = thread_id.replace("-", "") if thread_id else None
-        _lf_handler = make_langfuse_callback(_lf_trace_id)
+        # 优先使用 worker 层传入的 biz trace_id（32位 hex），
+        # 避免 thread_id（"agent_id:session_id:parent_msg_id" 格式）导致的 trace 断链。
+        _biz_trace_id = str((_effective_extras or {}).get("langfuse_trace_id", "") or "")
+        _lf_trace_id = _biz_trace_id if _biz_trace_id else None
+        _parent_span_id = str((_effective_extras or {}).get("langfuse_parent_span_id", "") or "")
+        _lf_handler = make_langfuse_callback(_lf_trace_id, parent_span_id=_parent_span_id or None)
         if _lf_handler is not None:
             run_config["callbacks"] = [_lf_handler]
             run_config["metadata"] = {
