@@ -162,7 +162,7 @@ def obj_camel_to_owl(obj_dict: dict[str, Any]) -> dict[str, Any]:
     if ext_property:
         result["ext_property"] = ext_property
 
-    term_sync = obj_dict.get("term_sync")
+    term_sync = obj_dict.get("term_sync") or obj_dict.get("termSync")
     if term_sync:
         result["term_sync"] = term_sync
     tags = obj_dict.get("tags")
