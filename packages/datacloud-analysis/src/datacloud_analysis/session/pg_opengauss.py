@@ -219,7 +219,14 @@ class OpenGaussSaver:
     # ── get_tuple override ─────────────────────────────────────────────────
 
     def get_tuple(self, config: Any) -> Any:
-        """OpenGauss-compatible get_tuple using separate queries."""
+        """OpenGauss-compatible get_tuple using separate queries.
+
+        Our ``put()`` pops complex channel values (e.g. messages) from the
+        checkpoint JSON and stores them as separate rows in
+        ``checkpoint_blobs``.  ``_load_checkpoint_tuple`` only sees the
+        stripped JSON, so we must merge blobs back into ``channel_values``
+        after loading.
+        """
         from langgraph.checkpoint.base import get_checkpoint_id  # noqa: PLC0415
 
         thread_id = config["configurable"]["thread_id"]
@@ -238,9 +245,50 @@ class OpenGaussSaver:
             row = cur.fetchone()
             if row is None:
                 return None
-            return self._load_checkpoint_tuple(  # type: ignore[attr-defined]
+            result = self._load_checkpoint_tuple(  # type: ignore[attr-defined]
                 self._assemble_row(cur, row)
             )
+            # Merge blobs that were separated from channel_values by our put()
+            cvs = result.checkpoint.get("channel_versions", {})
+            msg_ver = cvs.get("messages")
+            logger.info(
+                "OpenGaussSaver.get_tuple: thread=%s ckpt=%s channel_versions=%d msg_ver=%s",
+                thread_id,
+                result.checkpoint.get("id", "?")[:30],
+                len(cvs),
+                msg_ver,
+            )
+            if cvs:
+                blobs = self._fetch_blobs(cur, thread_id, checkpoint_ns, cvs)
+                logger.info(
+                    "OpenGaussSaver.get_tuple: _fetch_blobs returned %d blobs for thread=%s",
+                    len(blobs or []),
+                    thread_id,
+                )
+                if blobs:
+                    for ch_bytes, t_bytes, v in blobs:
+                        try:
+                            ch = ch_bytes.decode() if isinstance(ch_bytes, bytes) else str(ch_bytes)
+                            t = t_bytes.decode() if isinstance(t_bytes, bytes) else str(t_bytes)
+                            result.checkpoint["channel_values"][ch] = self.serde.loads_typed((t, v))  # type: ignore[attr-defined]
+                        except Exception:
+                            logger.debug(
+                                "OpenGaussSaver.get_tuple: blob merge failed for channel=%s",
+                                ch_bytes,
+                                exc_info=True,
+                            )
+                    logger.info(
+                        "OpenGaussSaver.get_tuple: merged %d blobs into channel_values for thread=%s",
+                        len(blobs),
+                        thread_id,
+                    )
+                else:
+                    logger.info(
+                        "OpenGaussSaver.get_tuple: NO blobs returned for thread=%s cvs=%d",
+                        thread_id,
+                        len(cvs),
+                    )
+            return result
 
     # ── list override ──────────────────────────────────────────────────────
 

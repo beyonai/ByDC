@@ -485,7 +485,20 @@ class OntologyAgent:
 
     def __init__(self, config: OntologyAgentConfig) -> None:
         self._config = config
-        self._checkpointer = MemorySaver()
+        # 优先使用 bootstrap.setup() 注册的 PG checkpointer（持久化、多进程共享）。
+        # 退化到 MemorySaver（单进程、掉电丢失，仅适合独立开发/测试）。
+        try:
+            from datacloud_analysis.session.checkpointer import get_checkpointer  # noqa: PLC0415
+
+            self._checkpointer = get_checkpointer()
+            logger.info("OntologyAgent: using PG checkpointer (registered by bootstrap.setup())")
+        except RuntimeError:
+            self._checkpointer = MemorySaver()
+            logger.warning(
+                "OntologyAgent: PG checkpointer not initialized, falling back to MemorySaver. "
+                "Multi-turn conversations will NOT survive process restart. "
+                "Call `await bootstrap.setup()` before creating OntologyAgent."
+            )
         # T6 进程级图缓存：OrderedDict 实现 LRU；key 为 (views, objects, bases) 三元组。
         self._graph_cache: OrderedDict[tuple, Any] = OrderedDict()
 
@@ -823,6 +836,9 @@ class OntologyAgent:
             # available_skills XML 注入已废弃：Skill 通过 search_ontology + TOOL_POOL 动态发现
             if target_tool:
                 graph_input["target_tool"] = target_tool
+            # 首次调用后 messages 交由 checkpoint 累积，不从 _build_input_payload 覆盖。
+            # 保留 user_query 供 knowledge_enhance 节点使用，但不清空其他 checkpoint 字段。
+            graph_input["user_query"] = question
         elif isinstance(resume_input, str | dict):
             graph_input = Command(resume=resume_input)
         else:
@@ -876,6 +892,11 @@ class OntologyAgent:
                         _last_tool_called = tool_name
 
                 if event_type == "on_chat_model_stream" and node != "respond":
+                    # agent 节点由 react_loop 通过 dc_stream_chunk 自定义事件
+                    # 发送 thinking token（含 message_id/parent_message_id），
+                    # 在此跳过 on_chat_model_stream 的原始 chunk，避免重复
+                    # reasoningLogDelta。仅跳过 ThinkingEvent yield，保留计时。
+                    _is_agent_stream = node == "agent"
                     chunk = (event.get("data") or {}).get("chunk")
                     content = getattr(chunk, "content", "") or ""
                     if content:
@@ -885,7 +906,8 @@ class OntologyAgent:
                             _in_thinking = True
                             _thinking_t_start = _time.monotonic()
                         _thinking_chars += len(content)
-                        yield ThinkingEvent(content=content)
+                        if not _is_agent_stream:
+                            yield ThinkingEvent(content=content)
                     else:
                         if _in_thinking and _thinking_t_start is not None:
                             _thinking_duration_ms += int(
