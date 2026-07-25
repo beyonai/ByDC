@@ -13,6 +13,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -198,6 +199,70 @@ def create_app(
                     reset_byclaw_userfs_headers(userfs_token)
                 if inv_ctx is not None:
                     inv_ctx.__exit__(None, None, None)
+
+    # ── Request/Response logging middleware ─────────────────────────────────
+    # DEBUG 级别记录请求入参和响应出参，覆盖所有路由。
+    # 通过 DATACLOUD_LOG_LEVEL=DEBUG 开启，不影响生产日志量。
+    # /health 等系统接口跳过，避免日志噪音。
+    _LOG_SKIP_PATHS = {"/health", "/api/v1/health", "/api/v1/loader/status"}
+
+    @app.middleware("http")
+    async def _request_logging_middleware(request: Any, call_next: Any) -> Any:
+        if not logger.isEnabledFor(logging.DEBUG) or request.url.path in _LOG_SKIP_PATHS:
+            return await call_next(request)
+
+        body = await request.body()
+        content_type = request.headers.get("content-type", "")
+        if "multipart/form-data" not in content_type:
+            logger.debug(
+                "HTTP %s %s body=%s",
+                request.method,
+                request.url.path,
+                body.decode("utf-8", errors="replace") if body else "",
+            )
+        else:
+            logger.debug(
+                "HTTP %s %s body=<multipart/form-data, skipped>",
+                request.method,
+                request.url.path,
+            )
+
+        # body stream 已消费，需回塞供路由 handler 再次读取
+        from starlette.requests import Request as _Req  # noqa: PLC0415
+        from starlette.responses import Response as _Resp  # noqa: PLC0415
+
+        async def _receive() -> dict[str, Any]:
+            return {"type": "http.request", "body": body, "more_body": False}
+        request = _Req(request.scope, _receive)
+
+        start = time.monotonic()
+        response = await call_next(request)
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+
+        # 缓冲响应 body 用于日志，再重建响应返回给客户端
+        resp_body = b""
+        async for chunk in response.body_iterator:  # type: ignore[attr-defined]
+            resp_body += chunk if isinstance(chunk, bytes) else chunk.encode("utf-8")
+
+        logger.debug(
+            "HTTP %s %s status=%d elapsed_ms=%d response=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+            resp_body.decode("utf-8", errors="replace"),
+        )
+        # transfer-encoding: chunked 与固定 content-length 冲突，重建时去掉
+        headers = {
+            k: v for k, v in response.headers.items()
+            if k.lower() not in ("transfer-encoding", "content-length")
+        }
+        return _Resp(
+            content=resp_body,
+            status_code=response.status_code,
+            headers=headers,
+            media_type=response.media_type,
+        )
 
     # ── CORS ────────────────────────────────────────────────────────────────
     cors_val = settings.cors_origins.strip()

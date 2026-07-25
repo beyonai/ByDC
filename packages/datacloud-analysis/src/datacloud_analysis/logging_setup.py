@@ -42,6 +42,7 @@ import logging
 import logging.handlers
 import os
 import shutil
+import sys
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -57,7 +58,14 @@ _FMT_FILE_OTEL = "%(asctime)s [%(levelname)-5s] %(process)d [tid=%(otelTraceID)s
 _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 
 # 日志配置覆盖的命名空间（不触碰 root logger）
-_MANAGED_NAMESPACES = ("datacloud_analysis", "datacloud_platform")
+_MANAGED_NAMESPACES = (
+    "datacloud_analysis",
+    "datacloud_platform",
+    "datacloud_knowledge",
+    "datacloud_data",
+    "datacloud_data_sdk",
+    "unhandled_exception",
+)
 
 # 仅对噪音最大的子模块提升级别，保留 langchain_core 整体的 INFO 诊断
 _NOISY_LOGGERS = (
@@ -233,6 +241,9 @@ def setup_logging(
     for noisy in _NOISY_LOGGERS:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
+    # ── 未捕获异常兜底：确保写入 error.log ───────────────────────────────────
+    _install_excepthook()
+
     logging.getLogger(__name__).info(
         "Logging initialized: level=%s log_dir=%s app_keep=%dd error_keep=%dd",
         _level_str,
@@ -240,6 +251,50 @@ def setup_logging(
         _app_keep,
         _error_keep,
     )
+
+
+def _install_excepthook() -> None:
+    """将未捕获异常路由到 logging.error，确保写入 error.log。
+
+    - sys.excepthook：同步主线程未捕获异常
+    - asyncio loop policy：新建 event loop 时自动注入异常处理器
+    """
+    import asyncio  # noqa: PLC0415
+
+    _unhandled_logger = logging.getLogger("unhandled_exception")
+
+    def _sync_excepthook(
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        exc_tb: object,
+    ) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)  # type: ignore[arg-type]
+            return
+        _unhandled_logger.error(
+            "Unhandled exception", exc_info=(exc_type, exc_value, exc_tb)  # type: ignore[arg-type]
+        )
+
+    sys.excepthook = _sync_excepthook
+
+    def _async_exception_handler(loop: object, context: dict[str, object]) -> None:
+        exc = context.get("exception")
+        msg = context.get("message", "Unhandled exception in asyncio")
+        if isinstance(exc, BaseException):
+            _unhandled_logger.error(msg, exc_info=exc)
+        else:
+            _unhandled_logger.error("%s: %s", msg, context)
+
+    # 包装 loop policy，使每个新建的 event loop 自动装载 exception handler
+    _orig_policy = asyncio.get_event_loop_policy()
+
+    class _LoggingPolicy(type(_orig_policy)):  # type: ignore[misc]
+        def new_event_loop(self) -> asyncio.AbstractEventLoop:
+            loop = super().new_event_loop()
+            loop.set_exception_handler(_async_exception_handler)
+            return loop
+
+    asyncio.set_event_loop_policy(_LoggingPolicy())
 
 
 def reset_logging() -> None:
