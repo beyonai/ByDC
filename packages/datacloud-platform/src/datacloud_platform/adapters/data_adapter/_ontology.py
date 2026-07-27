@@ -180,15 +180,30 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         }
 
         # Batch-write entities via save_batch (EntityStore handles index + version)
+        # Ensure owner_type defaults to "enterprise" for OWL-imported entities
         entity_store.save_batch(
             "objects",
-            [(o.get("object_code", ""), o) for o in objects if o.get("object_code")],
+            [
+                (
+                    o.get("object_code", ""),
+                    {**o, "owner_type": o.get("owner_type", "enterprise")},
+                )
+                for o in objects
+                if o.get("object_code")
+            ],
         )
         counts["objects"] = sum(1 for o in objects if o.get("object_code"))
         entity_store.save_batch(
             "views",
             [
-                (v.get("view_code") or v.get("viewCode") or v.get("view_id", ""), v)
+                (
+                    v.get("view_code") or v.get("viewCode") or v.get("view_id", ""),
+                    {
+                        **v,
+                        "view_code": v.get("view_code") or v.get("viewCode") or v.get("view_id", ""),
+                        "owner_type": v.get("owner_type", "enterprise"),
+                    },
+                )
                 for v in views
                 if v.get("view_code") or v.get("viewCode") or v.get("view_id", "")
             ],
@@ -2283,7 +2298,11 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
 
             data_stmt = (
                 select(
-                    data_col.op("->>")("view_code").label("view_code"),
+                    func.coalesce(
+                        data_col.op("->>")("view_code"),
+                        data_col.op("->>")("view_id"),
+                        text("''"),
+                    ).label("view_code"),
                     data_col.op("->>")("view_name").label("view_name"),
                     func.coalesce(data_col.op("->>")("description"), text("''")).label(
                         "description"

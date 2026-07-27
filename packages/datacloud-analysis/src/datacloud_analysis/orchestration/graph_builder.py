@@ -638,6 +638,23 @@ def _build_prebuilt_graph(
         return _as_state_update(result, node_name="intend")
 
     async def _agent(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
+        # DIAG: logs state messages count entering agent node to debug checkpoint accumulation
+        _raw_msgs = list(state.get("messages") or [])
+        _raw_count = len(_raw_msgs)
+        _msg_preview = []
+        for _m in _raw_msgs[-5:]:
+            _mt = type(_m).__name__
+            _mc = str(getattr(_m, "content", ""))[:50].replace("\n", " ")
+            _msg_preview.append(f"{_mt}({_mc})")
+        _thread = (config.get("configurable") or {}).get("thread_id", "?")
+        _round = state.get("react_round_idx", 0)
+        logger.info(
+            "[_agent DIAG] ENTER thread=%s round=%s raw_messages=%d preview=%s",
+            _thread,
+            _round,
+            _raw_count,
+            _msg_preview[-5:],
+        )
         result = await llm_call_fn(state, config)
         return _as_state_update(result, node_name="agent")
 

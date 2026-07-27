@@ -367,6 +367,16 @@ def make_llm_call_node(
             _dynamic if _provider == "anthropic" else None,
         )
         conv = list(state.get("messages") or [])
+        # DIAG: pre-trim raw conv messages count
+        _thread = (config.get("configurable") or {}).get("thread_id", "?")
+        logger.info(
+            "[llm_call DIAG] round=%d thread=%s raw_conv=%d "
+            "types=%s",
+            current_round,
+            _thread,
+            len(conv),
+            [type(m).__name__ for m in conv[-10:]],
+        )
         if conv:
             if _dynamic and _provider != "anthropic" and isinstance(conv[0], HumanMessage):
                 patched = HumanMessage(content=_dynamic + "\n\n" + str(conv[0].content))
