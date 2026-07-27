@@ -33,12 +33,13 @@ from datacloud_platform.api.routers.import_routes import create_import_routes
 from datacloud_platform.api.routers.ontology_build_routes import (
     create_ontology_build_routes,
 )
-from datacloud_platform.api.routers.workspace_routes import create_workspace_routes
 from datacloud_platform.api.routers.query_routes import router as query_router
 from datacloud_platform.api.routers.resource_routes import create_resource_routes
 from datacloud_platform.api.routers.search_routes import create_search_routes
 from datacloud_platform.api.routers.skills_routes import router as skills_router
+from datacloud_platform.api.routers.sqlite_routes import router as sqlite_router
 from datacloud_platform.api.routers.terms_routes import router as terms_router
+from datacloud_platform.api.routers.workspace_routes import create_workspace_routes
 from datacloud_platform.config import get_settings
 
 if TYPE_CHECKING:
@@ -116,6 +117,10 @@ def create_app(
             {
                 "name": "Query",
                 "description": "自然语言查询 — AI 驱动的自然语言数据查询",
+            },
+            {
+                "name": "SQLite",
+                "description": "SQLite 执行 — 对指定 SQLite 文件执行单条 SQL",
             },
             {"name": "Download", "description": "文件下载 — 查询结果 CSV 导出下载"},
             {"name": "Terms", "description": "术语选项 — 前端表单术语下拉选项"},
@@ -208,7 +213,10 @@ def create_app(
 
     @app.middleware("http")
     async def _request_logging_middleware(request: Any, call_next: Any) -> Any:
-        if not logger.isEnabledFor(logging.DEBUG) or request.url.path in _LOG_SKIP_PATHS:
+        if (
+            not logger.isEnabledFor(logging.DEBUG)
+            or request.url.path in _LOG_SKIP_PATHS
+        ):
             return await call_next(request)
 
         body = await request.body()
@@ -233,6 +241,7 @@ def create_app(
 
         async def _receive() -> dict[str, Any]:
             return {"type": "http.request", "body": body, "more_body": False}
+
         request = _Req(request.scope, _receive)
 
         start = time.monotonic()
@@ -254,7 +263,8 @@ def create_app(
         )
         # transfer-encoding: chunked 与固定 content-length 冲突，重建时去掉
         headers = {
-            k: v for k, v in response.headers.items()
+            k: v
+            for k, v in response.headers.items()
             if k.lower() not in ("transfer-encoding", "content-length")
         }
         return _Resp(
@@ -303,6 +313,7 @@ def create_app(
     app.include_router(query_router, prefix="/api/v1")
     app.include_router(download_router, prefix="/api/v1")
     app.include_router(terms_router, prefix="/api/v1")
+    app.include_router(sqlite_router, prefix="/api/v1")
     app.include_router(skills_router, prefix="/api/v1/skills")
 
     # ── Factory route (needs platform, now using factory pattern) ───────────
