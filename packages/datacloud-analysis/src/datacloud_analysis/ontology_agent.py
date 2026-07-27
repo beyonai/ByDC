@@ -766,13 +766,15 @@ class OntologyAgent:
         if tools_dict:
             _effective_extras["tools_dict"] = tools_dict
         # llm_config 写入 extras，供 sub_agent 工具函数克隆分身时读取
-        _effective_extras["llm_config"] = {
-            "model": self._config.model,
-            "api_key": self._config.api_key,
-            "base_url": self._config.base_url,
-            "temperature": self._config.temperature,
-            "model_kwargs": self._config.model_kwargs,
-        }
+        # 若 extras 已提供 llm_config（per-agent model override），优先使用
+        if not _effective_extras.get("llm_config"):
+            _effective_extras["llm_config"] = {
+                "model": self._config.model,
+                "api_key": self._config.api_key,
+                "base_url": self._config.base_url,
+                "temperature": self._config.temperature,
+                "model_kwargs": self._config.model_kwargs,
+            }
 
         # 无 Gateway 部署使用 NoOpExecutionReporter（实现 ExecutionReporter 协议），
         # 让 tool_wrapper.py 等业务代码不需感知是否有真实 Gateway。
@@ -793,7 +795,8 @@ class OntologyAgent:
                 "user_code": user_code,
                 "gateway_context": ctx_container,
                 "tool_context": tool_context,
-                "llm_config": {
+                "llm_config": _effective_extras.get("llm_config")
+                or {
                     "model": self._config.model,
                     "api_key": self._config.api_key,
                     "base_url": self._config.base_url,
