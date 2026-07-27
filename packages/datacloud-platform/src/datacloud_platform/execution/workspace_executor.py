@@ -355,16 +355,14 @@ class WorkspaceScriptExecutor:
             params: Action 入参 dict。
             db_path: debug.db 文件路径。
             all_fields: {entity_code: [field_def, ...]} 全部作用域内对象字段。
-            user_code: 当前用户标识（注入 context.user_id）。
-            user_name: 当前用户显示名（注入 context.extras["user_name"]）。
+            user_code: 当前用户标识，为兼容现有调用接口保留。
+            user_name: 当前用户显示名，为兼容现有调用接口保留。
             timeout: 脚本执行超时秒数。
 
         Returns:
             成功: {"ok": True, "result": {...}, "elapsed_ms": N}
             失败: {"ok": False, "error": "...", "traceback": "...", "elapsed_ms": N}
         """
-        from datacloud_data_sdk.context import InvocationContext
-
         loader = DebugLoader(db_path, all_fields)
 
         # 构建注入命名空间
@@ -381,15 +379,7 @@ class WorkspaceScriptExecutor:
 
         t0 = time.monotonic()
         try:
-            extras: dict[str, Any] = {}
-            if user_name:
-                extras["user_name"] = user_name
-
-            with InvocationContext(
-                user_id=user_code,
-                extras=extras or None,
-            ):
-                result = await _safe_execute(script, params, extra_namespace, timeout)
+            result = await _safe_execute(script, params, extra_namespace, timeout)
             elapsed = round((time.monotonic() - t0) * 1000, 2)
             return {"ok": True, "result": result, "elapsed_ms": elapsed}
         except _ScriptError as exc:

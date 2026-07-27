@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 本体管理器支持挂载资源（mount resource）
 
 ### Fixed
+- 工作区 Action 调试执行保留请求中的用户、会话和认证上下文
 - `HookAwareToolNode` 调用工具时未注入 `InvocationContext` 导致结果文件存储报错的问题
 - V0.4 prebuilt 图推送思考步骤时工具名称未翻译为中文显示名的问题
 - 动态 Agent 思考过程文字重复推送两遍的问题
