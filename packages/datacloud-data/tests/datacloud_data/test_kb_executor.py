@@ -224,13 +224,13 @@ async def test_kb_executor_uses_service_discovery_when_endpoint_empty(
     ) as init_redis:
         csv_path = await executor.execute(task, "req1", StepResults())
 
-    init_redis.assert_called_once_with(
-        host="redis.local",
-        port=6380,
-        db=2,
-        password=None,
-        username=None,
-    )
+    init_redis.assert_called_once()
+    redis_config = init_redis.call_args.kwargs["config"]
+    assert redis_config.host == "redis.local"
+    assert redis_config.port == 6380
+    assert redis_config.db == 2
+    assert redis_config.mode == "standalone"
+    assert redis_config.cluster_nodes is None
     assert _read_csv_records(csv_path) == [{"content": "发现内容"}]
 
 
@@ -396,6 +396,7 @@ def _patch_knowledge_discovery(
 
     root_module = ModuleType("by_framework")
     common_module = ModuleType("by_framework.common")
+    config_module = ModuleType("by_framework.common.config")
     redis_module = ModuleType("by_framework.common.redis_client")
     core_module = ModuleType("by_framework.core")
     discovery_module = ModuleType("by_framework.core.discovery")
@@ -404,6 +405,12 @@ def _patch_knowledge_discovery(
     http_client_module = ModuleType("by_framework.util.http_client")
 
     init_redis = MagicMock()
+
+    class _MockRedisConfig:
+        def __init__(self, **kwargs: Any) -> None:
+            self.__dict__.update(kwargs)
+
+    config_module.RedisConfig = _MockRedisConfig  # type: ignore[attr-defined]
     redis_module.init_redis = init_redis  # type: ignore[attr-defined]
     discovery_module.DiscoveryClient = _MockDiscoveryClient  # type: ignore[attr-defined]
     discovery_http_module.DiscoveryHttpClient = _MockDiscoveryHttpClient  # type: ignore[attr-defined]
@@ -412,6 +419,7 @@ def _patch_knowledge_discovery(
     modules = {
         "by_framework": root_module,
         "by_framework.common": common_module,
+        "by_framework.common.config": config_module,
         "by_framework.common.redis_client": redis_module,
         "by_framework.core": core_module,
         "by_framework.core.discovery": discovery_module,

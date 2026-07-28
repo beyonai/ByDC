@@ -146,20 +146,15 @@ async def _download_by_discovery(
 ) -> Any:
     try:
         from by_framework.core.discovery import DiscoveryClient  # noqa: PLC0415
-        from redis.asyncio import Redis  # noqa: PLC0415
+        from datacloud_platform.redis_client import (  # noqa: PLC0415
+            create_async_redis_client,
+        )
     except ImportError as exc:
         raise KbDocumentReadError(
             "KB download service discovery dependencies are unavailable"
         ) from exc
 
-    redis_client = Redis(
-        host=os.getenv("DATACLOUD_GATEWAY_REDIS_HOST", "localhost"),
-        port=int(os.getenv("DATACLOUD_GATEWAY_REDIS_PORT", "6379")),
-        db=int(os.getenv("DATACLOUD_GATEWAY_REDIS_DB", "0")),
-        password=os.getenv("DATACLOUD_GATEWAY_REDIS_PASSWORD") or None,
-        username=os.getenv("DATACLOUD_GATEWAY_REDIS_USERNAME") or None,
-        decode_responses=True,
-    )
+    redis_client = create_async_redis_client()
     discovery_client = DiscoveryClient(redis_client=redis_client, cache_interval=5)
     try:
         async with httpx.AsyncClient(

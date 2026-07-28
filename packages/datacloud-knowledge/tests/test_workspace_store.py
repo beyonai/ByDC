@@ -15,8 +15,19 @@ from datacloud_knowledge.ingestion.workspace_store import (
     WorkspaceStore,
     get_workspace_store,
 )
+from datacloud_knowledge.redis_client import _cluster_nodes
 
 # ── LocalFileWorkspaceStore ────────────────────────────────────────────────────
+
+
+def test_cluster_nodes_prefer_datacloud_environment(monkeypatch) -> None:
+    monkeypatch.setenv("REDIS_CLUSTER_HOST", "fallback:7000")
+    monkeypatch.setenv(
+        "DATACLOUD_GATEWAY_REDIS_CLUSTER_HOST",
+        "primary-a:7001,primary-b:7002",
+    )
+
+    assert _cluster_nodes() == [("primary-a", 7001), ("primary-b", 7002)]
 
 
 @pytest.fixture()

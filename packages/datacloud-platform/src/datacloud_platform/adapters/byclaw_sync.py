@@ -61,32 +61,12 @@ class ByClawSyncAdapter(ResourceSyncHook):
         if self._discovery is not None:
             return
         try:
-            from by_framework.common.redis_client import init_redis  # noqa: PLC0415
             from by_framework.core.discovery import DiscoveryClient  # noqa: PLC0415
-
-            init_redis(
-                host=os.getenv(
-                    "DATACLOUD_GATEWAY_REDIS_HOST", os.getenv("REDIS_HOST", "localhost")
-                ),
-                port=int(
-                    os.getenv(
-                        "DATACLOUD_GATEWAY_REDIS_PORT", os.getenv("REDIS_PORT", "6379")
-                    )
-                ),
-                db=int(
-                    os.getenv(
-                        "DATACLOUD_GATEWAY_REDIS_DB", os.getenv("REDIS_DATABASE", "0")
-                    )
-                ),
-                password=os.getenv(
-                    "DATACLOUD_GATEWAY_REDIS_PASSWORD", os.getenv("REDIS_PASSWORD")
-                )
-                or None,
-                username=os.getenv(
-                    "DATACLOUD_GATEWAY_REDIS_USERNAME", os.getenv("REDIS_USERNAME")
-                )
-                or None,
+            from datacloud_platform.redis_client import (  # noqa: PLC0415
+                init_framework_redis,
             )
+
+            init_framework_redis()
             self._discovery = DiscoveryClient(cache_interval=30)
         except ImportError:
             logger.warning("by_framework.core.discovery not available — sync disabled")

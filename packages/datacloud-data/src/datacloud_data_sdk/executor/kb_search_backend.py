@@ -16,6 +16,7 @@ from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutio
 from datacloud_data_sdk.utils.curl_logger import log_curl
 from datacloud_data_sdk.utils.redis_discovery import (
     RedisDiscoveryConfig,
+    init_redis_discovery,
     load_redis_discovery_config,
 )
 
@@ -590,7 +591,6 @@ class HttpKnowledgeSearchBackend:
     ) -> None:
         """Delete a single document via service-discovery."""
         try:
-            from by_framework.common.redis_client import init_redis
             from by_framework.core.discovery import DiscoveryClient
             from by_framework.util.discovery_http_client import DiscoveryHttpClient
             from by_framework.util.http_client import RetryConfig
@@ -600,14 +600,7 @@ class HttpKnowledgeSearchBackend:
                 "redis service discovery requires by_framework dependency",
             ) from exc
 
-        redis_config = self._redis_config
-        init_redis(
-            host=redis_config.host,
-            port=redis_config.port,
-            db=redis_config.database,
-            password=redis_config.password,
-            username=redis_config.username,
-        )
+        init_redis_discovery(self._redis_config)
         discovery_client = DiscoveryClient(cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
@@ -743,7 +736,6 @@ class HttpKnowledgeSearchBackend:
         markdown_file_path: str,
     ) -> None:
         try:
-            from by_framework.common.redis_client import init_redis
             from by_framework.core.discovery import DiscoveryClient
             from by_framework.util.discovery_http_client import DiscoveryHttpClient
             from by_framework.util.http_client import RetryConfig
@@ -753,14 +745,7 @@ class HttpKnowledgeSearchBackend:
                 "redis service discovery requires by_framework dependency",
             ) from exc
 
-        redis_config = self._redis_config
-        init_redis(
-            host=redis_config.host,
-            port=redis_config.port,
-            db=redis_config.database,
-            password=redis_config.password,
-            username=redis_config.username,
-        )
+        init_redis_discovery(self._redis_config)
         discovery_client = DiscoveryClient(cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
@@ -1067,7 +1052,6 @@ class HttpKnowledgeSearchBackend:
         markdown_file_path: str,
     ) -> dict[str, Any]:
         try:
-            from by_framework.common.redis_client import init_redis
             from by_framework.core.discovery import DiscoveryClient
             from by_framework.util.discovery_http_client import DiscoveryHttpClient
             from by_framework.util.http_client import RetryConfig
@@ -1077,14 +1061,7 @@ class HttpKnowledgeSearchBackend:
                 "redis service discovery requires by_framework dependency",
             ) from exc
 
-        redis_config = self._redis_config
-        init_redis(
-            host=redis_config.host,
-            port=redis_config.port,
-            db=redis_config.database,
-            password=redis_config.password,
-            username=redis_config.username,
-        )
+        init_redis_discovery(self._redis_config)
         discovery_client = DiscoveryClient(cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:
@@ -1401,7 +1378,6 @@ class HttpKnowledgeSearchBackend:
         datasource_alias: str,
     ) -> dict[str, Any]:
         try:
-            from by_framework.common.redis_client import init_redis
             from by_framework.core.discovery import DiscoveryClient
             from by_framework.util.discovery_http_client import DiscoveryHttpClient
             from by_framework.util.http_client import RetryConfig
@@ -1411,14 +1387,7 @@ class HttpKnowledgeSearchBackend:
                 "redis service discovery requires by_framework dependency",
             ) from exc
 
-        redis_config = self._redis_config
-        init_redis(
-            host=redis_config.host,
-            port=redis_config.port,
-            db=redis_config.database,
-            password=redis_config.password,
-            username=redis_config.username,
-        )
+        init_redis_discovery(self._redis_config)
         discovery_client = DiscoveryClient(cache_interval=5)
         retry_config = RetryConfig(max_attempts=3, retry_on_status_codes={502, 503, 504})
         try:

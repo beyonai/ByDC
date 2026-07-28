@@ -1504,6 +1504,7 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
 
     root_module = ModuleType("by_framework")
     common_module = ModuleType("by_framework.common")
+    config_module = ModuleType("by_framework.common.config")
     redis_module = ModuleType("by_framework.common.redis_client")
     core_module = ModuleType("by_framework.core")
     discovery_module = ModuleType("by_framework.core.discovery")
@@ -1512,6 +1513,12 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
     http_client_module = ModuleType("by_framework.util.http_client")
 
     init_redis = MagicMock()
+
+    class _MockRedisConfig:
+        def __init__(self, **kwargs: Any) -> None:
+            self.__dict__.update(kwargs)
+
+    config_module.RedisConfig = _MockRedisConfig  # type: ignore[attr-defined]
     redis_module.init_redis = init_redis  # type: ignore[attr-defined]
     discovery_module.DiscoveryClient = _MockDiscoveryClient  # type: ignore[attr-defined]
     discovery_http_module.DiscoveryHttpClient = _MockDiscoveryHttpClient  # type: ignore[attr-defined]
@@ -1520,6 +1527,7 @@ def _patch_knowledge_write_discovery() -> Iterator[MagicMock]:
     modules = {
         "by_framework": root_module,
         "by_framework.common": common_module,
+        "by_framework.common.config": config_module,
         "by_framework.common.redis_client": redis_module,
         "by_framework.core": core_module,
         "by_framework.core.discovery": discovery_module,
