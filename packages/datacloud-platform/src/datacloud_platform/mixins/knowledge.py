@@ -1006,7 +1006,7 @@ class KnowledgeMixin:
         if not items:
             return None
 
-        term_id = str(items[0].get("term_id", ""))
+        term_id = getattr(items[0], "term_id", "")
         if not term_id:
             return None
 
@@ -1049,7 +1049,7 @@ class KnowledgeMixin:
         if not items:
             return None
 
-        term_id = str(items[0].get("term_id", ""))
+        term_id = getattr(items[0], "term_id", "")
         if not term_id:
             return None
 
