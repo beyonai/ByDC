@@ -2096,15 +2096,17 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             )
             if fp and fp in file_scores:
                 seen.add(tid)
-                results.append({
-                    "term_id": tid,
-                    "term_code": item.get("term_code", ""),
-                    "term_name": item.get("term_name", ""),
-                    "term_type_code": tp,
-                    "file_name": fp,
-                    "match_type": "chunk_to_term",
-                    "score": file_scores[fp],
-                })
+                results.append(
+                    {
+                        "term_id": tid,
+                        "term_code": item.get("term_code", ""),
+                        "term_name": item.get("term_name", ""),
+                        "term_type_code": tp,
+                        "file_name": fp,
+                        "match_type": "chunk_to_term",
+                        "score": file_scores[fp],
+                    }
+                )
 
         logger.info(
             "_match_chunks_to_terms_by_filepath: %d filePaths × label_filter → %d term matches",

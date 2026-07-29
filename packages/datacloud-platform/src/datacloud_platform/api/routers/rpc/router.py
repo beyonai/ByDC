@@ -172,7 +172,11 @@ def create_rpc_router(platform: DatacloudPlatform) -> APIRouter:
             return result
         except tuple(_EXCEPTION_MAP) as e:
             logger.error(
-                "RPC %s/%s failed: %s - %s", service, method, type(e).__name__, e,
+                "RPC %s/%s failed: %s - %s",
+                service,
+                method,
+                type(e).__name__,
+                e,
                 exc_info=True,
             )
             return _wrap_error(e)

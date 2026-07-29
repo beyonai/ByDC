@@ -200,7 +200,9 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     v.get("view_code") or v.get("viewCode") or v.get("view_id", ""),
                     {
                         **v,
-                        "view_code": v.get("view_code") or v.get("viewCode") or v.get("view_id", ""),
+                        "view_code": v.get("view_code")
+                        or v.get("viewCode")
+                        or v.get("view_id", ""),
                         "owner_type": v.get("owner_type", "enterprise"),
                     },
                 )
