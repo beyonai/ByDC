@@ -1352,7 +1352,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
         _run_p2 = _should_run_path2(enable_chunk_recall)
 
-        # ── Collect kb_ids for path 2 (only when object_codes is provided) ─
+        # ── Collect ByClaw resource IDs for path 2 ─
         kb_ids: dict[str, dict[str, Any]] = {}
         if _run_p2 and object_codes is not None:
             kb_ids = self._collect_kb_ids(base_id, object_codes)
@@ -1426,7 +1426,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         query: str,
         top_k: int,
     ) -> list[dict[str, Any]]:
-        """路2 KB chunk 搜索：对收集的 kb_ids 逐个搜索并合并。"""
+        """路2 KB chunk 搜索：对收集的 kb_resource_id 逐个搜索并合并。"""
         if not kb_info:
             return []
         logger.info(
@@ -1434,17 +1434,19 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         )
         all_results: list[dict[str, Any]] = []
         seen: set[str] = set()
-        for kb_id, info in kb_info.items():
+        for kb_resource_id, info in kb_info.items():
             try:
                 chunk_hits = await self._do_chunk_search(
                     query=query,
-                    kb_id=kb_id,
+                    kb_resource_id=kb_resource_id,
                     top_k=top_k,
                     kb_directory=info.get("kb_directory"),
                     term_type_codes=info.get("object_codes"),
                 )
                 logger.warning(
-                    "_do_path2: kb_id=%s → %d chunk hits", kb_id, len(chunk_hits)
+                    "_do_path2: kb_resource_id=%s → %d chunk hits",
+                    kb_resource_id,
+                    len(chunk_hits),
                 )
                 for hit in chunk_hits:
                     tid = hit.get("term_id", "")
@@ -1453,7 +1455,9 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                         all_results.append(hit)
             except Exception:
                 logger.warning(
-                    "_do_path2: chunk search failed for kb_id=%s", kb_id, exc_info=True
+                    "_do_path2: chunk search failed for kb_resource_id=%s",
+                    kb_resource_id,
+                    exc_info=True,
                 )
         return all_results
 
@@ -1464,7 +1468,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         base_id: str,
         object_codes: list[str],
     ) -> dict[str, dict[str, Any]]:
-        """遍历对象列表，提取 kb_id → {kb_directory, object_codes} 映射。"""
+        """Collect kb_resource_id → scope information for ByClaw search."""
         result: dict[str, dict[str, Any]] = {}
         store = self._entity_store.sub_store(base_id)
         for oc in object_codes:
@@ -1476,9 +1480,9 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             if obj:
                 ext = obj.get("ext_property", obj.get("extProperty", {}))
                 if isinstance(ext, dict):
-                    kb_id = ext.get("kb_id")
-                    if kb_id:
-                        kid = str(kb_id)
+                    kb_resource_id = ext.get("kb_resource_id")
+                    if kb_resource_id:
+                        kid = str(kb_resource_id)
                         kb_directory = ext.get("kb_directory")
                         if kid in result:
                             if oc not in result[kid]["object_codes"]:
@@ -1819,11 +1823,11 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
     ) -> list[dict[str, Any]]:
         """路2 限定 KB chunk 搜索 → term 匹配。
 
-        通过 EntityStore 获取 object_code 对应的 ext_property.kb_id，
+        通过 EntityStore 获取 object_code 对应的 ext_property.kb_resource_id，
         限定在该 KB 内进行 chunk 向量搜索。
         datasource_alias 从 obj dict 直接提取。
         """
-        # 获取 kb_id 和 datasource_alias
+        # 获取 kb_resource_id 和 datasource_alias
         obj_data: dict[str, Any] | None = None
         try:
             obj_data = self._entity_store.get("objects", object_code)
@@ -1834,9 +1838,9 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                 exc_info=True,
             )
 
-        kb_id = _resolve_kb_id_for_object(obj_data)
-        if not kb_id:
-            logger.debug("_path2: no kb_id for object_code=%s", object_code)
+        kb_resource_id = _resolve_kb_resource_id_for_object(obj_data)
+        if not kb_resource_id:
+            logger.debug("_path2: no kb_resource_id for object_code=%s", object_code)
             return []
 
         datasource_alias = ""
@@ -1845,7 +1849,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
         return await self._do_chunk_search(
             query=query,
-            kb_id=kb_id,
+            kb_resource_id=kb_resource_id,
             top_k=top_k,
             datasource_alias=datasource_alias,
             object_code=object_code,
@@ -1859,13 +1863,13 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
     ) -> list[dict[str, Any]]:
         """路2 不限 KB 全库 chunk 搜索 → term 匹配。
 
-        kb_id=None 表示不限定知识库，全库 chunk 向量搜索。
+        kb_resource_id=None 表示不限定知识库，全库 chunk 向量搜索。
         object_code="" 表示不限对象类型。
         datasource_alias 使用默认值。
         """
         return await self._do_chunk_search(
             query=query,
-            kb_id=None,
+            kb_resource_id=None,
             top_k=top_k,
             datasource_alias="",
             object_code="",
@@ -1875,7 +1879,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         self,
         *,
         query: str,
-        kb_id: str | None,
+        kb_resource_id: str | None,
         top_k: int,
         datasource_alias: str = "",
         object_code: str = "",
@@ -1896,7 +1900,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
         Args:
             query: 搜索查询文本。
-            kb_id: 限定 KB ID，None 表示不限 KB。
+            kb_resource_id: ByClaw knowledge resource ID.
             top_k: 返回结果上限。
 
             datasource_alias: 数据源别名（从 obj dict 提取）。
@@ -1909,7 +1913,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         try:
             chunk_records = await self._exec_kb_search(
                 query=query,
-                kb_id=kb_id,
+                kb_resource_id=kb_resource_id,
                 top_k=top_k * 2,  # 多召回供聚合
                 datasource_alias=datasource_alias,
                 object_code=object_code,
@@ -1918,8 +1922,8 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             )
         except Exception:
             logger.warning(
-                "_do_chunk_search: KB search failed (kb_id=%s, query=%s)",
-                kb_id,
+                "_do_chunk_search: KB search failed (kb_resource_id=%s, query=%s)",
+                kb_resource_id,
                 query,
                 exc_info=True,
             )
@@ -1967,7 +1971,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         self,
         *,
         query: str,
-        kb_id: str | None,
+        kb_resource_id: str | None,
         top_k: int,
         datasource_alias: str,
         object_code: str,
@@ -1993,7 +1997,7 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             datasource_alias=datasource_alias,
             query=query,
             limit=top_k,
-            kb_id=kb_id if kb_id else None,
+            kb_resource_id=kb_resource_id if kb_resource_id else None,
             kb_directory=kb_directory,
         )
 
@@ -2007,15 +2011,15 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
         if records:
             logger.info(
-                "_exec_kb_search OK: kb_id=%s query=%s → %d records",
-                kb_id,
+                "_exec_kb_search OK: kb_resource_id=%s query=%s → %d records",
+                kb_resource_id,
                 query,
                 len(records),
             )
         else:
             logger.warning(
-                "_exec_kb_search OK: kb_id=%s query=%s → 0 records (empty response)",
-                kb_id,
+                "_exec_kb_search OK: kb_resource_id=%s query=%s → 0 records (empty response)",
+                kb_resource_id,
                 query,
             )
         return records
@@ -2163,7 +2167,7 @@ def _hybrid_tokenize(query: str) -> list[str]:
     """
     from datacloud_knowledge.retrieval.tokenizers.hybrid import hybrid_tokenize
 
-    return hybrid_tokenize(query)
+    return cast("list[str]", hybrid_tokenize(query))
 
 
 def _tokenize_query(query: str) -> list[str]:
@@ -2354,29 +2358,29 @@ def _should_run_path2(
     return enable_chunk_recall
 
 
-def _resolve_kb_id_for_object(
+def _resolve_kb_resource_id_for_object(
     obj_data: dict[str, Any] | None,
 ) -> str | None:
-    """从 EntityStore 返回的 object dict 中提取 ext_property.kb_id。
+    """从 EntityStore 返回的 object dict 中提取 ext_property.kb_resource_id。
 
     Args:
         obj_data: store.get("objects", code) 的返回值。
 
     Returns:
-        kb_id 字符串，未找到时返回 None。
+        kb_resource_id 字符串，未找到时返回 None。
     """
     if not obj_data:
         return None
     ext = obj_data.get("ext_property", {}) or {}
-    kb_id = ext.get("kb_id")
-    if kb_id:
-        return str(kb_id)
+    kb_resource_id = ext.get("kb_resource_id")
+    if kb_resource_id:
+        return str(kb_resource_id)
     return None
 
 
 async def _do_chunk_search(
     query: str,
-    kb_id: str | None,
+    kb_resource_id: str | None,
     top_k: int,
     datasource_alias: str = "",
     object_code: str = "",
@@ -2403,7 +2407,7 @@ async def _do_chunk_search(
             datasource_alias=datasource_alias,
             query=query,
             limit=top_k,
-            kb_id=kb_id if kb_id else None,
+            kb_resource_id=kb_resource_id if kb_resource_id else None,
             kb_directory=kb_directory,
         )
 
@@ -2415,8 +2419,8 @@ async def _do_chunk_search(
             return cast("list[dict[str, Any]]", result.get("records", []))
     except Exception:
         logger.warning(
-            "_do_chunk_search: KB search failed (kb_id=%s)",
-            kb_id,
+            "_do_chunk_search: KB search failed (kb_resource_id=%s)",
+            kb_resource_id,
             exc_info=True,
         )
 

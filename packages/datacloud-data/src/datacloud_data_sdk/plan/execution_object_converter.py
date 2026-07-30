@@ -70,6 +70,7 @@ class ExecutionObjectConverter:
             return KbExecTask(
                 datasource_alias=step.datasource_alias,
                 query=step.query,
+                kb_resource_id=step.kb_resource_id,
                 tags=tags,
                 output_ref=step.output_ref,
             )

@@ -9,23 +9,16 @@ import os
 from dataclasses import dataclass
 from threading import Thread
 from typing import Any, Callable
-from urllib.parse import urlparse
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DOWNLOAD_FILE_PATH = "/api/v1/downloadFile"
+DEFAULT_DOWNLOAD_FILE_PATH = "/byaiService/datasetController/download"
 DEFAULT_READ_FILE_PATH = DEFAULT_DOWNLOAD_FILE_PATH
-SERVICE_NAME_ENV_VARS = (
-    "DATACLOUD_KB_READ_SERVICE_NAME",
-    "QA_DOMAINNAME",
-    "DATACLOUD_RESULT_FILE_SERVICE_NAME",
-    "BE_DOMAINNAME",
-)
 _TIMEOUT_SECONDS = 30.0
 
-PostJson = Callable[[str, dict[str, Any], dict[str, str]], Any]
+GetBytes = Callable[[str, dict[str, Any], dict[str, str]], Any]
 
 
 class KbDocumentReadError(RuntimeError):
@@ -34,85 +27,73 @@ class KbDocumentReadError(RuntimeError):
 
 @dataclass(frozen=True)
 class KbDocumentReader:
-    """Client for knowledge-base ``POST /api/v1/downloadFile``."""
+    """Discovery-only client for ByClaw's knowledge document download API."""
 
-    base_url: str = ""
-    service_name: str = ""
     read_path: str = DEFAULT_READ_FILE_PATH
-    post_json: PostJson | None = None
+    get_bytes: GetBytes | None = None
+
+    @property
+    def service_name(self) -> str:
+        """Resolve the only supported runtime service from BE_DOMAINNAME."""
+        return _default_service_name()
 
     def read_text(
         self,
         *,
-        kn_code: str,
+        resource_id: str,
         file_path: str,
         start_line: int | None = None,
         end_line: int | None = None,
     ) -> str:
         """Download one knowledge-base document as Markdown text."""
         _ = start_line, end_line
-        normalized_kn_code = kn_code.strip()
+        normalized_resource_id = resource_id.strip()
         normalized_file_path = file_path.strip()
-        if not normalized_kn_code:
-            raise KbDocumentReadError("knCode is required")
+        if not normalized_resource_id:
+            raise KbDocumentReadError("kb_resource_id is required")
+        try:
+            parsed_resource_id = int(normalized_resource_id)
+        except ValueError as exc:
+            raise KbDocumentReadError("kb_resource_id must be an integer") from exc
         if not normalized_file_path.startswith("/"):
             raise KbDocumentReadError("filePath must start with /")
 
-        body: dict[str, Any] = {
-            "knCode": normalized_kn_code,
-            "filePath": normalized_file_path,
+        params: dict[str, Any] = {
+            "resourceId": parsed_resource_id,
+            "directoryPath": normalized_file_path,
         }
 
         headers = _build_headers()
-        response_payload = self._post(body=body, headers=headers)
+        response_payload = self._get(params=params, headers=headers)
         content = _extract_text(response_payload)
         logger.info(
-            "KB document download succeeded: knCode=%s filePath=%s content_length=%d",
-            normalized_kn_code,
+            "KB document download succeeded: resourceId=%s filePath=%s content_length=%d",
+            normalized_resource_id,
             normalized_file_path,
             len(content),
         )
         return content
 
-    def _post(self, *, body: dict[str, Any], headers: dict[str, str]) -> Any:
-        if self.post_json is not None:
-            return self.post_json(self.read_path, body, headers)
-
-        base_url = self.base_url.strip().rstrip("/")
-        if _is_complete_url(base_url):
-            url = f"{base_url}{self.read_path}"
-            logger.info(
-                "KB document download request: transport=http url=%s knCode=%s "
-                "filePath=%s has_token=%s",
-                url,
-                body.get("knCode", ""),
-                body.get("filePath", ""),
-                bool(headers.get("Beyond-Token") or headers.get("beyond-token")),
-            )
-            with httpx.Client(timeout=_TIMEOUT_SECONDS, headers=headers) as client:
-                response = client.post(url, json=body)
-                return _payload_from_httpx_response(response)
-
-        service_name = self.service_name.strip() or _default_service_name()
+    def _get(self, *, params: dict[str, Any], headers: dict[str, str]) -> Any:
+        if self.get_bytes is not None:
+            return self.get_bytes(self.read_path, params, headers)
+        service_name = self.service_name
         if not service_name:
-            raise KbDocumentReadError(
-                "KB download service name is required: set "
-                "DATACLOUD_KB_READ_SERVICE_NAME or QA_DOMAINNAME"
-            )
+            raise KbDocumentReadError("BE_DOMAINNAME is required")
         logger.info(
             "KB document download request: transport=discovery service_name=%s path=%s "
-            "knCode=%s filePath=%s has_token=%s",
+            "resourceId=%s filePath=%s has_token=%s",
             service_name,
             self.read_path,
-            body.get("knCode", ""),
-            body.get("filePath", ""),
+            params.get("resourceId", ""),
+            params.get("directoryPath", ""),
             bool(headers.get("Beyond-Token") or headers.get("beyond-token")),
         )
         return _run_async_in_thread(
             _download_by_discovery(
                 service_name=service_name,
                 path=self.read_path,
-                body=body,
+                params=params,
                 headers=headers,
             )
         )
@@ -120,28 +101,14 @@ class KbDocumentReader:
 
 def build_default_kb_document_reader() -> KbDocumentReader:
     """Build the default Platform KB document reader from environment config."""
-    return KbDocumentReader(
-        base_url=(
-            os.getenv("DATACLOUD_KB_DOWNLOAD_API_BASE_URL")
-            or os.getenv("DATACLOUD_KB_READ_API_BASE_URL")
-            or os.getenv("DATACLOUD_BYAI_SERVICE_BASE_URL")
-            or os.getenv("DATACLOUD_RESULT_FILE_API_BASE_URL")
-            or ""
-        ).strip(),
-        service_name=_default_service_name(),
-        read_path=(
-            os.getenv("DATACLOUD_KB_DOWNLOAD_PATH")
-            or os.getenv("DATACLOUD_KB_READ_PATH")
-            or DEFAULT_DOWNLOAD_FILE_PATH
-        ).strip(),
-    )
+    return KbDocumentReader(read_path=DEFAULT_DOWNLOAD_FILE_PATH)
 
 
 async def _download_by_discovery(
     *,
     service_name: str,
     path: str,
-    body: dict[str, Any],
+    params: dict[str, Any],
     headers: dict[str, str],
 ) -> Any:
     try:
@@ -173,7 +140,7 @@ async def _download_by_discovery(
                     )
                 url = _build_discovered_url(instance, path)
                 try:
-                    response = await client.post(url, json=body)
+                    response = await client.get(url, params=params)
                 except httpx.HTTPError as exc:
                     last_error = KbDocumentReadError(
                         f"HTTP error calling {service_name}{path}: {exc}"
@@ -268,14 +235,18 @@ def _response_preview(payload: Any) -> str:
 
 
 def _extract_content(response_body: dict[str, Any]) -> str:
-    result_code = str(response_body.get("resultCode", "0")).strip()
+    result_code = str(response_body.get("code", response_body.get("resultCode", "0"))).strip()
     if result_code not in {"0", "200"}:
-        message = str(response_body.get("resultMsg") or "KB document download failed")
+        message = str(
+            response_body.get("msg")
+            or response_body.get("resultMsg")
+            or "KB document download failed"
+        )
         raise KbDocumentReadError(message)
 
-    result_object = response_body.get("resultObject")
+    result_object = response_body.get("data", response_body.get("resultObject"))
     if not isinstance(result_object, dict):
-        raise KbDocumentReadError("resultObject must be a JSON object")
+        raise KbDocumentReadError("data must be a JSON object")
 
     content = result_object.get("data")
     if content is None:
@@ -340,14 +311,5 @@ def _run_async_in_thread(coro: Any) -> Any:
     return result.get("value")
 
 
-def _is_complete_url(value: str) -> bool:
-    parsed = urlparse(value)
-    return bool(parsed.scheme and parsed.netloc)
-
-
 def _default_service_name() -> str:
-    for env_name in SERVICE_NAME_ENV_VARS:
-        value = os.getenv(env_name, "").strip()
-        if value:
-            return value
-    return ""
+    return os.getenv("BE_DOMAINNAME", "").strip()

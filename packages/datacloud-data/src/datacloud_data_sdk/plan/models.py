@@ -263,6 +263,7 @@ class PlanStep:
     bind_from_step: str = ""
     bind_key: str = ""
     query: str = ""
+    kb_resource_id: str | None = None
     tags: dict[str, Any] = field(default_factory=dict)
 
 

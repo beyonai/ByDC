@@ -82,6 +82,15 @@ class KbSearchExecutor:
 
         backend = self._resolve_backend(cls, kb_configs, configured_backend)
         query = str(arguments.get("query", "") or "")
+        kb_resource_id = self._get_kb_resource_id(cls)
+        if not kb_resource_id:
+            return self._empty_response(
+                object_code,
+                arguments,
+                "kb_resource_id is required",
+                error=True,
+                meta_extra=_standard_action_meta(cls, datasource_alias, query),
+            )
         select = [
             str(getattr(field, "field_code", ""))
             for field in getattr(cls, "fields", [])
@@ -104,7 +113,7 @@ class KbSearchExecutor:
                     order_by=order_by,
                     limit=limit,
                     offset=offset,
-                    kb_id=self._get_kb_id(cls),
+                    kb_resource_id=kb_resource_id,
                     kb_directory=self._get_kb_directory(cls),
                     field_types=_metadata_field_types(list(getattr(cls, "fields", []))),
                 )
@@ -142,6 +151,20 @@ class KbSearchExecutor:
         backend = self._resolve_backend(cls, kb_configs, configured_backend)
         query = str(arguments.get("query", "") or "")
         file_name = str(arguments.get("fileName") or "")
+        kb_resource_id = self._get_kb_resource_id(cls)
+        if not kb_resource_id:
+            return self._empty_response(
+                object_code,
+                arguments,
+                "kb_resource_id is required",
+                error=True,
+                meta_extra=_standard_action_meta(
+                    cls,
+                    datasource_alias,
+                    query,
+                    include_content=True,
+                ),
+            )
         if not file_name:
             return self._empty_response(
                 object_code,
@@ -177,7 +200,7 @@ class KbSearchExecutor:
                     datasource_alias=datasource_alias,
                     query=query,
                     file_name=file_name,
-                    kb_id=self._get_kb_id(cls),
+                    kb_resource_id=kb_resource_id,
                     kb_directory=self._get_kb_directory(cls),
                     metadata_field_list=self._with_primary_key_metadata_fields(
                         [str(getattr(field, "field_code", "")) for field in cls.fields],
@@ -230,11 +253,12 @@ class KbSearchExecutor:
         kb_resource_id = self._get_kb_resource_id(cls)
         kb_id = self._get_kb_id(cls)
         kb_directory = self._get_kb_directory(cls)
-        if not kb_id:
+        if not kb_resource_id:
             return self._empty_response(
                 object_code,
                 arguments,
-                "knowledge base id not configured",
+                "kb_resource_id is required",
+                error=True,
                 meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
 
@@ -394,11 +418,12 @@ class KbSearchExecutor:
         kb_id = self._get_kb_id(cls)
         kb_directory = self._get_kb_directory(cls)
 
-        if not kb_id:
+        if not kb_resource_id:
             return self._empty_response(
                 object_code,
                 arguments,
-                "knowledge base id not configured",
+                "kb_resource_id is required",
+                error=True,
                 meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
 
@@ -551,14 +576,15 @@ class KbSearchExecutor:
         configured_backend = getattr(self._loader._config, "kb_search_backend", None)
         datasource_alias = self._get_datasource_alias(cls)
         query = ""
-        kb_id = self._get_kb_id(cls)
+        kb_resource_id = self._get_kb_resource_id(cls)
         kb_directory = self._get_kb_directory(cls)
 
-        if not kb_id:
+        if not kb_resource_id:
             return self._empty_response(
                 object_code,
                 arguments,
-                "knowledge base id not configured",
+                "kb_resource_id is required",
+                error=True,
                 meta_extra=_standard_action_meta(cls, datasource_alias, query),
             )
 
@@ -599,7 +625,12 @@ class KbSearchExecutor:
 
         for source_path in source_paths:
             detail = await self._get_file_metadata(
-                backend, cls, datasource_alias, kb_id, kb_directory, source_path
+                backend,
+                cls,
+                datasource_alias,
+                kb_resource_id,
+                kb_directory,
+                source_path,
             )
             if detail is None or not detail.exists:
                 logger.info("delete_kb: file not found, skipping: %s", source_path)
@@ -625,7 +656,7 @@ class KbSearchExecutor:
         delete_request = KnowledgeDeleteRequest(
             object_code=cls.object_code,
             datasource_alias=datasource_alias,
-            kb_id=kb_id,
+            kb_resource_id=kb_resource_id,
             kb_directory=kb_directory,
             file_paths=paths_to_delete,
         )
@@ -657,7 +688,7 @@ class KbSearchExecutor:
         backend: Any,
         cls: Any,
         datasource_alias: str,
-        kb_id: str,
+        kb_resource_id: str,
         kb_directory: str | None,
         source_path: str,
     ) -> KnowledgeFileMetadata | None:
@@ -670,7 +701,7 @@ class KbSearchExecutor:
                 KnowledgeFileMetadataRequest(
                     object_code=cls.object_code,
                     datasource_alias=datasource_alias,
-                    kb_id=kb_id,
+                    kb_resource_id=kb_resource_id,
                     kb_directory=kb_directory,
                     file_path=source_path,
                 )
@@ -1127,7 +1158,7 @@ class KbSearchExecutor:
             value = ext_property.get("kb_resource_id")
             if value:
                 return str(value)
-        # fallback: submit_object 新路径将 kb_id 存入 source_config
+        # fallback: submit_object 新路径将 kb_resource_id 存入 source_config
         source_config = getattr(cls, "source_config", {}) or {}
         if isinstance(source_config, dict):
             value = source_config.get("kb_resource_id")

@@ -1196,32 +1196,37 @@ def _json_for_log(data: dict[str, Any]) -> str:
 
 
 def _read_kb_document_from_reference(file_ref: dict[str, Any]) -> str:
-    kn_code = _pick_str(file_ref, "kb_id", "kbId", "knCode")
+    resource_id = _pick_str(
+        file_ref,
+        "kb_resource_id",
+        "kbResourceId",
+        "resourceId",
+    )
     file_path = _pick_str(
         file_ref, "kb_file_path", "kbFilePath", "file_path", "filePath"
     )
-    if not kn_code or not file_path:
+    if not resource_id or not file_path:
         return ""
 
     try:
         content = _build_kb_document_reader().read_text(
-            kn_code=kn_code,
+            resource_id=resource_id,
             file_path=file_path,
         )
     except KbDocumentReadError as exc:
         logger.warning(
-            "object_instance_build KB document download failed: knCode=%s filePath=%s "
+            "object_instance_build KB document download failed: resourceId=%s filePath=%s "
             "error=%s",
-            kn_code,
+            resource_id,
             file_path,
             exc,
         )
         return ""
 
     logger.info(
-        "object_instance_build KB document read succeeded: knCode=%s filePath=%s "
+        "object_instance_build KB document read succeeded: resourceId=%s filePath=%s "
         "content_length=%d",
-        kn_code,
+        resource_id,
         file_path,
         len(content),
     )
@@ -1696,10 +1701,23 @@ def _term_file_reference(term_detail: dict[str, Any]) -> dict[str, Any]:
 
 
 def _has_kb_document_reference(file_ref: dict[str, Any]) -> bool:
-    return bool(
-        _pick_str(file_ref, "kb_id", "kbId", "knCode")
-        and _pick_str(file_ref, "kb_file_path", "kbFilePath", "file_path", "filePath")
+    resource_id = _pick_str(
+        file_ref,
+        "kb_resource_id",
+        "kbResourceId",
+        "resourceId",
     )
+    kb_file_path = _pick_str(
+        file_ref,
+        "kb_file_path",
+        "kbFilePath",
+    )
+    file_path = kb_file_path or _pick_str(
+        file_ref,
+        "file_path",
+        "filePath",
+    )
+    return bool(resource_id and file_path)
 
 
 def _source_path(

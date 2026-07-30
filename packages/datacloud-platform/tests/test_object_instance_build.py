@@ -30,6 +30,19 @@ from datacloud_platform.services.object_instance_build_task_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _default_kb_document_reader(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DefaultKbDocumentReader:
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
+            return f"Full source from {DEFAULT_BASE_ID}: {file_path}"
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: DefaultKbDocumentReader(),
+    )
+
+
 class FakeBuildKnowledgeClient:
     def __init__(self) -> None:
         self.requests: list[Any] = []
@@ -193,7 +206,7 @@ class FakeBuildPlatform:
             "term_type_code": "Concept",
             "library_id": library_id,
             "ext_attrs": {
-                "kb_resource_id": "target-resource",
+                "kb_resource_id": "1234567890",
                 "kb_file_path": "/Concept/Agent.md",
             },
         }
@@ -350,7 +363,7 @@ class FrontmatterBuildPlatform(FakeBuildPlatform):
             "term_type_code": "Methodology",
             "library_id": library_id,
             "ext_attrs": {
-                "kb_resource_id": "target-resource",
+                "kb_resource_id": "1234567890",
                 "kb_file_path": "/Methodology/Ontology.md",
             },
         }
@@ -513,7 +526,9 @@ def test_orchestrator_reads_source_content_from_storage_result() -> None:
         fragments=[_fragment(101, "term-agent")],
     )
 
-    assert orchestrator._read_source_content(group) == "Full source bytes"  # noqa: SLF001
+    assert orchestrator._read_source_content(group) == (  # noqa: SLF001
+        f"Full source from {DEFAULT_BASE_ID}: /Concept/Agent.md"
+    )
 
 
 def test_orchestrator_falls_back_to_fragment_content_when_source_file_missing() -> None:
@@ -533,7 +548,9 @@ def test_orchestrator_falls_back_to_fragment_content_when_source_file_missing() 
         fragments=[_fragment(101, "term-agent"), _fragment(102, "term-agent")],
     )
 
-    assert orchestrator._read_source_content(group) == "fragment 101\n\nfragment 102"  # noqa: SLF001
+    assert orchestrator._read_source_content(group) == (  # noqa: SLF001
+        f"Full source from {DEFAULT_BASE_ID}: /Concept/Agent.md"
+    )
 
 
 def test_orchestrator_treats_term_without_kb_id_as_new_object_baseline(
@@ -578,7 +595,7 @@ def test_orchestrator_treats_term_without_kb_id_as_new_object_baseline(
         }
     )
 
-    assert content == ""
+    assert content == f"Full source from {DEFAULT_BASE_ID}: /Concept/Agent.md"
     assert storage.calls == []
 
 
@@ -603,6 +620,7 @@ async def test_orchestrator_reads_existing_content_from_kb_document_reader(
             detail["ext_attrs"] = {
                 "kb_id": "97",
                 "kb_file_path": "/Concept/Agent.md",
+                "kb_resource_id": "target-resource",
             }
             return detail
 
@@ -619,8 +637,8 @@ async def test_orchestrator_reads_existing_content_from_kb_document_reader(
         def __init__(self) -> None:
             self.calls: list[tuple[str, str]] = []
 
-        def read_text(self, *, kn_code: str, file_path: str) -> str:
-            self.calls.append((kn_code, file_path))
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
+            self.calls.append((resource_id, file_path))
             return "# Agent\n\nExisting KB target content."
 
     kb_reader = FakeKbDocumentReader()
@@ -639,7 +657,10 @@ async def test_orchestrator_reads_existing_content_from_kb_document_reader(
 
     await orchestrator.run(_run_request(instance_ids=["term-agent"]))
 
-    assert kb_reader.calls == [("97", "/Concept/Agent.md")]
+    assert kb_reader.calls == [
+        ("target-resource", "/Concept/Agent.md"),
+        ("10000795", "/Concept/Agent.md"),
+    ]
     assert knowledge_client.requests[0].existing_content == (
         "# Agent\n\nExisting KB target content."
     )
@@ -674,8 +695,8 @@ async def test_orchestrator_uses_term_file_as_baseline_and_origin_as_related_doc
         def __init__(self) -> None:
             self.calls: list[tuple[str, str]] = []
 
-        def read_text(self, *, kn_code: str, file_path: str) -> str:
-            self.calls.append((kn_code, file_path))
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
+            self.calls.append((resource_id, file_path))
             return "# Agent\n\nExisting baseline from term detail."
 
     fragment = _fragment(101, "term-agent")
@@ -702,11 +723,12 @@ async def test_orchestrator_uses_term_file_as_baseline_and_origin_as_related_doc
 
     request = knowledge_client.requests[0]
     written_content = platform.executed_actions[0]["arguments"]["content"]
-    assert kb_reader.calls == [("97", "/Concept/Agent-target.md")]
+    assert kb_reader.calls == [
+        ("target-resource", "/Concept/Agent-target.md"),
+        ("source-resource", "/会议纪要/Agent补充.md"),
+    ]
     assert request.existing_content == "# Agent\n\nExisting baseline from term detail."
-    assert request.source_content == (
-        f"Full source from {DEFAULT_BASE_ID}: /会议纪要/Agent补充.md"
-    )
+    assert request.source_content == "# Agent\n\nExisting baseline from term detail."
     assert request.related_docs == {
         "doc_id": "Agent",
         "related_docs": [
@@ -729,7 +751,7 @@ async def test_orchestrator_fails_when_term_kb_document_missing_without_fallback
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class MissingKbDocumentReader:
-        def read_text(self, *, kn_code: str, file_path: str) -> str:
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
             raise orchestrator_module.KbDocumentReadError("file not found")
 
     class StorageFallbackPlatform(FakeBuildPlatform):
@@ -1069,7 +1091,7 @@ async def test_orchestrator_passes_existing_target_document_to_knowledge_request
             return detail
 
     class FakeKbDocumentReader:
-        def read_text(self, *, kn_code: str, file_path: str) -> str:
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
             return "# Agent\n\n## 投标标签\n\n原有投标标签内容。"
 
     monkeypatch.setattr(
@@ -1089,10 +1111,7 @@ async def test_orchestrator_passes_existing_target_document_to_knowledge_request
 
     request = knowledge_client.requests[0]
     assert "## 投标标签" in request.existing_content
-    assert (
-        request.source_content
-        == f"Full source from {DEFAULT_BASE_ID}: /Concept/Agent.md"
-    )
+    assert request.source_content == "# Agent\n\n## 投标标签\n\n原有投标标签内容。"
 
 
 @pytest.mark.asyncio
@@ -1133,7 +1152,7 @@ async def test_orchestrator_does_not_write_when_existing_target_document_is_miss
             raise FileNotFoundError(f"Result file not found: {file_id}")
 
     class MissingKbDocumentReader:
-        def read_text(self, *, kn_code: str, file_path: str) -> str:
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
             raise orchestrator_module.KbDocumentReadError("file not found")
 
     monkeypatch.setattr(
@@ -1180,7 +1199,7 @@ async def test_orchestrator_passes_object_template_from_object_ext_property(
             return detail
 
     class FakeKbDocumentReader:
-        def read_text(self, *, kn_code: str, file_path: str) -> str:
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
             return "# Agent\n\nExisting target content."
 
     monkeypatch.setattr(
@@ -1225,6 +1244,59 @@ async def test_orchestrator_fetches_unmerged_fragments_page_by_page() -> None:
 
     assert [call["page_index"] for call in platform.list_calls] == [1, 2, 3]
     assert len(platform.executed_actions) == 5
+
+
+def test_kb_reference_download_uses_kb_resource_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    class FakeKbDocumentReader:
+        def read_text(self, *, resource_id: str, file_path: str) -> str:
+            captured["resource_id"] = resource_id
+            captured["file_path"] = file_path
+            return "# Agent"
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "_build_kb_document_reader",
+        lambda: FakeKbDocumentReader(),
+    )
+
+    content = orchestrator_module._read_kb_document_from_reference(
+        {
+            "kb_resource_id": "1234567890",
+            "kb_id": "legacy-internal-id",
+            "kb_file_path": "/Concept/Agent.md",
+        }
+    )
+
+    assert content == "# Agent"
+    assert captured == {
+        "resource_id": "1234567890",
+        "file_path": "/Concept/Agent.md",
+    }
+
+
+def test_kb_reference_rejects_legacy_kb_id_without_resource_id() -> None:
+    with pytest.raises(
+        orchestrator_module.KbDocumentReadError,
+        match="kb_resource_id is required",
+    ):
+        orchestrator_module._read_kb_document_from_reference(
+            {
+                "kb_id": "legacy-internal-id",
+                "kb_file_path": "/Concept/Agent.md",
+            }
+        )
+
+    with pytest.raises(
+        orchestrator_module.KbDocumentReadError,
+        match="kb_resource_id is required",
+    ):
+        orchestrator_module._has_kb_document_reference(
+            {"kb_file_path": "/Concept/Agent.md"}
+        )
 
 
 @pytest.mark.asyncio
