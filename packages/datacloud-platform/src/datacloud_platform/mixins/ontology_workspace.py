@@ -345,7 +345,10 @@ class OntologyWorkspaceMixin:
                 fields = wfm.load_fields(entity_code)
                 defn = wfm._load_definition(entity_code) or {}  # noqa: SLF001
                 entity_name: str = defn.get("entity_name", entity_code)
-                entity_desc: str = defn.get("entity_desc", "") + "。\n使用该对象时，需通过 query 参数传入完整的数据上下文。"
+                entity_desc: str = (
+                    defn.get("entity_desc", "")
+                    + "。\n使用该对象时，需通过 query 参数传入完整的数据上下文。"
+                )
                 entity_source = "DYNAMIC_TABLE"
                 table_name: str | None = defn.get("table_name") or entity_code
 

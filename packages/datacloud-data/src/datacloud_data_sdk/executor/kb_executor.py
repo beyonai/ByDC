@@ -5,12 +5,12 @@
 支持将检索结果写入 CSV 文件供后续步骤使用。
 
 核心功能：
-- 调用知识元数据服务的 /api/v1/knowledgeItems/searchFile 接口执行检索
+- 通过服务发现调用 ByClaw DatasetController 文件检索接口
 - 支持元数据过滤和 topK 参数
 - 将检索结果转换为 CSV 格式存储
 
 使用示例：
-    kb_configs = {"kb_main": {"endpoint": "http://rag-service:8000"}}
+    kb_configs = {"kb_main": {"kb_resource_id": "1234567890"}}
     executor = KbExecutor(kb_configs)
     csv_path = await executor.execute(task, request_id, step_results)
 """
@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from datacloud_data_sdk.csv_storage.manager import CsvStorageManager
+from datacloud_data_sdk.exceptions import DataSourceUnavailableError, KbExecutionError
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
     KnowledgeSearchBackend,
@@ -32,14 +33,14 @@ class KbExecutor:
     """
     知识库文件级检索执行器
 
-    通过 HTTP POST 调用知识元数据服务的 searchFile 接口执行知识库检索。
+    通过服务发现调用 ByClaw DatasetController 执行知识库检索。
 
     Attributes:
-        _configs: 知识库配置字典，key 为数据源别名，value 包含 endpoint
+        _configs: 知识库配置字典，key 为数据源别名，value 包含 kb_resource_id
         _csv: CSV 存储管理器
 
     Example:
-        kb_configs = {"kb_main": {"endpoint": "http://localhost:8000"}}
+        kb_configs = {"kb_main": {"kb_resource_id": "1234567890"}}
         executor = KbExecutor(kb_configs)
         csv_path = await executor.execute(task, "req_001", step_results)
     """
@@ -56,10 +57,11 @@ class KbExecutor:
         Args:
             kb_configs: 知识库配置字典
                 key: 数据源别名
-                value: {"endpoint": str} 知识元数据服务 base URL
+                value: {"kb_resource_id": str} ByClaw 知识库资源 ID
             csv_base_dir: CSV 临时文件根目录
             search_backend: 自定义知识库检索后端；不传时使用默认 HTTP 实现
         """
+        self._configs = kb_configs or {}
         self._search_backend = search_backend or HttpKnowledgeSearchBackend(kb_configs)
         self._csv = CsvStorageManager(csv_base_dir)
 
@@ -73,7 +75,7 @@ class KbExecutor:
         执行知识库检索
 
         执行流程：
-        1. 验证数据源配置
+        1. 验证数据源和 kb_resource_id 配置
         2. 构建 RAG 请求体
         3. 调用知识元数据服务 searchFile 接口
         4. 将检索结果写入 CSV 文件
@@ -90,6 +92,15 @@ class KbExecutor:
             DataSourceUnavailableError: 数据源未配置时抛出
             KbExecutionError: RAG 调用失败时抛出
         """
+        if self._configs and task.datasource_alias not in self._configs:
+            raise DataSourceUnavailableError(task.datasource_alias)
+        config = self._configs.get(task.datasource_alias, {})
+        resource_id = str(
+            task.kb_resource_id or config.get("kb_resource_id") or config.get("kbResourceId") or ""
+        ).strip()
+        if not resource_id:
+            raise KbExecutionError(task.datasource_alias, "kb_resource_id is required")
+
         result = await self._search_backend.search(
             KnowledgeSearchRequest(
                 object_code=task.datasource_alias,
@@ -97,6 +108,7 @@ class KbExecutor:
                 query=task.query,
                 filters=task.tags,
                 limit=10,
+                kb_resource_id=resource_id,
             )
         )
 

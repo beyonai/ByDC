@@ -272,7 +272,8 @@ def _install_excepthook() -> None:
             sys.__excepthook__(exc_type, exc_value, exc_tb)  # type: ignore[arg-type]
             return
         _unhandled_logger.error(
-            "Unhandled exception", exc_info=(exc_type, exc_value, exc_tb)  # type: ignore[arg-type]
+            "Unhandled exception",
+            exc_info=(exc_type, exc_value, exc_tb),  # type: ignore[arg-type]
         )
 
     sys.excepthook = _sync_excepthook

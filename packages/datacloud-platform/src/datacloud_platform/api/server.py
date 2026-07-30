@@ -250,7 +250,7 @@ def create_app(
 
         # 缓冲响应 body 用于日志，再重建响应返回给客户端
         resp_body = b""
-        async for chunk in response.body_iterator:  # type: ignore[attr-defined]
+        async for chunk in response.body_iterator:
             resp_body += chunk if isinstance(chunk, bytes) else chunk.encode("utf-8")
 
         logger.debug(

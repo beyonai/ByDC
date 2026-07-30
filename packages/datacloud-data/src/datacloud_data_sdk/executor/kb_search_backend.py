@@ -36,7 +36,8 @@ class KnowledgeSearchRequest:
     order_by: list[dict[str, Any]] = field(default_factory=list)
     limit: int = 10
     offset: int = 0
-    kb_id: str | None = None
+    kb_resource_id: str | None = None
+    kb_resource_ids: list[str] = field(default_factory=list)
     kb_directory: str | None = None
     field_types: dict[str, str] = field(default_factory=dict)
 
@@ -69,7 +70,7 @@ class KnowledgeFileNameSearchRequest:
     datasource_alias: str
     query: str
     file_name: str
-    kb_id: str | None = None
+    kb_resource_id: str | None = None
     kb_directory: str | None = None
     metadata_field_list: list[str] = field(default_factory=list)
     limit: int = 20
@@ -92,7 +93,7 @@ class KnowledgeWriteRequest:
     object_code: str
     datasource_alias: str
     kb_resource_id: str
-    kb_id: str
+    kb_id: str | None
     file_path: str
     content: str
     labels: dict[str, Any] = field(default_factory=dict)
@@ -128,7 +129,7 @@ class KnowledgeUpdateRequest:
     object_code: str
     datasource_alias: str
     kb_resource_id: str
-    kb_id: str
+    kb_id: str | None
     file_path: str
     content: str
     labels: dict[str, Any] = field(default_factory=dict)
@@ -163,7 +164,7 @@ class KnowledgeDeleteRequest:
 
     object_code: str
     datasource_alias: str
-    kb_id: str
+    kb_resource_id: str
     file_paths: list[str]
     kb_directory: str | None = None
 
@@ -197,7 +198,7 @@ class KnowledgeFileMetadataRequest:
 
     object_code: str
     datasource_alias: str
-    kb_id: str
+    kb_resource_id: str
     file_path: str
     kb_directory: str | None = None
 
@@ -212,7 +213,7 @@ class KnowledgeFileMetadata:
 
 
 class HttpKnowledgeSearchBackend:
-    """Default metadata service backend using knowledgeItems search/import APIs."""
+    """Discovery-only backend for ByClaw DatasetController knowledge APIs."""
 
     _default_redis_config: RedisDiscoveryConfig | None = None
 
@@ -232,9 +233,10 @@ class HttpKnowledgeSearchBackend:
         cls._default_redis_config = redis_config
 
     async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
-        """Search the configured metadata endpoint and normalize returned records."""
+        """Search files through ByClaw's DatasetController."""
         config = self._get_config(request.datasource_alias)
         body: dict[str, Any] = {
+            "resourceIdList": self._require_resource_ids(request),
             "query": request.query,
             "topK": request.limit,
             "searchMode": str(
@@ -246,42 +248,20 @@ class HttpKnowledgeSearchBackend:
         if where:
             body["where"] = where
 
-        kn_code_list = _coerce_string_list(request.kb_id) or _coerce_string_list(
-            config.get("knCodeList") or config.get("kn_code_list") or config.get("knCode")
-        )
-        if kn_code_list:
-            body["knCodeList"] = kn_code_list
-
         metadata_field_list = request.select or _coerce_string_list(
             config.get("metadataFieldList") or config.get("metadata_field_list")
         )
         if metadata_field_list:
             body["metadataFieldList"] = metadata_field_list
 
-        endpoint = self._resolve_endpoint(config)
-        if endpoint:
-            url = self._build_search_file_url(endpoint, config)
-            data = await self._post_json(url, body, request.datasource_alias)
-        else:
-            service_name = self._resolve_service_name(config, request.datasource_alias)
-            data = await self._post_json_by_discovery(
-                service_name=service_name,
-                path=self._build_search_file_path(config),
-                body=body,
-                datasource_alias=request.datasource_alias,
-            )
+        data = await self._post_json_by_discovery(
+            service_name=self._resolve_service_name(config, request.datasource_alias),
+            path=self._build_search_file_path(config),
+            body=body,
+            datasource_alias=request.datasource_alias,
+        )
 
-        result_object = data.get("resultObject")
-        if isinstance(result_object, dict):
-            raw_records = result_object.get("data")
-            if data.get("resultCode") not in (None, "0", 0):
-                raise KbExecutionError(request.datasource_alias, _format_error_message(data))
-        else:
-            raw_records = data.get("results")
-            if data.get("resultCode") not in (None, "0", 0):
-                raise KbExecutionError(request.datasource_alias, _format_error_message(data))
-
-        records = self._normalize_records(raw_records)
+        records = self._normalize_records(self._extract_raw_records(data, request.datasource_alias))
         return KnowledgeSearchResult(
             records=records,
             total=len(records),
@@ -296,9 +276,15 @@ class HttpKnowledgeSearchBackend:
         self,
         request: KnowledgeFileNameSearchRequest,
     ) -> KnowledgeSearchResult:
-        """Search chunks by query and file name using the upgraded knowledgeItems/search API."""
+        """Search chunks through ByClaw, constrained by directory and file name."""
         config = self._get_config(request.datasource_alias)
         body: dict[str, Any] = {
+            "resourceIdList": [
+                self._require_resource_id(
+                    request.kb_resource_id,
+                    request.datasource_alias,
+                )
+            ],
             "query": request.query,
             "topK": request.limit,
             "searchMode": str(
@@ -309,27 +295,15 @@ class HttpKnowledgeSearchBackend:
         where = _with_file_name_filter(where, request.file_name)
         if where:
             body["where"] = where
-        kn_code_list = _coerce_string_list(request.kb_id)
-        if kn_code_list:
-            body["knCodeList"] = kn_code_list
         if request.metadata_field_list:
             body["metadataFieldList"] = request.metadata_field_list
 
-        endpoint = self._resolve_endpoint(config)
-        if endpoint:
-            data = await self._post_json(
-                self._build_chunk_search_url(endpoint, config),
-                body,
-                request.datasource_alias,
-            )
-        else:
-            service_name = self._resolve_service_name(config, request.datasource_alias)
-            data = await self._post_json_by_discovery(
-                service_name=service_name,
-                path=self._build_chunk_search_path(config),
-                body=body,
-                datasource_alias=request.datasource_alias,
-            )
+        data = await self._post_json_by_discovery(
+            service_name=self._resolve_service_name(config, request.datasource_alias),
+            path=self._build_chunk_search_path(config),
+            body=body,
+            datasource_alias=request.datasource_alias,
+        )
 
         records = _aggregate_content_by_file(
             self._normalize_records(self._extract_raw_records(data, request.datasource_alias))
@@ -345,8 +319,9 @@ class HttpKnowledgeSearchBackend:
         )
 
     async def write(self, request: KnowledgeWriteRequest) -> KnowledgeWriteResult:
-        """Upload a generated Markdown document, updating in-place if it already exists."""
+        """Upload a Markdown document through ByClaw and trigger its build."""
         config = self._get_config(request.datasource_alias)
+        self._require_resource_id(request.kb_resource_id, request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
 
         # Merge relation info parsed from --- related_docs --- fenced blocks into labels.
@@ -359,93 +334,24 @@ class HttpKnowledgeSearchBackend:
         clean_content = _strip_front_matter(clean_content)
         file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
         filename = PurePosixPath(markdown_file_path).name or "document.md"
-        data = {
-            "knCode": request.kb_id,
-            "filePath": markdown_file_path,
-        }
-        if request.file_description:
-            data["fileDescription"] = request.file_description
-
-        endpoint = self._resolve_endpoint(config)
-        if endpoint:
-            try:
-                async with httpx.AsyncClient(
-                    headers=self._get_beyond_token_header(), timeout=30.0
-                ) as client:
-                    file_exists = await self._file_exists_http(
-                        client,
-                        endpoint,
-                        config,
-                        request.kb_id,
-                        markdown_file_path,
-                        request.datasource_alias,
-                    )
-                    if file_exists:
-                        update_url = self._build_update_url(endpoint, config)
-                        form_data: dict[str, str] = {
-                            "knCode": request.kb_id,
-                            "filePath": markdown_file_path,
-                            "processFrontMatter": "true",
-                        }
-                        if request.file_description:
-                            form_data["fileDescription"] = request.file_description
-                        log_curl(
-                            "POST", update_url, body={**form_data, "fileContent": f"@{filename}"}
-                        )
-                        resp = await client.post(
-                            update_url,
-                            data=form_data,
-                            files={
-                                "fileContent": (
-                                    filename,
-                                    file_content.encode("utf-8"),
-                                    "text/markdown; charset=utf-8",
-                                )
-                            },
-                        )
-                    else:
-                        import_url = self._build_import_url(endpoint, config)
-                        log_curl("POST", import_url, body={**data, "fileContent": f"@{filename}"})
-                        resp = await client.post(
-                            import_url,
-                            data=data,
-                            files={
-                                "fileContent": (
-                                    filename,
-                                    file_content.encode("utf-8"),
-                                    "text/markdown; charset=utf-8",
-                                )
-                            },
-                        )
-                    body = self._parse_response_body(resp, request.datasource_alias)
-                    self._ensure_success(body, request.datasource_alias)
-                    build_body = await self._trigger_file_build_http(
-                        client,
-                        endpoint,
-                        config,
-                        request,
-                        markdown_file_path,
-                    )
-            except httpx.HTTPError as exc:
-                raise KbExecutionError(request.datasource_alias, str(exc)) from exc
-        else:
-            service_name = self._resolve_service_name(config, request.datasource_alias)
-            try:
-                build_body = await self._write_by_discovery(
-                    service_name=service_name,
-                    config=config,
-                    request=request,
-                    data=data,
-                    filename=filename,
-                    file_content=file_content,
-                    markdown_file_path=markdown_file_path,
-                )
-            except httpx.HTTPError as exc:
-                raise KbExecutionError(request.datasource_alias, str(exc)) from exc
+        try:
+            build_body = await self._write_by_discovery(
+                service_name=self._resolve_service_name(
+                    config,
+                    request.datasource_alias,
+                ),
+                config=config,
+                request=request,
+                filename=filename,
+                file_content=file_content,
+                markdown_file_path=markdown_file_path,
+            )
+        except httpx.HTTPError as exc:
+            raise KbExecutionError(request.datasource_alias, str(exc)) from exc
 
         record = {
             **effective_labels,
-            "knCode": request.kb_id,
+            "knCode": str(request.kb_resource_id),
             "filePath": markdown_file_path,
             "content": request.content,
         }
@@ -462,12 +368,9 @@ class HttpKnowledgeSearchBackend:
         )
 
     async def update(self, request: KnowledgeUpdateRequest) -> KnowledgeUpdateResult:
-        """Update an existing document in-place via POST /api/v1/knowledgeItems/update.
-
-        Unlike write(), this does NOT delete-then-reimport. The target document must
-        already exist in the knowledge base. Build indexing is not triggered automatically.
-        """
+        """Update an existing document through ByClaw and trigger its build."""
         config = self._get_config(request.datasource_alias)
+        self._require_resource_id(request.kb_resource_id, request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
 
         related_docs = _parse_related_docs(request.content)
@@ -477,55 +380,24 @@ class HttpKnowledgeSearchBackend:
         file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
         filename = PurePosixPath(markdown_file_path).name or "document.md"
 
-        form_data: dict[str, str] = {
-            "knCode": request.kb_id,
-            "filePath": markdown_file_path,
-            "processFrontMatter": "true",
-        }
-        if request.file_description:
-            form_data["fileDescription"] = request.file_description
-
-        endpoint = self._resolve_endpoint(config)
-        if endpoint:
-            update_url = self._build_update_url(endpoint, config)
-            try:
-                async with httpx.AsyncClient(
-                    headers=self._get_beyond_token_header(), timeout=30.0
-                ) as client:
-                    log_curl("POST", update_url, body={**form_data, "fileContent": f"@{filename}"})
-                    resp = await client.post(
-                        update_url,
-                        data=form_data,
-                        files={
-                            "fileContent": (
-                                filename,
-                                file_content.encode("utf-8"),
-                                "text/markdown; charset=utf-8",
-                            )
-                        },
-                    )
-                    body = self._parse_response_body(resp, request.datasource_alias)
-                    self._ensure_success(body, request.datasource_alias)
-            except httpx.HTTPError as exc:
-                raise KbExecutionError(request.datasource_alias, str(exc)) from exc
-        else:
-            service_name = self._resolve_service_name(config, request.datasource_alias)
-            try:
-                await self._update_by_discovery(
-                    service_name=service_name,
-                    config=config,
-                    request=request,
-                    form_data=form_data,
-                    filename=filename,
-                    file_content=file_content,
-                    markdown_file_path=markdown_file_path,
-                )
-            except httpx.HTTPError as exc:
-                raise KbExecutionError(request.datasource_alias, str(exc)) from exc
+        try:
+            await self._update_by_discovery(
+                service_name=self._resolve_service_name(
+                    config,
+                    request.datasource_alias,
+                ),
+                config=config,
+                request=request,
+                filename=filename,
+                file_content=file_content,
+                markdown_file_path=markdown_file_path,
+            )
+        except httpx.HTTPError as exc:
+            raise KbExecutionError(request.datasource_alias, str(exc)) from exc
 
         record: dict[str, Any] = {
             **effective_labels,
-            "knCode": request.kb_id,
+            "knCode": str(request.kb_resource_id),
             "filePath": markdown_file_path,
             "content": request.content,
         }
@@ -541,35 +413,23 @@ class HttpKnowledgeSearchBackend:
         )
 
     async def delete_files(self, request: KnowledgeDeleteRequest) -> KnowledgeDeleteResult:
-        """Delete one or more documents from the knowledge base by file path."""
+        """Delete one or more documents through ByClaw."""
         config = self._get_config(request.datasource_alias)
+        self._require_resource_id(request.kb_resource_id, request.datasource_alias)
         deleted: list[str] = []
 
-        endpoint = self._resolve_endpoint(config)
         for file_path in request.file_paths:
             markdown_file_path = _to_markdown_file_path(file_path, request.kb_directory)
-            delete_body = {"knCode": request.kb_id, "filePath": markdown_file_path}
-            if endpoint:
-                delete_url = self._build_delete_url(endpoint, config)
-                try:
-                    async with httpx.AsyncClient(
-                        headers=self._get_beyond_token_header(), timeout=30.0
-                    ) as client:
-                        log_curl("POST", delete_url, body=delete_body)
-                        resp = await client.post(delete_url, json=delete_body)
-                        body = self._parse_response_body(resp, request.datasource_alias)
-                        self._ensure_success(body, request.datasource_alias)
-                except httpx.HTTPError as exc:
-                    raise KbExecutionError(request.datasource_alias, str(exc)) from exc
-            else:
-                service_name = self._resolve_service_name(config, request.datasource_alias)
-                await self._delete_file_by_discovery(
-                    service_name=service_name,
-                    config=config,
-                    datasource_alias=request.datasource_alias,
-                    kb_id=request.kb_id,
-                    markdown_file_path=markdown_file_path,
-                )
+            await self._delete_file_by_discovery(
+                service_name=self._resolve_service_name(
+                    config,
+                    request.datasource_alias,
+                ),
+                config=config,
+                datasource_alias=request.datasource_alias,
+                kb_resource_id=request.kb_resource_id,
+                markdown_file_path=markdown_file_path,
+            )
             deleted.append(markdown_file_path)
 
         return KnowledgeDeleteResult(
@@ -586,7 +446,7 @@ class HttpKnowledgeSearchBackend:
         service_name: str,
         config: dict[str, Any],
         datasource_alias: str,
-        kb_id: str,
+        kb_resource_id: str,
         markdown_file_path: str,
     ) -> None:
         """Delete a single document via service-discovery."""
@@ -615,7 +475,13 @@ class HttpKnowledgeSearchBackend:
                 **self._get_beyond_token_header(),
             }
             delete_path = self._build_delete_path(config)
-            delete_body = {"knCode": kb_id, "filePath": markdown_file_path}
+            delete_body = {
+                "resourceId": self._require_resource_id(
+                    kb_resource_id,
+                    datasource_alias,
+                ),
+                "directoryPath": markdown_file_path,
+            }
             async with DiscoveryHttpClient(
                 discovery_client,
                 retry_config=retry_config,
@@ -633,47 +499,36 @@ class HttpKnowledgeSearchBackend:
     async def get_file_metadata(
         self, request: KnowledgeFileMetadataRequest
     ) -> KnowledgeFileMetadata | None:
-        """Fetch metadata for a single file via POST /api/v1/knowledgeItems/metadata/get.
-
-        Returns None when the file does not exist or the request fails.
-        The metadata/get endpoint returns only the metadata values for the given file,
-        no vector search is involved.
-        """
+        """Fetch a single file's metadata through ByClaw."""
         config = self._get_config(request.datasource_alias)
         markdown_file_path = _to_markdown_file_path(request.file_path, request.kb_directory)
 
         body: dict[str, Any] = {
-            "knCode": request.kb_id,
+            "resourceId": self._require_resource_id(
+                request.kb_resource_id,
+                request.datasource_alias,
+            ),
             "filePath": markdown_file_path,
         }
 
-        try:
-            endpoint = self._resolve_endpoint(config)
-            if endpoint:
-                url = self._build_metadata_get_url(endpoint, config)
-                data = await self._post_json(url, body, request.datasource_alias)
-            else:
-                service_name = self._resolve_service_name(config, request.datasource_alias)
-                data = await self._post_json_by_discovery(
-                    service_name=service_name,
-                    path=self._build_metadata_get_path(config),
-                    body=body,
-                    datasource_alias=request.datasource_alias,
-                )
-        except KbExecutionError:
-            logger.debug("get_file_metadata: metadata/get failed for %s", markdown_file_path)
-            return None
-
-        # 非 0 resultCode 视为文件不存在（接口规范：文件不存在时返回非 0）
-        if data.get("resultCode") not in (None, "0", 0):
+        data = await self._post_json_by_discovery(
+            service_name=self._resolve_service_name(
+                config,
+                request.datasource_alias,
+            ),
+            path=self._build_metadata_get_path(config),
+            body=body,
+            datasource_alias=request.datasource_alias,
+        )
+        if data.get("code") not in ("0", 0):
             logger.debug(
-                "get_file_metadata: file not found resultCode=%s path=%s",
-                data.get("resultCode"),
+                "get_file_metadata: file not found code=%s path=%s",
+                data.get("code"),
                 markdown_file_path,
             )
             return KnowledgeFileMetadata(file_path=markdown_file_path, exists=False)
 
-        result_object = data.get("resultObject")
+        result_object = data.get("data")
         if not isinstance(result_object, dict):
             return KnowledgeFileMetadata(file_path=markdown_file_path, exists=False)
 
@@ -687,42 +542,14 @@ class HttpKnowledgeSearchBackend:
         return KnowledgeFileMetadata(file_path=markdown_file_path, labels=labels, exists=True)
 
     @staticmethod
-    def _build_glob_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("glob_url") or config.get("globUrl")
-        if explicit_url:
-            return str(explicit_url)
-        if endpoint.rstrip("/").endswith("/api/v1/glob"):
-            return endpoint.rstrip("/")
-        path = str(config.get("glob_path") or config.get("globPath") or "/api/v1/glob")
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
     def _build_glob_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(config.get("glob_path"), config.get("globPath")),
-            "/api/v1/glob",
-        )
-
-    @staticmethod
-    def _build_metadata_get_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("metadata_get_url") or config.get("metadataGetUrl")
-        if explicit_url:
-            return str(explicit_url)
-        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/metadata/get"):
-            return endpoint.rstrip("/")
-        path = str(
-            config.get("metadata_get_path")
-            or config.get("metadataGetPath")
-            or "/api/v1/knowledgeItems/metadata/get"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
+        _ = config
+        return "/byaiService/datasetController/glob"
 
     @staticmethod
     def _build_metadata_get_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(config.get("metadata_get_path"), config.get("metadataGetPath")),
-            "/api/v1/knowledgeItems/metadata/get",
-        )
+        _ = config
+        return "/byaiService/datasetController/knowledgeItems/metadata/get"
 
     async def _update_by_discovery(
         self,
@@ -730,7 +557,6 @@ class HttpKnowledgeSearchBackend:
         service_name: str,
         config: dict[str, Any],
         request: KnowledgeUpdateRequest,
-        form_data: dict[str, str],
         filename: str,
         file_content: str,
         markdown_file_path: str,
@@ -770,19 +596,31 @@ class HttpKnowledgeSearchBackend:
             ) as client:
                 update_path = self._build_update_path(config)
                 file_bytes = file_content.encode("utf-8")
-                log_curl("UPLOAD", update_path, body={**form_data, "fileContent": f"@{filename}"})
+                resource_id = str(
+                    self._require_resource_id(
+                        request.kb_resource_id,
+                        request.datasource_alias,
+                    )
+                )
                 parts: list[tuple[str, Any]] = [
-                    ("knCode", (None, form_data["knCode"])),
-                    ("filePath", (None, form_data["filePath"])),
-                    ("processFrontMatter", (None, form_data["processFrontMatter"])),
-                ]
-                if request.file_description:
-                    parts.append(("fileDescription", (None, request.file_description)))
-                parts.append(
+                    ("resourceId", (None, resource_id)),
+                    ("filePath", (None, markdown_file_path)),
                     (
                         "fileContent",
                         (filename, file_bytes, "text/markdown; charset=utf-8"),
-                    )
+                    ),
+                    ("processFrontMatter", (None, "true")),
+                ]
+                if request.file_description:
+                    parts.append(("fileDescription", (None, request.file_description)))
+                log_curl(
+                    "UPLOAD",
+                    update_path,
+                    body={
+                        "resourceId": resource_id,
+                        "filePath": markdown_file_path,
+                        "fileContent": f"@{filename}",
+                    },
                 )
                 resp = await client._upload_with_discovery(
                     service_name,
@@ -792,6 +630,7 @@ class HttpKnowledgeSearchBackend:
                 )
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
                 self._ensure_success(body, request.datasource_alias)
+                self._ensure_update_success(body, request.datasource_alias)
                 await self._trigger_file_build_by_discovery(
                     client,
                     service_name,
@@ -803,77 +642,6 @@ class HttpKnowledgeSearchBackend:
         finally:
             await discovery_client.close()
 
-    async def _ensure_metadata_properties_by_discovery(
-        self,
-        client: Any,
-        service_name: str,
-        config: dict[str, Any],
-        request: KnowledgeWriteRequest,
-        headers: dict[str, str],
-    ) -> None:
-        properties = _normalize_metadata_properties(request.labels, request.metadata_properties)
-        if not properties:
-            return
-
-        names = [str(item["propertyName"]) for item in properties]
-        list_body = {"propertyNameList": names}
-        list_path = self._build_metadata_properties_list_path(config)
-        log_curl("POST", list_path, body=list_body)
-        resp = await client.post(service_name, list_path, headers=headers, json=list_body)
-        body = self._parse_discovery_response_body(resp, request.datasource_alias)
-        self._ensure_success(body, request.datasource_alias)
-
-        existing_names = _metadata_property_names(body)
-        missing_properties = [
-            property_def
-            for property_def in properties
-            if str(property_def["propertyName"]) not in existing_names
-        ]
-        if not missing_properties:
-            return
-
-        create_path = self._build_metadata_properties_batch_create_path(config)
-        create_body = {"propertyList": missing_properties}
-        log_curl("POST", create_path, body=create_body)
-        resp = await client.post(service_name, create_path, headers=headers, json=create_body)
-        body = self._parse_discovery_response_body(resp, request.datasource_alias)
-        self._ensure_success(body, request.datasource_alias)
-
-    async def _ensure_metadata_properties_http(
-        self,
-        client: httpx.AsyncClient,
-        endpoint: str,
-        config: dict[str, Any],
-        request: KnowledgeWriteRequest,
-    ) -> None:
-        properties = _normalize_metadata_properties(request.labels, request.metadata_properties)
-        if not properties:
-            return
-
-        names = [str(item["propertyName"]) for item in properties]
-        list_url = self._build_metadata_properties_list_url(endpoint, config)
-        list_body = {"propertyNameList": names}
-        log_curl("POST", list_url, body=list_body)
-        resp = await client.post(list_url, json=list_body)
-        body = self._parse_response_body(resp, request.datasource_alias)
-        self._ensure_success(body, request.datasource_alias)
-
-        existing_names = _metadata_property_names(body)
-        missing_properties = [
-            property_def
-            for property_def in properties
-            if str(property_def["propertyName"]) not in existing_names
-        ]
-        if not missing_properties:
-            return
-
-        create_url = self._build_metadata_properties_batch_create_url(endpoint, config)
-        create_body = {"propertyList": missing_properties}
-        log_curl("POST", create_url, body=create_body)
-        resp = await client.post(create_url, json=create_body)
-        body = self._parse_response_body(resp, request.datasource_alias)
-        self._ensure_success(body, request.datasource_alias)
-
     async def _trigger_file_build_by_discovery(
         self,
         client: Any,
@@ -884,111 +652,25 @@ class HttpKnowledgeSearchBackend:
         headers: dict[str, str],
     ) -> dict[str, Any]:
         build_url = self._build_file_to_markdown_index_path(config)
-        build_body = {"knCode": request.kb_id, "filePath": file_path}
+        build_body = {
+            "resourceId": self._require_resource_id(
+                request.kb_resource_id,
+                request.datasource_alias,
+            ),
+            "directoryPath": file_path,
+        }
         log_curl("POST", build_url, body=build_body)
         resp = await client.post(service_name, build_url, headers=headers, json=build_body)
         body = self._parse_discovery_response_body(resp, request.datasource_alias)
         self._ensure_success(body, request.datasource_alias)
         return body
 
-    async def _trigger_file_build_http(
-        self,
-        client: httpx.AsyncClient,
-        endpoint: str,
-        config: dict[str, Any],
-        request: KnowledgeWriteRequest,
-        file_path: str,
-    ) -> dict[str, Any]:
-        build_url = self._build_file_to_markdown_index_url(endpoint, config)
-        build_body = {"knCode": request.kb_id, "filePath": file_path}
-        log_curl("POST", build_url, body=build_body)
-        resp = await client.post(build_url, json=build_body)
-        body = self._parse_response_body(resp, request.datasource_alias)
-        self._ensure_success(body, request.datasource_alias)
-        return body
-
-    async def _delete_http(
-        self,
-        client: httpx.AsyncClient,
-        delete_url: str,
-        request: KnowledgeWriteRequest,
-        markdown_file_path: str,
-    ) -> None:
-        """Delete an existing document via HTTP before re-uploading.
-
-        A 404-equivalent response (resultCode != "0") is treated as success
-        so that the first-time upload of a new document is not blocked.
-        """
-        delete_body = {"knCode": request.kb_id, "filePath": markdown_file_path}
-        log_curl("POST", delete_url, body=delete_body)
-        resp = await client.post(delete_url, json=delete_body)
-        if resp.status_code >= 400:
-            logger.warning(
-                "kb delete returned HTTP %s for %s – proceeding with upload",
-                resp.status_code,
-                markdown_file_path,
-            )
-            return
-        try:
-            body = resp.json()
-        except ValueError:
-            logger.warning("kb delete: invalid JSON response – proceeding with upload")
-            return
-        if isinstance(body, dict) and body.get("resultCode") not in (None, "0", 0):
-            logger.warning(
-                "kb delete non-success resultCode=%s msg=%s – proceeding with upload",
-                body.get("resultCode"),
-                body.get("resultMsg"),
-            )
-
-    async def _file_exists_http(
-        self,
-        client: httpx.AsyncClient,
-        endpoint: str,
-        config: dict[str, Any],
-        kb_id: str,
-        markdown_file_path: str,
-        datasource_alias: str,
-    ) -> bool:
-        """Return True if the file exists in the knowledge base via POST /api/v1/glob."""
-        glob_url = self._build_glob_url(endpoint, config)
-        # Build the exact-match pattern from the file path.
-        path = PurePosixPath(markdown_file_path)
-        path_rule = str(path) if str(path).startswith("/") else f"/{path}"
-        body: dict[str, Any] = {"knCode": kb_id, "pathRule": path_rule}
-        log_curl("POST", glob_url, body=body)
-        try:
-            resp = await client.post(glob_url, json=body)
-        except httpx.HTTPError:
-            logger.warning(
-                "glob check failed for %s – assuming file does not exist", markdown_file_path
-            )
-            return False
-        if resp.status_code >= 400:
-            logger.warning(
-                "glob check HTTP %s for %s – assuming file does not exist",
-                resp.status_code,
-                markdown_file_path,
-            )
-            return False
-        try:
-            data = resp.json()
-        except ValueError:
-            return False
-        if not isinstance(data, dict) or data.get("resultCode") not in (None, "0", 0):
-            return False
-        result_object = data.get("resultObject")
-        if not isinstance(result_object, dict):
-            return False
-        items = result_object.get("data")
-        return isinstance(items, list) and len(items) > 0
-
     async def _file_exists_by_discovery(
         self,
         client: Any,
         service_name: str,
         config: dict[str, Any],
-        kb_id: str,
+        kb_resource_id: str,
         markdown_file_path: str,
         datasource_alias: str,
         headers: dict[str, str],
@@ -997,48 +679,19 @@ class HttpKnowledgeSearchBackend:
         glob_path = self._build_glob_path(config)
         path = PurePosixPath(markdown_file_path)
         path_rule = str(path) if str(path).startswith("/") else f"/{path}"
-        body: dict[str, Any] = {"knCode": kb_id, "pathRule": path_rule}
+        body: dict[str, Any] = {
+            "resourceId": self._require_resource_id(
+                kb_resource_id,
+                datasource_alias,
+            ),
+            "pathRule": path_rule,
+        }
         log_curl("POST", glob_path, body=body)
-        try:
-            resp = await client.post(service_name, glob_path, headers=headers, json=body)
-        except httpx.HTTPError:
-            logger.warning(
-                "glob check failed for %s – assuming file does not exist", markdown_file_path
-            )
-            return False
-        data = getattr(resp, "data", None)
-        if not isinstance(data, dict) or data.get("resultCode") not in (None, "0", 0):
-            return False
-        result_object = data.get("resultObject")
-        if not isinstance(result_object, dict):
-            return False
-        items = result_object.get("data")
+        resp = await client.post(service_name, glob_path, headers=headers, json=body)
+        data = self._parse_discovery_response_body(resp, datasource_alias)
+        self._ensure_success(data, datasource_alias)
+        items = data.get("data")
         return isinstance(items, list) and len(items) > 0
-
-    async def _delete_by_discovery(
-        self,
-        client: Any,
-        service_name: str,
-        config: dict[str, Any],
-        request: KnowledgeWriteRequest,
-        markdown_file_path: str,
-        headers: dict[str, str],
-    ) -> None:
-        """Delete an existing document via service-discovery before re-uploading."""
-        delete_path = self._build_delete_path(config)
-        delete_body = {"knCode": request.kb_id, "filePath": markdown_file_path}
-        log_curl("POST", delete_path, body=delete_body)
-        resp = await client.post(service_name, delete_path, headers=headers, json=delete_body)
-        body = getattr(resp, "data", None)
-        if not isinstance(body, dict):
-            logger.warning("kb delete: unexpected discovery response – proceeding with upload")
-            return
-        if body.get("resultCode") not in (None, "0", 0):
-            logger.warning(
-                "kb delete non-success resultCode=%s msg=%s – proceeding with upload",
-                body.get("resultCode"),
-                body.get("resultMsg"),
-            )
 
     async def _write_by_discovery(
         self,
@@ -1046,7 +699,6 @@ class HttpKnowledgeSearchBackend:
         service_name: str,
         config: dict[str, Any],
         request: KnowledgeWriteRequest,
-        data: dict[str, str],
         filename: str,
         file_content: str,
         markdown_file_path: str,
@@ -1088,34 +740,40 @@ class HttpKnowledgeSearchBackend:
                     client,
                     service_name,
                     config,
-                    request.kb_id,
+                    request.kb_resource_id,
                     markdown_file_path,
                     request.datasource_alias,
                     json_headers,
                 )
                 file_bytes = file_content.encode("utf-8")
+                resource_id = str(
+                    self._require_resource_id(
+                        request.kb_resource_id,
+                        request.datasource_alias,
+                    )
+                )
                 if file_exists:
                     update_path = self._build_update_path(config)
-                    form_data: dict[str, str] = {
-                        "knCode": request.kb_id,
-                        "filePath": markdown_file_path,
-                        "processFrontMatter": "true",
-                    }
-                    if request.file_description:
-                        form_data["fileDescription"] = request.file_description
                     log_curl(
-                        "UPLOAD", update_path, body={**form_data, "fileContent": f"@{filename}"}
+                        "UPLOAD",
+                        update_path,
+                        body={
+                            "resourceId": resource_id,
+                            "filePath": markdown_file_path,
+                            "fileContent": f"@{filename}",
+                        },
                     )
                     parts: list[tuple[str, Any]] = [
-                        ("knCode", (None, form_data["knCode"])),
-                        ("filePath", (None, form_data["filePath"])),
-                        ("processFrontMatter", (None, form_data["processFrontMatter"])),
+                        ("resourceId", (None, resource_id)),
+                        ("filePath", (None, markdown_file_path)),
+                        (
+                            "fileContent",
+                            (filename, file_bytes, "text/markdown; charset=utf-8"),
+                        ),
+                        ("processFrontMatter", (None, "true")),
                     ]
                     if request.file_description:
                         parts.append(("fileDescription", (None, request.file_description)))
-                    parts.append(
-                        ("fileContent", (filename, file_bytes, "text/markdown; charset=utf-8"))
-                    )
                     resp = await client._upload_with_discovery(
                         service_name,
                         update_path,
@@ -1124,16 +782,30 @@ class HttpKnowledgeSearchBackend:
                     )
                 else:
                     import_path = self._build_import_path(config)
-                    log_curl("UPLOAD", import_path, body={**data, "fileContent": f"@{filename}"})
+                    directory_path = str(PurePosixPath(markdown_file_path).parent)
+                    if not directory_path.startswith("/"):
+                        directory_path = f"/{directory_path}"
+                    log_curl(
+                        "UPLOAD",
+                        import_path,
+                        body={
+                            "resourceId": resource_id,
+                            "directoryPath": directory_path,
+                            "file": f"@{filename}",
+                        },
+                    )
                     parts = [
-                        ("knCode", (None, data["knCode"])),
-                        ("filePath", (None, data["filePath"])),
+                        ("resourceId", (None, resource_id)),
+                        ("directoryPath", (None, directory_path)),
+                        (
+                            "files",
+                            (filename, file_bytes, "text/markdown; charset=utf-8"),
+                        ),
+                        ("processFrontMatter", (None, "true")),
+                        ("overwrite", (None, "false")),
                     ]
                     if request.file_description:
                         parts.append(("fileDescription", (None, request.file_description)))
-                    parts.append(
-                        ("fileContent", (filename, file_bytes, "text/markdown; charset=utf-8"))
-                    )
                     resp = await client._upload_with_discovery(
                         service_name,
                         import_path,
@@ -1143,6 +815,10 @@ class HttpKnowledgeSearchBackend:
 
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
                 self._ensure_success(body, request.datasource_alias)
+                if file_exists:
+                    self._ensure_update_success(body, request.datasource_alias)
+                else:
+                    self._ensure_upload_success(body, request.datasource_alias)
                 return await self._trigger_file_build_by_discovery(
                     client,
                     service_name,
@@ -1153,25 +829,6 @@ class HttpKnowledgeSearchBackend:
                 )
         finally:
             await discovery_client.close()
-
-    @staticmethod
-    def _parse_response_body(resp: httpx.Response, datasource_alias: str) -> dict[str, Any]:
-        if resp.status_code >= 400:
-            raise KbExecutionError(
-                datasource_alias,
-                f"HTTP {resp.status_code}: {resp.text}",
-            )
-
-        try:
-            body = resp.json()
-        except ValueError as exc:
-            raise KbExecutionError(
-                datasource_alias,
-                f"invalid JSON response: {exc}",
-            ) from exc
-        if not isinstance(body, dict):
-            raise KbExecutionError(datasource_alias, "invalid JSON response: root is not object")
-        return body
 
     @staticmethod
     def _parse_discovery_response_body(resp: Any, datasource_alias: str) -> dict[str, Any]:
@@ -1185,7 +842,7 @@ class HttpKnowledgeSearchBackend:
 
     @staticmethod
     def _ensure_success(body: dict[str, Any], datasource_alias: str) -> None:
-        if body.get("resultCode") not in (None, "0", 0):
+        if body.get("code") not in ("0", 0):
             error_message = _format_error_message(body)
             logger.error(
                 "knowledge backend request failed: datasource_alias=%s, error=%s, body=%s",
@@ -1196,16 +853,53 @@ class HttpKnowledgeSearchBackend:
             raise KbExecutionError(datasource_alias, error_message)
 
     @staticmethod
-    def _extract_raw_records(data: dict[str, Any], datasource_alias: str) -> Any:
-        result_object = data.get("resultObject")
-        if isinstance(result_object, dict):
-            if data.get("resultCode") not in (None, "0", 0):
-                raise KbExecutionError(datasource_alias, _format_error_message(data))
-            return result_object.get("data")
+    def _ensure_upload_success(body: dict[str, Any], datasource_alias: str) -> None:
+        data = body.get("data")
+        if not isinstance(data, dict):
+            raise KbExecutionError(datasource_alias, "upload response data is missing")
+        failed_items = data.get("failedItems")
+        if isinstance(failed_items, list) and failed_items:
+            errors = [
+                str(item.get("error") or item.get("filePath") or "upload failed")
+                for item in failed_items
+                if isinstance(item, dict)
+            ]
+            raise KbExecutionError(
+                datasource_alias,
+                "; ".join(errors) or "upload failed",
+            )
+        upload_items = data.get("uploadItems")
+        if not isinstance(upload_items, list) or not upload_items:
+            raise KbExecutionError(datasource_alias, "uploadItems is empty")
+        failed = [
+            item for item in upload_items if isinstance(item, dict) and item.get("success") is False
+        ]
+        if failed:
+            raise KbExecutionError(
+                datasource_alias,
+                str(failed[0].get("error") or "upload failed"),
+            )
 
-        if data.get("resultCode") not in (None, "0", 0):
-            raise KbExecutionError(datasource_alias, _format_error_message(data))
-        return data.get("results")
+    @staticmethod
+    def _ensure_update_success(body: dict[str, Any], datasource_alias: str) -> None:
+        data = body.get("data")
+        items = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(items, list) or not items:
+            raise KbExecutionError(datasource_alias, "update response data is empty")
+        failed = [item for item in items if isinstance(item, dict) and item.get("success") is False]
+        if failed:
+            raise KbExecutionError(
+                datasource_alias,
+                str(failed[0].get("error") or "update failed"),
+            )
+
+    @staticmethod
+    def _extract_raw_records(data: dict[str, Any], datasource_alias: str) -> Any:
+        HttpKnowledgeSearchBackend._ensure_success(data, datasource_alias)
+        result_object = data.get("data")
+        if not isinstance(result_object, dict):
+            return []
+        return result_object.get("data")
 
     def _get_config(self, datasource_alias: str) -> dict[str, Any]:
         if not self._configs:
@@ -1220,83 +914,65 @@ class HttpKnowledgeSearchBackend:
         return config
 
     @staticmethod
-    def _resolve_endpoint(config: dict[str, Any]) -> str | None:
-        endpoint = _first_non_empty_str(
-            config.get("url"),
-            config.get("endpoint"),
-            config.get("endpoint_url"),
-        )
-        return endpoint
-
-    @staticmethod
     def _resolve_service_name(config: dict[str, Any], datasource_alias: str) -> str:
-        service_name = _first_non_empty_str(config.get("service_name"), config.get("serviceName"))
-        if service_name:
-            return service_name
-        env_service_name = _first_non_empty_str(
-            os.getenv("QA_DOMAINNAME"),
-        )
+        _ = config
+        env_service_name = _first_non_empty_str(os.getenv("BE_DOMAINNAME"))
         if env_service_name:
             return env_service_name
-        return datasource_alias
+        raise KbExecutionError(datasource_alias, "BE_DOMAINNAME is required")
+
+    @staticmethod
+    def _require_resource_id(resource_id: Any, datasource_alias: str) -> int:
+        value = str(resource_id or "").strip()
+        if not value:
+            raise KbExecutionError(datasource_alias, "kb_resource_id is required")
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise KbExecutionError(
+                datasource_alias,
+                "kb_resource_id must be an integer",
+            ) from exc
+
+    @classmethod
+    def _require_resource_ids(cls, request: KnowledgeSearchRequest) -> list[int]:
+        raw_ids = request.kb_resource_ids or (
+            [request.kb_resource_id] if request.kb_resource_id else []
+        )
+        if not raw_ids:
+            raise KbExecutionError(
+                request.datasource_alias,
+                "kb_resource_id is required",
+            )
+        return [
+            cls._require_resource_id(resource_id, request.datasource_alias)
+            for resource_id in raw_ids
+        ]
 
     @staticmethod
     def _build_search_file_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(config.get("search_file_path"), config.get("searchFilePath")),
-            "/api/v1/knowledgeItems/searchFile",
-        )
+        _ = config
+        return "/byaiService/datasetController/knowledgeItems/searchFile"
 
     @staticmethod
     def _build_chunk_search_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(config.get("search_path"), config.get("searchPath")),
-            "/api/v1/knowledgeItems/search",
-        )
+        _ = config
+        return "/byaiService/datasetController/knowledgeItems/search"
 
     @staticmethod
     def _build_import_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(config.get("import_path"), config.get("importPath")),
-            "/api/v1/knowledgeItems/import",
-        )
+        _ = config
+        return "/byaiService/datasetController/uploadFiles"
 
     @staticmethod
     def _build_delete_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(config.get("delete_path"), config.get("deletePath")),
-            "/api/v1/knowledgeItems/delete",
-        )
-
-    @staticmethod
-    def _build_metadata_properties_list_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(
-                config.get("metadata_properties_list_path"),
-                config.get("metadataPropertiesListPath"),
-            ),
-            "/api/v1/metadataProperties/list",
-        )
-
-    @staticmethod
-    def _build_metadata_properties_batch_create_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(
-                config.get("metadata_properties_batch_create_path"),
-                config.get("metadataPropertiesBatchCreatePath"),
-            ),
-            "/api/v1/metadataProperties/batchCreate",
-        )
+        _ = config
+        return "/byaiService/datasetController/removeFile"
 
     @staticmethod
     def _build_file_to_markdown_index_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(
-                config.get("file_to_markdown_index_path"),
-                config.get("fileToMarkdownIndexPath"),
-            ),
-            "/api/v1/fileToMarkdownIndex",
-        )
+        _ = config
+        return "/byaiService/datasetController/build"
 
     @staticmethod
     def _build_discovery_headers(
@@ -1341,33 +1017,6 @@ class HttpKnowledgeSearchBackend:
         if len(token) <= 8:
             return "***"
         return f"{token[:4]}...{token[-4:]}"
-
-    async def _post_json(
-        self,
-        url: str,
-        body: dict[str, Any],
-        datasource_alias: str,
-    ) -> dict[str, Any]:
-        _beyond_header = self._get_beyond_token_header()
-        logger.info(
-            "[kb-backend] POST %s datasource=%s beyond_token=%s",
-            url,
-            datasource_alias,
-            self._mask_token(_beyond_header.get("Beyond-Token", "")),
-        )
-        log_curl("POST", url, body=body)
-        try:
-            async with httpx.AsyncClient(headers=_beyond_header, timeout=30.0) as client:
-                response = await client.post(url, json=body)
-        except httpx.HTTPError as exc:
-            raise KbExecutionError(datasource_alias, str(exc)) from exc
-        logger.info(
-            "[kb-backend] POST %s datasource=%s status=%s",
-            url,
-            datasource_alias,
-            response.status_code,
-        )
-        return self._parse_response_body(response, datasource_alias)
 
     async def _post_json_by_discovery(
         self,
@@ -1430,137 +1079,9 @@ class HttpKnowledgeSearchBackend:
         return self._parse_discovery_response_body(response, datasource_alias)
 
     @staticmethod
-    def _build_search_file_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("search_file_url") or config.get("searchFileUrl")
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/searchFile"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("search_file_path")
-            or config.get("searchFilePath")
-            or "/api/v1/knowledgeItems/searchFile"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
-    def _build_chunk_search_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("search_url") or config.get("searchUrl")
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/search"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("search_path") or config.get("searchPath") or "/api/v1/knowledgeItems/search"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
-    def _build_import_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("import_url") or config.get("importUrl")
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/import"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("import_path") or config.get("importPath") or "/api/v1/knowledgeItems/import"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
-    def _build_delete_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("delete_url") or config.get("deleteUrl")
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/delete"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("delete_path") or config.get("deletePath") or "/api/v1/knowledgeItems/delete"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
-    def _build_update_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("update_url") or config.get("updateUrl")
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/knowledgeItems/update"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("update_path") or config.get("updatePath") or "/api/v1/knowledgeItems/update"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
     def _build_update_path(config: dict[str, Any]) -> str:
-        return _normalize_discovery_path(
-            _first_non_empty_str(config.get("update_path"), config.get("updatePath")),
-            "/api/v1/knowledgeItems/update",
-        )
-
-    @staticmethod
-    def _build_metadata_properties_list_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("metadata_properties_list_url") or config.get(
-            "metadataPropertiesListUrl"
-        )
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/metadataProperties/list"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("metadata_properties_list_path")
-            or config.get("metadataPropertiesListPath")
-            or "/api/v1/metadataProperties/list"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
-    def _build_metadata_properties_batch_create_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("metadata_properties_batch_create_url") or config.get(
-            "metadataPropertiesBatchCreateUrl"
-        )
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/metadataProperties/batchCreate"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("metadata_properties_batch_create_path")
-            or config.get("metadataPropertiesBatchCreatePath")
-            or "/api/v1/metadataProperties/batchCreate"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
-
-    @staticmethod
-    def _build_file_to_markdown_index_url(endpoint: str, config: dict[str, Any]) -> str:
-        explicit_url = config.get("file_to_markdown_index_url") or config.get(
-            "fileToMarkdownIndexUrl"
-        )
-        if explicit_url:
-            return str(explicit_url)
-
-        if endpoint.rstrip("/").endswith("/api/v1/fileToMarkdownIndex"):
-            return endpoint.rstrip("/")
-
-        path = str(
-            config.get("file_to_markdown_index_path")
-            or config.get("fileToMarkdownIndexPath")
-            or "/api/v1/fileToMarkdownIndex"
-        )
-        return endpoint.rstrip("/") + "/" + path.lstrip("/")
+        _ = config
+        return "/byaiService/datasetController/knowledgeItems/update"
 
     @staticmethod
     def _normalize_records(results: Any) -> list[dict[str, Any]]:
@@ -1619,6 +1140,8 @@ def _looks_like_single_backend_config(config: dict[str, Any]) -> bool:
             "searchFileUrl",
             "import_url",
             "importUrl",
+            "kb_resource_id",
+            "kbResourceId",
         )
     )
 
@@ -1657,37 +1180,6 @@ def _aggregate_content_by_file(records: list[dict[str, Any]]) -> list[dict[str, 
     return [aggregated[key] for key in order]
 
 
-def _normalize_metadata_properties(
-    labels: dict[str, Any],
-    metadata_properties: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Build metadata property definitions for labels used in front matter."""
-    if not labels:
-        return []
-
-    definitions_by_name = {
-        str(item.get("propertyName")): dict(item)
-        for item in metadata_properties
-        if isinstance(item, dict) and item.get("propertyName")
-    }
-    properties: list[dict[str, Any]] = []
-    for name, value in labels.items():
-        property_name = str(name)
-        definition = definitions_by_name.get(property_name, {})
-        property_def: dict[str, Any] = {
-            "propertyName": property_name,
-            "valueType": str(definition.get("valueType") or _infer_metadata_value_type(value)),
-        }
-        description = definition.get("description")
-        if description:
-            property_def["description"] = str(description)
-        ext_params = definition.get("extParams")
-        if isinstance(ext_params, dict) and ext_params:
-            property_def["extParams"] = ext_params
-        properties.append(property_def)
-    return properties
-
-
 def _first_non_empty_str(*values: Any) -> str:
     for value in values:
         if isinstance(value, str) and value.strip():
@@ -1695,47 +1187,21 @@ def _first_non_empty_str(*values: Any) -> str:
     return ""
 
 
-def _normalize_discovery_path(path: str, default_path: str) -> str:
-    resolved = path or default_path
-    if not resolved.startswith("/"):
-        resolved = f"/{resolved}"
-    return resolved
-
-
-def _infer_metadata_value_type(value: Any) -> str:
-    """Infer metadata API valueType when field metadata is unavailable."""
-    if isinstance(value, list):
-        return "stringList"
-    if isinstance(value, bool):
-        return "boolean"
-    if isinstance(value, (int, float)):
-        return "number"
-    return "string"
-
-
-def _metadata_property_names(body: dict[str, Any]) -> set[str]:
-    result_object = body.get("resultObject")
-    if not isinstance(result_object, dict):
-        return set()
-    data = result_object.get("data")
-    if not isinstance(data, list):
-        return set()
-    return {
-        str(item.get("propertyName"))
-        for item in data
-        if isinstance(item, dict) and item.get("propertyName")
-    }
-
-
 def _result_summary(body: dict[str, Any]) -> dict[str, Any]:
     return {
-        "resultCode": body.get("resultCode"),
-        "resultMsg": body.get("resultMsg"),
+        "code": body.get("code"),
+        "msg": body.get("msg"),
     }
 
 
 def _format_error_message(body: dict[str, Any]) -> str:
-    message = str(body.get("resultMsg") or body.get("resultCode") or "request failed")
+    message = str(
+        body.get("msg")
+        or body.get("code")
+        or body.get("resultMsg")
+        or body.get("resultCode")
+        or "request failed"
+    )
     result_object = body.get("resultObject")
     if isinstance(result_object, dict):
         error_code = result_object.get("errorCode")
@@ -1822,11 +1288,14 @@ _FRONT_MATTER_RE = re.compile(r"\A---[ \t]*\r?\n.*?^---[ \t]*\r?\n?", re.DOTALL 
 def _parse_related_docs(content: str) -> list[dict[str, str]]:
     """Extract all entries from ``--- related_docs ---`` fenced blocks.
 
-    Returns a list of ``{target_doc_id, relation, kb_id}`` dicts, e.g.::
+    Returns a list of ``{target_doc_id, relation, kb_resource_id}`` dicts, e.g.::
 
         [
-            {"target_doc_id": "Concept/Skill.md", "relation": "maps-to", "kb_id": "12"},
-            {"target_doc_id": "Concept/本体库.md", "relation": "part-of", "kb_id": "12"},
+            {
+                "target_doc_id": "Concept/Skill.md",
+                "relation": "maps-to",
+                "kb_resource_id": "12",
+            },
         ]
     """
     import yaml  # lazy import — optional dependency

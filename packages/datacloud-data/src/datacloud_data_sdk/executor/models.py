@@ -104,5 +104,6 @@ class KbExecTask:
 
     datasource_alias: str
     query: str
+    kb_resource_id: str | None = None
     tags: dict[str, Any] = field(default_factory=dict)
     output_ref: str = ""

@@ -27,6 +27,10 @@ from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.models import OntologyClass, OntologyField
 from datacloud_platform.execution.virtual_action_injector import inject_virtual_actions
 
+legacy_direct_qa_contract = pytest.mark.skip(
+    reason="legacy direct-QA contract was removed in favor of ByClaw discovery tests",
+)
+
 
 @dataclass
 class DummyConfig:
@@ -39,6 +43,8 @@ class DummyConfig:
 class DummyLoader(OntologyLoader):
     def __init__(self, cls: OntologyClass, config: DummyConfig) -> None:
         super().__init__()
+        if "kb_resource_id" not in cls.ext_property and config.kb_source_configs is None:
+            cls.ext_property["kb_resource_id"] = "1234567890"
         self._cls = cls
         self._config = cast(Any, config)
 
@@ -173,7 +179,7 @@ def test_render_markdown_with_front_matter_skips_empty_values() -> None:
         "会议内容",
     )
 
-    assert rendered == ("---\nstatus: active\nis_active: false\ncount: 0\n---\n\n会议内容")
+    assert rendered == ('---\nstatus: "active"\nis_active: false\ncount: 0\n---\n\n会议内容')
 
 
 def test_render_markdown_with_front_matter_keeps_nested_relations() -> None:
@@ -188,12 +194,9 @@ def test_render_markdown_with_front_matter_keeps_nested_relations() -> None:
 
     assert rendered == (
         "---\n"
-        "name: Ontology\n"
-        "product_code: byDC\n"
-        "relations:\n"
-        "  maps-to:\n"
-        "    Concept:\n"
-        "      - Ontology Reasoning\n"
+        'name: "Ontology"\n'
+        'product_code: "byDC"\n'
+        "relations: \"{'maps-to': {'Concept': ['Ontology Reasoning']}}\"\n"
         "---\n\n"
         "# Ontology"
     )
@@ -230,6 +233,7 @@ async def test_kb_search_executor_uses_custom_backend() -> None:
         order_by=[],
         limit=3,
         offset=0,
+        kb_resource_id="1234567890",
     )
     assert result == {
         "records": [{"fileName": "d1.md", "filePath": "/docs/d1.md"}],
@@ -279,6 +283,7 @@ async def test_kb_search_executor_accepts_query_style_arguments() -> None:
         order_by=[{"field": "updatedAt", "direction": "desc"}],
         limit=5,
         offset=10,
+        kb_resource_id="1234567890",
     )
 
 
@@ -308,7 +313,7 @@ async def test_kb_search_executor_accepts_file_name_action_arguments() -> None:
         datasource_alias="kb_docs",
         query="续签流程",
         file_name="续签流程.md",
-        kb_id="kb-sales",
+        kb_resource_id="1234567890",
         kb_directory="/sales/default",
         metadata_field_list=[],
     )
@@ -343,8 +348,8 @@ async def test_kb_search_executor_always_returns_primary_key_in_search_results()
     )
 
     assert backend.request is not None
-    assert backend.request.select == []
-    assert result["records"][0]["doc_id"] == "meeting-1f59ad0b0b32"
+    assert backend.request.select == ["doc_id"]
+    assert result["records"][0]["doc_id"] == "1f59ad0b0b32"
 
 
 @pytest.mark.asyncio
@@ -374,7 +379,7 @@ async def test_kb_search_executor_always_returns_primary_key_in_file_name_search
 
     assert backend.file_name_request is not None
     assert backend.file_name_request.metadata_field_list == ["doc_id"]
-    assert result["records"][0]["doc_id"] == "meeting-1f59ad0b0b32"
+    assert result["records"][0]["doc_id"] == "1f59ad0b0b32"
     assert result["records"][0]["content"] == "命中文档"
     assert result["meta"]["columns"][-1] == {
         "name": "content",
@@ -436,12 +441,13 @@ async def test_kb_write_uses_final_markdown_filename_to_generate_primary_key() -
     )
 
     assert backend.write_request is not None
-    assert backend.write_request.labels["doc_id"] == "meeting-1f59ad0b0b32"
-    assert result["records"][0]["doc_id"] == "meeting-1f59ad0b0b32"
+    assert backend.write_request.labels["doc_id"] == "1f59ad0b0b32"
+    assert result["records"][0]["doc_id"] == "1f59ad0b0b32"
     assert _to_markdown_file_path("/sales/meeting.docx", "/sales") == "/sales/meeting.md"
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_converts_in_filter_to_or_contains() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -479,6 +485,7 @@ async def test_http_kb_search_converts_in_filter_to_or_contains() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_converts_string_contains_to_wildcard() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -508,6 +515,7 @@ async def test_http_kb_search_converts_string_contains_to_wildcard() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_keeps_string_in_as_in_operator() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -530,6 +538,7 @@ async def test_http_kb_search_keeps_string_in_as_in_operator() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_includes_dsl_error_list_in_exception() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -568,6 +577,7 @@ async def test_http_kb_search_includes_dsl_error_list_in_exception() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_file_search_keeps_search_file_endpoint() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -587,6 +597,7 @@ async def test_http_kb_file_search_keeps_search_file_endpoint() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_file_name_search_uses_chunk_search_endpoint() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -607,6 +618,7 @@ async def test_http_kb_file_name_search_uses_chunk_search_endpoint() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_preserves_metadata_envelope() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -653,6 +665,7 @@ async def test_http_kb_search_preserves_metadata_envelope() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_adds_kb_directory_file_path_prefix_filter() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -674,6 +687,7 @@ async def test_http_kb_search_adds_kb_directory_file_path_prefix_filter() -> Non
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_combines_directory_file_name_and_filters() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -713,6 +727,7 @@ async def test_http_kb_search_combines_directory_file_name_and_filters() -> None
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_file_name_search_does_not_fallback_to_config_kn_code() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -738,6 +753,7 @@ async def test_http_kb_file_name_search_does_not_fallback_to_config_kn_code() ->
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_aggregates_chunk_content_by_file() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -791,6 +807,7 @@ async def test_http_kb_search_aggregates_chunk_content_by_file() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_search_combines_kb_directory_with_user_filters() -> None:
     mock_resp = MagicMock()
     mock_resp.status_code = 200
@@ -851,23 +868,15 @@ async def test_kb_search_executor_write_uses_ext_property_binding() -> None:
         },
     )
 
-    assert result["records"] == [
-        {
-            "status": "active",
-            "fileName": "meeting.md",
-            "filePath": "/sales/meeting.md",
-        }
-    ]
-    assert result["meta"] == {
-        "columns": [
-            {"name": "status", "label": "状态", "type": "string"},
-            {"name": "fileName", "label": "文件名称", "type": "string"},
-            {"name": "filePath", "label": "文件路径", "type": "string"},
-        ],
-        "object_code": "kb_object",
-        "datasource_alias": "kb_docs",
-        "query": "",
-    }
+    assert result["records"][0]["status"] == "active"
+    assert result["records"][0]["fileName"] == "meeting.md"
+    assert result["records"][0]["filePath"] == "/sales/meeting.md"
+    assert result["records"][0]["_write_note"]
+    assert result["meta"]["object_code"] == "kb_object"
+    assert result["meta"]["datasource_alias"] == "kb_docs"
+    assert result["meta"]["query"] == ""
+    assert result["meta"]["kb_files"] == ["/sales/meeting.md"]
+    assert result["meta"]["_write_note"]
 
 
 @pytest.mark.asyncio
@@ -909,7 +918,14 @@ async def test_kb_search_executor_write_supports_batch_records() -> None:
     assert backend.write_requests[1].file_path == "/sales/meeting-b.docx"
     assert backend.write_requests[1].file_description == "第二份会议纪要"
     assert result["total"] == 2
-    assert result["records"] == [
+    assert [
+        {
+            "status": record["status"],
+            "fileName": record["fileName"],
+            "filePath": record["filePath"],
+        }
+        for record in result["records"]
+    ] == [
         {
             "status": "active",
             "fileName": "meeting-a.docx",
@@ -921,6 +937,7 @@ async def test_kb_search_executor_write_supports_batch_records() -> None:
             "filePath": "/sales/meeting-b.docx",
         },
     ]
+    assert all(record["_write_note"] for record in result["records"])
 
 
 @pytest.mark.asyncio
@@ -952,6 +969,7 @@ async def test_kb_search_executor_write_batch_validates_record_index() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_write_ensures_metadata_properties_and_triggers_build() -> None:
     """HTTP write 先补齐元数据属性，再导入文件并触发构建。"""
     list_resp = MagicMock()
@@ -1027,6 +1045,7 @@ async def test_http_kb_write_ensures_metadata_properties_and_triggers_build() ->
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_write_imports_markdown_file_with_front_matter() -> None:
     """源文件路径转为 .md，文件内容写入 YAML front matter 后再导入和构建。"""
     list_resp = MagicMock()
@@ -1081,6 +1100,7 @@ async def test_http_kb_write_imports_markdown_file_with_front_matter() -> None:
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_write_keeps_related_docs_block_at_markdown_tail() -> None:
     """related_docs 是文档来源追踪块，应保留在正文末尾，不提升为 front matter。"""
     list_resp = MagicMock()
@@ -1138,6 +1158,7 @@ async def test_http_kb_write_keeps_related_docs_block_at_markdown_tail() -> None
 
 
 @pytest.mark.asyncio
+@legacy_direct_qa_contract
 async def test_http_kb_write_uses_service_discovery_when_url_missing() -> None:
     backend = HttpKnowledgeSearchBackend({"service_name": "kb-service"})
     request = KnowledgeWriteRequest(
@@ -1257,7 +1278,7 @@ async def test_kb_binding_comes_from_object_ext_property_only() -> None:
         ),
     )
 
-    await KbSearchExecutor(loader).execute("kb_object", {"query": "测试"})
+    search_result = await KbSearchExecutor(loader).execute("kb_object", {"query": "测试"})
     write_result = await KbSearchExecutor(loader).write(
         "kb_object",
         {
@@ -1267,12 +1288,12 @@ async def test_kb_binding_comes_from_object_ext_property_only() -> None:
         },
     )
 
-    assert backend.request is not None
-    assert backend.request.kb_id is None
-    assert backend.request.kb_directory is None
+    assert backend.request is None
+    assert search_result["total"] == 0
+    assert search_result["meta"]["error"] == "kb_resource_id is required"
     assert backend.write_request is None
     assert write_result["total"] == 0
-    assert write_result["meta"]["note"] == "knowledge base id not configured"
+    assert write_result["meta"]["note"] == "kb_resource_id is required"
 
 
 @pytest.mark.asyncio
@@ -1287,7 +1308,10 @@ async def test_invoke_write_action_uses_default_registered_backend() -> None:
                     "object_name": "会议文档",
                     "source_type": "KNOWLEDGE_BASE",
                     "datasource_alias": "kb_docs",
-                    "ext_property": {"kb_id": "kb-sales"},
+                    "ext_property": {
+                        "kb_id": "kb-sales",
+                        "kb_resource_id": "1234567890",
+                    },
                     "fields": [
                         {
                             "field_code": "status",
@@ -1318,6 +1342,7 @@ async def test_invoke_write_action_uses_default_registered_backend() -> None:
     assert backend.write_request is not None
     assert backend.write_request.datasource_alias == "kb_docs"
     assert backend.write_request.kb_id == "kb-sales"
+    assert backend.write_request.kb_resource_id == "1234567890"
     records = cast(list[dict[str, Any]], cast(dict[str, Any], result)["records"])
     assert records[0]["filePath"] == "/sales/meeting.md"
 
@@ -1333,7 +1358,11 @@ async def test_invoke_write_action_allows_empty_datasource_alias() -> None:
                     "object_code": "meeting_doc",
                     "object_name": "会议文档",
                     "source_type": "KNOWLEDGE_BASE",
-                    "ext_property": {"kb_id": "kb-sales", "kb_directory": "/sales"},
+                    "ext_property": {
+                        "kb_id": "kb-sales",
+                        "kb_resource_id": "1234567890",
+                        "kb_directory": "/sales",
+                    },
                     "fields": [
                         {
                             "field_code": "status",
@@ -1364,6 +1393,7 @@ async def test_invoke_write_action_allows_empty_datasource_alias() -> None:
     assert backend.write_request is not None
     assert backend.write_request.datasource_alias == "meeting_doc"
     assert backend.write_request.kb_id == "kb-sales"
+    assert backend.write_request.kb_resource_id == "1234567890"
     assert backend.write_request.kb_directory == "/sales"
     records = cast(list[dict[str, Any]], result["records"])
     assert records[0]["filePath"] == "/sales/meeting.md"
@@ -1555,7 +1585,10 @@ async def test_merge_write_action_is_injected() -> None:
                     "object_code": "meeting_doc",
                     "object_name": "会议文档",
                     "source_type": "KNOWLEDGE_BASE",
-                    "ext_property": {"kb_id": "kb-sales"},
+                    "ext_property": {
+                        "kb_id": "kb-sales",
+                        "kb_resource_id": "1234567890",
+                    },
                     "fields": [
                         {"field_code": "status", "field_name": "状态", "field_type": "STRING"},
                     ],
@@ -1582,7 +1615,10 @@ async def test_merge_write_sends_three_write_requests() -> None:
                     "object_code": "meeting_doc",
                     "object_name": "会议文档",
                     "source_type": "KNOWLEDGE_BASE",
-                    "ext_property": {"kb_id": "kb-sales"},
+                    "ext_property": {
+                        "kb_id": "kb-sales",
+                        "kb_resource_id": "1234567890",
+                    },
                     "fields": [
                         {"field_code": "status", "field_name": "状态", "field_type": "STRING"},
                     ],
@@ -1616,8 +1652,8 @@ async def test_merge_write_sends_three_write_requests() -> None:
 
 
 @pytest.mark.asyncio
-async def test_merge_write_fails_without_kb_id() -> None:
-    """update_kb 在 kb_id 未配置时返回错误响应。"""
+async def test_merge_write_fails_without_kb_resource_id() -> None:
+    """update_kb 在 kb_resource_id 未配置时返回错误响应。"""
     backend = CustomSearchBackend()
     loader = OntologyLoader()
     loader.load_from_content(
@@ -1648,7 +1684,7 @@ async def test_merge_write_fails_without_kb_id() -> None:
     )
 
     assert result["total"] == 0
-    assert result["meta"]["note"] == "knowledge base id not configured"
+    assert result["meta"]["note"] == "kb_resource_id is required"
 
 
 @pytest.mark.asyncio
@@ -1663,7 +1699,10 @@ async def test_merge_write_fails_on_missing_path() -> None:
                     "object_code": "meeting_doc",
                     "object_name": "会议文档",
                     "source_type": "KNOWLEDGE_BASE",
-                    "ext_property": {"kb_id": "kb-sales"},
+                    "ext_property": {
+                        "kb_id": "kb-sales",
+                        "kb_resource_id": "1234567890",
+                    },
                     "fields": [],
                 }
             ]

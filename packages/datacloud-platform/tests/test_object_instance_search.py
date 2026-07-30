@@ -615,3 +615,68 @@ class TestObjectInstanceHitWithScore:
         assert sorted_hits[0].instance_name == "B"
         assert sorted_hits[1].instance_name == "C"
         assert sorted_hits[2].instance_name == "A"
+
+
+def test_resolve_kb_resource_id_for_object_ignores_legacy_kb_id() -> None:
+    from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+        _resolve_kb_resource_id_for_object,
+    )
+
+    assert (
+        _resolve_kb_resource_id_for_object(
+            {
+                "ext_property": {
+                    "kb_resource_id": "1234567890",
+                    "kb_id": "legacy-internal-id",
+                }
+            }
+        )
+        == "1234567890"
+    )
+    assert (
+        _resolve_kb_resource_id_for_object(
+            {"ext_property": {"kb_id": "legacy-internal-id"}}
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+async def test_chunk_search_passes_kb_resource_id_to_backend() -> None:
+    from datacloud_data_sdk.executor.kb_search_backend import KnowledgeSearchResult
+    from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+        _do_chunk_search,
+    )
+
+    class CapturingBackend:
+        request: Any = None
+
+        async def search(self, request: Any) -> KnowledgeSearchResult:
+            self.request = request
+            return KnowledgeSearchResult(records=[], total=0)
+
+    backend = CapturingBackend()
+    await _do_chunk_search(
+        query="年假",
+        kb_resource_id="1234567890",
+        top_k=5,
+        _kb_search_backend=backend,
+    )
+
+    assert backend.request is not None
+    assert backend.request.kb_resource_id == "1234567890"
+    assert not hasattr(backend.request, "kb_id")
+
+
+@pytest.mark.asyncio
+async def test_chunk_search_rejects_missing_kb_resource_id() -> None:
+    from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+        _do_chunk_search,
+    )
+
+    with pytest.raises(ValueError, match="kb_resource_id is required"):
+        await _do_chunk_search(
+            query="年假",
+            kb_resource_id="",
+            top_k=5,
+        )

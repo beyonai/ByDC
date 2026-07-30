@@ -370,8 +370,7 @@ def make_llm_call_node(
         # DIAG: pre-trim raw conv messages count
         _thread = (config.get("configurable") or {}).get("thread_id", "?")
         logger.info(
-            "[llm_call DIAG] round=%d thread=%s raw_conv=%d "
-            "types=%s",
+            "[llm_call DIAG] round=%d thread=%s raw_conv=%d types=%s",
             current_round,
             _thread,
             len(conv),
