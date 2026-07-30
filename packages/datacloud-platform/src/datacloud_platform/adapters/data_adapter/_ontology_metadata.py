@@ -2167,7 +2167,7 @@ def _hybrid_tokenize(query: str) -> list[str]:
     """
     from datacloud_knowledge.retrieval.tokenizers.hybrid import hybrid_tokenize
 
-    return cast("list[str]", hybrid_tokenize(query))
+    return hybrid_tokenize(query)
 
 
 def _tokenize_query(query: str) -> list[str]:

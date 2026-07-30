@@ -235,7 +235,9 @@ def _response_preview(payload: Any) -> str:
 
 
 def _extract_content(response_body: dict[str, Any]) -> str:
-    result_code = str(response_body.get("code", response_body.get("resultCode", "0"))).strip()
+    result_code = str(
+        response_body.get("code", response_body.get("resultCode", "0"))
+    ).strip()
     if result_code not in {"0", "200"}:
         message = str(
             response_body.get("msg")

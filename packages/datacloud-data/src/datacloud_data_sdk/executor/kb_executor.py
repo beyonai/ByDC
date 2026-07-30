@@ -96,10 +96,7 @@ class KbExecutor:
             raise DataSourceUnavailableError(task.datasource_alias)
         config = self._configs.get(task.datasource_alias, {})
         resource_id = str(
-            task.kb_resource_id
-            or config.get("kb_resource_id")
-            or config.get("kbResourceId")
-            or ""
+            task.kb_resource_id or config.get("kb_resource_id") or config.get("kbResourceId") or ""
         ).strip()
         if not resource_id:
             raise KbExecutionError(task.datasource_alias, "kb_resource_id is required")

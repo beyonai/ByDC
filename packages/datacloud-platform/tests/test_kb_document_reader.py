@@ -39,7 +39,9 @@ def test_kb_document_reader_gets_byclaw_download_and_returns_markdown() -> None:
     }
 
 
-def test_default_reader_uses_be_domainname_only(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_reader_uses_be_domainname_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("DATACLOUD_KB_READ_SERVICE_NAME", raising=False)
     monkeypatch.delenv("DATACLOUD_RESULT_FILE_SERVICE_NAME", raising=False)
     monkeypatch.setenv("BE_DOMAINNAME", "ByaiService")

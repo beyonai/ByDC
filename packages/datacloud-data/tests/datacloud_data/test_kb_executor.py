@@ -33,9 +33,7 @@ def _read_csv_records(path: str) -> list[dict[str, str]]:
 async def test_kb_executor_uses_configured_resource_id_and_writes_csv(
     tmp_path: Path,
 ) -> None:
-    backend = CapturingSearchBackend(
-        [{"content": "自定义内容", "source": "kb_docs"}]
-    )
+    backend = CapturingSearchBackend([{"content": "自定义内容", "source": "kb_docs"}])
     executor = KbExecutor(
         kb_configs={"kb_docs": {"kb_resource_id": "1234567890"}},
         csv_base_dir=str(tmp_path),
@@ -58,9 +56,7 @@ async def test_kb_executor_uses_configured_resource_id_and_writes_csv(
         limit=10,
         kb_resource_id="1234567890",
     )
-    assert _read_csv_records(csv_path) == [
-        {"content": "自定义内容", "source": "kb_docs"}
-    ]
+    assert _read_csv_records(csv_path) == [{"content": "自定义内容", "source": "kb_docs"}]
 
 
 @pytest.mark.asyncio

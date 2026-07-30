@@ -43,10 +43,7 @@ class DummyConfig:
 class DummyLoader(OntologyLoader):
     def __init__(self, cls: OntologyClass, config: DummyConfig) -> None:
         super().__init__()
-        if (
-            "kb_resource_id" not in cls.ext_property
-            and config.kb_source_configs is None
-        ):
+        if "kb_resource_id" not in cls.ext_property and config.kb_source_configs is None:
             cls.ext_property["kb_resource_id"] = "1234567890"
         self._cls = cls
         self._config = cast(Any, config)
@@ -182,9 +179,7 @@ def test_render_markdown_with_front_matter_skips_empty_values() -> None:
         "会议内容",
     )
 
-    assert rendered == (
-        '---\nstatus: "active"\nis_active: false\ncount: 0\n---\n\n会议内容'
-    )
+    assert rendered == ('---\nstatus: "active"\nis_active: false\ncount: 0\n---\n\n会议内容')
 
 
 def test_render_markdown_with_front_matter_keeps_nested_relations() -> None:
@@ -201,7 +196,7 @@ def test_render_markdown_with_front_matter_keeps_nested_relations() -> None:
         "---\n"
         'name: "Ontology"\n'
         'product_code: "byDC"\n'
-        'relations: "{\'maps-to\': {\'Concept\': [\'Ontology Reasoning\']}}"\n'
+        "relations: \"{'maps-to': {'Concept': ['Ontology Reasoning']}}\"\n"
         "---\n\n"
         "# Ontology"
     )

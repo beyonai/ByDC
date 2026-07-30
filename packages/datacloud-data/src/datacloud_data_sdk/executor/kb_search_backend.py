@@ -261,9 +261,7 @@ class HttpKnowledgeSearchBackend:
             datasource_alias=request.datasource_alias,
         )
 
-        records = self._normalize_records(
-            self._extract_raw_records(data, request.datasource_alias)
-        )
+        records = self._normalize_records(self._extract_raw_records(data, request.datasource_alias))
         return KnowledgeSearchResult(
             records=records,
             total=len(records),
@@ -874,9 +872,7 @@ class HttpKnowledgeSearchBackend:
         if not isinstance(upload_items, list) or not upload_items:
             raise KbExecutionError(datasource_alias, "uploadItems is empty")
         failed = [
-            item
-            for item in upload_items
-            if isinstance(item, dict) and item.get("success") is False
+            item for item in upload_items if isinstance(item, dict) and item.get("success") is False
         ]
         if failed:
             raise KbExecutionError(
@@ -890,11 +886,7 @@ class HttpKnowledgeSearchBackend:
         items = data.get("data") if isinstance(data, dict) else None
         if not isinstance(items, list) or not items:
             raise KbExecutionError(datasource_alias, "update response data is empty")
-        failed = [
-            item
-            for item in items
-            if isinstance(item, dict) and item.get("success") is False
-        ]
+        failed = [item for item in items if isinstance(item, dict) and item.get("success") is False]
         if failed:
             raise KbExecutionError(
                 datasource_alias,
