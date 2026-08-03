@@ -20,6 +20,57 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _relation_cascade_delete(relation: dict[str, Any]) -> bool:
+    value = relation.get("cascade_delete")
+    if type(value) is bool:
+        return value
+    attribute = relation.get("attribute")
+    if isinstance(attribute, dict):
+        return attribute.get("cascade_delete") is True
+    return False
+
+
+def resolve_cascade_object_closure(
+    relations: list[dict[str, Any]],
+    requested_object_codes: set[str],
+    *,
+    max_depth: int = 2,
+    max_execution_objects: int = 100,
+) -> set[str]:
+    """Expand cascade sources up to max_depth and silently truncate deeper levels."""
+    closure = set(requested_object_codes)
+    frontier = set(requested_object_codes)
+    depth = 0
+    while frontier and depth < max_depth:
+        next_frontier: set[str] = set()
+        for relation in relations:
+            if not _relation_cascade_delete(relation):
+                continue
+            source = str(
+                relation.get("source_class")
+                or relation.get("sourceObjectCode")
+                or ""
+            )
+            target = str(
+                relation.get("target_class")
+                or relation.get("targetObjectCode")
+                or ""
+            )
+            if target in frontier and source and source not in closure:
+                next_frontier.add(source)
+        if not next_frontier:
+            break
+        closure.update(next_frontier)
+        execution_count = len(closure - requested_object_codes)
+        if execution_count > max_execution_objects:
+            raise ValueError(
+                f"级联 execution-only 对象数量超过限制 {max_execution_objects}"
+            )
+        frontier = next_frontier
+        depth += 1
+    return closure
+
+
 class SceneLoaderMixin:
     """Mixin that provides scene-scoped and code-scoped ontology loading.
 
@@ -128,17 +179,20 @@ class SceneLoaderMixin:
         backend: OntologyBackend = self._ontology_for(base_id)  # type: ignore[attr-defined]
 
         vw_codes = view_codes if view_codes is not None else []
+        mounted_codes = set(object_codes)
 
         if hasattr(backend, "_entity_store"):
             store = backend._entity_store.sub_store(base_id)
+            all_rels = store.list_all("relations")
+            closure = resolve_cascade_object_closure(all_rels, mounted_codes)
             objs, _ = (
                 store.search(
                     "objects",
-                    codes=object_codes,
+                    codes=closure,
                     page=1,
-                    page_size=max(len(object_codes), 1),
+                    page_size=max(len(closure), 1),
                 )
-                if object_codes
+                if closure
                 else ([], 0)
             )
 
@@ -206,7 +260,6 @@ class SceneLoaderMixin:
             # 加载涉及的 relations（source 或 target 在已加载对象中）
             all_codes: set[str] = loaded_codes | set(vw_codes)
             if all_codes:
-                all_rels = store.list_all("relations")
                 related_rels = [
                     r
                     for r in all_rels
@@ -216,8 +269,14 @@ class SceneLoaderMixin:
                 if related_rels:
                     content["relations"] = related_rels
         else:
+            relation_rows, _ = backend.get_relations(
+                base_id=base_id,
+                page=1,
+                page_size=10_000,
+            )
+            closure = resolve_cascade_object_closure(relation_rows, mounted_codes)
             content = _build_content_from_remote_scenes(
-                backend, base_id, ["-1"], object_codes, vw_codes
+                backend, base_id, ["-1"], list(closure), vw_codes
             )
         logger.info(
             "load_ontology_from_codes: base_id=%s objects=%d views=%d",

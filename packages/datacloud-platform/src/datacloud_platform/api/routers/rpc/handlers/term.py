@@ -152,6 +152,8 @@ def _term_type_get_relations(
     }
     if params.get("relation_category"):
         kwargs["relation_category"] = params["relation_category"]
+    if params.get("relation_code"):
+        kwargs["relation_code"] = params["relation_code"]
     if params.get("keyword"):
         kwargs["keyword"] = params["keyword"]
     return ok(data=platform.list_term_type_relations(_base(params), **kwargs))

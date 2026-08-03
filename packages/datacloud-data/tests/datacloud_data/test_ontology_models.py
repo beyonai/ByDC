@@ -124,6 +124,18 @@ def test_ontology_relation_has_join_keys() -> None:
         description="一个商机可签署多份合同",
     )
     assert rel.join_keys[0]["from_field"] == "bo_id"
+    assert rel.cascade_delete is False
+
+
+def test_ontology_relation_keeps_cascade_delete() -> None:
+    rel = OntologyRelation(
+        relation_code="feature_belongs_to_product",
+        source_class="feature",
+        target_class="product",
+        cascade_delete=True,
+    )
+
+    assert rel.cascade_delete is True
 
 
 def test_ontology_field_has_property_kind_and_derived_config() -> None:
@@ -157,3 +169,15 @@ def test_ontology_relation_has_resolve_action() -> None:
     )
     assert r.resolve_action_code == "query_opp_by_cust"
     assert r.resolve_param_binding["source_field"] == "customer_id"
+
+
+def test_loader_does_not_expose_unused_mounted_object_codes() -> None:
+    loader = OntologyLoader()
+
+    assert not hasattr(loader, "mounted_object_codes")
+
+
+def test_loader_does_not_expose_unused_execution_object_codes() -> None:
+    loader = OntologyLoader()
+
+    assert not hasattr(loader, "execution_object_codes")

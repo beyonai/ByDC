@@ -9,6 +9,12 @@ from copy import deepcopy
 from typing import Any
 
 from datacloud_data_sdk.exceptions import TermAmbiguousError, TermNotFoundError
+from datacloud_data_sdk.executor.kb_cascade_delete.discovery import (
+    discover_cascade_context,
+)
+from datacloud_data_sdk.executor.kb_cascade_delete.form import (
+    build_cascade_action_form,
+)
 
 from datacloud_analysis.i18n.prompts import get_ui_text
 from datacloud_analysis.tool_hook_plugins.types import (
@@ -104,19 +110,17 @@ async def _try_fill_file_content(
     if storage is None:
         return tool_params
 
-    inv_ctx = _build_invocation_context(metadata, storage)
-
     records = tool_params.get("records")
     if isinstance(records, list):
         new_records = [
-            await _fill_record_file_content(record, storage, inv_ctx) for record in records
+            await _fill_record_file_content(record, storage) for record in records
         ]
         if any(new is not orig for new, orig in zip(new_records, records, strict=True)):
             return {**tool_params, "records": new_records}
         return tool_params
 
     # 单条模式
-    return await _fill_record_file_content(tool_params, storage, inv_ctx)
+    return await _fill_record_file_content(tool_params, storage)
 
 
 async def _try_fill_update_kb_file_content(
@@ -143,7 +147,6 @@ async def _try_fill_update_kb_file_content(
     if storage is None:
         return tool_params
 
-    inv_ctx = _build_invocation_context(metadata, storage)
     patched = dict(tool_params)
     changed = False
 
@@ -152,8 +155,7 @@ async def _try_fill_update_kb_file_content(
         # if not path_value:
         #     continue
         try:
-            with inv_ctx:
-                file_content: str = await _read_file_via_storage(path_value, storage)
+            file_content: str = await _read_file_via_storage(path_value, storage)
         except Exception:
             logger.warning(
                 "[operation_confirmation] update_kb read_file raised exception path=%r field=%s",
@@ -230,7 +232,6 @@ def _inject_update_kb_display_fields(
 async def _fill_record_file_content(
     record: Any,
     storage: Any,
-    inv_ctx: Any,
 ) -> Any:
     """对单条记录尝试读取文件内容并替换内容字段，失败则返回原记录。"""
     if not isinstance(record, dict):
@@ -244,8 +245,7 @@ async def _fill_record_file_content(
     if not path_value:
         return record
     try:
-        with inv_ctx:
-            file_content: str = await _read_file_via_storage(path_value, storage)
+        file_content: str = await _read_file_via_storage(path_value, storage)
     except Exception:
         logger.warning(
             "[operation_confirmation] read_file raised exception path=%r",
@@ -301,6 +301,8 @@ def _build_invocation_context(metadata: dict[str, Any], storage: Any) -> Any:
     user_id = _resolve_gateway_user_id(gw_ctx) if gw_ctx is not None else ""
     session_id = str(getattr(gw_ctx, "session_id", "") or "")
     token = str(getattr(gw_ctx, "beyond_token", "") or configurable.get("beyond_token") or "")
+    if not token :
+        token = getattr(gw_ctx, "extras", {}).get("beyond_token", "")
     locale = str(configurable.get("locale") or "zh_CN")
     workspace_dir = str(configurable.get("workspace_dir") or "")
     workspace_root = resolve_shared_workspace_dir(workspace_dir) if workspace_dir else None
@@ -340,11 +342,22 @@ def _is_kb_update_kb_action(action: Any) -> bool:
 
 
 async def before_call_back(ctx: HookContext) -> HookDecision | None:
-    """Interrupt operation tool calls before execution and resume with confirmed params."""
+    """Run operation confirmation inside the request's InvocationContext."""
+    metadata = dict(ctx.get("metadata") or {})
+    storage = _resolve_storage_from_metadata(metadata)
+    invocation_context = _build_invocation_context(metadata, storage)
+    with invocation_context:
+        return await _before_call_back_in_context(ctx, metadata)
+
+
+async def _before_call_back_in_context(
+    ctx: HookContext,
+    metadata: dict[str, Any],
+) -> HookDecision | None:
+    """Interrupt operation calls and resume them with confirmed parameters."""
     tool_name = str(ctx.get("tool_name") or "")
     tool_call_id = str(ctx.get("tool_call_id") or "")
     tool_params = dict(ctx.get("tool_params") or {})
-    metadata = dict(ctx.get("metadata") or {})
     state = metadata.get("state")
     state_dict = state if isinstance(state, dict) else {}
     loader = metadata.get("loader")
@@ -408,10 +421,38 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
         term_loader=term_loader,
         locale=locale,
     )
+    cascade_context: dict[str, Any] | None = None
+    if str(getattr(action, "action_family", "") or "").lower() == "delete_kb":
+        scope = getattr(action, "_datacloud_scope", None)
+        root_object_code = str(
+            getattr(action, "scope_code", "")
+            or getattr(scope, "object_code", "")
+            or tool_name.removeprefix("delete_kb_")
+        )
+        discovered = await discover_cascade_context(
+            loader=loader,
+            root_object_code=root_object_code,
+            root_source_paths=[
+                str(path) for path in tool_params.get("source_paths") or []
+            ],
+        )
+        if discovered is not None:
+            cascade_context = discovered.to_dict()
+            operation_form_action = build_cascade_action_form(
+                action_form=operation_form_action,
+                cascade_context=discovered,
+            )
+            operation_form = {
+                **operation_form,
+                "schemaVersion": "1.1",
+                "formMode": "cascade_delete",
+                "summary": operation_form_action["summary"],
+                "description": operation_form_action["description"],
+                "rule": operation_form_action["rule"],
+            }
     form_id = str(operation_form_action.get("formId") or operation_form.get("formId") or "")
     logger.info("[operation_confirmation] interrupt tool=%s form_id=%s", tool_name, form_id)
-    raise ClarificationNeededError(
-        {
+    context: dict[str, Any] = {
             "interrupt_type": _INTERRUPT_TYPE,
             "tool_call_id": tool_call_id,
             "tool_name": tool_name,
@@ -425,7 +466,9 @@ async def before_call_back(ctx: HookContext) -> HookDecision | None:
                 "originalParamsHash": _stable_hash(tool_params),
             },
         }
-    )
+    if cascade_context is not None:
+        context["cascade_context"] = cascade_context
+    raise ClarificationNeededError(context)
 
 
 def find_operation_action(loader: Any, tool_name: str) -> Any | None:
@@ -531,10 +574,11 @@ def build_batch_operation_form(
         actions.append(action)
 
     form_id = _build_batch_form_id(actions)
+    has_cascade = any(action.get("formMode") == "cascade_delete" for action in actions)
     for action in actions:
         action.pop("formId", None)
-    return {
-        "schemaVersion": "1.0",
+    batch_form = {
+        "schemaVersion": "1.1" if has_cascade else "1.0",
         "formId": form_id,
         "title": get_ui_text("operation_batch_title", locale, count=len(actions))
         if len(actions) > 1
@@ -542,6 +586,9 @@ def build_batch_operation_form(
         "description": get_ui_text("operation_form_description", locale),
         "actions": actions,
     }
+    if has_cascade:
+        batch_form["formMode"] = "cascade_delete"
+    return batch_form
 
 
 def _build_batch_form_id(actions: list[dict[str, Any]]) -> str:

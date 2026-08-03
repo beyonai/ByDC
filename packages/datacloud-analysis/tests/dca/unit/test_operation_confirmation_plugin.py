@@ -13,6 +13,11 @@ from datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin 
     restore_action_params,
 )
 from datacloud_analysis.tool_hook_plugins.types import ClarificationNeededError, HookContext
+from datacloud_data_sdk.executor.kb_cascade_delete.models import (
+    CascadeDeleteContext,
+    CascadeDeleteItem,
+    CascadeDeleteRoot,
+)
 from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_platform.errors import TermAmbiguousError, TermNotFoundError
 
@@ -150,6 +155,94 @@ async def test_operation_before_call_raises_form_interrupt() -> None:
     status_field = form["rule"][0][1]
     assert status_field["formType"] == "term_select"
     assert status_field["term"]["termSet"] == "customer_status.code"
+
+
+async def test_delete_kb_interrupt_adds_cascade_form_and_trusted_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    action = _Action(
+        action_code="delete_kb_product",
+        action_name="删除产品",
+        action_family="delete_kb",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "source_paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                }
+            },
+        },
+    )
+    action.scope_code = "product"  # type: ignore[attr-defined]
+    cascade_context = CascadeDeleteContext.create(
+        roots=[CascadeDeleteRoot("product", "/product/a.md", "p1", "fp-root")],
+        items=[
+            CascadeDeleteItem(
+                item_id="cascade-item-1",
+                parent_item_id=None,
+                depth=1,
+                object_code="feature",
+                object_name="产品特性",
+                source_path="/feature/1.md",
+                term_id="f1",
+                relation_id="r1",
+                relation_code="feature_belongs_to_product",
+                owner_term_id="p1",
+                file_fingerprint="fp-feature",
+            )
+        ],
+    )
+
+    async def _discover(**_kwargs: Any) -> CascadeDeleteContext:
+        from datacloud_data_sdk.context import get_current_context
+
+        request_context = get_current_context()
+        assert request_context.user_id == "user-1"
+        assert request_context.session_id == "session-1"
+        assert request_context.token == "token-1"
+        assert request_context.language == "en_US"
+        assert request_context.extras == {"request": "cascade-delete"}
+        return cascade_context
+
+    monkeypatch.setattr(
+        "datacloud_analysis.tool_hook_plugins.builtin.operation_confirmation_plugin."
+        "discover_cascade_context",
+        _discover,
+    )
+    ctx: HookContext = {
+        "tool_call_id": "call-1",
+        "tool_name": "delete_kb_product",
+        "tool_params": {"source_paths": ["/product/a.md"]},
+        "metadata": {
+            "loader": _Loader(action),
+            "state": {},
+            "gateway_context": SimpleNamespace(
+                user_id="user-1",
+                session_id="session-1",
+                beyond_token="token-1",
+                extras={"gateway": "fallback"},
+            ),
+            "configurable": {
+                "locale": "en_US",
+                "extras": {"request": "cascade-delete"},
+            },
+        },
+    }
+
+    with pytest.raises(ClarificationNeededError) as exc_info:
+        await before_call_back(ctx)
+
+    context = exc_info.value.context
+    assert context["operation_form_action"]["formMode"] == "cascade_delete"
+    assert context["cascade_context"]["items"][0]["termId"] == "f1"
+    assert "termId" not in str(context["operation_form_action"])
+
+    from datacloud_data_sdk.context import get_current_context
+    from datacloud_data_sdk.exceptions import DatacloudError
+
+    with pytest.raises(DatacloudError, match="InvocationContext"):
+        get_current_context()
 
 
 def test_operation_form_uses_locale_for_visible_text() -> None:

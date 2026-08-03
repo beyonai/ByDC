@@ -19,6 +19,30 @@ from datacloud_platform.models.view import View, ViewProperty
 logger = logging.getLogger(__name__)
 
 
+def _build_relation_attribute(relation: dict[str, Any]) -> dict[str, Any]:
+    """Build persisted relation attributes without dropping extensions."""
+    attribute = dict(relation.get("attribute") or {})
+    cascade_delete = relation.get(
+        "cascade_delete",
+        attribute.get("cascade_delete", False),
+    )
+    if type(cascade_delete) is not bool:
+        raise ValueError("cascade_delete 必须是 boolean")
+    relation_type = str(relation.get("relation_type") or "MANY_TO_ONE").upper()
+    if cascade_delete and relation_type not in {"MANY_TO_ONE", "ONE_TO_ONE"}:
+        raise ValueError(
+            "cascade_delete=true 时 relation_type 只能是 MANY_TO_ONE 或 ONE_TO_ONE"
+        )
+    join_keys = relation.get("join_keys")
+    if join_keys is None:
+        join_keys = attribute.get("join_keys") or attribute.get("joinKeys") or []
+    return {
+        **attribute,
+        "join_keys": list(join_keys),
+        "cascade_delete": cascade_delete,
+    }
+
+
 def _extract_search_items(result: Any) -> list[dict[str, Any]]:
     """从 search_terms 响应中提取 items 列表，兼容 dict 和对象。
 
@@ -249,7 +273,7 @@ class OntologyBuildMixin:
         # 4.5 创建对象关联关系（source 固定为当前实际对象编码）
         for rel in state.get("object_relations", []):
             src_code = actual_entity_code
-            tgt_code = rel.get("target_object_code") or rel.get("target_class", "")
+            tgt_code = rel.get("target_object_code", "")
             relation_code = rel.get("relation_code") or f"{src_code}_to_{tgt_code}"
             relation = Relation(
                 relationCode=relation_code,
@@ -258,9 +282,7 @@ class OntologyBuildMixin:
                 relationDesc=rel.get("description", ""),
                 sourceObjectCode=src_code,
                 targetObjectCode=tgt_code,
-                attribute={
-                    "join_keys": rel.get("join_keys", []),
-                },
+                attribute=_build_relation_attribute(rel),
             )
             try:
                 self.create_relation(base_id, relation)  # type: ignore[attr-defined]
@@ -367,9 +389,7 @@ class OntologyBuildMixin:
                 relationDesc=rel.get("description", ""),
                 sourceObjectCode=src_code,
                 targetObjectCode=tgt_code,
-                attribute={
-                    "join_keys": rel.get("join_keys", []),
-                },
+                attribute=_build_relation_attribute(rel),
             )
             try:
                 self.create_relation(base_id, relation)  # type: ignore[attr-defined]

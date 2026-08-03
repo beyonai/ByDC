@@ -393,6 +393,10 @@ class OntologyLoader:
                     target_class=rel.get("target_class", ""),
                     relation_type=rel.get("relation_type", "ONE_TO_MANY"),
                     join_keys=rel.get("join_keys", []),
+                    cascade_delete=(
+                        rel.get("cascade_delete") is True
+                        or (rel.get("attribute") or {}).get("cascade_delete") is True
+                    ),
                     description=rel.get("description", ""),
                     resolve_action_code=rel.get("resolve_action_code"),
                     resolve_param_binding=rel.get("resolve_param_binding"),
@@ -464,6 +468,10 @@ class OntologyLoader:
                     target_class=rel.get("target_class", ""),
                     relation_type=rel.get("relation_type", "ONE_TO_MANY"),
                     join_keys=rel.get("join_keys", []),
+                    cascade_delete=(
+                        rel.get("cascade_delete") is True
+                        or (rel.get("attribute") or {}).get("cascade_delete") is True
+                    ),
                     description=rel.get("description", ""),
                     resolve_action_code=rel.get("resolve_action_code"),
                     resolve_param_binding=rel.get("resolve_param_binding"),

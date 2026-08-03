@@ -41,6 +41,7 @@ class TermRelation(Base):
     relation_category: Mapped[str] = mapped_column(String(16), nullable=False)
     cardinality: Mapped[str | None] = mapped_column(String(8), nullable=True)
     action_term_id: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    ext_attrs: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     created_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     updated_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 

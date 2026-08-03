@@ -30,6 +30,14 @@ from ._base import _WriterBase
 log = logging.getLogger(__name__)
 
 
+def _raise_missing_cascade_owner(relation_code: str) -> None:
+    raise ValueError(f"cascade relation owner must exist: {relation_code}")
+
+
+def _raise_multiple_cascade_owners(relation_code: str) -> None:
+    raise ValueError(f"cascade relation has multiple owners: {relation_code}")
+
+
 class _TermWriter(_WriterBase):
     """Mixin providing all term-write operations.
 
@@ -1059,6 +1067,10 @@ class _TermWriter(_WriterBase):
                     rel_category = (
                         rel.get("relation_category") or rel.get("relationCategory") or "BUSINESS"
                     )
+                    relation_code = str(
+                        rel.get("relation_code") or rel.get("relationCode") or ""
+                    )
+                    cascade_delete = rel.get("cascade_delete") is True
 
                     if not target_code and not target_name:
                         skipped += 1
@@ -1079,7 +1091,7 @@ class _TermWriter(_WriterBase):
                             target_term_id = str(row[0])
 
                     # Create stub if not found
-                    if target_term_id is None and target_name:
+                    if target_term_id is None and target_name and not cascade_delete:
                         stub_code = target_code or f"STUB_{self._new_id().replace('-', '')[:12]}"
                         stub_type = rel.get("term_type_code") or rel.get("termTypeCode") or "_stub"
                         target_term_id = self._new_id()
@@ -1106,21 +1118,46 @@ class _TermWriter(_WriterBase):
                         stubs_created += 1
 
                     if target_term_id is None:
+                        if cascade_delete:
+                            _raise_missing_cascade_owner(relation_code)
                         skipped += 1
                         continue
 
+                    if cascade_delete and relation_code:
+                        other_owner = self.session.execute(
+                            text(
+                                "SELECT target_term_id FROM term_relation "
+                                "WHERE source_term_id = :src "
+                                "AND ext_attrs->>'relation_code' = :rcode "
+                                "AND target_term_id <> :tgt LIMIT 1"
+                            ),
+                            {
+                                "src": source_term_id,
+                                "rcode": relation_code,
+                                "tgt": target_term_id,
+                            },
+                        ).scalar_one_or_none()
+                        if other_owner is not None:
+                            _raise_multiple_cascade_owners(relation_code)
+
                     # Insert relation (check duplicate first)
+                    relation_identity_clause = (
+                        "AND ext_attrs->>'relation_code' = :rcode "
+                        if relation_code
+                        else "AND relation_name = :rname "
+                    )
                     existing_rel = self.session.execute(
                         text(
                             "SELECT 1 FROM term_relation "
                             "WHERE source_term_id = :src AND target_term_id = :tgt "
-                            "AND relation_name = :rname "
+                            f"{relation_identity_clause}"
                             "LIMIT 1"
                         ),
                         {
                             "src": source_term_id,
                             "tgt": target_term_id,
                             "rname": rel_name,
+                            "rcode": relation_code,
                         },
                     ).scalar_one_or_none()
 
@@ -1131,10 +1168,10 @@ class _TermWriter(_WriterBase):
                                 "INSERT INTO term_relation "
                                 "(relation_id, source_term_id, target_term_id, "
                                 "relation_name, relation_category, cardinality, "
-                                "created_time, updated_time) "
+                                "ext_attrs, created_time, updated_time) "
                                 "VALUES ("
                                 ":rid, :src, :tgt, :rname, :rcat, :card, "
-                                ":now, :now"
+                                "CAST(:ext_attrs AS jsonb), :now, :now"
                                 ")"
                             ),
                             {
@@ -1144,6 +1181,14 @@ class _TermWriter(_WriterBase):
                                 "rname": rel_name,
                                 "rcat": rel_category,
                                 "card": rel.get("cardinality") or "1:1",
+                                "ext_attrs": json.dumps(
+                                    {
+                                        "relation_code": relation_code,
+                                        "relation_version": 1,
+                                    }
+                                    if relation_code
+                                    else {}
+                                ),
                                 "now": now,
                             },
                         )

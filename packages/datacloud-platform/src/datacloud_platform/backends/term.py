@@ -194,12 +194,19 @@ class TermBackend(Protocol):
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
+        strict: bool = False,
     ) -> dict[str, Any]: ...
 
-    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None: ...
+    def get_term_relation(
+        self,
+        *,
+        relation_id: str,
+        strict: bool = False,
+    ) -> dict[str, Any] | None: ...
 
     def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]: ...
 

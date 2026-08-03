@@ -1,5 +1,5 @@
-#!/usr/bin/env /usr/local/bin/python3
-"""将本体资源挂载到当前数字员工/个人助理。
+#!/usr/local/bin/python3
+"""将本体资源（对象/视图）挂载到数字员工。
 
 I/O 协议：stdin JSON → stdout JSON
 

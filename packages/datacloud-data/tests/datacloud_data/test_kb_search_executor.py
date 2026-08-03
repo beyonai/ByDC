@@ -12,6 +12,8 @@ import pytest
 from datacloud_data_sdk.exceptions import KbExecutionError
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
+    KnowledgeDeleteResult,
+    KnowledgeFileMetadata,
     KnowledgeFileNameSearchRequest,
     KnowledgeSearchRequest,
     KnowledgeSearchResult,
@@ -162,6 +164,29 @@ class FailingFileNameSearchBackend:
         request: KnowledgeFileNameSearchRequest,
     ) -> KnowledgeSearchResult:
         raise RuntimeError("backend exploded")
+
+
+class DeleteMetadataBackend:
+    def __init__(
+        self,
+        metadata_by_path: dict[str, KnowledgeFileMetadata],
+        *,
+        deleted_paths: list[str] | None = None,
+    ) -> None:
+        self.metadata_by_path = metadata_by_path
+        self.deleted_paths = deleted_paths
+
+    async def get_file_metadata(self, request: Any) -> KnowledgeFileMetadata:
+        return self.metadata_by_path[request.file_path]
+
+    async def delete_files(self, request: Any) -> KnowledgeDeleteResult:
+        return KnowledgeDeleteResult(
+            deleted_paths=(
+                list(request.file_paths)
+                if self.deleted_paths is None
+                else list(self.deleted_paths)
+            )
+        )
 
 
 def test_render_markdown_with_front_matter_skips_empty_values() -> None:
@@ -407,6 +432,107 @@ async def test_kb_search_by_file_name_error_returns_traceback() -> None:
     assert result["total"] == 0
     assert "RuntimeError: backend exploded" in result["meta"]["error"]
     assert "search_by_file_name" in result["meta"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_delete_kb_returns_pre_delete_ontology_labels() -> None:
+    source_path = "/Product/Mock新药研发平台.md"
+    backend = DeleteMetadataBackend(
+        {
+            source_path: KnowledgeFileMetadata(
+                file_path=source_path,
+                labels={
+                    "code": "P001",
+                    "name": "Mock新药研发平台",
+                    "owner": "张三",
+                    "category": "医药研发",
+                    "status": "active",
+                    "internal_chunk_id": "chunk-1",
+                },
+            )
+        }
+    )
+    cls = OntologyClass(
+        object_code="product",
+        object_name="产品",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="product",
+        fields=[
+            OntologyField(field_code="code", field_name="产品编码", field_type="STRING"),
+            OntologyField(field_code="name", field_name="产品名称", field_type="STRING"),
+            OntologyField(field_code="owner", field_name="负责人", field_type="STRING"),
+            OntologyField(field_code="category", field_name="产品类别", field_type="STRING"),
+            OntologyField(field_code="status", field_name="状态", field_type="STRING"),
+        ],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).delete_kb(
+        "product",
+        {"source_paths": [source_path]},
+    )
+
+    assert result["records"] == [
+        {
+            "code": "P001",
+            "name": "Mock新药研发平台",
+            "owner": "张三",
+            "category": "医药研发",
+            "status": "active",
+            "fileName": "Mock新药研发平台.md",
+            "filePath": source_path,
+        }
+    ]
+    assert result["total"] == 1
+    assert result["meta"]["deleted_paths"] == [source_path]
+
+
+@pytest.mark.asyncio
+async def test_delete_kb_excludes_records_not_confirmed_deleted() -> None:
+    first_path = "/Product/A.md"
+    second_path = "/Product/B.md"
+    backend = DeleteMetadataBackend(
+        {
+            first_path: KnowledgeFileMetadata(
+                file_path=first_path,
+                labels={"code": "P001", "name": "产品 A"},
+            ),
+            second_path: KnowledgeFileMetadata(
+                file_path=second_path,
+                labels={"code": "P002", "name": "产品 B"},
+            ),
+        },
+        deleted_paths=[second_path],
+    )
+    cls = OntologyClass(
+        object_code="product",
+        object_name="产品",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="product",
+        fields=[
+            OntologyField(field_code="code", field_name="产品编码", field_type="STRING"),
+            OntologyField(field_code="name", field_name="产品名称", field_type="STRING"),
+        ],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).delete_kb(
+        "product",
+        {"source_paths": [first_path, second_path]},
+    )
+
+    assert result["records"] == [
+        {
+            "code": "P002",
+            "name": "产品 B",
+            "fileName": "B.md",
+            "filePath": second_path,
+        }
+    ]
+    assert result["total"] == 1
+    assert result["meta"]["deleted_paths"] == [second_path]
 
 
 @pytest.mark.asyncio

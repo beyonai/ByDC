@@ -218,6 +218,7 @@ class OntologyRelation:
         target_class: 目标对象代码
         relation_type: 关联类型（ONE_TO_MANY/MANY_TO_ONE/ONE_TO_ONE/MANY_TO_MANY）
         join_keys: 连接键映射
+        cascade_delete: 删除 target 时是否需要发现 source 级联实例
         description: 关联描述
         resolve_action_code: 解析动作代码
         resolve_param_binding: 解析参数绑定
@@ -229,6 +230,7 @@ class OntologyRelation:
     target_class: str = ""
     relation_type: str = ""
     join_keys: list[dict[str, str]] = field(default_factory=list)
+    cascade_delete: bool = False
     description: str = ""
     resolve_action_code: str | None = None
     resolve_param_binding: dict | None = None

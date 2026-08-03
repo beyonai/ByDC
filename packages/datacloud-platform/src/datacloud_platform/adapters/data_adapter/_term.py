@@ -491,9 +491,11 @@ class TermBackendMixin(DataCloudDataBackendBase):
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
+        strict: bool = False,
     ) -> dict[str, Any]:
         reader = self._get_knowledge_reader()
         try:
@@ -501,20 +503,30 @@ class TermBackendMixin(DataCloudDataBackendBase):
                 source_term_id=source_term_id,
                 target_term_id=target_term_id,
                 relation_category=relation_category,
+                relation_code=relation_code,
                 keyword=keyword,
                 page_index=page_index,
                 page_size=page_size,
             )
         except Exception:
             logger.exception("list_term_relations failed")
+            if strict:
+                raise
             return {"data": [], "totalCount": 0}
 
-    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
+    def get_term_relation(
+        self,
+        *,
+        relation_id: str,
+        strict: bool = False,
+    ) -> dict[str, Any] | None:
         reader = self._get_knowledge_reader()
         try:
             return reader.get_term_relation(relation_id=relation_id)  # type: ignore[no-any-return]
         except Exception:
             logger.exception("get_term_relation failed relation_id=%s", relation_id)
+            if strict:
+                raise
             return None
 
     def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:

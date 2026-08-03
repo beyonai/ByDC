@@ -992,6 +992,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             tgt_name = tgt_obj.get("object_name", tgt_obj.get("objectName", "")) or ""
 
         jk = raw.get("join_keys")
+        attribute = dict(raw.get("attribute") or {})
+        if jk:
+            attribute["join_keys"] = jk
+        cascade_delete = raw.get("cascade_delete", attribute.get("cascade_delete", False))
+        if type(cascade_delete) is bool:
+            attribute["cascade_delete"] = cascade_delete
         rel = Relation(
             relationCode=raw.get("relation_code", raw.get("relationCode", "")),
             relationName=raw.get("relation_name") or raw.get("relationName"),
@@ -1008,7 +1014,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             or raw.get("relationSceneType"),
             ownerType=str(raw.get("owner_type", raw.get("ownerType", "enterprise"))),
             userCode=raw.get("user_code") or raw.get("userCode"),
-            attribute={"join_keys": jk} if jk else None,
+            attribute=attribute or None,
         )
         return rel.model_dump(by_alias=True)
 

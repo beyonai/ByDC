@@ -25,6 +25,7 @@ class _RelationReader(_ReaderBase):
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
@@ -55,6 +56,10 @@ class _RelationReader(_ReaderBase):
             conditions.append(TermRelation.target_term_id == target_term_id)
         if relation_category is not None:
             conditions.append(TermRelation.relation_category == relation_category)
+        if relation_code is not None:
+            conditions.append(
+                TermRelation.ext_attrs["relation_code"].astext == relation_code
+            )
         if keyword and keyword.strip():
             conditions.append(text("term_relation.relation_name ILIKE :kw"))
             params["kw"] = f"%{keyword.strip()}%"
@@ -89,6 +94,7 @@ class _RelationReader(_ReaderBase):
                         TermRelation.relation_name,
                         TermRelation.relation_category,
                         TermRelation.cardinality,
+                        TermRelation.ext_attrs,
                         TermRelation.created_time,
                         TermRelation.updated_time,
                     )
@@ -129,8 +135,9 @@ class _RelationReader(_ReaderBase):
                 "relation_name": str(row[5]),
                 "relation_category": str(row[6]),
                 "cardinality": str(row[7]) if row[7] else None,
-                "created_time": self._format_time(row[8]),
-                "updated_time": self._format_time(row[9]),
+                "ext_attrs": dict(row[8]) if isinstance(row[8], dict) else {},
+                "created_time": self._format_time(row[9]),
+                "updated_time": self._format_time(row[10]),
                 "source_term_name": term_name_map.get(str(row[1])) if row[1] else None,
                 "target_term_name": term_name_map.get(str(row[3])) if row[3] else None,
             }
@@ -166,6 +173,7 @@ class _RelationReader(_ReaderBase):
                         TermRelation.relation_name,
                         TermRelation.relation_category,
                         TermRelation.cardinality,
+                        TermRelation.ext_attrs,
                         TermRelation.created_time,
                         TermRelation.updated_time,
                     ).where(TermRelation.relation_id == relation_id)
@@ -186,8 +194,9 @@ class _RelationReader(_ReaderBase):
             "relation_name": str(row[5]),
             "relation_category": str(row[6]),
             "cardinality": str(row[7]) if row[7] else None,
-            "created_time": self._format_time(row[8]),
-            "updated_time": self._format_time(row[9]),
+            "ext_attrs": dict(row[8]) if isinstance(row[8], dict) else {},
+            "created_time": self._format_time(row[9]),
+            "updated_time": self._format_time(row[10]),
         }
 
     def list_term_type_relations(

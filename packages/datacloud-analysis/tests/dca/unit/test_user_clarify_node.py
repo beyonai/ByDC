@@ -17,6 +17,14 @@ from unittest.mock import MagicMock, patch
 from datacloud_analysis.orchestration.clarification.user_clarify_node import (
     user_clarify_node,
 )
+from datacloud_data_sdk.executor.kb_cascade_delete.models import (
+    CascadeDeleteContext,
+    CascadeDeleteItem,
+    CascadeDeleteRoot,
+)
+from datacloud_data_sdk.executor.kb_cascade_delete.selection import (
+    verify_signed_cascade_execution,
+)
 
 # ── 辅助 ──────────────────────────────────────────────────────────────────────
 
@@ -317,6 +325,124 @@ async def test_operation_form_confirm_resume_writes_formatted_params() -> None:
     assert fp["params"]["userConfirmed"] is True
     assert fp["actions"][0]["confirmed"] is True
     assert result["clarify_abort"] is False
+
+
+async def test_cascade_resume_uses_only_explicit_confirmation_and_checkboxes() -> None:
+    cascade_context = CascadeDeleteContext.create(
+        roots=[CascadeDeleteRoot("product", "/product/a.md", "p1", "fp-root")],
+        items=[
+            CascadeDeleteItem(
+                item_id="feature-1",
+                parent_item_id=None,
+                depth=1,
+                object_code="feature",
+                object_name="产品特性",
+                source_path="/feature/1.md",
+                term_id="f1",
+                relation_id="r1",
+                relation_code="feature_belongs_to_product",
+                owner_term_id="p1",
+                file_fingerprint="fp-feature",
+            )
+        ],
+    )
+    rule = [
+        [
+            {
+                "fieldCode": "cascadeFiles",
+                "children": [
+                    [
+                        {
+                            "itemId": "feature-1",
+                            "fieldCode": "deleteSelected",
+                            "fieldValue": "false",
+                        },
+                        {
+                            "fieldCode": "filePath",
+                            "fieldValue": "/attacker/path.md",
+                        },
+                    ]
+                ],
+            }
+        ]
+    ]
+    operation_form = {
+        "schemaVersion": "1.1",
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "delete_kb_product",
+                "formMode": "cascade_delete",
+                "rule": rule,
+            }
+        ],
+    }
+    state = {
+        "pending_clarification_context": {},
+        "clarification_analyze_result": {
+            "interrupt_type": "operation_form",
+            "operation_form": operation_form,
+            "operation_form_contexts": [
+                {
+                    "tool_call_id": "call-1",
+                    "tool_name": "delete_kb_product",
+                    "structured_input": {"source_paths": ["/product/a.md"]},
+                    "cascade_context": cascade_context.to_dict(),
+                    "operation_confirm_context": {"actionFamily": "delete_kb"},
+                }
+            ],
+        },
+    }
+    resume_value = {
+        **operation_form,
+        "actions": [
+            {
+                **operation_form["actions"][0],
+                "confirmed": True,
+                "rule": rule,
+            }
+        ],
+    }
+
+    with patch(_INTERRUPT_PATCH, return_value=resume_value):
+        result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    params = result["clarification_formatted_params"]["params_by_tool_call_id"][
+        "call-1"
+    ]["params"]
+    payload = verify_signed_cascade_execution(params["_cascadeDelete"])
+    assert params["source_paths"] == ["/product/a.md"]
+    assert payload["detachItems"][0]["sourcePath"] == "/feature/1.md"
+
+
+async def test_cascade_resume_requires_explicit_boolean_confirmed() -> None:
+    operation_form = {
+        "schemaVersion": "1.1",
+        "formId": "form-1",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "delete_kb_product",
+                "formMode": "cascade_delete",
+                "rule": [],
+            }
+        ],
+    }
+    state = {
+        "pending_clarification_context": {},
+        "clarification_analyze_result": {
+            "interrupt_type": "operation_form",
+            "operation_form": operation_form,
+            "operation_form_contexts": [],
+        },
+    }
+
+    with patch(_INTERRUPT_PATCH, return_value=operation_form):
+        result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
+
+    action = result["clarification_formatted_params"]["actions"][0]
+    assert action["confirmed"] is False
 
 
 async def test_operation_form_insert_resume_uses_context_action_family_for_records() -> None:

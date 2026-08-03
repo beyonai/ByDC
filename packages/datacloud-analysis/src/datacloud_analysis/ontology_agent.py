@@ -78,6 +78,7 @@ class OperationFormField:
     default_files: list[str] = dc_field(default_factory=list)
     term: dict[str, Any] | None = None
     term_resolve_notice: dict[str, Any] | None = None
+    raw: dict[str, Any] = dc_field(default_factory=dict)
 
 
 @dataclass
@@ -92,6 +93,8 @@ class OperationFormAction:
     description: str = ""
     confirmed: bool | None = None
     reason: str = ""
+    form_mode: str = ""
+    summary: dict[str, Any] = dc_field(default_factory=dict)
     rule: list[list[OperationFormField]] = dc_field(default_factory=list)
     raw: dict[str, Any] = dc_field(default_factory=dict)
 
@@ -104,6 +107,7 @@ class OperationForm:
     form_id: str
     title: str = ""
     description: str = ""
+    form_mode: str = ""
     actions: list[OperationFormAction] = dc_field(default_factory=list)
     raw: dict[str, Any] = dc_field(default_factory=dict)
 
@@ -410,6 +414,7 @@ def _operation_form_from_payload(payload: dict[str, Any]) -> OperationForm:
         form_id=str(payload.get("formId") or ""),
         title=str(payload.get("title") or ""),
         description=str(payload.get("description") or ""),
+        form_mode=str(payload.get("formMode") or ""),
         actions=actions,
         raw=dict(payload),
     )
@@ -426,6 +431,10 @@ def _operation_action_from_payload(payload: dict[str, Any]) -> OperationFormActi
         description=str(payload.get("description") or ""),
         confirmed=confirmed_raw if isinstance(confirmed_raw, bool) else None,
         reason=str(payload.get("reason") or ""),
+        form_mode=str(payload.get("formMode") or ""),
+        summary=dict(payload.get("summary") or {})
+        if isinstance(payload.get("summary"), dict)
+        else {},
         rule=_operation_rule_from_payload(payload.get("rule")),
         raw=dict(payload),
     )
@@ -471,6 +480,7 @@ def _operation_field_from_payload(payload: dict[str, Any]) -> OperationFormField
         term_resolve_notice=dict(term_resolve_notice_raw)
         if isinstance(term_resolve_notice_raw, dict)
         else None,
+        raw=dict(payload),
     )
 
 

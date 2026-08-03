@@ -51,6 +51,9 @@ class _RelationWriter(_WriterBase):
         relation_category = _pick_key(relation, "relationCategory", "relation_category")
         cardinality = _pick_key(relation, "cardinality")
         action_term_id = _pick_key(relation, "actionTermId", "action_term_id")
+        ext_attrs = _pick_key(relation, "extAttrs", "ext_attrs") or {}
+        if not isinstance(ext_attrs, dict):
+            raise TypeError("relation ext_attrs must be an object")
 
         if not source_term_id:
             raise ValueError("relation dict must contain 'sourceTermId' or 'source_term_id'")
@@ -68,6 +71,7 @@ class _RelationWriter(_WriterBase):
             relation_category=(str(relation_category) if relation_category is not None else ""),
             cardinality=str(cardinality) if cardinality is not None else None,
             action_term_id=str(action_term_id) if action_term_id is not None else None,
+            ext_attrs=dict(ext_attrs),
             created_time=now,
             updated_time=now,
         )
@@ -90,6 +94,7 @@ class _RelationWriter(_WriterBase):
             "relation_category": row.relation_category,
             "cardinality": row.cardinality,
             "action_term_id": row.action_term_id,
+            "ext_attrs": row.ext_attrs,
             "created_time": row.created_time,
             "updated_time": row.updated_time,
         }
@@ -119,6 +124,8 @@ class _RelationWriter(_WriterBase):
             ("cardinality", "cardinality"),
             ("actionTermId", "action_term_id"),
             ("action_term_id", "action_term_id"),
+            ("extAttrs", "ext_attrs"),
+            ("ext_attrs", "ext_attrs"),
         ):
             val = updates.get(src_key)
             if val is not None:

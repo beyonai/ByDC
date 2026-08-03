@@ -754,21 +754,33 @@ class _NoopTermBackend:
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
+        strict: bool = False,
     ) -> dict[str, Any]:
         _ = (
             source_term_id,
             target_term_id,
             relation_category,
+            relation_code,
             keyword,
             page_index,
             page_size,
         )
+        if strict:
+            raise PermissionError("Term backend not available")
         return {"data": [], "totalCount": 0}
 
-    def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None:
+    def get_term_relation(
+        self,
+        *,
+        relation_id: str,
+        strict: bool = False,
+    ) -> dict[str, Any] | None:
+        if strict:
+            raise PermissionError("Term backend not available")
         return None
 
     def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:

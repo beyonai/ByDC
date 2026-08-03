@@ -826,7 +826,11 @@ class HttpTermAdapter:
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
-    ) -> list[dict[str, Any]]:
+        relation_code: str | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]:
         """HTTP API 不支持术语关系列表查询。"""
         raise NotImplementedError("list_term_relations not implemented in HTTP adapter")
 

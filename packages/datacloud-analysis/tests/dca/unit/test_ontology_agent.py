@@ -33,6 +33,7 @@ from datacloud_analysis.ontology_agent import (
     ThinkingEvent,
     _interrupt_value_to_paradigm_list,
     _make_cache_key,
+    _operation_form_from_payload,
     _paradigm_answer_to_resume_value,
 )
 
@@ -290,6 +291,53 @@ async def test_ask_yields_interrupt_event_with_batch_operation_form() -> None:
     assert operation_event.action_code == "create_by_rd_task"
     assert operation_event.rule[0][0].field_code == "taskName"
     assert operation_event.raw == operation_form
+
+
+def test_cascade_operation_form_keeps_form_mode_summary_and_field_raw() -> None:
+    payload = {
+        "schemaVersion": "1.1",
+        "formId": "cascade-form",
+        "formMode": "cascade_delete",
+        "actions": [
+            {
+                "toolCallId": "call-1",
+                "toolName": "delete_kb_product",
+                "actionCode": "delete_kb_product",
+                "formMode": "cascade_delete",
+                "summary": {"rootCount": 1, "cascadeCount": 1},
+                "rule": [
+                    [
+                        {
+                            "formType": "array",
+                            "fieldCode": "cascadeFiles",
+                            "fieldName": "级联文件",
+                            "fieldType": "array<object>",
+                            "extension": "kept-in-raw",
+                            "children": [
+                                [
+                                    {
+                                        "itemId": "item-1",
+                                        "formType": "checkbox",
+                                        "fieldCode": "deleteSelected",
+                                        "fieldName": "同时删除",
+                                        "fieldType": "boolean",
+                                        "fieldValue": True,
+                                    }
+                                ]
+                            ],
+                        }
+                    ]
+                ],
+            }
+        ],
+    }
+
+    form = _operation_form_from_payload(payload)
+
+    assert form.form_mode == "cascade_delete"
+    assert form.actions[0].form_mode == "cascade_delete"
+    assert form.actions[0].summary == {"rootCount": 1, "cascadeCount": 1}
+    assert form.actions[0].rule[0][0].raw["extension"] == "kept-in-raw"
 
 
 # ── TC-T3-4: resume() 在恢复后 yield AnswerEvent ────────────────────────────

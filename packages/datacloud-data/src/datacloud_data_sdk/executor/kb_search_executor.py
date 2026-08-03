@@ -22,6 +22,10 @@ from typing import Any, cast
 
 from datacloud_data_sdk.constants import DEFAULT_BASE_ID
 from datacloud_data_sdk.exceptions import KbExecutionError
+from datacloud_data_sdk.executor.kb_cascade_delete.discovery import _fingerprint
+from datacloud_data_sdk.executor.kb_cascade_delete.selection import (
+    verify_signed_cascade_execution,
+)
 from datacloud_data_sdk.executor.kb_search_backend import (
     HttpKnowledgeSearchBackend,
     KnowledgeDeleteBackend,
@@ -568,9 +572,19 @@ class KbSearchExecutor:
         写阶段（顺序执行，文件先于术语）：
           1. backend.delete_files 批量删除 KB 文件（外部服务，先删）
           2. platform.delete_terms 批量删除术语（内部数据，后删）
-          先删文件后删术语：若文件删成功但术语删失败，残留的是孤立术语（可重试清理）；
+        先删文件后删术语：若文件删成功但术语删失败，残留的是孤立术语（可重试清理）；
           反之若术语先删但文件删失败，会导致文件仍存在却缺少术语指针，状态更难恢复。
         """
+        cascade = arguments.get("_cascadeDelete")
+        if isinstance(cascade, dict) and not arguments.get("_skipCascade"):
+            return await self._execute_cascade_delete(
+                root_object_code=object_code,
+                root_source_paths=[
+                    str(path) for path in arguments.get("source_paths") or []
+                ],
+                cascade=cascade,
+            )
+        strict = arguments.get("_strictDelete") is True
         cls = self._loader.get_ontology_class(object_code)
         kb_configs = getattr(self._loader._config, "kb_source_configs", None)
         configured_backend = getattr(self._loader._config, "kb_search_backend", None)
@@ -622,6 +636,7 @@ class KbSearchExecutor:
         paths_to_delete: list[str] = []
         skipped_paths: list[str] = []
         all_term_ids: list[str] = []
+        pre_delete_records: dict[str, dict[str, Any]] = {}
 
         for source_path in source_paths:
             detail = await self._get_file_metadata(
@@ -632,7 +647,18 @@ class KbSearchExecutor:
                 kb_directory,
                 source_path,
             )
-            if detail is None or not detail.exists:
+            if detail is None:
+                if strict:
+                    return self._empty_response(
+                        object_code,
+                        arguments,
+                        f"strict metadata lookup failed: {source_path}",
+                        error=True,
+                        meta_extra=_standard_action_meta(cls, datasource_alias, query),
+                    )
+                skipped_paths.append(source_path)
+                continue
+            if not detail.exists:
                 logger.info("delete_kb: file not found, skipping: %s", source_path)
                 skipped_paths.append(source_path)
                 continue
@@ -640,12 +666,28 @@ class KbSearchExecutor:
             term_ids = await self._resolve_kb_term_ids(cls, detail)
             if term_ids is None:
                 # 术语查询报错，跳过该文件删除，避免删文件后术语变孤立
+                if strict:
+                    return self._empty_response(
+                        object_code,
+                        arguments,
+                        f"strict term lookup failed: {source_path}",
+                        error=True,
+                        meta_extra=_standard_action_meta(cls, datasource_alias, query),
+                    )
                 logger.warning("delete_kb: term lookup failed, skipping file: %s", source_path)
                 skipped_paths.append(source_path)
                 continue
 
             paths_to_delete.append(source_path)
             all_term_ids.extend(term_ids)
+            metadata_path = _to_markdown_file_path(
+                str(detail.file_path or source_path),
+                kb_directory,
+            )
+            pre_delete_records[metadata_path] = {
+                **self._filter_labels_to_fields(detail.labels, cls),
+                "filePath": metadata_path,
+            }
 
         if not paths_to_delete:
             meta = _standard_action_meta(cls, datasource_alias, query)
@@ -675,13 +717,424 @@ class KbSearchExecutor:
 
         # ── 写阶段第二步：删除术语（内部数据，文件删成功后执行）──────────
         if all_term_ids:
-            await self._delete_term_ids(all_term_ids)
+            try:
+                await self._delete_term_ids(all_term_ids, strict=strict)
+            except Exception as exc:  # noqa: BLE001
+                return self._empty_response(
+                    object_code,
+                    arguments,
+                    f"term deletion failed: {exc}",
+                    error=True,
+                    meta_extra=_standard_action_meta(cls, datasource_alias, query),
+                )
 
         meta = _standard_action_meta(cls, datasource_alias, query)
         meta["deleted_paths"] = result.deleted_paths
         if skipped_paths:
             meta["skipped_paths"] = skipped_paths
-        return result.to_response() | {"meta": meta}
+        deleted_records = [
+            pre_delete_records[deleted_path]
+            for path in result.deleted_paths
+            if (
+                deleted_path := _to_markdown_file_path(
+                    str(path),
+                    kb_directory,
+                )
+            )
+            in pre_delete_records
+        ]
+        records = _normalize_action_records(deleted_records, cls)
+        return {"records": records, "total": len(records), "meta": meta}
+
+    async def _delete_object_files(
+        self,
+        *,
+        object_code: str,
+        source_paths: list[str],
+        strict: bool,
+    ) -> dict[str, Any]:
+        """Reuse the existing delete_kb implementation for one object group."""
+        return await self.delete_kb(
+            object_code,
+            {
+                "source_paths": source_paths,
+                "_strictDelete": strict,
+                "_skipCascade": True,
+            },
+        )
+
+    async def _execute_cascade_delete(
+        self,
+        *,
+        root_object_code: str,
+        root_source_paths: list[str],
+        cascade: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Coordinate signed Detach/delete work and delete Root last."""
+        payload = verify_signed_cascade_execution(cascade)
+        trusted_root_paths = {
+            str(root.get("sourcePath") or "")
+            for root in payload.get("roots") or []
+            if isinstance(root, dict)
+        }
+        if trusted_root_paths != set(root_source_paths):
+            return self._cascade_error_response(
+                root_object_code,
+                "CASCADE_CONTEXT_INVALID: Root 文件集合不一致",
+            )
+        expected_revision = str(payload.get("ontologyRevision") or "")
+        current_revision = str(
+            getattr(self._loader, "ontology_revision", "")
+            or getattr(self._loader, "fingerprint", "")
+            or ""
+        )
+        if expected_revision and current_revision != expected_revision:
+            return self._cascade_error_response(
+                root_object_code,
+                "CASCADE_CONTEXT_STALE: 本体版本已变化",
+            )
+
+        trusted_items = [
+            dict(item)
+            for group_name in ("roots", "detachItems", "deleteItems", "keptItems")
+            for item in payload.get(group_name) or []
+            if isinstance(item, dict)
+        ]
+        try:
+            for trusted_item in trusted_items:
+                await self._verify_cascade_file_identity(trusted_item)
+        except Exception as exc:  # noqa: BLE001
+            return self._cascade_error_response(
+                root_object_code,
+                f"CASCADE_CONTEXT_STALE: {exc}",
+            )
+
+        detached: list[dict[str, str]] = []
+        for item in payload.get("detachItems") or []:
+            try:
+                await self._detach_cascade_item(item)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("cascade detach failed item=%s", item.get("itemId"))
+                return self._cascade_error_response(
+                    root_object_code,
+                    f"CASCADE_DETACH_FAILED: {exc}",
+                    detached=detached,
+                )
+            detached.append(
+                {
+                    "objectCode": str(item.get("objectCode") or ""),
+                    "sourcePath": str(item.get("sourcePath") or ""),
+                }
+            )
+
+        delete_items = [
+            dict(item)
+            for item in payload.get("deleteItems") or []
+            if isinstance(item, dict)
+        ]
+        grouped: dict[tuple[int, str], list[str]] = {}
+        for item in delete_items:
+            key = (int(item.get("depth") or 0), str(item.get("objectCode") or ""))
+            grouped.setdefault(key, []).append(str(item.get("sourcePath") or ""))
+
+        deleted: list[dict[str, str]] = []
+        for (depth, object_code), paths in sorted(
+            grouped.items(),
+            key=lambda entry: (-entry[0][0], entry[0][1]),
+        ):
+            _ = depth
+            response = await self._delete_object_files(
+                object_code=object_code,
+                source_paths=paths,
+                strict=True,
+            )
+            error = str((response.get("meta") or {}).get("error") or "")
+            if error:
+                return self._cascade_error_response(
+                    root_object_code,
+                    error,
+                    deleted=deleted,
+                    detached=detached,
+                )
+            deleted.extend(
+                {"objectCode": object_code, "sourcePath": path} for path in paths
+            )
+
+        try:
+            await self._assert_no_incoming_cascade_edges(
+                [
+                    dict(root)
+                    for root in payload.get("roots") or []
+                    if isinstance(root, dict)
+                ]
+            )
+        except Exception as exc:  # noqa: BLE001
+            return self._cascade_error_response(
+                root_object_code,
+                f"CASCADE_ROOT_STILL_REFERENCED: {exc}",
+                deleted=deleted,
+                detached=detached,
+            )
+
+        root_response = await self._delete_object_files(
+            object_code=root_object_code,
+            source_paths=root_source_paths,
+            strict=True,
+        )
+        root_meta = dict(root_response.get("meta") or {})
+        root_error = str(root_meta.get("error") or "")
+        root_meta["cascade"] = {
+            "deleted": deleted,
+            "detached": detached,
+            "keptWithAncestor": [
+                {
+                    "objectCode": str(item.get("objectCode") or ""),
+                    "sourcePath": str(item.get("sourcePath") or ""),
+                }
+                for item in payload.get("keptItems") or []
+                if isinstance(item, dict)
+            ],
+            "rootDeleted": not root_error,
+            "errors": [root_error] if root_error else [],
+        }
+        root_response["meta"] = root_meta
+        return root_response
+
+    @staticmethod
+    def _cascade_error_response(
+        object_code: str,
+        error: str,
+        *,
+        deleted: list[dict[str, str]] | None = None,
+        detached: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "records": [],
+            "total": 0,
+            "meta": {
+                "object_code": object_code,
+                "error": error,
+                "cascade": {
+                    "deleted": deleted or [],
+                    "detached": detached or [],
+                    "keptWithAncestor": [],
+                    "rootDeleted": False,
+                    "errors": [error],
+                },
+            },
+        }
+
+    async def _verify_cascade_file_identity(self, item: dict[str, Any]) -> None:
+        object_code = str(item.get("objectCode") or "")
+        source_path = str(item.get("sourcePath") or "")
+        expected_fingerprint = str(item.get("fileFingerprint") or "")
+        if not object_code or not source_path or not expected_fingerprint:
+            raise ValueError("文件身份不完整")
+        cls = self._loader.get_ontology_class(object_code)
+        backend = self._resolve_backend(
+            cls,
+            getattr(self._loader._config, "kb_source_configs", None),
+            getattr(self._loader._config, "kb_search_backend", None),
+        )
+        kb_resource_id = self._get_kb_resource_id(cls)
+        if not kb_resource_id:
+            raise ValueError(f"{object_code} 缺少 kb_resource_id")
+        detail = await self._get_file_metadata(
+            backend,
+            cls,
+            self._get_datasource_alias(cls),
+            kb_resource_id,
+            self._get_kb_directory(cls),
+            source_path,
+        )
+        if detail is None or not detail.exists:
+            raise ValueError(f"文件不存在: {source_path}")
+        if _fingerprint(detail) != expected_fingerprint:
+            raise ValueError(f"文件已变化: {source_path}")
+        expected_term_id = str(item.get("termId") or "")
+        term_ids = await self._resolve_kb_term_ids(cls, detail)
+        if (
+            not expected_term_id
+            or term_ids is None
+            or len(term_ids) != 1
+            or term_ids[0] != expected_term_id
+        ):
+            raise ValueError(f"文件术语身份已变化: {source_path}")
+
+        relation_id = str(item.get("relationId") or "")
+        if not relation_id:
+            return
+        platform = getattr(self._loader._config, "platform", None)
+        if platform is None:
+            raise ValueError("platform 不可用")
+        relation = platform.get_term_relation(
+            DEFAULT_BASE_ID,
+            relation_id=relation_id,
+            strict=True,
+        )
+        if relation is None:
+            raise ValueError(f"关系边不存在: {relation_id}")
+        ext_attrs = relation.get("ext_attrs") or {}
+        actual_identity = (
+            str(relation.get("source_term_id") or ""),
+            str(relation.get("target_term_id") or ""),
+            str(ext_attrs.get("relation_code") or ""),
+        )
+        expected_identity = (
+            expected_term_id,
+            str(item.get("ownerTermId") or ""),
+            str(item.get("relationCode") or ""),
+        )
+        if actual_identity != expected_identity:
+            raise ValueError(f"关系边身份已变化: {relation_id}")
+
+    async def _assert_no_incoming_cascade_edges(
+        self,
+        roots: list[dict[str, Any]],
+    ) -> None:
+        platform = getattr(self._loader._config, "platform", None)
+        if platform is None:
+            raise ValueError("platform 不可用")
+        relations_by_target: dict[str, list[Any]] = {}
+        for relation in self._loader.get_ontology_relations():
+            if getattr(relation, "cascade_delete", False) is True:
+                relations_by_target.setdefault(
+                    str(getattr(relation, "target_class", "") or ""),
+                    [],
+                ).append(relation)
+        for root in roots:
+            object_code = str(root.get("objectCode") or "")
+            term_id = str(root.get("termId") or "")
+            for relation in relations_by_target.get(object_code, []):
+                response = platform.list_term_relations(
+                    DEFAULT_BASE_ID,
+                    target_term_id=term_id,
+                    relation_code=str(getattr(relation, "relation_code", "") or ""),
+                    page_index=1,
+                    page_size=1,
+                    strict=True,
+                )
+                if int(response.get("totalCount") or 0) > 0 or response.get("data"):
+                    raise ValueError(
+                        f"{object_code}/{term_id} 仍存在关系 "
+                        f"{getattr(relation, 'relation_code', '')}"
+                    )
+
+    async def _detach_cascade_item(self, item: dict[str, Any]) -> None:
+        """Clear persisted join keys, then remove and verify the exact relation edge."""
+        object_code = str(item.get("objectCode") or "")
+        source_path = str(item.get("sourcePath") or "")
+        relation_id = str(item.get("relationId") or "")
+        join_keys = [
+            key for key in item.get("joinKeys") or [] if isinstance(key, dict)
+        ]
+        source_fields = [
+            str(key.get("sourceField") or key.get("from_field") or "")
+            for key in join_keys
+            if str(key.get("sourceField") or key.get("from_field") or "")
+        ]
+        if not object_code or not source_path or not relation_id or not source_fields:
+            raise ValueError("CASCADE_DETACH_NOT_SUPPORTED: Detach 上下文不完整")
+
+        cls = self._loader.get_ontology_class(object_code)
+        backend = self._resolve_backend(
+            cls,
+            getattr(self._loader._config, "kb_source_configs", None),
+            getattr(self._loader._config, "kb_search_backend", None),
+        )
+        if not hasattr(backend, "update"):
+            raise ValueError("CASCADE_DETACH_NOT_SUPPORTED: backend 不支持 update")
+        kb_resource_id = self._get_kb_resource_id(cls)
+        if not kb_resource_id:
+            raise ValueError("CASCADE_DETACH_NOT_SUPPORTED: 缺少 kb_resource_id")
+        detail = await self._get_file_metadata(
+            backend,
+            cls,
+            self._get_datasource_alias(cls),
+            kb_resource_id,
+            self._get_kb_directory(cls),
+            source_path,
+        )
+        if detail is None or not detail.exists:
+            raise ValueError("CASCADE_CONTEXT_STALE: 文件不存在")
+        if _fingerprint(detail) != str(item.get("fileFingerprint") or ""):
+            raise ValueError("CASCADE_CONTEXT_STALE: 文件已变化")
+
+        search_response = await self.search_by_file_name(
+            object_code,
+            {
+                "fileName": PurePosixPath(source_path).name,
+                "query": PurePosixPath(source_path).stem,
+                "limit": 20,
+            },
+        )
+        content = ""
+        for record in search_response.get("records") or []:
+            record_path = str(record.get("filePath") or record.get("source_path") or "")
+            if record_path == source_path or record_path.endswith(source_path):
+                content = str(record.get("content") or record.get("source_text") or "")
+                break
+        if not content:
+            raise ValueError("CASCADE_DETACH_FAILED: 无法读取文件内容")
+
+        labels = dict(detail.labels)
+        for source_field in source_fields:
+            labels[source_field] = ""
+        update_request = KnowledgeUpdateRequest(
+            object_code=object_code,
+            datasource_alias=self._get_datasource_alias(cls),
+            kb_resource_id=kb_resource_id,
+            kb_id=self._get_kb_id(cls),
+            file_path=source_path,
+            content=content,
+            labels=labels,
+            kb_directory=self._get_kb_directory(cls),
+            metadata_properties=_metadata_properties_from_labels(labels, cls),
+            clear_label_fields=set(source_fields),
+        )
+        update_backend = cast(KnowledgeUpdateBackend, backend)
+        await update_backend.update(update_request)
+        await self._enqueue_kb_term_sync(
+            [
+                KnowledgeWriteRequest(
+                    object_code=update_request.object_code,
+                    datasource_alias=update_request.datasource_alias,
+                    kb_resource_id=update_request.kb_resource_id,
+                    kb_id=update_request.kb_id,
+                    kb_directory=update_request.kb_directory,
+                    file_path=update_request.file_path,
+                    labels=update_request.labels,
+                    content=update_request.content,
+                    metadata_properties=update_request.metadata_properties,
+                )
+            ]
+        )
+        updated_detail = await self._get_file_metadata(
+            backend,
+            cls,
+            self._get_datasource_alias(cls),
+            kb_resource_id,
+            self._get_kb_directory(cls),
+            source_path,
+        )
+        if updated_detail is None or not updated_detail.exists:
+            raise ValueError("CASCADE_DETACH_FAILED: 更新后文件不存在")
+        if any(updated_detail.labels.get(field) not in (None, "") for field in source_fields):
+            raise ValueError("CASCADE_DETACH_FAILED: source join key 未清空")
+
+        platform = getattr(self._loader._config, "platform", None)
+        if platform is None:
+            raise ValueError("CASCADE_DETACH_FAILED: platform 不可用")
+        platform.delete_term_relation(DEFAULT_BASE_ID, relation_id=relation_id)
+        if (
+            platform.get_term_relation(
+                DEFAULT_BASE_ID,
+                relation_id=relation_id,
+                strict=True,
+            )
+            is not None
+        ):
+            raise ValueError("CASCADE_DETACH_FAILED: 关系边仍存在")
 
     async def _get_file_metadata(
         self,
@@ -775,7 +1228,12 @@ class KbSearchExecutor:
             )
             return None
 
-    async def _delete_term_ids(self, term_ids: list[str]) -> None:
+    async def _delete_term_ids(
+        self,
+        term_ids: list[str],
+        *,
+        strict: bool = False,
+    ) -> None:
         """批量删除术语，失败只记 warning，不阻断主流程。"""
         platform = getattr(self._loader._config, "platform", None)
         if platform is None or not term_ids:
@@ -787,6 +1245,8 @@ class KbSearchExecutor:
             logger.warning(
                 "_delete_term_ids: delete_terms failed for %d term(s)", len(term_ids), exc_info=True
             )
+            if strict:
+                raise
 
     async def _enqueue_kb_term_sync(
         self, write_requests: list[KnowledgeWriteRequest]
@@ -864,6 +1324,8 @@ class KbSearchExecutor:
                             "term_code": term_value,
                             "term_type_code": related_object_code,
                             "relation_name": rel.relation_name or rel.relation_code,
+                            "relation_code": rel.relation_code,
+                            "cascade_delete": rel.cascade_delete,
                         }
                     )
 

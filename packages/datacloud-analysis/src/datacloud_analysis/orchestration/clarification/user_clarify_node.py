@@ -8,6 +8,12 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
+from datacloud_data_sdk.executor.kb_cascade_delete.models import CascadeDeleteContext
+from datacloud_data_sdk.executor.kb_cascade_delete.selection import (
+    CascadeSelectionError,
+    build_signed_cascade_execution,
+    extract_cascade_selections,
+)
 from datacloud_platform import get_platform
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
@@ -282,6 +288,8 @@ async def _handle_operation_form_clarify(
     )
     payload = _normalize_operation_resume(resume_value, operation_form)
     form_id = str(payload.get("formId") or operation_form.get("formId") or "")
+    if form_id != str(operation_form.get("formId") or ""):
+        raise CascadeSelectionError("CASCADE_ITEM_TAMPERED: formId 不匹配")
     pending_actions = [dict(a) for a in operation_form.get("actions") or [] if isinstance(a, dict)]
     resume_action_list = [dict(a) for a in payload.get("actions") or [] if isinstance(a, dict)]
     resume_actions = {
@@ -309,11 +317,23 @@ async def _handle_operation_form_clarify(
                 action_returned = True
         if resume_action is None:
             resume_action = {}
-        confirmed = (
-            bool(resume_action.get("confirmed"))
-            if "confirmed" in resume_action
-            else action_returned
+        context = context_by_id.get(current_tool_call_id, {})
+        cascade_mode = (
+            pending_action.get("formMode") == "cascade_delete"
+            or isinstance(context.get("cascade_context"), dict)
         )
+        if cascade_mode:
+            confirmed = (
+                resume_action.get("confirmed") is True
+                if type(resume_action.get("confirmed")) is bool
+                else False
+            )
+        else:
+            confirmed = (
+                bool(resume_action.get("confirmed"))
+                if "confirmed" in resume_action
+                else action_returned
+            )
         rule_raw = resume_action.get("rule")
         if not isinstance(rule_raw, list):
             rule_raw = pending_action.get("rule") or []
@@ -333,19 +353,33 @@ async def _handle_operation_form_clarify(
         }
         if confirmed:
             action_meta = _find_operation_action(config, current_tool_name)
-            context = context_by_id.get(current_tool_call_id, {})
             if action_meta is None:
                 action_meta = _operation_action_meta_from_context(context)
-            params = restore_action_params(
-                rule,
-                action=action_meta,
-                original_params=dict(
-                    context.get("structured_input")
-                    or analyze_result.get("structured_input")
-                    or ctx.get("structured_input")
-                    or {}
-                ),
+            original_params = dict(
+                context.get("structured_input")
+                or analyze_result.get("structured_input")
+                or ctx.get("structured_input")
+                or {}
             )
+            if cascade_mode:
+                raw_cascade_context = context.get("cascade_context")
+                if not isinstance(raw_cascade_context, dict):
+                    raise CascadeSelectionError("CASCADE_CONTEXT_NOT_FOUND")
+                cascade_context = CascadeDeleteContext.from_dict(raw_cascade_context)
+                selections = extract_cascade_selections(rule)
+                params = original_params
+                params["_cascadeDelete"] = build_signed_cascade_execution(
+                    context=cascade_context,
+                    selections=selections,
+                    form_id=form_id,
+                    tool_call_id=current_tool_call_id,
+                )
+            else:
+                params = restore_action_params(
+                    rule,
+                    action=action_meta,
+                    original_params=original_params,
+                )
             params["userConfirmed"] = True
             params["_operationConfirm"] = {
                 "formId": form_id,

@@ -51,6 +51,60 @@ def _validate_fields_format(fields: list[dict[str, Any]]) -> list[str]:
     return errors
 
 
+def _validate_cascade_relations(
+    fields: list[dict[str, Any]],
+    relations: list[dict[str, Any]],
+) -> None:
+    """Reject cascade relations that cannot safely support Detach."""
+    fields_by_code = {
+        str(field.get("property_code") or ""): field
+        for field in fields
+        if str(field.get("property_code") or "")
+    }
+    for relation in relations:
+        cascade_delete = relation.get("cascade_delete", False)
+        if type(cascade_delete) is not bool:
+            raise ValueError("cascade_delete 必须是 boolean")
+        if not cascade_delete:
+            continue
+        relation_code = str(relation.get("relation_code") or "")
+        relation_type = str(
+            relation.get("relation_type") or "MANY_TO_ONE"
+        ).upper()
+        if relation_type not in {"MANY_TO_ONE", "ONE_TO_ONE"}:
+            raise ValueError(
+                f"级联关系 {relation_code} 的 relation_type 只能是 "
+                "MANY_TO_ONE 或 ONE_TO_ONE"
+            )
+        join_keys = relation.get("join_keys")
+        if not isinstance(join_keys, list) or not join_keys:
+            raise ValueError(f"级联关系 {relation_code} 的 join_keys 不能为空")
+        for join_key in join_keys:
+            if not isinstance(join_key, dict):
+                raise TypeError(f"级联关系 {relation_code} 的 join key 必须是对象")
+            source_field = str(
+                join_key.get("sourceField") or ""
+            )
+            target_field = str(
+                join_key.get("targetField") or ""
+            )
+            if not source_field or not target_field:
+                raise ValueError(f"级联关系 {relation_code} 的 join key 两端不能为空")
+            source_definition = fields_by_code.get(source_field)
+            if source_definition is None:
+                raise ValueError(
+                    f"级联关系 {relation_code} 的 source join key 字段不存在: "
+                    f"{source_field}"
+                )
+            if bool(
+                source_definition.get("is_required")
+                or source_definition.get("required")
+            ):
+                raise ValueError(
+                    f"级联关系 {relation_code} 的 source join key 必须允许清空: "
+                    f"{source_field}"
+                )
+
 # ── OntologyBuildSession ──────────────────────────────────────────────────────
 
 _OBJ_FIELDS_CACHE_TTL = 86400 * 30  # 30 天
@@ -201,6 +255,15 @@ class OntologyBuildSession:
             normalized_rels: list[dict[str, Any]] = []
             for rel in object_relations:
                 nr = dict(rel)
+                cascade_delete = nr.get("cascade_delete", False)
+                if type(cascade_delete) is not bool:
+                    raise ValueError("cascade_delete 必须是 boolean")
+                relation_type = str(nr.get("relation_type") or "MANY_TO_ONE").upper()
+                if cascade_delete and relation_type not in {"MANY_TO_ONE", "ONE_TO_ONE"}:
+                    raise ValueError(
+                        "cascade_delete=true 时 relation_type 只能是 MANY_TO_ONE 或 ONE_TO_ONE"
+                    )
+                nr["cascade_delete"] = cascade_delete
                 nr.setdefault(
                     "source_object_code",
                     rel.get("source_object_code")
@@ -226,6 +289,11 @@ class OntologyBuildSession:
                 rkey: tuple[str, str] = _rel_key(rel)
                 existing_rels[rkey] = {**existing_rels.get(rkey, {}), **rel}
             state["object_relations"] = list(existing_rels.values())
+
+        _validate_cascade_relations(
+            list(state.get("fields") or []),
+            list(state.get("object_relations") or []),
+        )
 
         # 如果字段通过 object_relations 关联了其他对象，自动绑定 term_type_code
         # join_keys[].sourceField 对应当前对象的字段，target_object_code 即术语类型

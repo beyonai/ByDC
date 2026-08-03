@@ -136,6 +136,7 @@ class KnowledgeUpdateRequest:
     file_description: str = ""
     kb_directory: str | None = None
     metadata_properties: list[dict[str, Any]] = field(default_factory=list)
+    clear_label_fields: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -377,7 +378,11 @@ class HttpKnowledgeSearchBackend:
         effective_labels = _merge_related_docs_into_labels(request.labels, related_docs)
         clean_content = _strip_related_docs_blocks(request.content)
         clean_content = _strip_front_matter(clean_content)
-        file_content = _render_markdown_with_front_matter(effective_labels, clean_content)
+        file_content = _render_markdown_with_front_matter(
+            effective_labels,
+            clean_content,
+            clear_label_fields=request.clear_label_fields,
+        )
         filename = PurePosixPath(markdown_file_path).name or "document.md"
 
         try:
@@ -1397,10 +1402,18 @@ def _merge_related_docs_into_labels(
     return merged
 
 
-def _render_markdown_with_front_matter(labels: dict[str, Any], content: str) -> str:
+def _render_markdown_with_front_matter(
+    labels: dict[str, Any],
+    content: str,
+    *,
+    clear_label_fields: set[str] | None = None,
+) -> str:
     """Render labels as YAML front matter before Markdown content."""
+    explicit_empty_fields = clear_label_fields or set()
     front_matter_labels = {
-        key: value for key, value in labels.items() if not _is_empty_front_matter_value(value)
+        key: value
+        for key, value in labels.items()
+        if str(key) in explicit_empty_fields or not _is_empty_front_matter_value(value)
     }
     if not front_matter_labels:
         return content

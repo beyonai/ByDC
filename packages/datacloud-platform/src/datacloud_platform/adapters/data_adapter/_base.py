@@ -225,14 +225,28 @@ def _normalize_entity(
         # Extract join_keys from attribute JSON to top-level
         attr = data.get("attribute")
         if isinstance(attr, dict):
+            result["attribute"] = dict(attr)
             jk = attr.get("join_keys") or attr.get("joinKeys")
             if jk:
                 result["join_keys"] = jk
+            cascade_delete = attr.get("cascade_delete")
+            if type(cascade_delete) is bool:
+                result["cascade_delete"] = cascade_delete
         # Also preserve top-level join_keys (OWL / direct format)
         if "join_keys" not in result:
             top_jk = data.get("join_keys") or data.get("joinKeys")
             if top_jk:
                 result["join_keys"] = top_jk
+        if "cascade_delete" not in result:
+            top_cascade_delete = data.get("cascade_delete")
+            if type(top_cascade_delete) is bool:
+                result["cascade_delete"] = top_cascade_delete
+        if "cascade_delete" in result:
+            stored_attribute = dict(result.get("attribute") or {})
+            stored_attribute["cascade_delete"] = result["cascade_delete"]
+            if result.get("join_keys"):
+                stored_attribute["join_keys"] = result["join_keys"]
+            result["attribute"] = stored_attribute
 
     elif entity_type == "action":
         result["action_code"] = data.get("action_code") or data.get("actionCode", "")

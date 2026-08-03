@@ -60,6 +60,77 @@ def test_normalize_relation_extracts_join_keys_from_attribute() -> None:
     ]
 
 
+def test_normalize_relation_extracts_cascade_delete_from_attribute() -> None:
+    data = {
+        "relationCode": "feature_belongs_to_product",
+        "relationCardinality": "MANY_TO_ONE",
+        "sourceObjectCode": "feature",
+        "targetObjectCode": "product",
+        "attribute": {
+            "join_keys": [{"sourceField": "product_code", "targetField": "code"}],
+            "cascade_delete": True,
+        },
+    }
+
+    result = _normalize_entity("relation", data, for_storage=True)
+
+    assert result["cascade_delete"] is True
+    assert result["attribute"]["cascade_delete"] is True
+
+
+def test_build_relation_attribute_preserves_extensions() -> None:
+    from datacloud_platform.mixins.ontology_build import _build_relation_attribute
+
+    result = _build_relation_attribute(
+        {
+            "attribute": {"custom": "kept"},
+            "join_keys": [{"sourceField": "product_code", "targetField": "code"}],
+            "cascade_delete": True,
+        }
+    )
+
+    assert result == {
+        "custom": "kept",
+        "join_keys": [{"sourceField": "product_code", "targetField": "code"}],
+        "cascade_delete": True,
+    }
+
+
+def test_build_relation_attribute_uses_attribute_fallbacks() -> None:
+    from datacloud_platform.mixins.ontology_build import _build_relation_attribute
+
+    result = _build_relation_attribute(
+        {
+            "relation_type": "MANY_TO_ONE",
+            "attribute": {
+                "custom": "kept",
+                "join_keys": [
+                    {"sourceField": "product_code", "targetField": "code"}
+                ],
+                "cascade_delete": True,
+            },
+        }
+    )
+
+    assert result["join_keys"] == [
+        {"sourceField": "product_code", "targetField": "code"}
+    ]
+    assert result["cascade_delete"] is True
+    assert result["custom"] == "kept"
+
+
+def test_build_relation_attribute_rejects_ambiguous_cascade_direction() -> None:
+    from datacloud_platform.mixins.ontology_build import _build_relation_attribute
+
+    with pytest.raises(ValueError, match="MANY_TO_ONE"):
+        _build_relation_attribute(
+            {
+                "relation_type": "ONE_TO_MANY",
+                "cascade_delete": True,
+            }
+        )
+
+
 def test_normalize_relation_no_attribute_no_join_keys() -> None:
     """没有 attribute 时不生成 join_keys。"""
     data = {
@@ -195,6 +266,101 @@ def test_collect_object_with_relations_normalize_source_class(
     assert rel["join_keys"] == [
         {"sourceField": "opp_id", "targetField": "id", "joinType": "LEFT"}
     ]
+
+
+def test_collect_object_rejects_non_boolean_cascade_delete(
+    fake_workspace_store: _FakeStore,
+) -> None:
+    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
+
+    session = OntologyBuildSession(user_code="test_user")
+    with pytest.raises(ValueError, match="cascade_delete"):
+        session.collect_object_info(
+            entity_code="by_feature",
+            entity_name="特性",
+            fields=[
+                {
+                    "property_code": "product_code",
+                    "property_name": "产品编码",
+                    "data_type": "STRING",
+                }
+            ],
+            object_relations=[
+                {
+                    "target_object_code": "by_product",
+                    "relation_type": "MANY_TO_ONE",
+                    "join_keys": [
+                        {"sourceField": "product_code", "targetField": "code"}
+                    ],
+                    "cascade_delete": "true",
+                }
+            ],
+        )
+
+
+def test_collect_object_rejects_required_cascade_join_key(
+    fake_workspace_store: _FakeStore,
+) -> None:
+    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
+
+    session = OntologyBuildSession(user_code="test_user")
+    with pytest.raises(ValueError, match="必须允许清空"):
+        session.collect_object_info(
+            entity_code="by_feature",
+            entity_name="特性",
+            fields=[
+                {
+                    "property_code": "product_code",
+                    "property_name": "产品编码",
+                    "data_type": "STRING",
+                    "is_required": True,
+                }
+            ],
+            object_relations=[
+                {
+                    "relation_code": "feature_belongs_to_product",
+                    "target_object_code": "by_product",
+                    "relation_type": "MANY_TO_ONE",
+                    "join_keys": [
+                        {"sourceField": "product_code", "targetField": "code"}
+                    ],
+                    "cascade_delete": True,
+                }
+            ],
+        )
+
+
+def test_collect_object_accepts_nullable_cascade_join_key(
+    fake_workspace_store: _FakeStore,
+) -> None:
+    from datacloud_knowledge.ingestion.ontology_build import OntologyBuildSession
+
+    session = OntologyBuildSession(user_code="test_user")
+    result = session.collect_object_info(
+        entity_code="by_feature",
+        entity_name="特性",
+        fields=[
+            {
+                "property_code": "product_code",
+                "property_name": "产品编码",
+                "data_type": "STRING",
+                "is_required": False,
+            }
+        ],
+        object_relations=[
+            {
+                "relation_code": "feature_belongs_to_product",
+                "target_object_code": "by_product",
+                "relation_type": "MANY_TO_ONE",
+                "join_keys": [
+                    {"sourceField": "product_code", "targetField": "code"}
+                ],
+                "cascade_delete": True,
+            }
+        ],
+    )
+
+    assert result["object_relations"][0]["cascade_delete"] is True
 
 
 def test_collect_view_with_relations_normalize_source_class(

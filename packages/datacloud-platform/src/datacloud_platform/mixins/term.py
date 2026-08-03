@@ -98,9 +98,16 @@ class TermMixin(TermSyncHandler):
         return self._term_for(base_id).list_term_relations(**kwargs)
 
     def get_term_relation(
-        self: _HasTermBackend, base_id: str, *, relation_id: str
+        self: _HasTermBackend,
+        base_id: str,
+        *,
+        relation_id: str,
+        strict: bool = False,
     ) -> dict[str, Any] | None:
-        return self._term_for(base_id).get_term_relation(relation_id=relation_id)
+        return self._term_for(base_id).get_term_relation(
+            relation_id=relation_id,
+            strict=strict,
+        )
 
     def create_term_relation(
         self: _HasTermBackend, base_id: str, *, relation: dict[str, Any]

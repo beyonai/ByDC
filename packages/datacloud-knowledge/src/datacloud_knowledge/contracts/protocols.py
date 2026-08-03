@@ -609,7 +609,11 @@ class TermReader(Protocol):
         source_term_id: str | None = None,
         target_term_id: str | None = None,
         relation_category: str | None = None,
-    ) -> list[dict[str, Any]]: ...
+        relation_code: str | None = None,
+        keyword: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> dict[str, Any]: ...
 
     def get_term_relation(self, *, relation_id: str) -> dict[str, Any] | None: ...
 
