@@ -314,6 +314,7 @@ class OpenGaussEntityStore:
         owner_type: str | None = None,
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
+        ext_property_in_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -372,6 +373,16 @@ class OpenGaussEntityStore:
                     base_where.append(
                         data_col.op("->")("ext_property").op("->>")(key) == str(val)
                     )
+
+            if ext_property_in_filters:
+                for key, values in ext_property_in_filters.items():
+                    if values:
+                        json_value = data_col.op("->")("ext_property").op("->>")(
+                            key
+                        )
+                        base_where.append(
+                            json_value.in_([str(value) for value in values])
+                        )
 
             # Lightweight count query — reads no JSONB data
             count_stmt = (

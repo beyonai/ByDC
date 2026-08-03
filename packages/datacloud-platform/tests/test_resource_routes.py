@@ -23,6 +23,7 @@ from datacloud_platform.backends.registry import (
     register_backend_type,
     register_implementation,
 )
+from datacloud_platform.constants import DEFAULT_BASE_ID
 from fakes import (
     FakeExecutionBackend,
     FakeOntologyBackend,
@@ -94,6 +95,13 @@ def client(fakes: dict[str, Any], entity_store: JsonEntityStore) -> TestClient:
     registry = OntologyBaseRegistry(entity_store)
     registry.register(
         OntologyBaseEntry(base_id=LOCAL, display_name="本地库", source_type="LOCAL")
+    )
+    registry.register(
+        OntologyBaseEntry(
+            base_id=DEFAULT_BASE_ID,
+            display_name="默认库",
+            source_type="LOCAL",
+        )
     )
 
     platform = DatacloudPlatform(_base_registry=registry)
@@ -169,6 +177,92 @@ class TestObjectRoutes:
         assert resp.status_code == 200
         data = resp.json()
         assert data["message"] == "deleted"
+
+    def test_query_objects_by_knowledge_returns_camel_case_page(
+        self, client: TestClient, fakes: dict[str, Any]
+    ) -> None:
+        onto = fakes["onto_local"]
+        onto._knowledge_objects = (
+            [
+                {
+                    "objectCode": "customer",
+                    "objectName": "客户",
+                    "objectDesc": "客户对象",
+                    "baseId": DEFAULT_BASE_ID,
+                    "kbResourceId": "kb-1",
+                    "kbDirectory": "/a",
+                }
+            ],
+            1001,
+        )
+
+        resp = client.post(
+            _objects_url().split("?")[0] + "/queryByKnowledge",
+            json={
+                "kbResourceId": " kb-1 ",
+                "kbDirectories": [" /a ", "/a", ""],
+                "objectName": " 客户 ",
+                "pageIndex": 2,
+                "pageSize": 1000,
+            },
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"] == {
+            "items": onto._knowledge_objects[0],
+            "total": 1001,
+            "pageIndex": 2,
+            "pageSize": 1000,
+            "totalPages": 2,
+        }
+        assert "properties" not in body["data"]["items"][0]
+        assert "actions" not in body["data"]["items"][0]
+        assert onto._knowledge_query == {
+            "base_id": DEFAULT_BASE_ID,
+            "kb_resource_id": "kb-1",
+            "kb_directories": ["/a"],
+            "object_name": "客户",
+            "page_index": 2,
+            "page_size": 1000,
+        }
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {},
+            {"kbResourceId": "   "},
+            {"kbResourceId": "kb-1", "pageIndex": 0},
+            {"kbResourceId": "kb-1", "pageSize": 0},
+            {"kbResourceId": "kb-1", "pageSize": 1001},
+        ],
+    )
+    def test_query_objects_by_knowledge_rejects_invalid_request(
+        self, client: TestClient, payload: dict[str, Any]
+    ) -> None:
+        resp = client.post(
+            _objects_url().split("?")[0] + "/queryByKnowledge",
+            json=payload,
+        )
+
+        assert resp.status_code == 422
+
+    def test_query_objects_by_knowledge_empty_page_has_zero_total_pages(
+        self, client: TestClient
+    ) -> None:
+        resp = client.post(
+            _objects_url().split("?")[0] + "/queryByKnowledge",
+            json={"kbResourceId": "kb-1"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["data"] == {
+            "items": [],
+            "total": 0,
+            "pageIndex": 1,
+            "pageSize": 20,
+            "totalPages": 0,
+        }
 
 
 class TestViewRoutes:

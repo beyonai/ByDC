@@ -169,6 +169,7 @@ class EntityStore(Protocol):
         owner_type: str | None = None,
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
+        ext_property_in_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -186,6 +187,9 @@ class EntityStore(Protocol):
             ext_property_filters: Optional dict of ``{key: value}`` filters on the
                 entity's ``ext_property`` JSONB field.  Equality match only;
                 all keys must match (AND semantics).
+            ext_property_in_filters: Optional dict of ``{key: values}`` filters on
+                ``ext_property``. Each key must match one non-empty listed value;
+                empty value lists do not restrict results.
             page: 1-based page number.
             page_size: Maximum items per page.
 

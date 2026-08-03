@@ -38,6 +38,43 @@ def test_load_ontology(platform: DatacloudPlatform) -> None:
     assert objs[0].object_name == "测试对象"
 
 
+def test_query_objects_by_knowledge_delegates_to_backend(
+    platform: DatacloudPlatform,
+) -> None:
+    onto_local, *_ = platform._fakes  # type: ignore[attr-defined]
+    onto_local._knowledge_objects = ([  # type: ignore[attr-defined]
+        {
+            "objectCode": "customer",
+            "objectName": "客户",
+            "baseId": LOCAL,
+            "kbResourceId": "kb-1",
+            "kbDirectory": "/a",
+        }
+    ], 1)
+
+    items, total = platform.query_objects_by_knowledge(
+        LOCAL,
+        kb_resource_id="kb-1",
+        kb_directories=["/a"],
+        object_name="客户",
+        page_index=1,
+        page_size=20,
+    )
+
+    assert total == 1
+    assert items[0]["baseId"] == LOCAL
+    assert "properties" not in items[0]
+    assert "actions" not in items[0]
+    assert onto_local._knowledge_query == {  # type: ignore[attr-defined]
+        "base_id": LOCAL,
+        "kb_resource_id": "kb-1",
+        "kb_directories": ["/a"],
+        "object_name": "客户",
+        "page_index": 1,
+        "page_size": 20,
+    }
+
+
 def test_search(platform: DatacloudPlatform) -> None:
     """search() delegates to search_candidates + disambiguate on FakeTermBackend."""
     _, _, know, *_ = platform._fakes  # type: ignore[attr-defined]

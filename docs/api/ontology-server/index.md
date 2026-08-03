@@ -27,6 +27,7 @@
 | API | Method | Path | Description |
 |---|---|---|---|
 | [listObjects](Object/listObjects.md) | GET | `/api/v1/ontologyBases/{baseId}/objects` | 列出对象类型列表。 |
+| [queryObjectsByKnowledge](Object/queryObjectsByKnowledge.md) | POST | `/api/v1/ontologyBases/objects/queryByKnowledge` | 按知识库资源、目录和对象名称分页查询对象基本信息。 |
 | [getObject](Object/getObject.md) | GET | `/api/v1/ontologyBases/{baseId}/objects/{objectCode}` | 获取对象类型详情，含属性列表和动作列表。 |
 | [createObject](Object/createObject.md) | POST | `/api/v1/ontologyBases/{baseId}/objects` | 创建对象类型。仅 LOCAL。 |
 | [updateObject](Object/updateObject.md) | PUT | `/api/v1/ontologyBases/{baseId}/objects/{objectCode}` | 更新对象类型。仅 LOCAL。 |

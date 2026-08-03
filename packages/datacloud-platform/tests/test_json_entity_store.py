@@ -126,3 +126,93 @@ class TestSharding:
         assert view_data is not None
         assert obj_data["object_code"] == "a"
         assert view_data["view_code"] == "a"
+
+
+class TestSearchByExtensionProperties:
+    def test_combines_kb_resource_directory_list_and_fuzzy_name(
+        self, store: JsonEntityStore
+    ) -> None:
+        objects = [
+            ("a_customer", "Customer Alpha", "kb-1", "/a"),
+            ("b_customer", "Customer Beta", "kb-1", "/b"),
+            ("c_customer", "Customer Gamma", "kb-1", "/c"),
+            ("d_customer", "Customer Delta", "kb-2", "/a"),
+            ("e_order", "Order", "kb-1", "/a"),
+        ]
+        for code, name, kb_resource_id, kb_directory in objects:
+            store.save(
+                "objects",
+                code,
+                {
+                    "object_code": code,
+                    "object_name": name,
+                    "ext_property": {
+                        "kb_resource_id": kb_resource_id,
+                        "kb_directory": kb_directory,
+                    },
+                },
+            )
+
+        items, total = store.search(
+            "objects",
+            keyword="CUSTOMER",
+            ext_property_filters={"kb_resource_id": "kb-1"},
+            ext_property_in_filters={"kb_directory": ["/a", "/b"]},
+            page=1,
+            page_size=1,
+        )
+
+        assert total == 2
+        assert [item["object_code"] for item in items] == ["a_customer"]
+
+    @pytest.mark.parametrize("directory_filter", [None, {"kb_directory": []}])
+    def test_empty_directory_filter_does_not_restrict_results(
+        self,
+        store: JsonEntityStore,
+        directory_filter: dict[str, list[str]] | None,
+    ) -> None:
+        for code, directory in [("a", "/a"), ("b", "/b")]:
+            store.save(
+                "objects",
+                code,
+                {
+                    "object_code": code,
+                    "object_name": code,
+                    "ext_property": {
+                        "kb_resource_id": "kb-1",
+                        "kb_directory": directory,
+                    },
+                },
+            )
+
+        items, total = store.search(
+            "objects",
+            ext_property_filters={"kb_resource_id": "kb-1"},
+            ext_property_in_filters=directory_filter,
+            page=1,
+            page_size=20,
+        )
+
+        assert total == 2
+        assert [item["object_code"] for item in items] == ["a", "b"]
+
+    def test_ext_property_equality_normalizes_scalar_values_to_strings(
+        self, store: JsonEntityStore
+    ) -> None:
+        store.save(
+            "objects",
+            "numeric_resource",
+            {
+                "object_code": "numeric_resource",
+                "object_name": "Numeric Resource",
+                "ext_property": {"kb_resource_id": 10000765},
+            },
+        )
+
+        items, total = store.search(
+            "objects",
+            ext_property_filters={"kb_resource_id": "10000765"},
+        )
+
+        assert total == 1
+        assert items[0]["object_code"] == "numeric_resource"

@@ -149,6 +149,7 @@ class _ScopedEntityStore:
         owner_type: str | None = None,
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
+        ext_property_in_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -160,6 +161,7 @@ class _ScopedEntityStore:
             owner_type=owner_type,
             user_code=user_code,
             ext_property_filters=ext_property_filters,
+            ext_property_in_filters=ext_property_in_filters,
             page=page,
             page_size=page_size,
         )
@@ -246,6 +248,7 @@ class JsonEntityStore:
         owner_type: str | None = None,
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
+        ext_property_in_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -261,7 +264,9 @@ class JsonEntityStore:
 
         # When heavy filters are present, skip the index-level keyword shortcut
         # and evaluate against full entity data for consistent total counts.
-        has_heavy_filters = bool(owner_type or user_code or ext_property_filters)
+        has_heavy_filters = bool(
+            owner_type or user_code or ext_property_filters or ext_property_in_filters
+        )
 
         if has_heavy_filters:
             all_data = self.list_all(entity_type)
@@ -276,7 +281,11 @@ class JsonEntityStore:
                     if keyword.lower() not in name.lower():
                         continue
                 if not _json_entity_match(
-                    data, owner_type, user_code, ext_property_filters
+                    data,
+                    owner_type,
+                    user_code,
+                    ext_property_filters,
+                    ext_property_in_filters,
                 ):
                     continue
                 filtered.append(data)
@@ -588,6 +597,7 @@ def _json_entity_match(
     owner_type: str | None,
     user_code: str | None,
     ext_property_filters: dict[str, Any] | None,
+    ext_property_in_filters: dict[str, list[Any]] | None = None,
 ) -> bool:
     """Match an entity data dict against owner_type, user_code, and extProperty filters.
 
@@ -615,7 +625,17 @@ def _json_entity_match(
         ext = data.get("ext_property", {}) or {}
         for key, expected in ext_property_filters.items():
             actual = ext.get(key)
-            if actual != expected:
+            if actual is None or str(actual) != str(expected):
+                return False
+
+    if ext_property_in_filters:
+        ext = data.get("ext_property", {}) or {}
+        for key, expected_values in ext_property_in_filters.items():
+            actual = ext.get(key)
+            normalized_values = {str(value) for value in expected_values}
+            if expected_values and (
+                actual is None or str(actual) not in normalized_values
+            ):
                 return False
 
     return True

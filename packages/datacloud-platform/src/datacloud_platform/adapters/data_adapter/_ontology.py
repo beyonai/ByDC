@@ -464,6 +464,53 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         summaries = [self._raw_to_summary(raw) for raw in items]
         return summaries, total
 
+    def query_objects_by_knowledge(
+        self,
+        *,
+        base_id: str = "",
+        kb_resource_id: str,
+        kb_directories: list[str] | None = None,
+        object_name: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query basic object information by knowledge-base context."""
+        store = self._entity_store.sub_store(base_id)
+        raw_items, total = store.search(
+            "objects",
+            keyword=object_name,
+            ext_property_filters={"kb_resource_id": kb_resource_id},
+            ext_property_in_filters=(
+                {"kb_directory": kb_directories} if kb_directories else None
+            ),
+            page=page_index,
+            page_size=page_size,
+        )
+        items: list[dict[str, Any]] = []
+        for raw in raw_items:
+            summary = self._raw_to_summary(raw)
+            ext_property = raw.get("ext_property", raw.get("extProperty", {})) or {}
+            items.append(
+                {
+                    "objectCode": summary.object_code,
+                    "objectName": summary.object_name,
+                    "objectDesc": summary.description,
+                    "objectSource": summary.object_source,
+                    "fieldCount": summary.field_count,
+                    "actionCount": summary.action_count,
+                    "ownerType": summary.owner_type,
+                    "userCode": summary.user_code,
+                    "baseId": base_id,
+                    "kbResourceId": str(
+                        ext_property.get("kb_resource_id", "") or ""
+                    ),
+                    "kbDirectory": str(
+                        ext_property.get("kb_directory", "") or ""
+                    ),
+                }
+            )
+        return items, total
+
     def get_object_detail(
         self, object_code: str, *, base_id: str = ""
     ) -> dict[str, Any] | None:
@@ -573,8 +620,13 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             object_code=raw.get("object_code", raw.get("objectCode", "")),
             object_name=raw.get("object_name", raw.get("objectName", "")),
             description=raw.get("description", raw.get("objectDesc", "")) or "",
-            object_source=raw.get("source_type", raw.get("sourceType", "")) or "",
-            field_count=len(raw.get("fields", [])),
+            object_source=(
+                raw.get("source_type")
+                or raw.get("sourceType")
+                or raw.get("object_source")
+                or raw.get("objectSource", "")
+            ),
+            field_count=len(raw.get("fields", raw.get("properties", []))),
             action_count=len(raw.get("actions", [])),
             owner_type=owner,
             user_code=user,

@@ -90,6 +90,19 @@ class OntologyBackend(Protocol):
         """Get paginated object summaries under a base."""
         ...
 
+    def query_objects_by_knowledge(
+        self,
+        *,
+        base_id: str = "",
+        kb_resource_id: str,
+        kb_directories: list[str] | None = None,
+        object_name: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query object summaries by knowledge-base context."""
+        ...
+
     def get_object_detail(
         self, object_code: str, *, base_id: str = ""
     ) -> dict[str, Any] | None:

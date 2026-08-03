@@ -65,6 +65,8 @@ class FakeOntologyBackend:
         self._deleted_objects: list[tuple[Any, Any, str]] = []
         self._readonly: bool = False
         """When True, write operations raise PermissionError."""
+        self._knowledge_objects: tuple[list[dict[str, Any]], int] = ([], 0)
+        self._knowledge_query: dict[str, Any] | None = None
 
         # View tracking
         self._views: dict[str, list[dict[str, Any]]] = {}
@@ -151,6 +153,27 @@ class FakeOntologyBackend:
     ) -> list[ObjectSummary]:
         """Return all objects from _objects."""
         return list(self._objects.values())
+
+    def query_objects_by_knowledge(
+        self,
+        *,
+        base_id: str = "",
+        kb_resource_id: str,
+        kb_directories: list[str] | None = None,
+        object_name: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Return configured knowledge-object rows and record query arguments."""
+        self._knowledge_query = {
+            "base_id": base_id,
+            "kb_resource_id": kb_resource_id,
+            "kb_directories": kb_directories,
+            "object_name": object_name,
+            "page_index": page_index,
+            "page_size": page_size,
+        }
+        return self._knowledge_objects
 
     def get_object_detail(
         self,

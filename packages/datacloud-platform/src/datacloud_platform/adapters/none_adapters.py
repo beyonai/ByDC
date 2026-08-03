@@ -58,6 +58,27 @@ class _NoopOntologyBackend:
         _ = base_id, owner_type, user_code, keyword
         return [], 0
 
+    def query_objects_by_knowledge(
+        self,
+        *,
+        base_id: str = "",
+        kb_resource_id: str,
+        kb_directories: list[str] | None = None,
+        object_name: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Return an empty knowledge-object page."""
+        _ = (
+            base_id,
+            kb_resource_id,
+            kb_directories,
+            object_name,
+            page_index,
+            page_size,
+        )
+        return [], 0
+
     def get_object_detail(
         self, object_code: str, *, base_id: str = ""
     ) -> dict[str, Any] | None:

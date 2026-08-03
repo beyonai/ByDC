@@ -71,6 +71,82 @@ class TestCreateObject:
             backend.create_object("test-base", {"object_name": "No Code"})
 
 
+class TestQueryObjectsByKnowledge:
+    def test_returns_basic_camel_case_information_without_detail_lists(
+        self, tmp_path: Path
+    ) -> None:
+        store = JsonEntityStore(tmp_path)
+        backend = DataCloudDataBackend(entity_store=store)
+        store.save(
+            "objects",
+            "customer",
+            {
+                "object_code": "customer",
+                "object_name": "客户对象",
+                "description": "客户基本信息",
+                "objectSource": "KNOWLEDGE_BASE",
+                "properties": [{"propertyCode": "name"}],
+                "actions": [{"action_code": "search"}],
+                "ext_property": {
+                    "kb_resource_id": "kb-1",
+                    "kb_directory": "/customer",
+                },
+            },
+        )
+
+        items, total = backend.query_objects_by_knowledge(
+            base_id="test-base",
+            kb_resource_id="kb-1",
+            kb_directories=[],
+            object_name="客户",
+            page_index=1,
+            page_size=20,
+        )
+
+        assert total == 1
+        assert items == [
+            {
+                "objectCode": "customer",
+                "objectName": "客户对象",
+                "objectDesc": "客户基本信息",
+                "objectSource": "KNOWLEDGE_BASE",
+                "fieldCount": 1,
+                "actionCount": 1,
+                "ownerType": "enterprise",
+                "userCode": None,
+                "baseId": "test-base",
+                "kbResourceId": "kb-1",
+                "kbDirectory": "/customer",
+            }
+        ]
+        assert "properties" not in items[0]
+        assert "actions" not in items[0]
+
+    def test_nullable_kb_directory_returns_empty_string(self, tmp_path: Path) -> None:
+        store = JsonEntityStore(tmp_path)
+        backend = DataCloudDataBackend(entity_store=store)
+        store.save(
+            "objects",
+            "customer",
+            {
+                "object_code": "customer",
+                "object_name": "客户对象",
+                "ext_property": {
+                    "kb_resource_id": "kb-1",
+                    "kb_directory": None,
+                },
+            },
+        )
+
+        items, total = backend.query_objects_by_knowledge(
+            base_id="test-base",
+            kb_resource_id="kb-1",
+        )
+
+        assert total == 1
+        assert items[0]["kbDirectory"] == ""
+
+
 class TestUpdateObject:
     def test_update_object(
         self, backend: DataCloudDataBackend, entity_store: JsonEntityStore

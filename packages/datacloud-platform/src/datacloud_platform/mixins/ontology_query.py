@@ -51,6 +51,26 @@ class OntologyQueryMixin:
             page_size=page_size,
         )
 
+    def query_objects_by_knowledge(
+        self: _HasOntologyBackend,
+        base_id: str,
+        *,
+        kb_resource_id: str,
+        kb_directories: list[str] | None = None,
+        object_name: str | None = None,
+        page_index: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query object summaries associated with a knowledge base."""
+        return self._ontology_for(base_id).query_objects_by_knowledge(
+            base_id=base_id,
+            kb_resource_id=kb_resource_id,
+            kb_directories=kb_directories,
+            object_name=object_name,
+            page_index=page_index,
+            page_size=page_size,
+        )
+
     def get_object_detail(
         self: _HasOntologyBackend,
         base_id: str,

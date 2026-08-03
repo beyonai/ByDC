@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from datacloud_platform.adapters.byclaw_sync import hook_ctx
 
@@ -23,6 +24,39 @@ from datacloud_platform.models.view import View
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
+
+
+class QueryObjectsByKnowledgeRequest(BaseModel):
+    """Filters and pagination for knowledge-associated object summaries."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    kb_resource_id: str = Field(alias="kbResourceId", min_length=1)
+    kb_directories: list[str] = Field(default_factory=list, alias="kbDirectories")
+    object_name: str | None = Field(default=None, alias="objectName")
+    page_index: int = Field(default=1, alias="pageIndex", ge=1)
+    page_size: int = Field(default=20, alias="pageSize", ge=1, le=1000)
+
+    @field_validator("kb_resource_id")
+    @classmethod
+    def validate_kb_resource_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("kbResourceId must not be blank")
+        return normalized
+
+    @field_validator("kb_directories")
+    @classmethod
+    def normalize_kb_directories(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+    @field_validator("object_name")
+    @classmethod
+    def normalize_object_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
 
 
 def _parse_csv(param: str | None) -> list[str] | None:
@@ -72,6 +106,33 @@ def create_resource_routes(platform: DatacloudPlatform) -> APIRouter:
                     "total": total,
                     "page": page,
                     "page_size": page_size,
+                }
+            )
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.post("/objects/queryByKnowledge", tags=["Object"])
+    def query_objects_by_knowledge(
+        body: QueryObjectsByKnowledgeRequest,
+    ) -> Any:
+        """Query basic object information by knowledge-base context."""
+        try:
+            items, total = platform.query_objects_by_knowledge(
+                DEFAULT_BASE_ID,
+                kb_resource_id=body.kb_resource_id,
+                kb_directories=body.kb_directories,
+                object_name=body.object_name,
+                page_index=body.page_index,
+                page_size=body.page_size,
+            )
+            total_pages = (total + body.page_size - 1) // body.page_size
+            return ok(
+                data={
+                    "items": items,
+                    "total": total,
+                    "pageIndex": body.page_index,
+                    "pageSize": body.page_size,
+                    "totalPages": total_pages,
                 }
             )
         except KeyError as e:
