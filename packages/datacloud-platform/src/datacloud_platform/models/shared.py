@@ -172,3 +172,64 @@ class ObjectInstanceSearchResult:
     """
 
     results: dict[str, list[ObjectInstanceHit]]
+
+
+@dataclass(frozen=True)
+class ObjectInstanceListItem:
+    """对象实例枚举结果项（枚举型接口，非检索命中）。
+
+    与 ObjectInstanceHit 的区别：枚举无分（score 是检索概念），
+    取而代之的是图度数 out_degree/in_degree；枚举是确定性集合，
+    排序可承诺稳定、total 诚实。
+
+    file_name / kb_resource_id / kb_id 来自 term 的 ext_attrs，
+    枚举接口（knowledge 层 T-45）不返回这些字段时恒为 None。
+    """
+
+    instance_id: str
+    """实例 ID（term_id，全局唯一）。"""
+
+    instance_code: str
+    """实例编码（term_code，业务编码）。"""
+
+    instance_name: str
+    """实例名称（term_name）。"""
+
+    object_code: str
+    """对象类型编码（term_type_code）。"""
+
+    file_name: str | None
+    """对应的知识库文件路径（ext_attrs.kb_file_path）。None 表示无/未知。"""
+
+    kb_resource_id: str | None
+    """知识库资源 ID（ext_attrs.kb_resource_id）。None 表示未知。"""
+
+    kb_id: str | None
+    """知识库 ID（ext_attrs.kb_id，legacy）。None 表示未知。"""
+
+    out_degree: int
+    """出度（实例间 BUSINESS 关系计数；无 degree filter 时为 0）。"""
+
+    in_degree: int
+    """入度（实例间 BUSINESS 关系计数；无 degree filter 时为 0）。"""
+
+
+@dataclass(frozen=True)
+class ObjectInstanceListPage:
+    """对象实例枚举信封（platform 层返回类型）。
+
+    items + 诚实 total（同条件 COUNT）+ 分页回显。RPC handler 据此
+    组装 ``{items, total, page, pageSize}`` JSON 信封。
+    """
+
+    items: list[ObjectInstanceListItem]
+    """当前页条目（9 字段 ObjectInstanceListItem）。"""
+
+    total: int
+    """诚实总数（同 WHERE+HAVING 的 COUNT，无 ORDER BY/LIMIT）。"""
+
+    page: int
+    """页码（1-based，>=1）。"""
+
+    page_size: int
+    """每页条数（>=1）。"""
