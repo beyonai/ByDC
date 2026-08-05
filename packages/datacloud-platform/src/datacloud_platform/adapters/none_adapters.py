@@ -911,7 +911,10 @@ class _NoopTermBackend:
     ) -> dict[str, Any]:
         return {"items": [], "total": 0}
 
-    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+    def create_term_type(
+        self, *, library_id: str, term_type: dict[str, Any]
+    ) -> dict[str, Any]:
+        _ = library_id
         raise PermissionError("Term backend not available")
 
     def update_term_type(

@@ -350,3 +350,43 @@ class TestDatasourceCRUD:
         backend.create_datasource("test-base", ds)
         backend.delete_datasource("test-base", "tempdb")
         assert entity_store.get("datasources", "tempdb") is None
+
+
+class TestTermTypeCRUD:
+    def test_create_term_type_forwards_library_id(
+        self,
+        backend: DataCloudDataBackend,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        calls: list[dict[str, object]] = []
+
+        class RecordingWriter:
+            def __enter__(self) -> RecordingWriter:
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+            def create_term_type(
+                self, *, term_type: dict[str, object], library_id: str
+            ) -> dict[str, object]:
+                calls.append({"term_type": term_type, "library_id": library_id})
+                return {**term_type, "library_id": library_id}
+
+        monkeypatch.setattr(
+            "datacloud_knowledge.adapters.create_writer",
+            lambda: RecordingWriter(),
+        )
+
+        result = backend.create_term_type(
+            library_id="base-a",
+            term_type={"typeCode": "expense_status", "typeName": "报销状态"},
+        )
+
+        assert calls == [
+            {
+                "library_id": "base-a",
+                "term_type": {"typeCode": "expense_status", "typeName": "报销状态"},
+            }
+        ]
+        assert result["library_id"] == "base-a"

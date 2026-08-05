@@ -158,11 +158,13 @@ class TermEntityMixin(DataCloudDataBackendBase):
             logger.exception("list_term_type_relations failed type_code=%s", type_code)
             return {"items": [], "total": 0}
 
-    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+    def create_term_type(
+        self, *, library_id: str, term_type: dict[str, Any]
+    ) -> dict[str, Any]:
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
-            return writer.create_term_type(term_type=term_type)
+            return writer.create_term_type(library_id=library_id, term_type=term_type)
 
     def update_term_type(
         self, *, library_id: str, type_code: str, updates: dict[str, Any]

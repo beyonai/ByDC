@@ -1123,16 +1123,19 @@ class HttpTermAdapter:
         """HTTP API 不支持术语库删除。"""
         raise NotImplementedError("delete_term_library not implemented in HTTP adapter")
 
-    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+    def create_term_type(self, *, library_id: str, term_type: dict[str, Any]) -> dict[str, Any]:
         """HTTP API 不支持术语类型创建。"""
+        _ = library_id, term_type
         raise NotImplementedError("create_term_type not implemented in HTTP adapter")
 
-    def update_term_type(self, *, type_code: str, updates: dict[str, Any]) -> None:
+    def update_term_type(self, *, library_id: str, type_code: str, updates: dict[str, Any]) -> None:
         """HTTP API 不支持术语类型更新。"""
+        _ = library_id, type_code, updates
         raise NotImplementedError("update_term_type not implemented in HTTP adapter")
 
-    def delete_term_type(self, *, type_code: str) -> None:
+    def delete_term_type(self, *, library_id: str, type_code: str) -> None:
         """HTTP API 不支持术语类型删除。"""
+        _ = library_id, type_code
         raise NotImplementedError("delete_term_type not implemented in HTTP adapter")
 
     def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:

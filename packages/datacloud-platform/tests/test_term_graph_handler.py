@@ -17,6 +17,7 @@ import pytest
 
 from datacloud_platform.api.routers.rpc.handlers.term import (
     _term_get_knowledge_by_word,
+    _term_type_create,
 )
 from datacloud_platform.models.graph_query import (
     GRAPH_QUERY_PROFILE_DEFAULTS,
@@ -28,6 +29,23 @@ from datacloud_platform.models.graph_query import (
 
 class FakeRequest:
     """测试用伪 Request 对象。"""
+
+
+def test_term_type_create_defaults_library_id_to_base_id() -> None:
+    mock_platform = Mock()
+    mock_platform.create_term_type.return_value = {"type_code": "expense_status"}
+    term_type = {"typeCode": "expense_status", "typeName": "报销状态"}
+
+    result = _term_type_create(
+        mock_platform,
+        {"base_id": "base-a", "term_type": term_type},
+        FakeRequest(),  # type: ignore[arg-type]
+    )
+
+    assert result.code == 200
+    mock_platform.create_term_type.assert_called_once_with(
+        "base-a", library_id="base-a", term_type=term_type
+    )
 
 
 # ============================================================================
