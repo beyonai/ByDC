@@ -6,6 +6,10 @@ import logging
 from typing import Any
 
 from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
+from datacloud_platform.models.shared import (
+    ObjectInstanceListItem,
+    ObjectInstanceListPage,
+)
 from datacloud_knowledge.adapters import create_reader, create_writer
 from datacloud_knowledge.contracts.term_provider_types import (
     LabelCondition,
@@ -151,6 +155,62 @@ class TermBackendMixin(DataCloudDataBackendBase):
         for keyword, qr in zip(keywords, batch_results):
             result[keyword] = qr
         return result
+
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str] | None,
+        kb_resource_ids: list[str] | None,
+        filters: list[dict[str, Any]] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> ObjectInstanceListPage:
+        """枚举带度数的对象实例 — 委托 knowledge provider（filters 原样透传）。
+
+        Args:
+            object_codes:   对象类型编码范围（与 kb_resource_ids AND）。
+            kb_resource_ids: 知识库资源 ID 范围（ext_attrs->>'kb_resource_id'）。
+            filters:        条件数组，**原样透传不解析**——非法 type/params 由
+                            knowledge 层 validate 抛 ValueError（RPC 层映射 400）。
+            page:           页码（>=1）。
+            page_size:      每页条数（>=1）。
+
+        Returns:
+            ObjectInstanceListPage：knowledge 层 ObjectInstanceItem（6 字段）
+            映射为 platform 层 ObjectInstanceListItem（9 字段）。
+            file_name/kb_resource_id/kb_id 枚举接口不返回，恒 None。
+        """
+        from datacloud_knowledge.provider import (  # noqa: PLC0415
+            enumerate_object_instances as sdk_enumerate_object_instances,
+        )
+
+        result = sdk_enumerate_object_instances(
+            object_codes=object_codes or [],
+            kb_resource_ids=kb_resource_ids or [],
+            filters=filters,
+            page=page,
+            page_size=page_size,
+        )
+        items = [
+            ObjectInstanceListItem(
+                instance_id=item.term_id,
+                instance_code=item.term_code,
+                instance_name=item.term_name,
+                object_code=item.term_type_code,
+                file_name=None,
+                kb_resource_id=None,
+                kb_id=None,
+                out_degree=item.out_degree,
+                in_degree=item.in_degree,
+            )
+            for item in result.items
+        ]
+        return ObjectInstanceListPage(
+            items=items,
+            total=result.total,
+            page=page,
+            page_size=page_size,
+        )
 
     def search_terms_by_labels(
         self,
@@ -531,19 +591,16 @@ class TermBackendMixin(DataCloudDataBackendBase):
             return None
 
     def create_term_relation(self, *, relation: dict[str, Any]) -> dict[str, Any]:
-
         with create_writer() as writer:
             return writer.create_term_relation(relation=relation)
 
     def update_term_relation(
         self, *, relation_id: str, updates: dict[str, Any]
     ) -> None:
-
         with create_writer() as writer:
             writer.update_term_relation(relation_id=relation_id, updates=updates)
 
     def delete_term_relation(self, *, relation_id: str) -> None:
-
         with create_writer() as writer:
             writer.delete_term_relation(relation_id=relation_id)
 
@@ -568,17 +625,14 @@ class TermBackendMixin(DataCloudDataBackendBase):
             return None
 
     def create_term_name(self, *, name: dict[str, Any]) -> dict[str, Any]:
-
         with create_writer() as writer:
             return writer.create_term_name_wrapper(name=name)
 
     def update_term_name(self, *, name_id: str, updates: dict[str, Any]) -> None:
-
         with create_writer() as writer:
             writer.update_term_name(name_id=name_id, updates=updates)
 
     def delete_term_name(self, *, name_id: str) -> None:
-
         with create_writer() as writer:
             writer.delete_term_name(name_id=name_id)
 

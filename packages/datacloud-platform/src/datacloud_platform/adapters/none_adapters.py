@@ -670,6 +670,21 @@ class _NoopTermBackend:
         """Return empty batch results."""
         return {kw: {"data": [], "totalCount": 0} for kw in keywords}
 
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str] | None,
+        kb_resource_ids: list[str] | None,
+        filters: list[dict[str, Any]] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Any:
+        """Return empty page — noop backend has no term data (sync)."""
+        _ = object_codes, kb_resource_ids, filters
+        from datacloud_platform.models.shared import ObjectInstanceListPage
+
+        return ObjectInstanceListPage(items=[], total=0, page=page, page_size=page_size)
+
     def get_term_detail(
         self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
