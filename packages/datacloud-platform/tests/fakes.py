@@ -1329,6 +1329,8 @@ class FakeTermBackend:
         self._batch_searches: list[dict[str, Any]] = []
         self._search_instances_result: dict[str, Any] = {"data": [], "totalCount": 0}
         self._graph_path_result: dict[str, Any] = {"path": [], "edges": [], "hops": -1}
+        self._enumerate_calls: list[dict[str, Any]] = []
+        self._enumerate_page: Any = None
 
     # -- Search --
 
@@ -1349,6 +1351,31 @@ class FakeTermBackend:
     ) -> list[MatchResult]:
         """Return preset _disambiguated."""
         return list(self._disambiguated)
+
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str] | None,
+        kb_resource_ids: list[str] | None,
+        filters: list[dict[str, Any]] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Any:
+        """Record call args; return preset _enumerate_page (default empty page)."""
+        self._enumerate_calls.append(
+            {
+                "object_codes": object_codes,
+                "kb_resource_ids": kb_resource_ids,
+                "filters": filters,
+                "page": page,
+                "page_size": page_size,
+            }
+        )
+        if self._enumerate_page is not None:
+            return self._enumerate_page
+        from datacloud_platform.models.shared import ObjectInstanceListPage
+
+        return ObjectInstanceListPage(items=[], total=0, page=page, page_size=page_size)
 
     # -- Clarification --
 
