@@ -174,6 +174,58 @@ async def _search_object_instances_unstructured_paged(
     )
 
 
+async def _enumerate_object_instances(
+    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+) -> Any:
+    """枚举带度数的对象实例 RPC handler（枚举型接口，非检索）。
+
+    入参（camelCase 由 RPC 层约定透传）：
+        object_codes:    list[str] | None — 对象类型范围（与 kb 范围 AND）
+        kb_resource_ids: list[str] | None — 知识库资源范围
+        filters:         list[dict] | None — 条件数组，**原样透传不解析**
+        page:            int，默认 1，钳制 >=1
+        pageSize:        int，默认 20，钳制 >=1
+
+    语义钉死：
+    (a) filters 只透传——不解析/不校验 filter type/params；非法 type/params
+        由 knowledge 层 validate 抛 ValueError → 既有 _EXCEPTION_MAP
+        （ValueError → 400 invalid_params）自动映射，handler 无需自定义。
+    (b) 范围全空（object_codes 与 kb_resource_ids 均为空）→ 空结果
+        （items=[], total=0），即使 filters 有值（filters 不代替范围）。
+    (c) 返回信封 {items, total, page, pageSize}；items 为
+        ObjectInstanceListItem（9 字段含 out_degree/in_degree）。
+    """
+    page = max(1, int(params.get("page", 1)))
+    page_size = max(1, int(params.get("pageSize", 20)))
+
+    logger.warning(
+        "enumerateObjectInstances ENTRY: object_codes=%s kb_resource_ids=%s "
+        "filters=%r page=%s pageSize=%s",
+        params.get("object_codes"),
+        params.get("kb_resource_ids"),
+        params.get("filters"),
+        page,
+        page_size,
+    )
+
+    result = platform.enumerate_object_instances(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        object_codes=params.get("object_codes"),
+        kb_resource_ids=params.get("kb_resource_ids"),
+        filters=params.get("filters"),
+        page=page,
+        page_size=page_size,
+    )
+    return ok(
+        data={
+            "items": result.items,
+            "total": result.total,
+            "page": page,
+            "pageSize": page_size,
+        }
+    )
+
+
 REGISTRY: dict[str, Any] = {
     "searchOntology": _search_ontology,
     "searchScene": _search_scene,
@@ -182,6 +234,7 @@ REGISTRY: dict[str, Any] = {
     "searchObjectInstancesUnstructuredPaged": (
         _search_object_instances_unstructured_paged
     ),
+    "enumerateObjectInstances": _enumerate_object_instances,
 }
 
 
