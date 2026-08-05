@@ -1364,7 +1364,11 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             if not tokens:
                 return ObjectInstanceSearchResult(results={})
 
-            path1 = self._do_path1(object_codes, tokens, top_k)
+            path1 = self._do_path1(base_id, object_codes, tokens, top_k)
+            if path1 is None:
+                # 全局检索（object_codes=None）且 KNOWLEDGE_BASE 白名单为空
+                # → 空结果，不调用 search_terms_batch、不退化为全表
+                return ObjectInstanceSearchResult(results={})
             path2 = await self._do_path2(
                 kb_ids,
                 keywords[0],
@@ -1377,7 +1381,11 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         results: dict[str, list[Any]] = {}
 
         # 路1：一次 batch 调用，按 keyword 分组返回
-        all_path1 = self._do_path1_batched(object_codes, keywords, top_k)
+        all_path1 = self._do_path1_batched(base_id, object_codes, keywords, top_k)
+        if all_path1 is None:
+            # 全局检索（object_codes=None）且 KNOWLEDGE_BASE 白名单为空
+            # → 空结果，不调用 search_terms_batch、不退化为全表
+            return ObjectInstanceSearchResult(results={})
 
         # 路2：asyncio.gather 并发
         path2_futures: dict[str, list[dict[str, Any]]] = {}
@@ -1408,18 +1416,36 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
 
     def _do_path1(
         self,
+        base_id: str,
         object_codes: list[str] | None,
         tokens: list[str],
         top_k: int,
-    ) -> list[dict[str, Any]]:
-        """路1 术语实例检索：多类型原生 IN 过滤。"""
+    ) -> list[dict[str, Any]] | None:
+        """路1 术语实例检索：多类型原生 IN 过滤。
+
+        ``object_codes is None``（全局检索）时先解析 KNOWLEDGE_BASE 白名单
+        （解析只发生一次，global 方法不再自行解析）；白名单为空时返回
+        ``None`` 哨兵而非空列表——调用方据此返回 ``results={}``（语义边界：
+        库中无非结构化类型时就是空结果），与"白名单非空但无命中"
+        （返回 ``{query: []}``）区分开，且不调用 search_terms_batch。
+
+        Returns:
+            命中的 hit dict 列表；全局检索且白名单为空时返回 None。
+        """
         if object_codes is not None:
             return self._path1_scoped_term_search(
                 object_codes=object_codes,
                 tokens=tokens,
                 top_k=top_k,
             )
-        return self._path1_global_term_instance_search(tokens=tokens, top_k=top_k)
+        term_type_codes = self._collect_knowledge_base_object_codes(base_id)
+        if not term_type_codes:
+            return None
+        return self._path1_global_term_instance_search(
+            tokens=tokens,
+            top_k=top_k,
+            term_type_codes=term_type_codes,
+        )
 
     async def _do_path2(
         self,
@@ -1512,6 +1538,47 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                                 "object_codes": [oc],
                             }
         return result
+
+    # ── 全局检索白名单 ─────────────────────────────────────────────────
+
+    def _collect_knowledge_base_object_codes(self, base_id: str) -> list[str]:
+        """收集 KNOWLEDGE_BASE 类型的对象编码白名单（全局检索专用）。
+
+        从 objects 注册表读取全部对象 dict，过滤根级 ``source_type ==
+        "KNOWLEDGE_BASE"``（大小写不敏感，兼容 ``objectSource`` 别名），
+        返回去重、非空的 object_code 列表。
+
+        白名单是闭集：结构化系统产物（prop/object/view/relation/
+        ontology_action 及动态 ``{entity}_{prop}`` 类型）天然不在其中，
+        因此用其作为 ``term_type_codes`` IN 过滤即可排除全部结构化产物。
+        """
+        store = self._entity_store.sub_store(base_id)
+        try:
+            objects = store.list_all("objects")
+        except Exception:
+            logger.warning(
+                "_collect_knowledge_base_object_codes: list_all('objects') failed "
+                "for base_id=%s",
+                base_id,
+                exc_info=True,
+            )
+            return []
+
+        codes: list[str] = []
+        seen: set[str] = set()
+        for obj in objects or []:
+            source_type = str(
+                obj.get("source_type") or obj.get("objectSource") or ""
+            ).upper()
+            if source_type != "KNOWLEDGE_BASE":
+                continue
+            code = str(
+                obj.get("object_code") or obj.get("objectCode") or obj.get("code") or ""
+            ).strip()
+            if code and code not in seen:
+                seen.add(code)
+                codes.append(code)
+        return codes
 
     # ── Path 1 helpers ──────────────────────────────────────────────────
 
@@ -1621,11 +1688,15 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         *,
         tokens: list[str],
         top_k: int,
+        term_type_codes: list[str],
     ) -> list[dict[str, Any]]:
-        """路1 跨全类型批量术语检索。
+        """路1 跨类型批量术语检索（限定 KNOWLEDGE_BASE 白名单类型）。
 
-        使用 self.search_terms_batch（TermBackendMixin 混入到同一
-        DataCloudDataBackend 实例）做 UNION ALL 批量全类型检索。
+        term_type_codes 为调用方（_do_path1）解析好的 KNOWLEDGE_BASE
+        白名单。使用 self.search_terms_batch（TermBackendMixin 混入到同一
+        DataCloudDataBackend 实例）做 UNION ALL 批量检索 — SQL IN 过滤
+        天然排除结构化系统产物（prop/object/view/relation/ontology_action
+        及动态 ``{entity}_{prop}`` 类型）。
         """
         # self.search_terms_batch 来自 TermBackendMixin，与 OntologyMetadataMixin
         # 同在一个 DataCloudDataBackend 实例中（_composite.py）
@@ -1634,14 +1705,16 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             try:
                 batch = batch_method(
                     keywords=tokens,
-                    term_type_codes=None,
+                    term_type_codes=term_type_codes,
                     top_k=top_k,
                 )
             except Exception:
                 logger.warning(
                     "_path1_global: search_terms_batch failed", exc_info=True
                 )
-                return self._path1_global_fallback(tokens, top_k)
+                return self._path1_global_fallback(
+                    tokens, top_k, term_type_codes=term_type_codes
+                )
 
             seen: set[str] = set()
             results: list[dict[str, Any]] = []
@@ -1655,54 +1728,49 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                             results.append(_make_path1_hit(item))
             return results
 
-        # 降级：逐 token，不带 term_type 过滤
+        # 降级：按白名单类型逐类型逐 token
         logger.info(
-            "_path1_global: search_terms_batch unavailable, falling back to per-token"
+            "_path1_global: search_terms_batch unavailable, falling back to "
+            "per-type scoped search"
         )
-        return self._path1_global_fallback(tokens, top_k)
+        return self._path1_global_fallback(
+            tokens, top_k, term_type_codes=term_type_codes
+        )
 
     def _path1_global_fallback(
         self,
         tokens: list[str],
         top_k: int,
+        term_type_codes: list[str],
     ) -> list[dict[str, Any]]:
-        """降级：对所有类型逐 token 调用 search_terms。"""
-        reader = self._get_knowledge_reader()
-        seen: set[str] = set()
-        results: list[dict[str, Any]] = []
+        """降级：委托 scoped 检索（白名单逐类型逐 token，替代 wildcard "*"）。
 
-        for token in tokens:
-            try:
-                raw = reader.search_terms(
-                    term_type_code="*",  # wildcard to trigger full-text match
-                    keyword=token,
-                    limit=top_k,
-                )
-            except Exception:
-                # 空 term_type_code 也可能失败，跳过
-                continue
-
-            items = _extract_items(raw)
-            for item in items:
-                tid = _attr(item, "term_id", "")
-                if tid and tid not in seen:
-                    seen.add(tid)
-                    results.append(_make_path1_hit(item))
-
-        return results
+        全局检索的降级与显式 object_codes 的 scoped 降级语义相同
+        （按类型逐 token 调用 search_terms），直接复用避免重复实现。
+        """
+        return self._path1_scoped_fallback(
+            object_codes=term_type_codes,
+            tokens=tokens,
+            top_k=top_k,
+        )
 
     # ── Path 1 batched helpers ──────────────────────────────────────────
 
     def _do_path1_batched(
         self,
+        base_id: str,
         object_codes: list[str] | None,
         tokens: list[str],
         top_k: int,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> dict[str, list[dict[str, Any]]] | None:
         """路1 批量术语检索 — 按 keyword 分组返回。
 
         与 _do_path1 不同，此方法保留 search_terms_batch 的 per-keyword
         分组结构，用于 word_batch 模式避免 N 次 batch 调用。
+
+        ``object_codes is None``（全局检索）时先解析 KNOWLEDGE_BASE 白名单；
+        白名单为空返回 ``None`` 哨兵（调用方返回空 results={}），与
+        "无 token"（返回 {}）区分开，且不调用 search_terms_batch。
         """
         if not tokens:
             return {}
@@ -1710,7 +1778,12 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
             return self._path1_scoped_batched(
                 object_codes=object_codes, tokens=tokens, top_k=top_k
             )
-        return self._path1_global_batched(tokens, top_k)
+        term_type_codes = self._collect_knowledge_base_object_codes(base_id)
+        if not term_type_codes:
+            return None
+        return self._path1_global_batched(
+            tokens, top_k, term_type_codes=term_type_codes
+        )
 
     def _path1_scoped_batched(
         self,
@@ -1777,17 +1850,24 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         self,
         tokens: list[str],
         top_k: int,
+        term_type_codes: list[str],
     ) -> dict[str, list[dict[str, Any]]]:
-        """全类型批量 — search_terms_batch(type=None) 一次调用，按 kw 分组。"""
+        """跨类型批量（限定白名单）— search_terms_batch 一次调用，按 kw 分组。"""
         batch_method = getattr(self, "search_terms_batch", None)
         if not callable(batch_method):
-            return self._path1_global_fallback_batched(tokens, top_k)
+            return self._path1_global_fallback_batched(
+                tokens, top_k, term_type_codes=term_type_codes
+            )
 
         try:
-            batch = batch_method(keywords=tokens, term_type_codes=None, top_k=top_k)
+            batch = batch_method(
+                keywords=tokens, term_type_codes=term_type_codes, top_k=top_k
+            )
         except Exception:
             logger.warning("_path1_global_batched: batch failed", exc_info=True)
-            return self._path1_global_fallback_batched(tokens, top_k)
+            return self._path1_global_fallback_batched(
+                tokens, top_k, term_type_codes=term_type_codes
+            )
 
         results: dict[str, list[dict[str, Any]]] = {}
         if isinstance(batch, dict):
@@ -1806,27 +1886,14 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         self,
         tokens: list[str],
         top_k: int,
+        term_type_codes: list[str],
     ) -> dict[str, list[dict[str, Any]]]:
-        """降级：逐 token wildcard search → 按 token 分组。"""
-        reader = self._get_knowledge_reader()
-        results: dict[str, list[dict[str, Any]]] = {}
-
-        for token in tokens:
-            seen: set[str] = set()
-            hits: list[dict[str, Any]] = []
-            try:
-                raw = reader.search_terms(
-                    term_type_code="*", keyword=token, limit=top_k
-                )
-            except Exception:
-                raw = None
-            for item in _extract_items(raw):
-                tid = _attr(item, "term_id", "")
-                if tid and tid not in seen:
-                    seen.add(tid)
-                    hits.append(_make_path1_hit(item))
-            results[token] = hits
-        return results
+        """降级：委托 scoped batched 检索（白名单逐类型逐 token → 按 token 分组）。"""
+        return self._path1_scoped_fallback_batched(
+            object_codes=term_type_codes,
+            tokens=tokens,
+            top_k=top_k,
+        )
 
     # ── Path 2 helpers ──────────────────────────────────────────────────
 

@@ -853,3 +853,342 @@ class TestDoPath2ConcurrentSearch:
         adapter._do_chunk_search = fake_chunk_search  # type: ignore[method-assign]
 
         assert await adapter._do_path2({}, query="测试查询", top_k=20) == []
+
+
+# ============================================================================
+# T-42: 全局检索 KNOWLEDGE_BASE 白名单（非结构化实例排除结构化产物）
+# ============================================================================
+
+
+class _ScopedFakeStore:
+    """sub_store(base_id) 返回的 scoped 视图 — 记录 list_all 调用并返回可控对象列表。"""
+
+    def __init__(self, objects: list[dict[str, Any]]) -> None:
+        self._objects = objects
+        self.list_all_calls: list[str] = []
+
+    def list_all(self, entity_type: str, *, base_id: str = "") -> list[dict[str, Any]]:
+        self.list_all_calls.append(entity_type)
+        assert entity_type == "objects"
+        return list(self._objects)
+
+
+class _FakeEntityStore:
+    """Fake entity store：sub_store(base_id) → _ScopedFakeStore。"""
+
+    def __init__(self, objects: list[dict[str, Any]]) -> None:
+        self._objects = objects
+        self._scopes: dict[str, _ScopedFakeStore] = {}
+
+    def sub_store(self, base_id: str) -> _ScopedFakeStore:
+        if base_id not in self._scopes:
+            self._scopes[base_id] = _ScopedFakeStore(self._objects)
+        return self._scopes[base_id]
+
+
+class _CapturingBatchSearch:
+    """捕获 search_terms_batch 调用并模拟 term_type_codes IN 过滤。
+
+    模拟 query_terms_batch 语义：term_type_codes=None 时返回全量（bug 场景），
+    传列表时仅返回列表内类型（修复后的 IN 过滤行为）。
+    """
+
+    def __init__(self, all_items: list[dict[str, Any]]) -> None:
+        self.all_items = all_items
+        self.calls: list[dict[str, Any]] = []
+
+    def __call__(
+        self,
+        *,
+        keywords: list[str],
+        term_type_codes: list[str] | None = None,
+        top_k: int = 20,
+        **_: Any,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            {
+                "keywords": list(keywords),
+                "term_type_codes": (
+                    list(term_type_codes) if term_type_codes is not None else None
+                ),
+                "top_k": top_k,
+            }
+        )
+        if term_type_codes is None:
+            pool = self.all_items
+        else:
+            type_set = set(term_type_codes)
+            pool = [it for it in self.all_items if it.get("term_type_code") in type_set]
+        return {kw: {"items": list(pool), "total": len(pool)} for kw in keywords}
+
+
+_SYSTEM_TERM_TYPES = {"prop", "object", "view", "relation", "ontology_action"}
+
+
+class TestGlobalSearchWhitelist:
+    """T-42: 全局检索（object_codes=None）只检索 KNOWLEDGE_BASE 类型实例。
+
+    验收锚点：
+    - search_terms_batch 收到 term_type_codes == KNOWLEDGE_BASE 白名单
+    - 空白名单 → 空 results 且不调用 search_terms_batch
+    - 显式 object_codes 行为完全不变（不解析白名单）
+    """
+
+    BASE_ID = "test-base"
+
+    @staticmethod
+    def _make_adapter(
+        objects: list[dict[str, Any]],
+        all_terms: list[dict[str, Any]],
+    ) -> OntologyMetadataMixin:
+        adapter = OntologyMetadataMixin.__new__(OntologyMetadataMixin)
+        adapter._entity_store = _FakeEntityStore(objects)
+        adapter.search_terms_batch = _CapturingBatchSearch(  # type: ignore[method-assign]
+            all_terms
+        )
+        return adapter
+
+    def _kb_objects(self) -> list[dict[str, Any]]:
+        return [
+            {"object_code": "Event", "source_type": "KNOWLEDGE_BASE"},
+            {"object_code": "Document", "source_type": "KNOWLEDGE_BASE"},
+            # 结构化对象：必须被排除
+            {"object_code": "leave_balance", "source_type": "DB"},
+        ]
+
+    def _mixed_terms(self) -> list[dict[str, Any]]:
+        """模拟全量术语表：白名单类型 + 结构化系统类型混存。"""
+        return [
+            {
+                "term_id": "t_event",
+                "term_code": "c_event",
+                "term_name": "事件",
+                "term_type_code": "Event",
+                "score": 0.9,
+            },
+            {
+                "term_id": "t_doc",
+                "term_code": "c_doc",
+                "term_name": "文档",
+                "term_type_code": "Document",
+                "score": 0.8,
+            },
+            {
+                "term_id": "t_year",
+                "term_code": "c_year",
+                "term_name": "年度",
+                "term_type_code": "prop",
+                "score": 0.99,
+            },
+            {
+                "term_id": "t_view",
+                "term_code": "c_view",
+                "term_name": "视图",
+                "term_type_code": "view",
+                "score": 0.98,
+            },
+        ]
+
+    # ── 1. 全局检索 + 存在 KNOWLEDGE_BASE 类型 ──────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_global_search_passes_kb_whitelist_and_excludes_system_types(
+        self,
+    ) -> None:
+        """object_codes=None → batch 收到 term_type_codes == 白名单；结果不含系统类型。"""
+        adapter = self._make_adapter(self._kb_objects(), self._mixed_terms())
+
+        result = await adapter.search_object_instances_unstructured(
+            base_id=self.BASE_ID,
+            object_codes=None,
+            query="年假",
+            top_k=20,
+            enable_chunk_recall=False,
+        )
+
+        batch = adapter.search_terms_batch  # type: ignore[attr-defined]
+        assert batch.calls, "search_terms_batch 应被调用"
+        assert batch.calls[0]["term_type_codes"] == ["Event", "Document"]
+
+        hits = result.results.get("年假", [])
+        assert hits, "白名单非空时应返回结果"
+        hit_types = {h.object_code for h in hits}
+        assert not (hit_types & _SYSTEM_TERM_TYPES), f"结果混入系统类型: {hit_types}"
+        assert hit_types <= {"Event", "Document"}
+
+    # ── 2. 全局检索 + 无 KNOWLEDGE_BASE 类型 ────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_global_search_empty_whitelist_returns_empty(self) -> None:
+        """无 KNOWLEDGE_BASE 类型 → 空 results 且不调用 search_terms_batch。"""
+        objects = [
+            {"object_code": "leave_balance", "source_type": "DB"},
+            {"object_code": "order", "source_type": "MYSQL"},
+        ]
+        adapter = self._make_adapter(objects, self._mixed_terms())
+
+        result = await adapter.search_object_instances_unstructured(
+            base_id=self.BASE_ID,
+            object_codes=None,
+            query="年假",
+            top_k=20,
+            enable_chunk_recall=False,
+        )
+
+        assert isinstance(result, ObjectInstanceSearchResult)
+        assert result.results == {}
+        batch = adapter.search_terms_batch  # type: ignore[attr-defined]
+        assert batch.calls == [], "空白名单不应调用 search_terms_batch"
+
+    # ── 3. source_type 大小写变体 + objectSource 别名 ───────────────────
+
+    @pytest.mark.asyncio
+    async def test_global_search_source_type_case_insensitive_and_alias(self) -> None:
+        """source_type 大小写变体 + objectSource 别名 → 全部正确识别为白名单。"""
+        objects = [
+            {"object_code": "Lower", "source_type": "knowledge_base"},
+            {"object_code": "Mixed", "source_type": "Knowledge_Base"},
+            {"object_code": "Alias", "objectSource": "KNOWLEDGE_BASE"},
+            {"object_code": "db_obj", "source_type": "DB"},
+            {"objectCode": "CamelCode", "source_type": "KNOWLEDGE_BASE"},
+        ]
+        adapter = self._make_adapter(objects, self._mixed_terms())
+
+        result = await adapter.search_object_instances_unstructured(
+            base_id=self.BASE_ID,
+            object_codes=None,
+            query="年假",
+            top_k=20,
+            enable_chunk_recall=False,
+        )
+
+        batch = adapter.search_terms_batch  # type: ignore[attr-defined]
+        assert batch.calls, "search_terms_batch 应被调用"
+        assert set(batch.calls[0]["term_type_codes"]) == {
+            "Lower",
+            "Mixed",
+            "Alias",
+            "CamelCode",
+        }
+        assert "db_obj" not in batch.calls[0]["term_type_codes"]
+        # 大小写变体同样走正常返回路径
+        assert isinstance(result, ObjectInstanceSearchResult)
+        assert "年假" in result.results
+
+    # ── 4. 显式 object_codes（含结构化类型）→ 不走白名单解析 ───────────
+
+    @pytest.mark.asyncio
+    async def test_explicit_object_codes_bypasses_whitelist(self) -> None:
+        """显式 object_codes（含结构化类型）→ 尊重输入，不解析白名单。"""
+        adapter = self._make_adapter(self._kb_objects(), self._mixed_terms())
+        store = adapter._entity_store.sub_store(self.BASE_ID)
+
+        result = await adapter.search_object_instances_unstructured(
+            base_id=self.BASE_ID,
+            object_codes=["prop"],  # 结构化类型显式传入
+            query="年假",
+            top_k=20,
+            enable_chunk_recall=False,
+        )
+
+        assert store.list_all_calls == [], "显式传参不应解析白名单"
+        batch = adapter.search_terms_batch  # type: ignore[attr-defined]
+        assert batch.calls
+        assert batch.calls[0]["term_type_codes"] == ["prop"]
+        # 显式结构化类型照常返回结果（尊重输入）
+        assert isinstance(result, ObjectInstanceSearchResult)
+
+    # ── 5. 显式 object_codes=[] → 空结果早退不变 ───────────────────────
+
+    @pytest.mark.asyncio
+    async def test_explicit_empty_object_codes_early_returns(self) -> None:
+        """object_codes=[] → 空结果早退，不解析白名单、不调用 batch。"""
+        adapter = self._make_adapter(self._kb_objects(), self._mixed_terms())
+        store = adapter._entity_store.sub_store(self.BASE_ID)
+
+        result = await adapter.search_object_instances_unstructured(
+            base_id=self.BASE_ID,
+            object_codes=[],
+            query="年假",
+            top_k=20,
+            enable_chunk_recall=False,
+        )
+
+        assert result.results == {}
+        assert store.list_all_calls == []
+        batch = adapter.search_terms_batch  # type: ignore[attr-defined]
+        assert batch.calls == []
+
+    # ── 6. word_batch 模式全局检索 → 同样走白名单 ───────────────────────
+
+    @pytest.mark.asyncio
+    async def test_word_batch_global_search_uses_whitelist(self) -> None:
+        """word_batch 模式（queries 非空 + object_codes=None）→ 同样走白名单。"""
+        adapter = self._make_adapter(self._kb_objects(), self._mixed_terms())
+
+        result = await adapter.search_object_instances_unstructured(
+            base_id=self.BASE_ID,
+            object_codes=None,
+            queries=["年", "假"],
+            top_k=20,
+            enable_chunk_recall=False,
+        )
+
+        batch = adapter.search_terms_batch  # type: ignore[attr-defined]
+        assert batch.calls, "search_terms_batch 应被调用"
+        assert batch.calls[0]["term_type_codes"] == ["Event", "Document"]
+        assert set(result.results.keys()) == {"年", "假"}
+        for hits in result.results.values():
+            hit_types = {h.object_code for h in hits}
+            assert not (hit_types & _SYSTEM_TERM_TYPES), (
+                f"结果混入系统类型: {hit_types}"
+            )
+
+    # ── 7. 降级路径：无 search_terms_batch 时同样按白名单 scoped 检索 ──
+
+    @pytest.mark.asyncio
+    async def test_global_search_fallback_scoped_when_batch_unavailable(self) -> None:
+        """无 search_terms_batch 时全局检索降级为白名单逐类型检索（不退化全表）。"""
+        adapter = OntologyMetadataMixin.__new__(OntologyMetadataMixin)
+        adapter._entity_store = _FakeEntityStore(self._kb_objects())
+
+        class _Reader:
+            def __init__(self) -> None:
+                self.calls: list[tuple[str, str]] = []
+
+            def search_terms(
+                self, *, term_type_code: str, keyword: str, limit: int
+            ) -> dict[str, Any]:
+                self.calls.append((term_type_code, keyword))
+                return {
+                    "items": [
+                        {
+                            "term_id": f"t_{term_type_code}_{keyword}",
+                            "term_code": f"c_{term_type_code}",
+                            "term_name": f"{term_type_code}-{keyword}",
+                            "term_type_code": term_type_code,
+                            "score": 0.9,
+                        }
+                    ],
+                    "total": 1,
+                }
+
+        reader = _Reader()
+        adapter._knowledge_reader = reader
+
+        result = await adapter.search_object_instances_unstructured(
+            base_id=self.BASE_ID,
+            object_codes=None,
+            query="年假",
+            top_k=20,
+            enable_chunk_recall=False,
+        )
+
+        # 降级后只按白名单类型检索，没有 wildcard "*" 全表
+        assert reader.calls, "降级路径应调用 reader.search_terms"
+        called_types = {tc for tc, _ in reader.calls}
+        assert called_types == {"Event", "Document"}
+        assert "*" not in called_types
+        # 结果全部来自白名单类型
+        hit_types = {h.object_code for h in result.results["年假"]}
+        assert not (hit_types & _SYSTEM_TERM_TYPES), f"结果混入系统类型: {hit_types}"
