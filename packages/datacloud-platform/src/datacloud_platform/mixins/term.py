@@ -237,9 +237,15 @@ class TermMixin(TermSyncHandler):
         return self._term_for(base_id).list_term_type_relations(**kwargs)
 
     def create_term_type(
-        self: _HasTermBackend, base_id: str, *, term_type: dict[str, Any]
+        self: _HasTermBackend,
+        base_id: str,
+        *,
+        library_id: str,
+        term_type: dict[str, Any],
     ) -> dict[str, Any]:
-        return self._term_for(base_id).create_term_type(term_type=term_type)
+        return self._term_for(base_id).create_term_type(
+            library_id=library_id, term_type=term_type
+        )
 
     def update_term_type(
         self: _HasTermBackend,

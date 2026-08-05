@@ -118,7 +118,11 @@ def _term_type_create(
 ) -> Any:
     return ok(
         data=platform.create_term_type(
-            _base(params), term_type=params.get("term_type", {})
+            _base(params),
+            library_id=(
+                params.get("library_id") or params.get("libraryId") or _base(params)
+            ),
+            term_type=params.get("term_type", {}),
         ),
         message="created",
     )

@@ -290,12 +290,13 @@ class TermBackendMixin(DataCloudDataBackendBase):
         """确保术语类型存在（幂等）。实现 TermSyncHandler.ensure_term_type。"""
         try:
             self.create_term_type(  # type: ignore[attr-defined]
+                library_id=base_id,
                 term_type={
                     "typeCode": type_code,
                     "typeName": type_name,
                     "typeDesc": "",
                     "typeCategory": 1,
-                }
+                },
             )
         except Exception:
             logger.debug(

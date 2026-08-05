@@ -2053,7 +2053,10 @@ class RemoteTermBackend:
     ) -> dict[str, Any]:
         return {"items": [], "total": 0}
 
-    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]:
+    def create_term_type(
+        self, *, library_id: str, term_type: dict[str, Any]
+    ) -> dict[str, Any]:
+        _ = library_id
         raise NotImplementedError("Remote term type not yet implemented")
 
     def update_term_type(

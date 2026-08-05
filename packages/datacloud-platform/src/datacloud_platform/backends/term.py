@@ -309,7 +309,9 @@ class TermBackend(Protocol):
         """
         ...
 
-    def create_term_type(self, *, term_type: dict[str, Any]) -> dict[str, Any]: ...
+    def create_term_type(
+        self, *, library_id: str, term_type: dict[str, Any]
+    ) -> dict[str, Any]: ...
 
     def update_term_type(
         self, *, library_id: str, type_code: str, updates: dict[str, Any]
