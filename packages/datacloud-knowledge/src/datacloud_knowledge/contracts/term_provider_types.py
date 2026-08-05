@@ -28,6 +28,35 @@ LabelCondition = Literal["and", "or"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 枚举型查询类型（enumerate_object_instances）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectInstanceItem:
+    """对象实例枚举结果项（term 行 + 图度数）。
+
+    ``out_degree``/``in_degree`` 仅在请求包含 degree filter（触发 JOIN）时
+    为真实全图度数；无 degree filter 时不做 JOIN，恒为 0。
+    """
+
+    term_id: str
+    term_code: str
+    term_name: str
+    term_type_code: str
+    out_degree: int = 0
+    in_degree: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EnumeratedObjectInstances:
+    """对象实例枚举信封 — items + 诚实 total（同条件 COUNT 变体）。"""
+
+    items: list[ObjectInstanceItem]
+    total: int
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # 输入类型
 # ═══════════════════════════════════════════════════════════════════════════════
 
