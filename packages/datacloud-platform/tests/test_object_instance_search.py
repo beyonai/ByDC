@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
 from datacloud_platform.adapters.data_adapter._ontology_metadata import (
+    OntologyMetadataMixin,
     _extract_items,
     _fuse_path_results,
     _resolve_input_mode,
@@ -680,3 +682,174 @@ async def test_chunk_search_rejects_missing_kb_resource_id() -> None:
             kb_resource_id="",
             top_k=5,
         )
+
+
+# ============================================================================
+# T-40: _do_path2 多 KB chunk 搜索并发化
+# ============================================================================
+
+
+class TestDoPath2ConcurrentSearch:
+    """T-40: _do_path2 内部多 KB chunk 搜索并发执行。
+
+    验收点:
+    1. 多 KB 并发：一个成功一个抛异常 → 成功结果正常返回、失败仅告警
+    2. 保序合并：合并顺序与 kb_info 迭代顺序一致（gather 保序）
+    3. 去重保持：跨 KB 相同 term_id 只保留首个
+    """
+
+    @staticmethod
+    def _make_adapter() -> OntologyMetadataMixin:
+        """创建不执行 __init__ 的裸 adapter（_do_path2 只需 _do_chunk_search）。"""
+        return OntologyMetadataMixin.__new__(OntologyMetadataMixin)
+
+    @staticmethod
+    def _kb_info() -> dict[str, dict[str, Any]]:
+        return {
+            "kb_1": {"kb_directory": "/dir1", "object_codes": ["obj_a"]},
+            "kb_2": {"kb_directory": "/dir2", "object_codes": ["obj_b"]},
+        }
+
+    @pytest.mark.asyncio
+    async def test_one_kb_fails_one_succeeds(self) -> None:
+        """一个 KB 抛异常 → 仅告警降级；另一个 KB 结果正常返回。"""
+        adapter = self._make_adapter()
+        attempted: list[str] = []
+
+        async def fake_chunk_search(
+            *,
+            query: str,
+            kb_resource_id: str | None,
+            top_k: int,
+            kb_directory: str | None = None,
+            term_type_codes: list[str] | None = None,
+            **_: Any,
+        ) -> list[dict[str, Any]]:
+            attempted.append(kb_resource_id or "")
+            if kb_resource_id == "kb_1":
+                raise RuntimeError("kb_1 backend down")
+            return [{"term_id": "tid_ok", "term_code": "c_ok", "score": 0.9}]
+
+        adapter._do_chunk_search = fake_chunk_search  # type: ignore[method-assign]
+
+        with patch(
+            "datacloud_platform.adapters.data_adapter._ontology_metadata.logger"
+        ) as mock_logger:
+            result = await adapter._do_path2(
+                self._kb_info(), query="测试查询", top_k=20
+            )
+
+        # 成功 KB 结果正常返回，失败 KB 不影响
+        assert [h["term_id"] for h in result] == ["tid_ok"]
+        # 两个 KB 都被尝试（并发发起）
+        assert set(attempted) == {"kb_1", "kb_2"}
+        # 失败仅告警不中断
+        fail_warnings = [
+            str(c)
+            for c in mock_logger.warning.call_args_list
+            if "chunk search failed" in str(c)
+        ]
+        assert len(fail_warnings) == 1
+        assert "kb_1" in fail_warnings[0]
+
+    @pytest.mark.asyncio
+    async def test_kb_searches_run_concurrently(self) -> None:
+        """两个 KB 搜索并发执行；串行实现会因握手超时而失败。"""
+        adapter = self._make_adapter()
+        started = {kid: asyncio.Event() for kid in ("kb_1", "kb_2")}
+        all_started = asyncio.Event()
+
+        async def fake_chunk_search(
+            *,
+            kb_resource_id: str | None,
+            **_: Any,
+        ) -> list[dict[str, Any]]:
+            kid = kb_resource_id or ""
+            started[kid].set()
+            if all(e.is_set() for e in started.values()):
+                all_started.set()
+            await asyncio.wait_for(all_started.wait(), timeout=2.0)
+            return [{"term_id": f"tid_{kid}", "score": 0.9}]
+
+        adapter._do_chunk_search = fake_chunk_search  # type: ignore[method-assign]
+
+        result = await adapter._do_path2(self._kb_info(), query="测试查询", top_k=20)
+
+        assert [h["term_id"] for h in result] == ["tid_kb_1", "tid_kb_2"]
+
+    @pytest.mark.asyncio
+    async def test_merge_order_follows_kb_info_iteration(self) -> None:
+        """合并顺序与 kb_info 迭代顺序一致，与完成先后无关。"""
+        adapter = self._make_adapter()
+
+        async def fake_chunk_search(
+            *,
+            kb_resource_id: str | None,
+            **_: Any,
+        ) -> list[dict[str, Any]]:
+            kid = kb_resource_id or ""
+            # kb_1 最慢返回：若按完成顺序合并会排到末尾
+            if kid == "kb_1":
+                await asyncio.sleep(0.05)
+            return [
+                {"term_id": f"tid_{kid}_a", "score": 0.9},
+                {"term_id": f"tid_{kid}_b", "score": 0.8},
+            ]
+
+        adapter._do_chunk_search = fake_chunk_search  # type: ignore[method-assign]
+
+        result = await adapter._do_path2(self._kb_info(), query="测试查询", top_k=20)
+
+        assert [h["term_id"] for h in result] == [
+            "tid_kb_1_a",
+            "tid_kb_1_b",
+            "tid_kb_2_a",
+            "tid_kb_2_b",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_cross_kb_dedup_keeps_first_term_id(self) -> None:
+        """跨 KB 相同 term_id 只保留首个（按 kb_info 迭代顺序）。"""
+        adapter = self._make_adapter()
+
+        async def fake_chunk_search(
+            *,
+            kb_resource_id: str | None,
+            **_: Any,
+        ) -> list[dict[str, Any]]:
+            kid = kb_resource_id or ""
+            if kid == "kb_1":
+                return [
+                    {"term_id": "shared", "score": 0.9},
+                    {"term_id": "only_kb_1", "score": 0.8},
+                ]
+            return [
+                {"term_id": "shared", "score": 0.7},
+                {"term_id": "only_kb_2", "score": 0.6},
+            ]
+
+        adapter._do_chunk_search = fake_chunk_search  # type: ignore[method-assign]
+
+        result = await adapter._do_path2(self._kb_info(), query="测试查询", top_k=20)
+
+        assert [h["term_id"] for h in result] == [
+            "shared",
+            "only_kb_1",
+            "only_kb_2",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_empty_kb_info_returns_empty(self) -> None:
+        """空 kb_info 直接返回空列表，不发起任何搜索。"""
+        adapter = self._make_adapter()
+
+        async def fake_chunk_search(
+            *,
+            kb_resource_id: str | None,
+            **_: Any,
+        ) -> list[dict[str, Any]]:
+            raise AssertionError("不应发起搜索")
+
+        adapter._do_chunk_search = fake_chunk_search  # type: ignore[method-assign]
+
+        assert await adapter._do_path2({}, query="测试查询", top_k=20) == []

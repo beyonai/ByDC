@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
@@ -1426,15 +1427,21 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
         query: str,
         top_k: int,
     ) -> list[dict[str, Any]]:
-        """路2 KB chunk 搜索：对收集的 kb_resource_id 逐个搜索并合并。"""
+        """路2 KB chunk 搜索：并发搜索所有 kb_resource_id 并按收集顺序合并。
+
+        每个 KB 一个协程任务，asyncio.gather 保序合并；
+        单 KB 失败记 warning 并降级为空列表，不影响其他 KB。
+        """
         if not kb_info:
             return []
         logger.info(
             "_do_path2: kb_ids=%s query=%s top_k=%s", list(kb_info.keys()), query, top_k
         )
-        all_results: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for kb_resource_id, info in kb_info.items():
+
+        async def _search_one(
+            kb_resource_id: str, info: dict[str, Any]
+        ) -> list[dict[str, Any]]:
+            """单个 KB 的 chunk 搜索，失败降级为空列表。"""
             try:
                 chunk_hits = await self._do_chunk_search(
                     query=query,
@@ -1448,17 +1455,27 @@ class OntologyMetadataMixin(DataCloudDataBackendBase):
                     kb_resource_id,
                     len(chunk_hits),
                 )
-                for hit in chunk_hits:
-                    tid = hit.get("term_id", "")
-                    if tid and tid not in seen:
-                        seen.add(tid)
-                        all_results.append(hit)
+                return chunk_hits
             except Exception:
                 logger.warning(
                     "_do_path2: chunk search failed for kb_resource_id=%s",
                     kb_resource_id,
                     exc_info=True,
                 )
+                return []
+
+        chunk_lists = await asyncio.gather(
+            *(_search_one(kid, info) for kid, info in kb_info.items())
+        )
+
+        all_results: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for chunk_hits in chunk_lists:
+            for hit in chunk_hits:
+                tid = hit.get("term_id", "")
+                if tid and tid not in seen:
+                    seen.add(tid)
+                    all_results.append(hit)
         return all_results
 
     # ── kb_ids collector ────────────────────────────────────────────────
