@@ -27,9 +27,11 @@ from typing import Any
 import httpx
 
 from datacloud_knowledge.contracts.term_provider_types import (
+    EnumeratedObjectInstances,
     ImportResult,
     LabelCondition,
     LabelFilter,
+    ObjectInstanceItem,
     QueryResult,
     QueryType,
     TermCreate,
@@ -874,6 +876,44 @@ class HttpTermAdapter:
     ) -> dict[str, Any]:
         """HTTP API 不支持术语关系图谱查询。"""
         raise NotImplementedError("query_term_relations not implemented in HTTP adapter")
+
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str],
+        kb_resource_ids: list[str],
+        filters: list[dict[str, Any]] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> EnumeratedObjectInstances:
+        """远程转发对象实例枚举 — filters 透传（None 归一化为空数组，语义等价无条件）。
+
+        映射到 POST /core/term/enumerateObjectInstances。
+        非法 filter type/params 由远端 knowledge 服务校验。
+        """
+        payload: dict[str, object] = {
+            "objectCodes": object_codes,
+            "kbResourceIds": kb_resource_ids,
+            "filters": filters or [],
+            "page": page,
+            "pageSize": page_size,
+        }
+        resp = self._client.post("/core/term/enumerateObjectInstances", json=payload)
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        result = data.get("resultObject") or data
+        items = [
+            ObjectInstanceItem(
+                term_id=str(raw["term_id"]),
+                term_code=str(raw["term_code"]),
+                term_name=str(raw["term_name"]),
+                term_type_code=str(raw["term_type_code"]),
+                out_degree=int(raw.get("out_degree") or 0),
+                in_degree=int(raw.get("in_degree") or 0),
+            )
+            for raw in result["items"]
+        ]
+        return EnumeratedObjectInstances(items=items, total=int(result["total"]))
 
     # ═════════════════════════════════════════════════════════════════════
     # TermWriter — 新增协议方法（TermProvider）

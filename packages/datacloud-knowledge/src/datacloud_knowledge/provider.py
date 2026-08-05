@@ -21,6 +21,7 @@ from typing import Any
 
 from datacloud_knowledge.adapters import create_reader, create_writer
 from datacloud_knowledge.contracts.term_provider_types import (
+    EnumeratedObjectInstances,
     ImportResult,
     LabelCondition,
     LabelFilter,
@@ -442,6 +443,36 @@ def query_terms_batch(
         query_vectors=query_vectors,
         top_k=top_k,
         offset=offset,
+    )
+
+
+def enumerate_object_instances(
+    *,
+    object_codes: list[str],
+    kb_resource_ids: list[str],
+    filters: list[dict[str, Any]] | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> EnumeratedObjectInstances:
+    """枚举带度数的对象实例（filters 条件框架版）— 委托 reader。
+
+    Args:
+        object_codes: 对象类型编码范围（尊重输入不校验，与 kb 范围 AND）。
+        kb_resource_ids: 知识库资源 ID 范围（ext_attrs->>'kb_resource_id'）。
+        filters: 条件数组（v1 只 AND），type 不在注册表 → ValueError。
+        page: 页码（>=1）。
+        page_size: 每页条数（>=1）。
+
+    Returns:
+        items（含 out_degree/in_degree）+ 诚实 total；范围全空 → 空结果。
+    """
+    reader = create_reader()
+    return reader.enumerate_object_instances(
+        object_codes=object_codes,
+        kb_resource_ids=kb_resource_ids,
+        filters=filters,
+        page=page,
+        page_size=page_size,
     )
 
 
