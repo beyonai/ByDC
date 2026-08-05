@@ -109,11 +109,79 @@ async def _search_object_instances_unstructured(
     return ok(data=result.results)
 
 
+async def _search_object_instances_unstructured_paged(
+    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+) -> Any:
+    """非结构化对象实例检索 — 分页候选推荐 RPC handler（纯 sentence 模式）。
+
+    语义说明：
+    (a) 候选池内 RRF 语义、非全量精确分页：fetch_top 只放大候选池，
+        分页是"融合后排名列表"上的切片，不是全量快照精确分页。
+    (b) 跨页顺序不保证稳定（RRF 固有属性）：第 2 页候选池比第 1 页长，
+        同一 term 的 rank 会变、可能出现跨页重复条目。
+    (c) 纯 sentence 模式：屏蔽 queries（word_batch）与 enable_chunk_recall
+        （路2 固定关闭——表单候选推荐场景字段为结构化关键字、每键防抖
+        触发延迟敏感，路1 为主、保延迟）；需要 KB 召回时走旧接口。
+    (d) 忽略客户端传入的 top_k（pageSize 取代其语义），否则分页数学被破坏。
+
+    入参：base_id / object_codes / query 与旧接口一致；page（默认 1）与
+    pageSize（默认 5）钳制到 >=1，offset 只在融合结果之上切片（严禁下推
+    到 search_terms_batch 的 offset 参数，RRF rank 会错位）。
+    返回信封：{"results": {query: [hit, ...]}, "pagination": {...}}，
+    has_more 为单 bool（offset+limit 之后是否还有候选）。
+    """
+    page = max(1, int(params.get("page", 1)))
+    page_size = max(1, int(params.get("pageSize", 5)))
+    offset = (page - 1) * page_size
+    limit = page_size
+    fetch_top = offset + limit + 1  # +1 为 has_more 哨兵
+
+    logger.warning(
+        "searchObjectInstancesUnstructuredPaged ENTRY: object_codes=%s query=%r "
+        "page=%s pageSize=%s fetch_top=%s",
+        params.get("object_codes"),
+        params.get("query"),
+        page,
+        page_size,
+        fetch_top,
+    )
+
+    result = await platform.search_object_instances_unstructured(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        object_codes=params.get("object_codes"),
+        query=params.get("query"),
+        queries=None,
+        top_k=fetch_top,
+        enable_chunk_recall=False,
+    )
+
+    results: dict[str, list[Any]] = {}
+    has_more = False
+    for keyword, hits in result.results.items():
+        results[keyword] = list(hits[offset : offset + limit])
+        if len(hits) > offset + limit:
+            has_more = True
+
+    return ok(
+        data={
+            "results": results,
+            "pagination": {
+                "page": page,
+                "pageSize": page_size,
+                "has_more": has_more,
+            },
+        }
+    )
+
+
 REGISTRY: dict[str, Any] = {
     "searchOntology": _search_ontology,
     "searchScene": _search_scene,
     "searchInstances": _search_instances,
     "searchObjectInstancesUnstructured": _search_object_instances_unstructured,
+    "searchObjectInstancesUnstructuredPaged": (
+        _search_object_instances_unstructured_paged
+    ),
 }
 
 
