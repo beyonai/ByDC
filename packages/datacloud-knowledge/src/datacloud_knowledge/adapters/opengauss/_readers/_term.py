@@ -11,9 +11,9 @@ import json
 import logging
 import re
 import warnings
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import and_, bindparam, cast, func, literal, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, NUMERIC, TIMESTAMP
@@ -30,8 +30,10 @@ from datacloud_knowledge.adapters.opengauss.bm25 import bm25_search_with_or
 from datacloud_knowledge.adapters.opengauss.jieba_recall import jieba_recall
 from datacloud_knowledge.contracts.rrf import rrf_fuse
 from datacloud_knowledge.contracts.term_provider_types import (
+    EnumeratedObjectInstances,
     LabelCondition,
     LabelFilter,
+    ObjectInstanceItem,
     QueryResult,
     QueryType,
     TermDetail,
@@ -74,6 +76,116 @@ class _TermSearchRow:
     created_time: Any | None
     updated_time: Any | None
     score: float | None = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FilterSpec 注册表 — enumerate_object_instances 条件框架
+#
+# filters 数组 = [{"type": <注册表 key>, "params": <类型专属参数字典>}, ...]
+# 新条件类型 = 注册表 +1 条（validate + build）+ 测试，RPC/handler/接口形状零改动。
+# 静态 dict，非插件系统/DSL（防过度工程）。
+#
+# degree filter 请求形状:
+#   {"type": "degree", "params": {"metric": "out_minus_in"|"out_ratio_in"|"out"|"in",
+#                                 "op": "gt"|"gte"|"lt"|"lte"|"eq", "value": <数字>}}
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_DEGREE_METRICS = ("out", "in", "out_minus_in", "out_ratio_in")
+_DEGREE_OPS: dict[str, str] = {
+    "gt": ">",
+    "gte": ">=",
+    "lt": "<",
+    "lte": "<=",
+    "eq": "=",
+}
+
+
+def _degree_metric_expr(metric: str) -> str:
+    """degree metric 白名单 → SQL 度量表达式（防注入：白名单映射，绝不拼接输入）。
+
+    度数语义（钉死）：只统计实例级边（两端 id 均非空）+ BUSINESS 类别；
+    自环（source=target）进出各计一次；全图度数（LEFT JOIN 不截断邻域）。
+    双 JOIN 计数用 COUNT(DISTINCT relation_id) 防止 out/in 交叉膨胀。
+    """
+    out_expr = "COUNT(DISTINCT out_rel.relation_id)"
+    in_expr = "COUNT(DISTINCT in_rel.relation_id)"
+    if metric == "out":
+        return out_expr
+    if metric == "in":
+        return in_expr
+    if metric == "out_minus_in":
+        return f"({out_expr} - {in_expr})"
+    # out_ratio_in — 除零语义：in=0 且 out>0 → +∞（1e999，gt/gte 恒通过 lt/lte 恒不通过）；
+    # in=0 且 out=0 → NULL 不参与
+    return (
+        f"CASE WHEN {out_expr} = 0 AND {in_expr} = 0 THEN NULL "
+        f"WHEN {in_expr} = 0 THEN 1e999 "
+        f"ELSE {out_expr} * 1.0 / {in_expr} END"
+    )
+
+
+def _validate_degree_filter(params: dict[str, Any]) -> None:
+    """degree filter 参数校验 — 非法抛 ValueError。"""
+    metric = params.get("metric")
+    if metric not in _DEGREE_METRICS:
+        raise ValueError(f"非法 degree metric: {metric!r}，允许: {sorted(_DEGREE_METRICS)}")
+    op = params.get("op")
+    if op not in _DEGREE_OPS:
+        raise ValueError(f"非法 degree op: {op!r}，允许: {sorted(_DEGREE_OPS)}")
+    value = params.get("value")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        # 验收钉死 ValueError（_EXCEPTION_MAP: ValueError → 400 invalid_params）
+        raise ValueError(f"degree value 必须是数字，收到: {value!r}")  # noqa: TRY004
+
+
+def _build_degree_condition(alias: str, params: dict[str, Any]) -> tuple[str, dict[str, object]]:
+    """degree filter → (条件片段, 绑定参数)。
+
+    返回片段形如 ``<metric_expr> <op> :value``，绑定参数 key 固定为 ``value``，
+    由调用侧做参数名唯一化（支持多个 filter AND 组合）。
+    """
+    _ = alias  # 保留 FilterSpec.build 的 (alias, params) 签名（票面钉死）
+    metric = params["metric"]
+    op = params["op"]
+    value = params["value"]
+    expr = _degree_metric_expr(metric)
+    return f"{expr} {_DEGREE_OPS[op]} :value", {"value": value}
+
+
+def _degree_sort_expr(params: dict[str, Any]) -> str:
+    """degree 排序度量表达式（metric 值降序，HAVING/ORDER BY 复用同一表达式）。"""
+    return _degree_metric_expr(params["metric"])
+
+
+@dataclass(frozen=True, slots=True)
+class FilterSpec:
+    """枚举查询条件规格 — 注册表条目。
+
+    Attributes:
+        stage: 条件所在 SQL 阶段（"where" | "having"）。
+        required_joins: 需要生成的 LEFT JOIN（"out"/"in"，空 = 无 JOIN）。
+        validate: 参数校验，非法抛 ValueError。
+        build: (alias, params) -> (SQL 片段, 绑定参数 dict)。
+        sort_expr: 可选排序度量表达式构造器；含排序语义的 filter 提供，
+                   无则查询按 term_id ASC（新 filter 类型无需改本方法）。
+    """
+
+    stage: Literal["where", "having"]
+    required_joins: frozenset[str]
+    validate: Callable[[dict[str, Any]], None]
+    build: Callable[[str, dict[str, Any]], tuple[str, dict[str, object]]]
+    sort_expr: Callable[[dict[str, Any]], str] | None = None
+
+
+_FILTER_REGISTRY: dict[str, FilterSpec] = {
+    "degree": FilterSpec(
+        stage="having",
+        required_joins=frozenset({"out", "in"}),
+        validate=_validate_degree_filter,
+        build=_build_degree_condition,
+        sort_expr=_degree_sort_expr,
+    ),
+}
 
 
 class _TermReader(_ReaderBase):
@@ -2398,6 +2510,165 @@ class _TermReader(_ReaderBase):
             raise
 
         return [r for r in results if r is not None]
+
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str],
+        kb_resource_ids: list[str],
+        filters: list[dict[str, Any]] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> EnumeratedObjectInstances:
+        """枚举带度数的对象实例 — 单条 SQL 完成范围过滤 + 度数聚合 + 条件过滤 + 稳定排序 + 分页。
+
+        条件框架：filters 数组按 ``_FILTER_REGISTRY`` 查表（type 走 dict key，
+        绝不拼接进 SQL）；degree 为注册表首个 filter 类型（HAVING 阶段）。
+
+        Args:
+            object_codes: 对象类型编码范围（尊重输入不校验）。与 kb_resource_ids 为 AND。
+            kb_resource_ids: 知识库资源 ID 范围（``ext_attrs->>'kb_resource_id'``）。
+            filters: 条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]，v1 只 AND。
+            page: 页码（>=1，1-based）。
+            page_size: 每页条数（>=1）。
+
+        Returns:
+            items + 诚实 total（同 WHERE+HAVING 的 COUNT 变体，无 ORDER BY/LIMIT）。
+
+        Raises:
+            ValueError: filter type 不在注册表 / metric/op 白名单非法 / value 非数字 /
+                        page/page_size 非法。
+        """
+        if page < 1:
+            raise ValueError(f"page 必须 >= 1，收到: {page}")
+        if page_size < 1:
+            raise ValueError(f"page_size 必须 >= 1，收到: {page_size}")
+        # 范围全空 → 空结果（即使 filters 有值：filters 不代替范围）
+        if not object_codes and not kb_resource_ids:
+            return EnumeratedObjectInstances(items=[], total=0)
+
+        # ── 解析 filters：查注册表 → validate → build → 按 stage 分组 ──
+        having_parts: list[str] = []
+        where_parts: list[str] = []
+        bind_params: dict[str, object] = {}
+        required_joins: set[str] = set()
+        degree_sort_expr: str | None = None
+
+        for idx, filt in enumerate(filters or []):
+            if not isinstance(filt, dict):
+                # 验收钉死 ValueError（_EXCEPTION_MAP: ValueError → 400 invalid_params）
+                raise ValueError(f"filter 项必须是 dict，收到: {filt!r}")  # noqa: TRY004
+            filter_type = filt.get("type")
+            spec = _FILTER_REGISTRY.get(filter_type) if isinstance(filter_type, str) else None
+            if spec is None:
+                raise ValueError(
+                    f"未知 filter type: {filter_type!r}（注册表: {sorted(_FILTER_REGISTRY)}）"
+                )
+            filter_params = filt.get("params")
+            if not isinstance(filter_params, dict):
+                # 验收钉死 ValueError（_EXCEPTION_MAP: ValueError → 400 invalid_params）
+                raise ValueError(f"filter {filter_type!r} 的 params 必须是 dict")  # noqa: TRY004
+            spec.validate(filter_params)
+            fragment, extra_binds = spec.build("", filter_params)
+            # 绑定参数名唯一化（支持多个 filter AND 组合；整词替换防误改长参数名）
+            for name, value in extra_binds.items():
+                new_name = f"{filter_type}_{name}_{idx}"
+                fragment = re.sub(rf":{re.escape(name)}(?!\w)", f":{new_name}", fragment)
+                bind_params[new_name] = value
+            if spec.stage == "where":
+                where_parts.append(fragment)
+            else:
+                having_parts.append(fragment)
+            required_joins.update(spec.required_joins)
+            # 排序：第一个带 sort_expr 的 filter 的度量表达式降序 + term_id ASC
+            if spec.sort_expr is not None and degree_sort_expr is None:
+                degree_sort_expr = spec.sort_expr(filter_params)
+
+        # ── 动态组装 SQL ──────────────────────────────────────────────
+        select_cols = ["t.term_id", "t.term_code", "t.term_name", "t.term_type_code"]
+        joins: list[str] = []
+        if "out" in required_joins:
+            # SELECT 度数列与 HAVING/ORDER BY 共用同一表达式源，防计数规则漂移
+            select_cols.append(f"{_degree_metric_expr('out')} AS out_degree")
+            joins.append(
+                "LEFT JOIN term_relation out_rel\n"
+                "       ON out_rel.source_term_id = t.term_id\n"
+                "      AND out_rel.source_term_id IS NOT NULL\n"
+                "      AND out_rel.target_term_id  IS NOT NULL\n"
+                "      AND out_rel.relation_category = 'BUSINESS'"
+            )
+        if "in" in required_joins:
+            select_cols.append(f"{_degree_metric_expr('in')} AS in_degree")
+            joins.append(
+                "LEFT JOIN term_relation in_rel\n"
+                "       ON in_rel.target_term_id = t.term_id\n"
+                "      AND in_rel.source_term_id IS NOT NULL\n"
+                "      AND in_rel.target_term_id  IS NOT NULL\n"
+                "      AND in_rel.relation_category = 'BUSINESS'"
+            )
+
+        where_conditions: list[str] = []
+        if object_codes:
+            where_conditions.append("t.term_type_code IN :object_codes")
+        if kb_resource_ids:
+            where_conditions.append("t.ext_attrs->>'kb_resource_id' IN :kb_resource_ids")
+        where_conditions.extend(where_parts)
+
+        group_by = "GROUP BY t.term_id, t.term_code, t.term_name, t.term_type_code"
+        having_sql = f"HAVING {' AND '.join(having_parts)}" if having_parts else ""
+        if degree_sort_expr is not None:
+            order_by = f"ORDER BY {degree_sort_expr} DESC, t.term_id ASC"
+        else:
+            order_by = "ORDER BY t.term_id ASC"
+
+        select_sql = "SELECT " + ", ".join(select_cols) + "\nFROM term t"
+        join_sql = "\n" + "\n".join(joins) if joins else ""
+        where_sql = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+        sql = (
+            f"{select_sql}{join_sql}\n{where_sql}\n{group_by}\n"
+            f"{having_sql}\n{order_by}\nLIMIT :limit OFFSET :offset"
+        )
+        # total：同 WHERE + GROUP BY + HAVING 的 COUNT(*) 变体（无 ORDER BY/LIMIT）。
+        # 必须包一层子查询：无 GROUP BY 时 sqlite 会静默忽略 HAVING。
+        total_sql = (
+            "SELECT COUNT(*) FROM (\n"
+            f"SELECT t.term_id\nFROM term t{join_sql}\n{where_sql}\n{group_by}\n{having_sql}\n"
+            ") AS filtered"
+        )
+
+        params: dict[str, object] = {}
+        if object_codes:
+            params["object_codes"] = object_codes
+        if kb_resource_ids:
+            params["kb_resource_ids"] = kb_resource_ids
+        params.update(bind_params)
+        params["limit"] = page_size
+        params["offset"] = (page - 1) * page_size
+
+        # ── 执行 ─────────────────────────────────────────────────────
+        binds: list[Any] = []
+        if object_codes:
+            binds.append(bindparam("object_codes", expanding=True))
+        if kb_resource_ids:
+            binds.append(bindparam("kb_resource_ids", expanding=True))
+        stmt = text(sql) if not binds else text(sql).bindparams(*binds)
+        total_stmt = text(total_sql) if not binds else text(total_sql).bindparams(*binds)
+        with self._get_session() as session:
+            rows = session.execute(stmt, params).fetchall()
+            total = int(session.execute(total_stmt, params).scalar() or 0)
+
+        items = [
+            ObjectInstanceItem(
+                term_id=str(row[0]),
+                term_code=str(row[1]),
+                term_name=str(row[2]),
+                term_type_code=str(row[3]),
+                out_degree=int(row[4]) if len(row) > 4 and row[4] is not None else 0,
+                in_degree=int(row[5]) if len(row) > 5 and row[5] is not None else 0,
+            )
+            for row in rows
+        ]
+        return EnumeratedObjectInstances(items=items, total=total)
 
     # ── Batch SQL helpers ─────────────────────────────────────────────
 
