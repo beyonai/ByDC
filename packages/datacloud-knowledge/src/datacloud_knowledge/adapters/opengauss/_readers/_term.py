@@ -4646,7 +4646,7 @@ class _TermReader(_ReaderBase):
                 if r_[2]:
                     term_ids.add(str(r_[2]))
 
-            term_name_map = self._batch_get_term_names(session, term_ids)
+            term_info_map = self._batch_get_term_infos(session, term_ids)
 
         data = [
             {
@@ -4656,8 +4656,10 @@ class _TermReader(_ReaderBase):
                 "relation_name": str(r[3]),
                 "relation_category": str(r[4]),
                 "cardinality": str(r[5]) if r[5] else None,
-                "source_term_name": term_name_map.get(str(r[1])) if r[1] else None,
-                "target_term_name": term_name_map.get(str(r[2])) if r[2] else None,
+                "source_term_name": term_info_map.get(str(r[1]), {}).get("name") if r[1] else None,
+                "target_term_name": term_info_map.get(str(r[2]), {}).get("name") if r[2] else None,
+                "source_term_code": term_info_map.get(str(r[1]), {}).get("code") if r[1] else None,
+                "target_term_code": term_info_map.get(str(r[2]), {}).get("code") if r[2] else None,
                 "created_time": r[6].isoformat() if r[6] is not None else None,
                 "updated_time": r[7].isoformat() if r[7] is not None else None,
             }

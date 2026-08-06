@@ -112,7 +112,7 @@ class _RelationReader(_ReaderBase):
                     if row[3]:
                         term_ids.add(str(row[3]))
 
-                term_name_map = self._batch_get_term_names(session, term_ids)
+                term_info_map = self._batch_get_term_infos(session, term_ids)
 
         except Exception:
             logger.exception(
@@ -137,8 +137,12 @@ class _RelationReader(_ReaderBase):
                 "ext_attrs": dict(row[8]) if isinstance(row[8], dict) else {},
                 "created_time": self._format_time(row[9]),
                 "updated_time": self._format_time(row[10]),
-                "source_term_name": term_name_map.get(str(row[1])) if row[1] else None,
-                "target_term_name": term_name_map.get(str(row[3])) if row[3] else None,
+                "source_term_name": term_info_map.get(str(row[1]), {}).get("name")
+                if row[1]
+                else None,
+                "target_term_name": term_info_map.get(str(row[3]), {}).get("name")
+                if row[3]
+                else None,
             }
             for row in rows
         ]
@@ -371,7 +375,7 @@ class _RelationReader(_ReaderBase):
                     if row[4]:
                         type_codes.add(str(row[4]))
 
-                term_name_map = self._batch_get_term_names(session, term_ids)
+                term_info_map = self._batch_get_term_infos(session, term_ids)
                 type_name_map = self._batch_get_type_names(session, type_codes)
 
         except Exception:
@@ -404,11 +408,12 @@ class _RelationReader(_ReaderBase):
 
             source: dict[str, Any]
             if src_term_id:
+                src_info = term_info_map.get(src_term_id, {})
                 source = {
                     "type": "term",
                     "term_id": src_term_id,
-                    "term_code": None,
-                    "term_name": term_name_map.get(src_term_id),
+                    "term_code": src_info.get("code"),
+                    "term_name": src_info.get("name"),
                 }
             elif src_type_code:
                 source = {
@@ -421,11 +426,12 @@ class _RelationReader(_ReaderBase):
 
             target: dict[str, Any]
             if tgt_term_id:
+                tgt_info = term_info_map.get(tgt_term_id, {})
                 target = {
                     "type": "term",
                     "term_id": tgt_term_id,
-                    "term_code": None,
-                    "term_name": term_name_map.get(tgt_term_id),
+                    "term_code": tgt_info.get("code"),
+                    "term_name": tgt_info.get("name"),
                 }
             elif tgt_type_code:
                 target = {

@@ -117,16 +117,35 @@ class _ReaderBase:
 
         return {str(row[0]): {"code": str(row[1]), "name": str(row[2])} for row in rows}
 
-    def _batch_get_term_names(self, session: Any, term_ids: set[str]) -> dict[str, str]:
-        """Batch resolve term_id → term_name."""
+    def _batch_get_term_infos(
+        self, session: Any, term_ids: set[str]
+    ) -> dict[str, dict[str, str | None]]:
+        """Batch resolve term_id → {name, code} in a single query.
+
+        name/code 必须同一条 SQL 取出：分开查询会多一次往返，且在行集变化时
+        可能产生 name/code 不一致。返回结构对齐 _batch_resolve_domain_codes 的
+        {id: {"code": ..., "name": ...}} 惯例。
+
+        Returns:
+            {term_id: {"name": term_name, "code": term_code}} mapping。
+            查不到的 term_id 没有条目，调用方回退为 None。
+        """
         if not term_ids:
             return {}
         from datacloud_knowledge.adapters.opengauss._db.models import Term
 
         rows = session.execute(
-            select(Term.term_id, Term.term_name).where(Term.term_id.in_(list(term_ids)))
+            select(Term.term_id, Term.term_name, Term.term_code).where(
+                Term.term_id.in_(list(term_ids))
+            )
         ).all()
-        return {str(r[0]): str(r[1]) for r in rows}
+        return {
+            str(r[0]): {
+                "name": str(r[1]) if r[1] is not None else None,
+                "code": str(r[2]) if r[2] is not None else None,
+            }
+            for r in rows
+        }
 
     def _batch_get_type_names(self, session: Any, type_codes: set[str]) -> dict[str, str]:
         """Batch resolve type_code → type_name."""
