@@ -676,11 +676,12 @@ class _NoopTermBackend:
         object_codes: list[str] | None,
         kb_resource_ids: list[str] | None,
         filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> Any:
         """Return empty page — noop backend has no term data (sync)."""
-        _ = object_codes, kb_resource_ids, filters
+        _ = object_codes, kb_resource_ids, filters, sort
         from datacloud_platform.models.shared import ObjectInstanceListPage
 
         return ObjectInstanceListPage(items=[], total=0, page=page, page_size=page_size)

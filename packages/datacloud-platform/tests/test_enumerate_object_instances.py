@@ -71,6 +71,7 @@ class RecordingFakePlatform:
         object_codes: list[str] | None = None,
         kb_resource_ids: list[str] | None = None,
         filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> ObjectInstanceListPage:
@@ -81,6 +82,7 @@ class RecordingFakePlatform:
                 "object_codes": object_codes,
                 "kb_resource_ids": kb_resource_ids,
                 "filters": filters,
+                "sort": sort,
                 "page": page,
                 "page_size": page_size,
             }
@@ -193,6 +195,32 @@ class TestHandler:
         await _call_handler(fake, {"object_codes": ["Event"]})
 
         assert fake.calls[-1]["filters"] is None
+
+    @pytest.mark.asyncio
+    async def test_sort_passed_through_unchanged(self) -> None:
+        """锚点：sort 规格原样透传（含 params），handler 不解析（同 filters 约定）。"""
+        sort = {"by": "similarity", "params": {"query": "退货单"}}
+        fake = RecordingFakePlatform()
+        await _call_handler(
+            fake,
+            {
+                "object_codes": ["Event"],
+                "kb_resource_ids": ["10000383"],
+                "sort": sort,
+            },
+        )
+
+        call = fake.calls[-1]
+        assert call["sort"] == sort
+        assert call["sort"]["params"] == {"query": "退货单"}  # 深层相等
+
+    @pytest.mark.asyncio
+    async def test_sort_none_passed_as_none(self) -> None:
+        """sort 缺省 → None 透传（不默认空 dict）。"""
+        fake = RecordingFakePlatform()
+        await _call_handler(fake, {"object_codes": ["Event"]})
+
+        assert fake.calls[-1]["sort"] is None
 
     @pytest.mark.asyncio
     async def test_absent_scope_with_filters_returns_empty_envelope(self) -> None:
@@ -366,6 +394,7 @@ class TestDataAdapterLink:
             object_codes: list[str],
             kb_resource_ids: list[str],
             filters: list[dict[str, Any]] | None = None,
+            sort: dict[str, Any] | None = None,
             page: int = 1,
             page_size: int = 20,
         ) -> EnumeratedObjectInstances:
@@ -374,6 +403,7 @@ class TestDataAdapterLink:
                     "object_codes": object_codes,
                     "kb_resource_ids": kb_resource_ids,
                     "filters": filters,
+                    "sort": sort,
                     "page": page,
                     "page_size": page_size,
                 }
@@ -383,7 +413,7 @@ class TestDataAdapterLink:
         return fake_provider, captured
 
     def test_filters_passthrough_and_nine_field_mapping(self, monkeypatch: Any) -> None:
-        """filters 原样透传；6 字段 → 9 字段映射（out_degree/in_degree 正确）。"""
+        """filters/sort 原样透传；6 字段 → 9 字段映射（out_degree/in_degree 正确）。"""
         fake_provider, captured = self._capture_fake()
 
         def provider_with_items(
@@ -391,6 +421,7 @@ class TestDataAdapterLink:
             object_codes: list[str],
             kb_resource_ids: list[str],
             filters: list[dict[str, Any]] | None = None,
+            sort: dict[str, Any] | None = None,
             page: int = 1,
             page_size: int = 20,
         ) -> EnumeratedObjectInstances:
@@ -399,6 +430,7 @@ class TestDataAdapterLink:
                     "object_codes": object_codes,
                     "kb_resource_ids": kb_resource_ids,
                     "filters": filters,
+                    "sort": sort,
                     "page": page,
                     "page_size": page_size,
                 }
@@ -425,6 +457,7 @@ class TestDataAdapterLink:
                 total=2,
             )
 
+        sort = {"by": "similarity", "params": {"query": "退货单"}}
         with patch(
             "datacloud_knowledge.provider.enumerate_object_instances",
             provider_with_items,
@@ -434,13 +467,16 @@ class TestDataAdapterLink:
                 object_codes=["Event"],
                 kb_resource_ids=["10000383"],
                 filters=[DEGREE_FILTER],
+                sort=sort,
                 page=2,
                 page_size=10,
             )
 
-        # filters 原样透传（含嵌套 params，深层相等）
+        # filters/sort 原样透传（含嵌套 params，深层相等）
         call = captured[-1]
         assert call["filters"] == [DEGREE_FILTER]
+        assert call["sort"] == sort
+        assert call["sort"]["params"] == {"query": "退货单"}
         assert call["object_codes"] == ["Event"]
         assert call["kb_resource_ids"] == ["10000383"]
         assert call["page"] == 2
@@ -521,14 +557,16 @@ class TestMixinLink:
     """platform.enumerate_object_instances → TermMixin → TermBackend（sync）。"""
 
     def test_mixin_delegates_with_filters_passthrough(self, platform: Any) -> None:
-        """platform 委托链路：FakeTermBackend 收到全部参数，filters 原样。"""
+        """platform 委托链路：FakeTermBackend 收到全部参数，filters/sort 原样。"""
         _, _, know, _, _ = platform._fakes  # type: ignore[attr-defined]
 
+        sort = {"by": "similarity", "params": {"query": "退货单"}}
         result = platform.enumerate_object_instances(
             base_id="local-base",
             object_codes=["Event"],
             kb_resource_ids=["10000383"],
             filters=[DEGREE_FILTER],
+            sort=sort,
             page=2,
             page_size=10,
         )
@@ -537,6 +575,7 @@ class TestMixinLink:
         assert call["object_codes"] == ["Event"]
         assert call["kb_resource_ids"] == ["10000383"]
         assert call["filters"] == [DEGREE_FILTER]
+        assert call["sort"] == sort
         assert call["page"] == 2
         assert call["page_size"] == 10
 
@@ -560,12 +599,13 @@ class TestNoopStub:
     """_NoopTermBackend stub 返回空页（sync，无知识库时安全降级）。"""
 
     def test_stub_returns_empty_page(self) -> None:
-        """stub 返回 items=[] total=0，分页回显保留。"""
+        """stub 返回 items=[] total=0，分页回显保留（sort 参数兼容透传，忽略）。"""
         stub = _NoopTermBackend()
         result = stub.enumerate_object_instances(
             object_codes=["Event"],
             kb_resource_ids=["10000383"],
             filters=[DEGREE_FILTER],
+            sort={"by": "similarity", "params": {"query": "退货单"}},
             page=3,
             page_size=50,
         )

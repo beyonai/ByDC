@@ -118,13 +118,15 @@ async def _enumerate_object_instances(
         object_codes:    list[str] | None — 对象类型范围（与 kb 范围 AND）
         kb_resource_ids: list[str] | None — 知识库资源范围
         filters:         list[dict] | None — 条件数组，**原样透传不解析**
+        sort:            dict | None — 排序规格，**原样透传不解析**
         page:            int，默认 1，钳制 >=1
         pageSize:        int，默认 20，钳制 >=1
 
     语义钉死：
-    (a) filters 只透传——不解析/不校验 filter type/params；非法 type/params
-        由 knowledge 层 validate 抛 ValueError → 既有 _EXCEPTION_MAP
-        （ValueError → 400 invalid_params）自动映射，handler 无需自定义。
+    (a) filters/sort 只透传——不解析/不校验 filter type/params 与 sort by/params；
+        非法 type/params/by 由 knowledge 层 validate 抛 ValueError → 既有
+        _EXCEPTION_MAP（ValueError → 400 invalid_params）自动映射，handler
+        无需自定义。
     (b) 范围全空（object_codes 与 kb_resource_ids 均为空）→ 空结果
         （items=[], total=0），即使 filters 有值（filters 不代替范围）。
     (c) 返回信封 {items, total, page, pageSize}；items 为
@@ -135,10 +137,11 @@ async def _enumerate_object_instances(
 
     logger.warning(
         "enumerateObjectInstances ENTRY: object_codes=%s kb_resource_ids=%s "
-        "filters=%r page=%s pageSize=%s",
+        "filters=%r sort=%r page=%s pageSize=%s",
         params.get("object_codes"),
         params.get("kb_resource_ids"),
         params.get("filters"),
+        params.get("sort"),
         page,
         page_size,
     )
@@ -148,6 +151,7 @@ async def _enumerate_object_instances(
         object_codes=params.get("object_codes"),
         kb_resource_ids=params.get("kb_resource_ids"),
         filters=params.get("filters"),
+        sort=params.get("sort"),
         page=page,
         page_size=page_size,
     )

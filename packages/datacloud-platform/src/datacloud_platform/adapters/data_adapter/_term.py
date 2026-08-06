@@ -162,16 +162,19 @@ class TermBackendMixin(DataCloudDataBackendBase):
         object_codes: list[str] | None,
         kb_resource_ids: list[str] | None,
         filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> ObjectInstanceListPage:
-        """枚举带度数的对象实例 — 委托 knowledge provider（filters 原样透传）。
+        """枚举带度数的对象实例 — 委托 knowledge provider（filters/sort 原样透传）。
 
         Args:
             object_codes:   对象类型编码范围（与 kb_resource_ids AND）。
             kb_resource_ids: 知识库资源 ID 范围（ext_attrs->>'kb_resource_id'）。
             filters:        条件数组，**原样透传不解析**——非法 type/params 由
                             knowledge 层 validate 抛 ValueError（RPC 层映射 400）。
+            sort:           排序规格，**原样透传不解析**（同 filters 约定）——
+                            非法 by/params 由 knowledge 层 validate 抛 ValueError（400）。
             page:           页码（>=1）。
             page_size:      每页条数（>=1）。
 
@@ -188,6 +191,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             object_codes=object_codes or [],
             kb_resource_ids=kb_resource_ids or [],
             filters=filters,
+            sort=sort,
             page=page,
             page_size=page_size,
         )

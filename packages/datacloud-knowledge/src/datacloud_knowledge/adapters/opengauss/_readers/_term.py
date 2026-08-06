@@ -188,6 +188,112 @@ _FILTER_REGISTRY: dict[str, FilterSpec] = {
 }
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SortSpec 注册表 — enumerate_object_instances 排序框架（与 _FILTER_REGISTRY 同构）
+#
+# sort 请求形状（term_provider_types.SortSpec）:
+#   {"by": "similarity", "params": {"query": <语义查询串>}}
+# 新排序依据 = 注册表 +1 条（validate + build）+ 测试，RPC/handler 接口形状零改动。
+#
+# similarity 排序语义（钉死）:
+#   - 候选集（object_codes/kb_resource_ids/filters 过滤后）内重排，不截断候选集
+#     （仅分页 LIMIT/OFFSET，排序本身无 LIMIT）；
+#   - 排序键 = term 下全部 name 的最佳相似度 MAX(1-(name_embedding <=> :vector))，
+#     余弦公式与 _build_vector_sql 同形；name_embedding IS NULL → 排尾部（NULLS LAST）；
+#   - 双键 = 分数 DESC, term_id ASC（稳定 tie-break，调用方统一拼接）；
+#   - query 向量由 EmbeddingService 生成 1 次；Embedding 配置缺失/失败 → 静默降级
+#     BM25 单字（ts_rank_cd(name_keywords)，name_keywords 97.3% 可用），不 500；
+#   - query 空串 → 退化 term_id ASC（无排序）。
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _validate_similarity_sort(params: dict[str, Any]) -> None:
+    """similarity 参数校验 — query 必须是 str（空串允许，退化 term_id ASC）。"""
+    query = params.get("query")
+    if query is not None and not isinstance(query, str):
+        # 验收钉死 ValueError（_EXCEPTION_MAP: ValueError → 400 invalid_params）
+        raise ValueError(f"similarity 排序的 query 必须是字符串，收到: {query!r}")
+
+
+def _similarity_score_expr(alias: str = "tn") -> str:
+    """相似度分数表达式 — 参照 _build_vector_sql 的余弦公式（1 - 余弦距离）。"""
+    return f"1 - ({alias}.name_embedding <=> CAST(:vector AS vector))"
+
+
+def _embed_query_vector(query: str) -> list[float] | None:
+    """生成 query 向量；Embedding 配置缺失/调用失败 → None（静默降级 BM25，不 500）。
+
+    EmbeddingService 来自 retrieval/embedding/service.py（OpenAI 兼容，
+    DATACLOUD_EMBEDDING_API_BASE/KEY/MODEL 已配置；缺配置时 _init_model 抛
+    RuntimeError），非 reader 方法。跨 Mixin 标注：本函数是 reader 模块对
+    retrieval 层的单向调用，不产生循环依赖。
+    """
+    try:
+        from datacloud_knowledge.retrieval.embedding.service import (
+            get_embedding_service,
+        )
+
+        return get_embedding_service().get_text_embedding(query)
+    except Exception:
+        logger.warning(
+            "similarity sort embedding 生成失败，静默降级 BM25: query=%r", query, exc_info=True
+        )
+        return None
+
+
+def _build_similarity_sort(params: dict[str, Any]) -> tuple[str, dict[str, object]]:
+    """similarity 排序 → (分数排序片段, 绑定参数)。
+
+    片段 = 分数表达式 + DESC NULLS LAST（不含 term_id tie-break，调用方统一拼接）；
+    空片段 = 退化（调用方回退 term_id ASC）。
+    优先级：query 向量 → 降级 BM25 单字 → 空 query 退化。
+    """
+    raw_query = params.get("query")
+    query = raw_query.strip() if isinstance(raw_query, str) else ""
+    if not query:
+        return "", {}
+    query_vector = _embed_query_vector(query)
+    if query_vector is not None:
+        vector_str = "[" + ",".join(map(str, query_vector)) + "]"
+        return f"MAX({_similarity_score_expr('tn')}) DESC NULLS LAST", {"vector": vector_str}
+    # Embedding 不可用 → 静默降级 BM25 单字（ts_rank_cd(name_keywords)，与
+    # bm25.py bm25_search_with_or 同款单字 OR tsquery 构建）
+    from datacloud_knowledge.adapters.opengauss.bm25 import _build_char_tsquery
+
+    tsquery = _build_char_tsquery(query, ts_operator="|")
+    if not tsquery:
+        return "", {}
+    return (
+        "MAX(ts_rank_cd(tn.name_keywords, q, 32)) DESC NULLS LAST",
+        {"tsquery": tsquery},
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SortSpecEntry:
+    """枚举查询排序规格 — 注册表条目（与 FilterSpec 同构）。
+
+    Attributes:
+        validate: 参数校验，非法抛 ValueError。
+        build: (params) -> (分数排序片段, 绑定参数 dict)；空片段 = 无排序
+               （调用方回退 term_id ASC）。
+        requires_name_join: 排序依赖 term_name 表（name 级特征）时 True。
+    """
+
+    validate: Callable[[dict[str, Any]], None]
+    build: Callable[[dict[str, Any]], tuple[str, dict[str, object]]]
+    requires_name_join: bool = False
+
+
+_SORT_REGISTRY: dict[str, SortSpecEntry] = {
+    "similarity": SortSpecEntry(
+        validate=_validate_similarity_sort,
+        build=_build_similarity_sort,
+        requires_name_join=True,
+    ),
+}
+
+
 class _TermReader(_ReaderBase):
     """Mixin providing all term-read operations.
 
@@ -2517,6 +2623,7 @@ class _TermReader(_ReaderBase):
         object_codes: list[str],
         kb_resource_ids: list[str],
         filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> EnumeratedObjectInstances:
@@ -2524,11 +2631,16 @@ class _TermReader(_ReaderBase):
 
         条件框架：filters 数组按 ``_FILTER_REGISTRY`` 查表（type 走 dict key，
         绝不拼接进 SQL）；degree 为注册表首个 filter 类型（HAVING 阶段）。
+        排序框架：sort 按 ``_SORT_REGISTRY`` 查表（by 走 dict key）；similarity
+        为注册表首个（且目前唯一）排序类型（Embedding 向量或 BM25 降级）。
 
         Args:
             object_codes: 对象类型编码范围（尊重输入不校验）。与 kb_resource_ids 为 AND。
             kb_resource_ids: 知识库资源 ID 范围（``ext_attrs->>'kb_resource_id'``）。
             filters: 条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]，v1 只 AND。
+            sort: 排序规格 = {"by": <注册表 key>, "params": {...}}，None = 默认序。
+                  similarity 在候选集内重排（不截断），Embedding 失败静默降级 BM25；
+                  query 空串退化 term_id ASC。显式 sort 优先于 degree filter 隐式排序。
             page: 页码（>=1，1-based）。
             page_size: 每页条数（>=1）。
 
@@ -2537,13 +2649,14 @@ class _TermReader(_ReaderBase):
 
         Raises:
             ValueError: filter type 不在注册表 / metric/op 白名单非法 / value 非数字 /
+                        sort by 不在注册表 / params 非 dict / query 非 str /
                         page/page_size 非法。
         """
         if page < 1:
             raise ValueError(f"page 必须 >= 1，收到: {page}")
         if page_size < 1:
             raise ValueError(f"page_size 必须 >= 1，收到: {page_size}")
-        # 范围全空 → 空结果（即使 filters 有值：filters 不代替范围）
+        # 范围全空 → 空结果（即使 filters/sort 有值：它们不代替范围）
         if not object_codes and not kb_resource_ids:
             return EnumeratedObjectInstances(items=[], total=0)
 
@@ -2584,9 +2697,39 @@ class _TermReader(_ReaderBase):
             if spec.sort_expr is not None and degree_sort_expr is None:
                 degree_sort_expr = spec.sort_expr(filter_params)
 
+        # ── 解析 sort：查注册表 → validate → build（similarity 含 Embedding/降级逻辑）──
+        sort_order_by: str | None = None
+        sort_binds: dict[str, object] = {}
+        requires_name_join = False
+        if sort is not None:
+            if not isinstance(sort, dict):
+                # 验收钉死 ValueError（_EXCEPTION_MAP: ValueError → 400 invalid_params）
+                raise ValueError(f"sort 必须是 dict，收到: {sort!r}")
+            sort_by = sort.get("by")
+            entry = _SORT_REGISTRY.get(sort_by) if isinstance(sort_by, str) else None
+            if entry is None:
+                raise ValueError(
+                    f"未知 sort by: {sort_by!r}（注册表: {sorted(_SORT_REGISTRY)}）"
+                )
+            sort_params = sort.get("params")
+            if not isinstance(sort_params, dict):
+                # 验收钉死 ValueError（_EXCEPTION_MAP: ValueError → 400 invalid_params）
+                raise ValueError(f"sort {sort_by!r} 的 params 必须是 dict")
+            entry.validate(sort_params)
+            fragment, sort_binds = entry.build(sort_params)
+            if fragment:
+                # 双键（钉死）：分数 DESC + term_id ASC 稳定 tie-break
+                sort_order_by = f"{fragment}, t.term_id ASC"
+                requires_name_join = entry.requires_name_join
+
         # ── 动态组装 SQL ──────────────────────────────────────────────
         select_cols = ["t.term_id", "t.term_code", "t.term_name", "t.term_type_code"]
         joins: list[str] = []
+        if requires_name_join:
+            # similarity 排序键在 name 级（name_embedding / name_keywords）
+            joins.append(
+                "LEFT JOIN term_name tn\n       ON tn.term_id = t.term_id"
+            )
         if "out" in required_joins:
             # SELECT 度数列与 HAVING/ORDER BY 共用同一表达式源，防计数规则漂移
             select_cols.append(f"{_degree_metric_expr('out')} AS out_degree")
@@ -2616,12 +2759,19 @@ class _TermReader(_ReaderBase):
 
         group_by = "GROUP BY t.term_id, t.term_code, t.term_name, t.term_type_code"
         having_sql = f"HAVING {' AND '.join(having_parts)}" if having_parts else ""
-        if degree_sort_expr is not None:
+        if sort_order_by is not None:
+            # 显式 sort（_SORT_REGISTRY）优先于 degree filter 的隐式排序
+            order_by = f"ORDER BY {sort_order_by}"
+        elif degree_sort_expr is not None:
             order_by = f"ORDER BY {degree_sort_expr} DESC, t.term_id ASC"
         else:
             order_by = "ORDER BY t.term_id ASC"
 
-        select_sql = "SELECT " + ", ".join(select_cols) + "\nFROM term t"
+        # 降级 BM25 需单行 tsquery（bm25.py 同款 to_tsquery('simple', ...) 形态）
+        from_sql = "FROM term t"
+        if "tsquery" in sort_binds:
+            from_sql += ", to_tsquery('simple', :tsquery) q"
+        select_sql = "SELECT " + ", ".join(select_cols) + f"\n{from_sql}"
         join_sql = "\n" + "\n".join(joins) if joins else ""
         where_sql = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
         sql = (
@@ -2632,7 +2782,7 @@ class _TermReader(_ReaderBase):
         # 必须包一层子查询：无 GROUP BY 时 sqlite 会静默忽略 HAVING。
         total_sql = (
             "SELECT COUNT(*) FROM (\n"
-            f"SELECT t.term_id\nFROM term t{join_sql}\n{where_sql}\n{group_by}\n{having_sql}\n"
+            f"SELECT t.term_id\n{from_sql}{join_sql}\n{where_sql}\n{group_by}\n{having_sql}\n"
             ") AS filtered"
         )
 
@@ -2642,6 +2792,7 @@ class _TermReader(_ReaderBase):
         if kb_resource_ids:
             params["kb_resource_ids"] = kb_resource_ids
         params.update(bind_params)
+        params.update(sort_binds)
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 

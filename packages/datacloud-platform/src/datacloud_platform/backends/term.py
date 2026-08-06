@@ -72,6 +72,7 @@ class TermBackend(Protocol):
         object_codes: list[str] | None,
         kb_resource_ids: list[str] | None,
         filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> ObjectInstanceListPage:
@@ -87,6 +88,9 @@ class TermBackend(Protocol):
                             **原样透传，不解析 type/params**；非法 type/params
                             由 knowledge 层 validate 抛 ValueError →
                             RPC 层 _EXCEPTION_MAP 自动映射 400 invalid_params。
+            sort:           排序规格 = {"by": <注册表 key>, "params": {...}}。
+                            **原样透传，不解析**（同 filters 约定）；非法 by/params
+                            由 knowledge 层 validate 抛 ValueError → 400。
             page:           页码（>=1，1-based）。
             page_size:      每页条数（>=1）。
 

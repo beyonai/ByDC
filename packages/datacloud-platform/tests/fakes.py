@@ -1358,6 +1358,7 @@ class FakeTermBackend:
         object_codes: list[str] | None,
         kb_resource_ids: list[str] | None,
         filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> Any:
@@ -1367,6 +1368,7 @@ class FakeTermBackend:
                 "object_codes": object_codes,
                 "kb_resource_ids": kb_resource_ids,
                 "filters": filters,
+                "sort": sort,
                 "page": page,
                 "page_size": page_size,
             }
