@@ -14,6 +14,7 @@ from datacloud_platform.ontology_store import OntologyStore
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
+    from datacloud_platform.backends.document_library import DocumentLibraryBackend
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
     from datacloud_platform.backends.storage import StorageBackend
     from datacloud_platform.backends.term import TermBackend
@@ -34,6 +35,12 @@ class _HasTermBackend(Protocol):
     """Requires ``_term_for(base_id)`` routing."""
 
     def _term_for(self, base_id: str) -> TermBackend: ...
+
+
+class _HasDocumentLibraryBackend(Protocol):
+    """Requires ``_document_library_for(base_id)`` routing."""
+
+    def _document_library_for(self, base_id: str) -> DocumentLibraryBackend: ...
 
 
 class _HasExecutionBackend(Protocol):

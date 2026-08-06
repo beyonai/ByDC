@@ -16,8 +16,12 @@ from datacloud_platform.platform_file_storage import _data_dir
 from datacloud_platform.adapters.data_adapter import DataCloudDataBackend
 from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.adapters.local_execution_adapter import LocalExecutionBackend
+from datacloud_platform.adapters.document_library_adapter import (
+    ServiceDiscoveryDocumentLibraryBackend,
+)
 from datacloud_platform.adapters.none_adapters import (
     _NoopStorageBackend,
+    _NoopDocumentLibraryBackend,
     _NoopTermBackend,
 )
 from datacloud_platform.api.server import create_app  # noqa: F401
@@ -48,6 +52,7 @@ def _init_platform() -> DatacloudPlatform:
     # ── Register backend types ──────────────────────────────────────────
     register_backend_type("ontology", "native-data")
     register_backend_type("term", "native-data")
+    register_backend_type("document_library", "service-discovery")
     register_backend_type("execution", "local-exec")
     register_backend_type("storage", "native-data")
 
@@ -64,11 +69,19 @@ def _init_platform() -> DatacloudPlatform:
     )
     register_implementation("execution", "local-exec", lambda: LocalExecutionBackend())
     register_implementation(
+        "document_library",
+        "service-discovery",
+        lambda: ServiceDiscoveryDocumentLibraryBackend(),
+    )
+    register_implementation(
         "storage",
         "native-data",
         lambda: DataCloudDataBackend(entity_store=entity_store),
     )
     register_implementation("term", "none", lambda: _NoopTermBackend())
+    register_implementation(
+        "document_library", "none", lambda: _NoopDocumentLibraryBackend()
+    )
     register_implementation("storage", "none", lambda: _NoopStorageBackend())
 
     # ── Register remote-http implementations ─────────────────────────────
@@ -85,6 +98,7 @@ def _init_platform() -> DatacloudPlatform:
         {
             "ontology": "native-data",
             "term": "native-data",
+            "document_library": "service-discovery",
             "execution": "local-exec",
             "storage": "native-data",
         },
@@ -94,6 +108,7 @@ def _init_platform() -> DatacloudPlatform:
         {
             "ontology": "native-data",
             "term": "none",
+            "document_library": "none",
             "execution": "none",
             "storage": "none",
         },

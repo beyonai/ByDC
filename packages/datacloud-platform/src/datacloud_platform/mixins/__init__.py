@@ -2,8 +2,12 @@
 
 from datacloud_platform.mixins.action_crud import ActionCRUDMixin
 from datacloud_platform.mixins.datasource import DatasourceMixin
+from datacloud_platform.mixins.document import DocumentMixin
 from datacloud_platform.mixins.execution import ExecutionMixin
 from datacloud_platform.mixins.knowledge import KnowledgeMixin
+from datacloud_platform.mixins.document_library_backend import (
+    DocumentLibraryBackendMixin,
+)
 from datacloud_platform.mixins.library import LibraryMixin
 from datacloud_platform.mixins.ontology_build import OntologyBuildMixin
 from datacloud_platform.mixins.ontology_crud import OntologyCRUDMixin
@@ -24,8 +28,10 @@ from datacloud_platform.mixins.workspace_action import WorkspaceActionMixin
 __all__ = [
     "ActionCRUDMixin",
     "DatasourceMixin",
+    "DocumentMixin",
     "ExecutionMixin",
     "KnowledgeMixin",
+    "DocumentLibraryBackendMixin",
     "LibraryMixin",
     "OntologyBuildMixin",
     "OntologyCRUDMixin",
