@@ -9,8 +9,9 @@ import logging
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy.orm import aliased
 
-from datacloud_knowledge.adapters.opengauss._db.models import TermRelation
+from datacloud_knowledge.adapters.opengauss._db.models import Term, TermRelation
 from datacloud_knowledge.adapters.opengauss._readers._base import _ReaderBase
 
 logger = logging.getLogger(__name__)
@@ -204,22 +205,30 @@ class _RelationReader(_ReaderBase):
         type_code: str,
         direction: str = "both",
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
-        """List relations involving a term type (ADR-006: direct query on term_type_code columns).
+        """List relations involving a term type (ADR-006 修复: JOIN term 表做类型过滤).
 
-        Queries term_relation where source_term_type_code or target_term_type_code
-        matches the given type_code. Also joins term_type for names and term for
-        term-side info when the other endpoint is a term.
+        冗余列 term_relation.source_term_type_code / target_term_type_code 从未被写入
+        （全 NULL），因此不再用它做过滤条件。改为 JOIN 权威表 term
+        （term.term_type_code NOT NULL），过滤语义为"给定术语类型 type_code，
+        查该类型术语参与的所有关系"：
+
+        - direction=outgoing → source 端术语的 term_type_code == type_code（INNER JOIN）
+        - direction=incoming → target 端术语的 term_type_code == type_code（INNER JOIN）
+        - direction=both     → 双别名 LEFT JOIN，任一端类型匹配即命中
+        - type_code 为空     → 不过滤（向后兼容，返回全部关系）
 
         Args:
             library_id: Term library ID.
-            type_code: Term type code.
+            type_code: Term type code. 空字符串视为未提供（不过滤）。
             direction: "outgoing" (type is source), "incoming" (type is target),
                        or "both" (default).
             relation_category: Optional relation category filter.
+            relation_code: Optional relation code filter (ext_attrs.relation_code).
             keyword: Optional keyword for relation_name (ILIKE).
             page_index: 1-based page number (default 1).
             page_size: Items per page (default 20, max 100).
@@ -234,20 +243,13 @@ class _RelationReader(_ReaderBase):
         conditions: list[Any] = []
         exec_params: dict[str, Any] = {}
 
-        if direction == "outgoing":
-            conditions.append(TermRelation.source_term_type_code == type_code)
-        elif direction == "incoming":
-            conditions.append(TermRelation.target_term_type_code == type_code)
-        else:  # both
-            conditions.append(
-                or_(
-                    TermRelation.source_term_type_code == type_code,
-                    TermRelation.target_term_type_code == type_code,
-                )
-            )
-
         if relation_category:
             conditions.append(TermRelation.relation_category == relation_category)
+
+        if relation_code:
+            conditions.append(
+                TermRelation.ext_attrs["relation_code"].astext == relation_code
+            )
 
         if keyword and keyword.strip():
             conditions.append(text("term_relation.relation_name ILIKE :kw"))
@@ -255,12 +257,74 @@ class _RelationReader(_ReaderBase):
 
         where_clause = and_(*conditions) if conditions else text("1=1")
 
+        # ── JOIN term 表（权威 term_type_code）做类型过滤 ─────────────────────
+        # 方案 A：废弃冗余列 source/target_term_type_code（全 NULL）。
+        # - outgoing/incoming 用 INNER JOIN：语义上"该类型术语必须存在于 term 表"，
+        #   term.term_type_code 为 NOT NULL，left+where 判空与 inner 等价，inner 更直白；
+        # - both 必须用 LEFT JOIN ×2：term_relation.source/target_term_id 可空，
+        #   INNER JOIN 会因另一端 JOIN 失败而误删本应命中的行，LEFT + OR 保证
+        #   任一端类型匹配即保留。
+        src_term = aliased(Term)
+        tgt_term = aliased(Term)
+
+        def _join_and_filter(
+            stmt: Any,
+        ) -> tuple[Any, Any, Any | None, Any | None]:
+            """给 stmt 追加 term JOIN 与类型过滤；count 与主查询共用本函数。
+
+            Returns:
+                (stmt, type_filter, src_type_col, tgt_type_col)
+                - type_filter: 附加 WHERE 条件；type_code 为空时为 None（不过滤）
+                - src_type_col/tgt_type_col: 主查询追加的 term.term_type_code
+                  列（带 label），供 direction 判定使用
+            """
+            if not type_code:
+                return stmt, None, None, None
+            if direction == "outgoing":
+                joined = stmt.join(
+                    src_term, TermRelation.source_term_id == src_term.term_id
+                )
+                return (
+                    joined,
+                    src_term.term_type_code == type_code,
+                    src_term.term_type_code.label("src_join_type"),
+                    None,
+                )
+            if direction == "incoming":
+                joined = stmt.join(
+                    tgt_term, TermRelation.target_term_id == tgt_term.term_id
+                )
+                return (
+                    joined,
+                    tgt_term.term_type_code == type_code,
+                    None,
+                    tgt_term.term_type_code.label("tgt_join_type"),
+                )
+            joined = stmt.outerjoin(
+                src_term, TermRelation.source_term_id == src_term.term_id
+            ).outerjoin(tgt_term, TermRelation.target_term_id == tgt_term.term_id)
+            return (
+                joined,
+                or_(
+                    src_term.term_type_code == type_code,
+                    tgt_term.term_type_code == type_code,
+                ),
+                src_term.term_type_code.label("src_join_type"),
+                tgt_term.term_type_code.label("tgt_join_type"),
+            )
+
+        # count 与主查询共用同一 JOIN + WHERE，保证 totalCount 不失真
+        count_stmt, count_filter, _, _ = _join_and_filter(
+            select(func.count()).select_from(TermRelation)
+        )
+        if count_filter is not None:
+            count_stmt = count_stmt.where(count_filter)
+
         try:
             with self._get_session() as session:
                 total = int(
                     session.execute(
-                        select(func.count()).select_from(TermRelation).where(where_clause),
-                        exec_params,
+                        count_stmt.where(where_clause), exec_params
                     ).scalar_one()
                 )
 
@@ -273,7 +337,7 @@ class _RelationReader(_ReaderBase):
                         "totalPages": 0,
                     }
 
-                rows = session.execute(
+                rows_stmt, type_filter, src_type_col, tgt_type_col = _join_and_filter(
                     select(
                         TermRelation.relation_id,
                         TermRelation.source_term_id,
@@ -286,7 +350,16 @@ class _RelationReader(_ReaderBase):
                         TermRelation.created_time,
                         TermRelation.updated_time,
                     )
-                    .where(where_clause)
+                )
+                if type_filter is not None:
+                    rows_stmt = rows_stmt.where(type_filter)
+                if src_type_col is not None:
+                    rows_stmt = rows_stmt.add_columns(src_type_col)
+                if tgt_type_col is not None:
+                    rows_stmt = rows_stmt.add_columns(tgt_type_col)
+
+                rows = session.execute(
+                    rows_stmt.where(where_clause)
                     .order_by(TermRelation.relation_name)
                     .limit(page_size)
                     .offset(offset),
@@ -325,7 +398,17 @@ class _RelationReader(_ReaderBase):
             tgt_term_id = str(row[3]) if row[3] else None
             tgt_type_code = str(row[4]) if row[4] else None
 
-            is_outgoing = src_type_code == type_code
+            # direction 判定：优先看 JOIN 命中的 term.term_type_code（权威列）。
+            # type_code 为空（不过滤）时回退冗余列比较，保持旧行为。
+            src_join_type = row._mapping.get("src_join_type")
+            if type_code and direction == "outgoing":
+                is_outgoing = True
+            elif type_code and direction == "incoming":
+                is_outgoing = False
+            elif type_code:
+                is_outgoing = bool(src_join_type) and str(src_join_type) == type_code
+            else:
+                is_outgoing = src_type_code == type_code
 
             source: dict[str, Any]
             if src_term_id:

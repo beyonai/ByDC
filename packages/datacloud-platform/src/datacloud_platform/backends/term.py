@@ -339,11 +339,12 @@ class TermBackend(Protocol):
         type_code: str,
         direction: str = "both",
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
-        """术语类型一跳关系（直接查 term_relation.term_type_code 列）。
+        """术语类型一跳关系（JOIN term 表按 term.term_type_code 过滤）。
 
         对应: POST /api/v1/rpc/termType/getRelations
         """
