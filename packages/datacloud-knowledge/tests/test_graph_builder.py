@@ -34,7 +34,7 @@ class TestAddTerms:
             term_name="客户",
             term_type_code="object",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
         )
         gb.add_terms([term])
         g = gb.export_terms_graph()
@@ -59,7 +59,7 @@ class TestAddTerms:
             term_name="签约成功",
             term_type_code="opp_status",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
             parent_term_code="status",
         )
         gb.add_terms([term])
@@ -80,7 +80,7 @@ class TestAddTerms:
             term_name="客户",
             term_type_code="object",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
             synonyms=("顾客", "Client"),
         )
         gb.add_terms([term])
@@ -100,7 +100,7 @@ class TestAddTerms:
             term_name="客户",
             term_type_code="object",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
         )
         gb.add_terms([term])
         g = gb.export_terms_graph()
@@ -119,14 +119,14 @@ class TestAddTerms:
                 term_name="对象A",
                 term_type_code="object",
                 library_code="L1",
-                domain_code="D1",
+                domain_codes=("D1",),
             ),
             TermDef(
                 term_code="prop_x",
                 term_name="属性X",
                 term_type_code="prop",
                 library_code="L1",
-                domain_code="D1",
+                domain_codes=("D1",),
             ),
         ]
         gb.add_terms(terms)
@@ -150,7 +150,7 @@ class TestAddTerms:
                     term_name="测试",
                     term_type_code="object",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                 )
             ]
         )
@@ -427,14 +427,14 @@ class TestAddPackage:
                     term_name="客户",
                     term_type_code="object",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                 ),
                 TermDef(
                     term_code="customer_name",
                     term_name="客户名称",
                     term_type_code="prop",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                 ),
             ),
             relations=(
@@ -549,13 +549,15 @@ class TestAddPackage:
                     term_name="测试",
                     term_type_code="object",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                 )
             ]
         )
         g = gb.export_terms_graph()
         xml = g.serialize(format="xml")
-        assert "http://beyond.ai/ontology" in xml
+        # terms 文件使用 term/ontology# 命名空间（对齐现有 OWL 产物格式），
+        # 而非主图的默认 base（entity/ontology#，仅用于 _definition.owl）。
+        assert "http://example.org/term/ontology#" in xml
         assert "rdf:RDF" in xml
 
 
@@ -577,7 +579,7 @@ class TestEdgeCases:
                     term_name="测试",
                     term_type_code="object",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                     synonyms=(),
                 )
             ]
@@ -627,7 +629,7 @@ class TestEdgeCases:
                     term_name="测试",
                     term_type_code="object",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                 )
             ]
         )
@@ -643,7 +645,7 @@ class TestEdgeCases:
             term_name="特殊字符属性",
             term_type_code="prop",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
         )
         gb.add_terms([term])
         g = gb.export_terms_graph()

@@ -247,9 +247,7 @@ class _RelationReader(_ReaderBase):
             conditions.append(TermRelation.relation_category == relation_category)
 
         if relation_code:
-            conditions.append(
-                TermRelation.ext_attrs["relation_code"].astext == relation_code
-            )
+            conditions.append(TermRelation.ext_attrs["relation_code"].astext == relation_code)
 
         if keyword and keyword.strip():
             conditions.append(text("term_relation.relation_name ILIKE :kw"))
@@ -281,9 +279,7 @@ class _RelationReader(_ReaderBase):
             if not type_code:
                 return stmt, None, None, None
             if direction == "outgoing":
-                joined = stmt.join(
-                    src_term, TermRelation.source_term_id == src_term.term_id
-                )
+                joined = stmt.join(src_term, TermRelation.source_term_id == src_term.term_id)
                 return (
                     joined,
                     src_term.term_type_code == type_code,
@@ -291,9 +287,7 @@ class _RelationReader(_ReaderBase):
                     None,
                 )
             if direction == "incoming":
-                joined = stmt.join(
-                    tgt_term, TermRelation.target_term_id == tgt_term.term_id
-                )
+                joined = stmt.join(tgt_term, TermRelation.target_term_id == tgt_term.term_id)
                 return (
                     joined,
                     tgt_term.term_type_code == type_code,
@@ -323,9 +317,7 @@ class _RelationReader(_ReaderBase):
         try:
             with self._get_session() as session:
                 total = int(
-                    session.execute(
-                        count_stmt.where(where_clause), exec_params
-                    ).scalar_one()
+                    session.execute(count_stmt.where(where_clause), exec_params).scalar_one()
                 )
 
                 if total == 0:

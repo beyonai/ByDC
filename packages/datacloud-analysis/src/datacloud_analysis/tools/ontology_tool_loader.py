@@ -805,7 +805,8 @@ class OntologyToolLoader:
                     tree = ET.parse(str(owl_file))
                     root = tree.getroot()
                     ns = {"rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#"}
-                    ent_ns = "http://example.org/entity/ontology#"
+                    # *_terms.owl 文件使用 term/ontology# 命名空间（对齐现有 OWL 产物格式）
+                    ent_ns = "http://example.org/term/ontology#"
                     mappings: list[str] = []
                     for desc in root.findall(".//rdf:Description", ns):
                         code_el = desc.find(f"{{{ent_ns}}}term_code")
