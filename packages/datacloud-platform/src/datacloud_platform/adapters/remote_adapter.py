@@ -1901,11 +1901,21 @@ class RemoteTermBackend:
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
+        term_type_code: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
         """Remote term relations — not yet implemented."""
-        _ = term_id, relation_category, direction, depth, keyword, page_index, page_size
+        _ = (
+            term_id,
+            relation_category,
+            direction,
+            depth,
+            keyword,
+            term_type_code,
+            page_index,
+            page_size,
+        )
         logger.debug("Remote term: query_term_relations not yet implemented")
         return {"data": [], "totalCount": 0}
 
@@ -2047,10 +2057,21 @@ class RemoteTermBackend:
         type_code: str,
         direction: str = "both",
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
+        _ = (
+            library_id,
+            type_code,
+            direction,
+            relation_category,
+            relation_code,
+            keyword,
+            page_index,
+            page_size,
+        )
         return {"items": [], "total": 0}
 
     def create_term_type(
