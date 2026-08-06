@@ -14,6 +14,19 @@
 4. TermMixin → TermBackend 委托链路（conftest platform fixture + FakeTermBackend）
 5. none_adapters _NoopTermBackend stub（sync，返回空列表）
 
+T-55 增量（fake 注入验收，依赖 T-54）：
+6. sort 原值锚点：fake 收到调用方传入的同一 sort 对象（is 锚点），handler
+   不原地改写（不解析、不加默认键）
+7. 非法 sort（未知 by / params 非 dict / query 非 str）→ knowledge 层
+   ValueError → RPC 层 _EXCEPTION_MAP → 400 invalid_params（TestClient 全链路）
+8. 信封 9 字段无 score：TestClient 全链路 JSON 断言 items 恰好 9 键
+   （含 out_degree/in_degree，无 score）；sort 全链路原值透传锚点
+9. 缺 query → 400 映射：fake 抛 ValueError（模拟 knowledge 校验拒绝）→
+   RPC 层 400 invalid_params。注意：knowledge 层 T-51 对缺 query 实际是
+   退化语义（validate 放行，term_id ASC）——本用例验证的是 RPC 映射契约
+   （knowledge 层任何 ValueError → 400），不宣称 knowledge 必拒缺 query
+10. 范围全缺省（含 sort 有值）→ 空信封不报错（sort 不代替范围）
+
 async 纪律：仅 handler 为 async；TermMixin/Backend/adapter/stub 全 sync。
 """
 
@@ -239,6 +252,32 @@ class TestHandler:
         assert call["object_codes"] is None
         assert call["kb_resource_ids"] is None
         assert call["filters"] == [DEGREE_FILTER]
+
+        data = resp.data
+        assert data is not None
+        assert data["items"] == []
+        assert data["total"] == 0
+        assert data["page"] == 1
+        assert data["pageSize"] == 20
+
+    @pytest.mark.asyncio
+    async def test_absent_scope_with_sort_returns_empty_envelope(self) -> None:
+        """范围全缺省（sort 有值）→ 不报错；sort 不代替范围，信封 items=[] total=0。
+
+        sort 只决定排序不改变集合（Spec 决策 3/7）；范围全空时集合本就为空，
+        sort 有值不影响空结果语义——handler 层验证链路不炸 + sort 原样透传。
+        """
+        sort = {"by": "similarity", "params": {"query": "退货单"}}
+        fake = RecordingFakePlatform()
+        resp = await _call_handler(
+            fake,
+            {"sort": sort, "page": 1, "pageSize": 20},
+        )
+
+        call = fake.calls[-1]
+        assert call["object_codes"] is None
+        assert call["kb_resource_ids"] is None
+        assert call["sort"] == sort  # 原样透传（handler 不因范围为空丢弃 sort）
 
         data = resp.data
         assert data is not None
@@ -614,3 +653,276 @@ class TestNoopStub:
         assert result.total == 0
         assert result.page == 3
         assert result.page_size == 50
+
+
+# ============================================================================
+# T-55：sort 原值锚点（handler fake 注入）
+# ============================================================================
+
+
+class TestSortOriginalValueAnchor:
+    """sort 原值锚点（handler fake 注入）。
+
+    T-55 验收：sort 规格以「原值」透传——fake 收到的是调用方传入的同一
+    dict 对象（透传不复制），且 handler 不原地改写（不解析、不加默认键）。
+    与 filters 的透传约定同构（handler 只透传不解析，校验在 knowledge 层）。
+    """
+
+    @pytest.mark.asyncio
+    async def test_sort_passthrough_is_original_object(self) -> None:
+        """锚点：fake 收到的 sort 与传入是同一对象（is，透传不复制）。"""
+        sort = {"by": "similarity", "params": {"query": "退货单", "top": 3}}
+        fake = RecordingFakePlatform()
+        await _call_handler(
+            fake,
+            {
+                "object_codes": ["Event"],
+                "kb_resource_ids": ["10000383"],
+                "sort": sort,
+            },
+        )
+
+        assert fake.calls[-1]["sort"] is sort  # 原值对象锚点（不复制）
+
+    @pytest.mark.asyncio
+    async def test_sort_not_mutated_by_handler(self) -> None:
+        """锚点：调用后原 sort 对象内容不变（handler 不解析、不加默认键）。"""
+        sort = {"by": "similarity", "params": {"query": "退货单"}}
+        snapshot = {"by": "similarity", "params": {"query": "退货单"}}
+        fake = RecordingFakePlatform()
+        await _call_handler(
+            fake,
+            {
+                "object_codes": ["Event"],
+                "kb_resource_ids": ["10000383"],
+                "sort": sort,
+            },
+        )
+
+        # 原地内容未被改动（无 score 注入、无默认 params 补齐）
+        assert sort == snapshot
+        assert fake.calls[-1]["sort"] == snapshot
+
+
+# ============================================================================
+# T-55：非法 sort → ValueError → 400 invalid_params（TestClient 全链路）
+# ============================================================================
+
+
+class TestInvalidSort400:
+    """非法 sort → knowledge 层 ValueError → RPC 层 400 invalid_params。
+
+    与 TestInvalidFilterType400 同契约：knowledge validate 抛 ValueError，
+    _EXCEPTION_MAP（ValueError → 400 invalid_params）自动映射，handler 只
+    透传不校验；此处补 sort 维度（未知 by / params 非 dict / query 非 str）。
+    """
+
+    def test_unknown_sort_by_maps_to_400(
+        self, platform: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """未知 sort by（不在注册表）→ 400 invalid_params，消息回显。"""
+
+        def _boom(**_kwargs: Any) -> Any:
+            raise ValueError("未知 sort by: 'bogus'（注册表: ['similarity']）")
+
+        monkeypatch.setattr(platform, "enumerate_object_instances", _boom)
+        client = TestClient(create_app(platform))
+
+        resp = client.post(
+            "/api/v1/rpc/search/enumerateObjectInstances",
+            json={
+                "params": {
+                    "object_codes": ["Event"],
+                    "sort": {"by": "bogus", "params": {}},
+                }
+            },
+        )
+
+        assert resp.status_code == 200  # RPC 统一信封：HTTP 层 200
+        body = resp.json()
+        assert body["code"] == 400
+        assert body["message"] == "未知 sort by: 'bogus'（注册表: ['similarity']）"
+        assert body["data"] is None
+
+    def test_sort_params_not_dict_maps_to_400(
+        self, platform: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """sort params 非 dict → 400 invalid_params，消息回显。"""
+
+        def _boom(**_kwargs: Any) -> Any:
+            raise ValueError("sort 'similarity' 的 params 必须是 dict")
+
+        monkeypatch.setattr(platform, "enumerate_object_instances", _boom)
+        client = TestClient(create_app(platform))
+
+        resp = client.post(
+            "/api/v1/rpc/search/enumerateObjectInstances",
+            json={
+                "params": {
+                    "object_codes": ["Event"],
+                    "sort": {"by": "similarity", "params": "not-a-dict"},
+                }
+            },
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["code"] == 400
+        assert body["message"] == "sort 'similarity' 的 params 必须是 dict"
+        assert body["data"] is None
+
+    def test_sort_query_not_string_maps_to_400(
+        self, platform: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """similarity query 非 str → 400 invalid_params，消息回显。"""
+
+        def _boom(**_kwargs: Any) -> Any:
+            raise ValueError("similarity 排序的 query 必须是字符串，收到: 42")
+
+        monkeypatch.setattr(platform, "enumerate_object_instances", _boom)
+        client = TestClient(create_app(platform))
+
+        resp = client.post(
+            "/api/v1/rpc/search/enumerateObjectInstances",
+            json={
+                "params": {
+                    "object_codes": ["Event"],
+                    "sort": {"by": "similarity", "params": {"query": 42}},
+                }
+            },
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["code"] == 400
+        assert body["message"] == "similarity 排序的 query 必须是字符串，收到: 42"
+        assert body["data"] is None
+
+    def test_missing_query_maps_to_400(
+        self, platform: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """缺 query（params 无 query 键）→ knowledge 校验拒绝 ValueError → 400。
+
+        RPC 映射契约测试：fake 模拟 knowledge 层因缺 query 抛 ValueError，
+        验证 _EXCEPTION_MAP（ValueError → 400 invalid_params）照常生效且
+        handler 不吞异常。注意：knowledge 层 T-51 对缺 query 实际是退化
+        语义（validate 放行 → term_id ASC）——本用例只钉 RPC 映射机制，
+        不宣称 knowledge 必拒缺 query。
+        """
+
+        def _boom(**_kwargs: Any) -> Any:
+            raise ValueError("similarity 排序缺少 query 参数")
+
+        monkeypatch.setattr(platform, "enumerate_object_instances", _boom)
+        client = TestClient(create_app(platform))
+
+        resp = client.post(
+            "/api/v1/rpc/search/enumerateObjectInstances",
+            json={
+                "params": {
+                    "object_codes": ["Event"],
+                    "sort": {"by": "similarity", "params": {}},
+                }
+            },
+        )
+
+        assert resp.status_code == 200  # RPC 统一信封：HTTP 层 200
+        body = resp.json()
+        assert body["code"] == 400
+        assert body["message"] == "similarity 排序缺少 query 参数"
+        assert body["data"] is None
+
+
+# ============================================================================
+# T-55：信封 9 字段无 score（TestClient 全链路 JSON 断言）
+# ============================================================================
+
+
+class TestWireEnvelopeNineFields:
+    """全链路（TestClient）信封：items 序列化后恰好 9 字段、无 score。
+
+    handler 层已有模型断言（test_envelope_shape_with_items）；此处钉死
+    「线上 JSON 真的看不到 score」——序列化后键集合恰为 9 个。
+    """
+
+    def test_wire_envelope_nine_fields_no_score(
+        self, platform: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """线上 JSON 信封：items[0] 恰好 9 键（含度数、无 score）。"""
+
+        def _ok(**_kwargs: Any) -> ObjectInstanceListPage:
+            return ObjectInstanceListPage(
+                items=[_make_item(0), _make_item(1)],
+                total=2,
+                page=1,
+                page_size=20,
+            )
+
+        monkeypatch.setattr(platform, "enumerate_object_instances", _ok)
+        client = TestClient(create_app(platform))
+
+        resp = client.post(
+            "/api/v1/rpc/search/enumerateObjectInstances",
+            json={
+                "params": {
+                    "object_codes": ["Event"],
+                    "kb_resource_ids": ["10000383"],
+                }
+            },
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert set(data.keys()) == {"items", "total", "page", "pageSize"}
+        assert data["total"] == 2
+        assert data["page"] == 1
+        assert data["pageSize"] == 20
+
+        item = data["items"][0]
+        assert set(item.keys()) == {
+            "instance_id",
+            "instance_code",
+            "instance_name",
+            "object_code",
+            "file_name",
+            "kb_resource_id",
+            "kb_id",
+            "out_degree",
+            "in_degree",
+        }  # 9 字段（枚举无分，score 是检索概念）
+        assert "score" not in item
+        assert item["out_degree"] == 0
+        assert item["in_degree"] == 1
+
+    def test_wire_sort_anchor_passthrough(
+        self, platform: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """全链路 sort 原值锚点：调用方 JSON 传入的 sort 原样到达 platform。"""
+        captured: list[dict[str, Any]] = []
+
+        def _recording(**_kwargs: Any) -> ObjectInstanceListPage:
+            captured.append(dict(_kwargs))
+            return ObjectInstanceListPage(items=[], total=0, page=1, page_size=20)
+
+        monkeypatch.setattr(platform, "enumerate_object_instances", _recording)
+        client = TestClient(create_app(platform))
+
+        resp = client.post(
+            "/api/v1/rpc/search/enumerateObjectInstances",
+            json={
+                "params": {
+                    "object_codes": ["Event"],
+                    "kb_resource_ids": ["10000383"],
+                    "sort": {"by": "similarity", "params": {"query": "退货单"}},
+                }
+            },
+        )
+
+        assert resp.status_code == 200
+        # 原值锚点：JSON 往返后值不变（含嵌套 params，深层相等）
+        assert captured[-1]["sort"] == {
+            "by": "similarity",
+            "params": {"query": "退货单"},
+        }
+        assert captured[-1]["object_codes"] == ["Event"]
+        assert captured[-1]["kb_resource_ids"] == ["10000383"]
