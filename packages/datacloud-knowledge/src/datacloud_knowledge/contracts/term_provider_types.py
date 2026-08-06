@@ -56,6 +56,22 @@ class EnumeratedObjectInstances:
     total: int
 
 
+@dataclass(frozen=True, slots=True)
+class SortSpec:
+    """枚举查询排序规格 — sort 数组单元素请求形状。
+
+    与 FilterSpec 请求元素同构：单一 key（by）+ params 参数字典。
+    ``by`` 目前仅支持 ``"similarity"``（语义相似度排序，EmbeddingService
+    形态 T-51 落地）；新排序依据 = 扩展 Literal + _SORT_REGISTRY 条目（T-51），
+    本层仅定形状，不做任何排序逻辑。
+    """
+
+    by: Literal["similarity"]
+    """排序依据。目前仅 "similarity"。"""
+    params: dict[str, Any] = field(default_factory=dict)
+    """类型专属参数字典（如 embedding 查询所需参数，T-51 定义）。"""
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 输入类型
 # ═══════════════════════════════════════════════════════════════════════════════

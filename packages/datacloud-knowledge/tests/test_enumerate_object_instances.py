@@ -461,7 +461,7 @@ def test_non_numeric_value_raises(known_graph_reader: PostgresTermReader) -> Non
 
 
 def test_provider_delegates_to_reader() -> None:
-    """provider.enumerate_object_instances 委托 reader（filters 透传）。"""
+    """provider.enumerate_object_instances 委托 reader（filters/sort 透传）。"""
     expected = EnumeratedObjectInstances(
         items=[
             ObjectInstanceItem(
@@ -488,6 +488,7 @@ def test_provider_delegates_to_reader() -> None:
         object_codes=["Event"],
         kb_resource_ids=["kb1"],
         filters=_degree_filter("out", "gte", 0),
+        sort=None,
         page=2,
         page_size=5,
     )

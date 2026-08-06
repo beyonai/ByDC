@@ -451,6 +451,7 @@ def enumerate_object_instances(
     object_codes: list[str],
     kb_resource_ids: list[str],
     filters: list[dict[str, Any]] | None = None,
+    sort: dict[str, Any] | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> EnumeratedObjectInstances:
@@ -460,6 +461,8 @@ def enumerate_object_instances(
         object_codes: 对象类型编码范围（尊重输入不校验，与 kb 范围 AND）。
         kb_resource_ids: 知识库资源 ID 范围（ext_attrs->>'kb_resource_id'）。
         filters: 条件数组（v1 只 AND），type 不在注册表 → ValueError。
+        sort: 排序规格 = {"by": "similarity", "params": {...}}，None = 默认序。
+              本层仅签名透传，实际排序（EmbeddingService 形态）T-51 落地。
         page: 页码（>=1）。
         page_size: 每页条数（>=1）。
 
@@ -471,6 +474,7 @@ def enumerate_object_instances(
         object_codes=object_codes,
         kb_resource_ids=kb_resource_ids,
         filters=filters,
+        sort=sort,
         page=page,
         page_size=page_size,
     )
