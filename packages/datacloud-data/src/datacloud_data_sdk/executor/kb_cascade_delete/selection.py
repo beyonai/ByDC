@@ -34,9 +34,7 @@ def _normalize_checkbox_value(value: Any) -> bool:
             return True
         if normalized == "false":
             return False
-    raise CascadeSelectionError(
-        "CASCADE_ITEM_TAMPERED: itemId 和 deleteSelected 必须有效"
-    )
+    raise CascadeSelectionError("CASCADE_ITEM_TAMPERED: itemId 和 deleteSelected 必须有效")
 
 
 def extract_cascade_selections(rule: list[Any]) -> dict[str, bool]:
@@ -58,9 +56,7 @@ def extract_cascade_selections(rule: list[Any]) -> dict[str, bool]:
                 )
             field_value = _normalize_checkbox_value(value.get("fieldValue"))
             if item_id in selections:
-                raise CascadeSelectionError(
-                    f"CASCADE_ITEM_TAMPERED: itemId 重复: {item_id}"
-                )
+                raise CascadeSelectionError(f"CASCADE_ITEM_TAMPERED: itemId 重复: {item_id}")
             selections[item_id] = field_value
         for child in value.values():
             if isinstance(child, (list, dict)):
@@ -124,14 +120,10 @@ def build_signed_cascade_execution(
         "ontologyRevision": context.ontology_revision,
         "roots": context.to_dict()["roots"],
         "deleteItems": [
-            serialize(item.item_id)
-            for item in context.items
-            if resolved[item.item_id] == "DELETE"
+            serialize(item.item_id) for item in context.items if resolved[item.item_id] == "DELETE"
         ],
         "detachItems": [
-            serialize(item.item_id)
-            for item in context.items
-            if resolved[item.item_id] == "DETACH"
+            serialize(item.item_id) for item in context.items if resolved[item.item_id] == "DETACH"
         ],
         "keptItems": [
             serialize(item.item_id)

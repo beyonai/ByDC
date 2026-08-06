@@ -104,9 +104,7 @@ def test_build_relation_attribute_uses_attribute_fallbacks() -> None:
             "relation_type": "MANY_TO_ONE",
             "attribute": {
                 "custom": "kept",
-                "join_keys": [
-                    {"sourceField": "product_code", "targetField": "code"}
-                ],
+                "join_keys": [{"sourceField": "product_code", "targetField": "code"}],
                 "cascade_delete": True,
             },
         }
@@ -352,9 +350,7 @@ def test_collect_object_accepts_nullable_cascade_join_key(
                 "relation_code": "feature_belongs_to_product",
                 "target_object_code": "by_product",
                 "relation_type": "MANY_TO_ONE",
-                "join_keys": [
-                    {"sourceField": "product_code", "targetField": "code"}
-                ],
+                "join_keys": [{"sourceField": "product_code", "targetField": "code"}],
                 "cascade_delete": True,
             }
         ],

@@ -408,9 +408,7 @@ async def test_cascade_resume_uses_only_explicit_confirmation_and_checkboxes() -
     with patch(_INTERRUPT_PATCH, return_value=resume_value):
         result = await user_clarify_node(state, {"configurable": {}})  # type: ignore[arg-type]
 
-    params = result["clarification_formatted_params"]["params_by_tool_call_id"][
-        "call-1"
-    ]["params"]
+    params = result["clarification_formatted_params"]["params_by_tool_call_id"]["call-1"]["params"]
     payload = verify_signed_cascade_execution(params["_cascadeDelete"])
     assert params["source_paths"] == ["/product/a.md"]
     assert payload["detachItems"][0]["sourcePath"] == "/feature/1.md"

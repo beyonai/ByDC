@@ -221,9 +221,12 @@ async def discover_cascade_context(
                         f"CASCADE_CONTEXT_STALE: Dependent 文件不存在 {source_path}"
                     )
 
-                item_id = "cascade_item_" + hashlib.sha256(
-                    f"{relation_id}:{source_term_id}:{source_path}".encode()
-                ).hexdigest()[:16]
+                item_id = (
+                    "cascade_item_"
+                    + hashlib.sha256(
+                        f"{relation_id}:{source_term_id}:{source_path}".encode()
+                    ).hexdigest()[:16]
+                )
                 item = CascadeDeleteItem(
                     item_id=item_id,
                     parent_item_id=parent_item_id,
@@ -249,9 +252,7 @@ async def discover_cascade_context(
     if not items:
         return None
     revision = str(
-        getattr(loader, "ontology_revision", "")
-        or getattr(loader, "fingerprint", "")
-        or ""
+        getattr(loader, "ontology_revision", "") or getattr(loader, "fingerprint", "") or ""
     )
     return CascadeDeleteContext.create(
         roots=roots,

@@ -47,14 +47,10 @@ def resolve_cascade_object_closure(
             if not _relation_cascade_delete(relation):
                 continue
             source = str(
-                relation.get("source_class")
-                or relation.get("sourceObjectCode")
-                or ""
+                relation.get("source_class") or relation.get("sourceObjectCode") or ""
             )
             target = str(
-                relation.get("target_class")
-                or relation.get("targetObjectCode")
-                or ""
+                relation.get("target_class") or relation.get("targetObjectCode") or ""
             )
             if target in frontier and source and source not in closure:
                 next_frontier.add(source)

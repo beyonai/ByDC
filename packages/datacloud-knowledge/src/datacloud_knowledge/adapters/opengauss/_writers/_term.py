@@ -1067,9 +1067,7 @@ class _TermWriter(_WriterBase):
                     rel_category = (
                         rel.get("relation_category") or rel.get("relationCategory") or "BUSINESS"
                     )
-                    relation_code = str(
-                        rel.get("relation_code") or rel.get("relationCode") or ""
-                    )
+                    relation_code = str(rel.get("relation_code") or rel.get("relationCode") or "")
                     cascade_delete = rel.get("cascade_delete") is True
 
                     if not target_code and not target_name:

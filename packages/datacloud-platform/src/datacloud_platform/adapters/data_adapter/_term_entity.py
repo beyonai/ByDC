@@ -172,7 +172,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
-            writer.update_term_type(  # type: ignore[call-arg]
+            writer.update_term_type(
                 library_id=library_id, type_code=type_code, updates=updates
             )
 
@@ -180,7 +180,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
-            writer.delete_term_type(library_id=library_id, type_code=type_code)  # type: ignore[call-arg]
+            writer.delete_term_type(library_id=library_id, type_code=type_code)
 
     # ── Domain ──────────────────────────────────────────────────────────
 

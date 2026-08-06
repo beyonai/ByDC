@@ -229,16 +229,25 @@ def test_similarity_sort_pagination_and_envelope(
     """分页不重不漏 + total 诚实 + 响应 6 字段无 score（verify gate）。"""
     _install_sqlite_sort(monkeypatch)
     page1 = known_graph_reader.enumerate_object_instances(
-        object_codes=["Event", "Document"], kb_resource_ids=[], sort=_similarity_sort(),
-        page=1, page_size=3,
+        object_codes=["Event", "Document"],
+        kb_resource_ids=[],
+        sort=_similarity_sort(),
+        page=1,
+        page_size=3,
     )
     page2 = known_graph_reader.enumerate_object_instances(
-        object_codes=["Event", "Document"], kb_resource_ids=[], sort=_similarity_sort(),
-        page=2, page_size=3,
+        object_codes=["Event", "Document"],
+        kb_resource_ids=[],
+        sort=_similarity_sort(),
+        page=2,
+        page_size=3,
     )
     page3 = known_graph_reader.enumerate_object_instances(
-        object_codes=["Event", "Document"], kb_resource_ids=[], sort=_similarity_sort(),
-        page=3, page_size=3,
+        object_codes=["Event", "Document"],
+        kb_resource_ids=[],
+        sort=_similarity_sort(),
+        page=3,
+        page_size=3,
     )
     assert (page1.total, page2.total, page3.total) == (8, 8, 8)
     assert _item_ids(page1) + _item_ids(page2) + _item_ids(page3) == EXPECTED_ORDER
@@ -332,8 +341,7 @@ def test_similarity_embedding_failure_falls_back_to_bm25(
     sql = captured["sqls"][0]
     assert "to_tsquery('simple', :tsquery) q" in sql
     assert (
-        "ORDER BY MAX(ts_rank_cd(tn.name_keywords, q, 32)) DESC NULLS LAST, t.term_id ASC"
-        in sql
+        "ORDER BY MAX(ts_rank_cd(tn.name_keywords, q, 32)) DESC NULLS LAST, t.term_id ASC" in sql
     ), "降级路径必须走 BM25 单字 ts_rank_cd"
     tsquery = captured["params_list"][0]["tsquery"]
     assert "退" in tsquery and "货" in tsquery, "tsquery 为单字 OR 组合"

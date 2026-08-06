@@ -182,9 +182,7 @@ class DeleteMetadataBackend:
     async def delete_files(self, request: Any) -> KnowledgeDeleteResult:
         return KnowledgeDeleteResult(
             deleted_paths=(
-                list(request.file_paths)
-                if self.deleted_paths is None
-                else list(self.deleted_paths)
+                list(request.file_paths) if self.deleted_paths is None else list(self.deleted_paths)
             )
         )
 

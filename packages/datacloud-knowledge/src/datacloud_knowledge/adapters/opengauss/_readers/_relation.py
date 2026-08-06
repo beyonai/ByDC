@@ -57,9 +57,7 @@ class _RelationReader(_ReaderBase):
         if relation_category is not None:
             conditions.append(TermRelation.relation_category == relation_category)
         if relation_code is not None:
-            conditions.append(
-                TermRelation.ext_attrs["relation_code"].astext == relation_code
-            )
+            conditions.append(TermRelation.ext_attrs["relation_code"].astext == relation_code)
         if keyword and keyword.strip():
             conditions.append(text("term_relation.relation_name ILIKE :kw"))
             params["kw"] = f"%{keyword.strip()}%"

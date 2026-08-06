@@ -2758,9 +2758,7 @@ class _TermReader(_ReaderBase):
             sort_by = sort.get("by")
             entry = _SORT_REGISTRY.get(sort_by) if isinstance(sort_by, str) else None
             if entry is None:
-                raise ValueError(
-                    f"未知 sort by: {sort_by!r}（注册表: {sorted(_SORT_REGISTRY)}）"
-                )
+                raise ValueError(f"未知 sort by: {sort_by!r}（注册表: {sorted(_SORT_REGISTRY)}）")
             sort_params = sort.get("params")
             if not isinstance(sort_params, dict):
                 # 验收钉死 ValueError（_EXCEPTION_MAP: ValueError → 400 invalid_params）
@@ -2777,9 +2775,7 @@ class _TermReader(_ReaderBase):
         joins: list[str] = []
         if requires_name_join:
             # similarity 排序键在 name 级（name_embedding / name_keywords）
-            joins.append(
-                "LEFT JOIN term_name tn\n       ON tn.term_id = t.term_id"
-            )
+            joins.append("LEFT JOIN term_name tn\n       ON tn.term_id = t.term_id")
         if "out" in required_joins:
             # SELECT 度数列与 HAVING/ORDER BY 共用同一表达式源，防计数规则漂移
             select_cols.append(f"{_degree_metric_expr('out')} AS out_degree")
