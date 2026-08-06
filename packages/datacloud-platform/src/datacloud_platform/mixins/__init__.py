@@ -3,6 +3,7 @@
 from datacloud_platform.mixins.action_crud import ActionCRUDMixin
 from datacloud_platform.mixins.datasource import DatasourceMixin
 from datacloud_platform.mixins.document import DocumentMixin
+from datacloud_platform.mixins.document_enrich import DocumentEnrichMixin
 from datacloud_platform.mixins.execution import ExecutionMixin
 from datacloud_platform.mixins.knowledge import KnowledgeMixin
 from datacloud_platform.mixins.document_library_backend import (
@@ -29,6 +30,7 @@ __all__ = [
     "ActionCRUDMixin",
     "DatasourceMixin",
     "DocumentMixin",
+    "DocumentEnrichMixin",
     "ExecutionMixin",
     "KnowledgeMixin",
     "DocumentLibraryBackendMixin",
