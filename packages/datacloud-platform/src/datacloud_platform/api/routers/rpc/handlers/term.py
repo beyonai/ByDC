@@ -328,6 +328,8 @@ def _term_get_relations(
         kwargs["relation_category"] = params["relation_category"]
     if params.get("keyword"):
         kwargs["keyword"] = params["keyword"]
+    if params.get("term_type_code"):
+        kwargs["term_type_code"] = params["term_type_code"]
     return ok(data=platform.query_term_relations(_base(params), **kwargs))
 
 

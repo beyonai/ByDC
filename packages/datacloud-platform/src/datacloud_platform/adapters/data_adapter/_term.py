@@ -466,6 +466,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
+        term_type_code: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
@@ -478,6 +479,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
                 direction=direction,
                 depth=depth,
                 keyword=keyword,
+                term_type_code=term_type_code,
                 page_index=page_index,
                 page_size=page_size,
             )

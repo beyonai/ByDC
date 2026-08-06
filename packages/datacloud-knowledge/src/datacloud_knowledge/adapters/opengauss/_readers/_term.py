@@ -4507,6 +4507,7 @@ class _TermReader(_ReaderBase):
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
+        term_type_code: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
@@ -4518,6 +4519,14 @@ class _TermReader(_ReaderBase):
             direction: "outgoing", "incoming", or "both" (default).
             depth: Recursion depth (1 = direct only).
             keyword: Optional keyword, searches relation_name (ILIKE).
+            term_type_code: Optional term_type_code filter on the *neighbor* term
+                (the endpoint opposite to the given term_id).  Applied at the SQL
+                layer via JOIN on the ``term`` table:
+                - outgoing → filter target term type
+                - incoming → filter source term type
+                - both     → (source==term_id AND target.type==ttc)
+                             OR (target==term_id AND source.type==ttc)
+                When omitted, behaves exactly as before (no JOIN, no filter).
             page_index: 1-based page number (default 1).
             page_size: Items per page (default 20, max 100).
 
@@ -4549,11 +4558,53 @@ class _TermReader(_ReaderBase):
                 filters.append(text("term_relation.relation_name ILIKE :kw"))
                 params["kw"] = f"%{keyword.strip()}%"
 
+            # SQL 层 JOIN term 表按"邻居端" term_type_code 过滤（禁止 Python 层过滤）。
+            # 未传 term_type_code 时保持零 JOIN，行为与改造前完全一致。
+            joins: list[tuple[Any, Any]] = []
+            if term_type_code:
+                if direction == "outgoing":
+                    neighbor_term = aliased(Term)
+                    joins.append(
+                        (neighbor_term, neighbor_term.term_id == TermRelation.target_term_id)
+                    )
+                    filters.append(neighbor_term.term_type_code == term_type_code)
+                elif direction == "incoming":
+                    neighbor_term = aliased(Term)
+                    joins.append(
+                        (neighbor_term, neighbor_term.term_id == TermRelation.source_term_id)
+                    )
+                    filters.append(neighbor_term.term_type_code == term_type_code)
+                else:
+                    target_alias = aliased(Term)
+                    source_alias = aliased(Term)
+                    joins.append(
+                        (target_alias, target_alias.term_id == TermRelation.target_term_id)
+                    )
+                    joins.append(
+                        (source_alias, source_alias.term_id == TermRelation.source_term_id)
+                    )
+                    filters.append(
+                        or_(
+                            and_(
+                                TermRelation.source_term_id == term_id,
+                                target_alias.term_type_code == term_type_code,
+                            ),
+                            and_(
+                                TermRelation.target_term_id == term_id,
+                                source_alias.term_type_code == term_type_code,
+                            ),
+                        )
+                    )
+
             where_clause = and_(*filters) if filters else text("1=1")
 
+            # count 与主查询必须使用同一组 JOIN + 过滤条件，保证 totalCount 一致
+            count_stmt = select(func.count()).select_from(TermRelation)
+            for entity, onclause in joins:
+                count_stmt = count_stmt.outerjoin(entity, onclause)
             total = int(
                 session.execute(
-                    select(func.count()).select_from(TermRelation).where(where_clause),
+                    count_stmt.where(where_clause),
                     params,
                 ).scalar_one()
             )
@@ -4567,19 +4618,21 @@ class _TermReader(_ReaderBase):
                     "totalPages": 0,
                 }
 
+            stmt = select(
+                TermRelation.relation_id,
+                TermRelation.source_term_id,
+                TermRelation.target_term_id,
+                TermRelation.relation_name,
+                TermRelation.relation_category,
+                TermRelation.cardinality,
+                TermRelation.created_time,
+                TermRelation.updated_time,
+            )
+            for entity, onclause in joins:
+                stmt = stmt.outerjoin(entity, onclause)
             rows = session.execute(
-                select(
-                    TermRelation.relation_id,
-                    TermRelation.source_term_id,
-                    TermRelation.target_term_id,
-                    TermRelation.relation_name,
-                    TermRelation.relation_category,
-                    TermRelation.cardinality,
-                    TermRelation.created_time,
-                    TermRelation.updated_time,
-                )
-                .where(where_clause)
-                .order_by(TermRelation.relation_name)
+                stmt.where(where_clause)
+                .order_by(TermRelation.updated_time.desc().nulls_last())
                 .limit(page_size)
                 .offset(offset),
                 params,
