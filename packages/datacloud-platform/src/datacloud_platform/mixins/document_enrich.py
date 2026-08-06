@@ -199,7 +199,7 @@ class DocumentEnrichMixin:
         base_id: str,
         *,
         object_scope: list[DocumentEnrichObjectScope],
-        object_code: DocumentEnrichObjectScope,
+        target_object: DocumentEnrichObjectScope,
         term_id: str,
         on_event: Callable[[Any], None] | None = None,
     ) -> DocumentEnrichResult:
@@ -208,8 +208,8 @@ class DocumentEnrichMixin:
         total_started = perf_counter()
         object_names = {item.object_code: item.object_name for item in object_scope}
         normalized_scope_codes = list(object_names)
-        normalized_object_code = object_code.object_code
-        object_names.setdefault(object_code.object_code, object_code.object_name)
+        normalized_object_code = target_object.object_code
+        object_names.setdefault(target_object.object_code, target_object.object_name)
         normalized_term_id = term_id.strip()
         _log_enrich_stage(
             stage="start",

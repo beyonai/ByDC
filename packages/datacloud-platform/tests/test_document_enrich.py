@@ -326,7 +326,7 @@ async def test_enrich_uses_labelled_bounded_evidence_and_relation_fallback(
     result = await platform.enrich(
         BASE_ID,
         object_scope=_object_scope(),
-        object_code=_target_object(),
+        target_object=_target_object(),
         term_id=TARGET_TERM_ID,
     )
 
@@ -394,7 +394,7 @@ async def test_enrich_skips_invalid_scope_without_retrieval() -> None:
     result = await platform.enrich(
         BASE_ID,
         object_scope=[],
-        object_code=_target_object(),
+        target_object=_target_object(),
         term_id=TARGET_TERM_ID,
     )
 
@@ -411,7 +411,7 @@ async def test_enrich_skips_when_target_object_detail_is_missing() -> None:
     result = await platform.enrich(
         BASE_ID,
         object_scope=_object_scope(),
-        object_code=_target_object("missing-object", "缺失对象"),
+        target_object=_target_object("missing-object", "缺失对象"),
         term_id=TARGET_TERM_ID,
     )
 
@@ -430,7 +430,7 @@ async def test_enrich_returns_failed_status_and_exception_information() -> None:
     result = await platform.enrich(
         BASE_ID,
         object_scope=_object_scope(),
-        object_code=_target_object(),
+        target_object=_target_object(),
         term_id=TARGET_TERM_ID,
     )
 
@@ -446,7 +446,7 @@ async def test_enrich_uses_generic_template_when_object_template_is_missing() ->
     result = await platform.enrich(
         BASE_ID,
         object_scope=_object_scope(),
-        object_code=_target_object(),
+        target_object=_target_object(),
         term_id=TARGET_TERM_ID,
     )
 
@@ -464,7 +464,7 @@ async def test_enrich_rejects_output_that_does_not_follow_strict_format() -> Non
     result = await platform.enrich(
         BASE_ID,
         object_scope=_object_scope(),
-        object_code=_target_object(),
+        target_object=_target_object(),
         term_id=TARGET_TERM_ID,
     )
 
