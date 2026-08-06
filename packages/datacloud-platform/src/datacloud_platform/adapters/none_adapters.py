@@ -7,6 +7,31 @@ from __future__ import annotations
 
 from typing import Any
 
+from datacloud_platform.models.document import MetadataSearchPage
+
+
+class _NoopDocumentLibraryBackend:
+    """Document-library backend that returns empty read results."""
+
+    async def search_knowledge_item_metadata(
+        self, *, payload: dict[str, Any]
+    ) -> MetadataSearchPage:
+        page_num = int(payload.get("pageNum") or 1)
+        page_size = int(payload.get("pageSize") or payload.get("topK") or 20)
+        return MetadataSearchPage(
+            data=(), total=0, page_num=page_num, page_size=page_size
+        )
+
+    async def read_knowledge_document(self, *, resource_id: str, file_path: str) -> str:
+        _ = resource_id, file_path
+        raise PermissionError("Knowledge service not available")
+
+    async def search_knowledge_items(
+        self, *, payload: dict[str, Any]
+    ) -> tuple[dict[str, Any], ...]:
+        _ = payload
+        return ()
+
 
 class _NoopOntologyBackend:
     """Ontology backend where all reads return empty and all writes are forbidden."""

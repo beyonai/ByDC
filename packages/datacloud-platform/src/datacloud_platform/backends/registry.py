@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 from datacloud_platform.backends.execution import ExecutionBackend
+from datacloud_platform.backends.document_library import DocumentLibraryBackend
 from datacloud_platform.backends.ontology import OntologyBackend
 from datacloud_platform.backends.storage import StorageBackend
 from datacloud_platform.backends.term import TermBackend
@@ -23,6 +24,7 @@ BackendFactory = Callable[[], Any]
 OntologyBackendFactory = Callable[[], OntologyBackend]
 TermBackendFactory = Callable[[], TermBackend]
 ExecutionBackendFactory = Callable[[], ExecutionBackend]
+DocumentLibraryBackendFactory = Callable[[], DocumentLibraryBackend]
 StorageBackendFactory = Callable[[], StorageBackend]
 
 # ── Generic registry state ──
@@ -156,6 +158,14 @@ def register_execution_backend(name: str, factory: ExecutionBackendFactory) -> N
     register_implementation("execution", name, factory)
 
 
+def register_document_library_backend(
+    name: str, factory: DocumentLibraryBackendFactory
+) -> None:
+    """Register a DocumentLibraryBackend factory."""
+    _ensure_dimension("document_library")
+    register_implementation("document_library", name, factory)
+
+
 def register_storage_backend(name: str, factory: StorageBackendFactory) -> None:
     """Register a StorageBackend factory (backward-compat wrapper)."""
     _ensure_dimension("storage")
@@ -178,6 +188,12 @@ def get_execution_backend(name: str) -> ExecutionBackend:
     """Get ExecutionBackend instance by name (backward-compat wrapper)."""
     _ensure_dimension("execution")
     return get_backend_factory("execution", name)()  # type: ignore[no-any-return]
+
+
+def get_document_library_backend(name: str) -> DocumentLibraryBackend:
+    """Get a DocumentLibraryBackend instance by name."""
+    _ensure_dimension("document_library")
+    return get_backend_factory("document_library", name)()  # type: ignore[no-any-return]
 
 
 def get_storage_backend(name: str) -> StorageBackend:

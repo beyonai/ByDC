@@ -1,0 +1,193 @@
+"""Typed contracts for document-library orchestration and transport."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class DocumentProcessingStatus(StrEnum):
+    """Allowed Chinese processing states stored in ``dc_status``."""
+
+    PENDING_DISCOVERY = "待发现"
+    DISCOVERING = "发现中"
+    DISCOVERY_RETRY = "发现失败-待重试"
+    DISCOVERY_MANUAL = "发现失败-待人工处理"
+    PENDING_ORGANIZATION = "待整理"
+    ORGANIZING = "整理中"
+    ORGANIZATION_RETRY = "整理失败-待重试"
+    ORGANIZATION_MANUAL = "整理失败-待人工处理"
+    COMPLETED = "已完成"
+
+
+class _AliasedModel(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
+class QueryDocumentObjectsRequest(_AliasedModel):
+    kb_resource_ids: tuple[str, ...] = Field(default=(), alias="kbResourceIds")
+    statuses: tuple[DocumentProcessingStatus, ...] = ()
+    object_codes: tuple[str, ...] = Field(default=(), alias="objectCodes")
+    organization_interval_seconds: int | None = Field(
+        default=None, alias="organizationIntervalSeconds", ge=0
+    )
+    relation_in_out_difference: int | None = Field(
+        default=None, alias="relationInOutDifference"
+    )
+    page_index: int = Field(default=1, alias="pageIndex", ge=1)
+    page_size: int = Field(default=20, alias="pageSize", ge=1, le=200)
+
+    @field_validator("kb_resource_ids", "object_codes", mode="before")
+    @classmethod
+    def _normalize_strings(cls, value: object) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("must be an array")
+        normalized = tuple(dict.fromkeys(str(item).strip() for item in value))
+        if any(not item for item in normalized):
+            raise ValueError("must not contain blank values")
+        return normalized
+
+    @field_validator("statuses", mode="before")
+    @classmethod
+    def _deduplicate_statuses(cls, value: object) -> object:
+        if value is None:
+            return ()
+        if isinstance(value, (list, tuple)):
+            return tuple(dict.fromkeys(value))
+        return value
+
+
+class QueryRelatedDocumentObjectsRequest(_AliasedModel):
+    term_id: str = Field(alias="termId", min_length=1)
+    page_index: int = Field(default=1, alias="pageIndex", ge=1)
+    page_size: int = Field(default=20, alias="pageSize", ge=1, le=200)
+
+    @field_validator("term_id")
+    @classmethod
+    def _strip_term_id(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("termId is required")
+        return stripped
+
+
+class DocumentObjectItem(_AliasedModel):
+    term_id: str = Field(alias="termId")
+    term_name: str = Field(alias="termName")
+    term_code: str = Field(alias="termCode")
+    term_type_code: str = Field(alias="termTypeCode")
+    file_path: str = Field(alias="filePath")
+    kb_resource_id: str = Field(alias="kbResourceId")
+    status: DocumentProcessingStatus
+    failure_reason: str | None = Field(default=None, alias="failureReason")
+    failure_count: int = Field(default=0, alias="failureCount", ge=0)
+
+
+class Pagination(_AliasedModel):
+    page_index: int = Field(alias="pageIndex")
+    page_size: int = Field(alias="pageSize")
+    total: int = Field(ge=0)
+    total_pages: int = Field(alias="totalPages", ge=0)
+
+
+class DocumentObjectPage(_AliasedModel):
+    items: tuple[DocumentObjectItem, ...] = ()
+    pagination: Pagination
+
+
+class RelatedTermInfo(_AliasedModel):
+    term_id: str = Field(alias="termId")
+    term_name: str = Field(alias="termName")
+    term_code: str = Field(alias="termCode")
+    term_type_code: str = Field(alias="termTypeCode")
+    kb_resource_id: str = Field(alias="kbResourceId")
+    file_path: str = Field(alias="filePath")
+
+
+class RelatedDocumentRelationItem(_AliasedModel):
+    relation_id: str = Field(alias="relationId")
+    relation_name: str = Field(alias="relationName")
+    relation_category: str = Field(alias="relationCategory")
+    cardinality: str | None = None
+    source: RelatedTermInfo
+    target: RelatedTermInfo
+
+
+class RelatedDocumentRelationPage(_AliasedModel):
+    items: tuple[RelatedDocumentRelationItem, ...] = ()
+    pagination: Pagination
+
+
+@dataclass(frozen=True, slots=True)
+class MetadataSearchPage:
+    """One stable metadata-search page and its downstream pagination data."""
+
+    data: tuple[dict[str, Any], ...]
+    total: int
+    page_num: int
+    page_size: int
+
+
+class GetDocumentContentRequest(_AliasedModel):
+    term_id: str = Field(alias="termId", min_length=1)
+
+    @field_validator("term_id")
+    @classmethod
+    def _strip_content_term_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("termId is required")
+        return value
+
+
+class DocumentContentResult(_AliasedModel):
+    term_id: str = Field(alias="termId")
+    kb_resource_id: str = Field(alias="kbResourceId")
+    file_path: str = Field(alias="filePath")
+    content: str
+
+
+class SearchDocumentFragmentsRequest(_AliasedModel):
+    object_codes: tuple[str, ...] = Field(alias="objectCodes", min_length=1)
+    query: str = Field(min_length=1)
+    top_k: int = Field(alias="topK", gt=0)
+
+    @field_validator("object_codes", mode="before")
+    @classmethod
+    def _normalize_object_codes(cls, value: object) -> tuple[str, ...]:
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("objectCodes must be an array")
+        normalized = tuple(dict.fromkeys(str(item).strip() for item in value))
+        if not normalized or any(not item for item in normalized):
+            raise ValueError("objectCodes must not contain blank values")
+        return normalized
+
+    @field_validator("query")
+    @classmethod
+    def _strip_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query is required")
+        return value
+
+
+class DocumentFragmentItem(_AliasedModel):
+    kn_code: str = Field(default="", alias="knCode")
+    file_path: str = Field(default="", alias="filePath")
+    chunk_no: int | None = Field(default=None, alias="chunkNo")
+    chunk_id: int | None = Field(default=None, alias="chunkId")
+    chunk_text: str = Field(default="", alias="chunkText")
+    score: float = 0.0
+    image_path: str | None = Field(default=None, alias="imagePath")
+    start_line: int | None = Field(default=None, alias="startLine")
+    end_line: int | None = Field(default=None, alias="endLine")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class DocumentFragmentResult(_AliasedModel):
+    items: tuple[DocumentFragmentItem, ...] = ()

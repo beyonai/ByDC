@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader
+from datacloud_platform.models.document import DocumentProcessingStatus
+from datacloud_platform.mixins.document import build_processing_labels
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -56,6 +59,7 @@ async def invoke_object_action(
     arguments: dict[str, Any],
 ) -> dict[str, Any]:
     """Invoke an object action using the same loader pipeline as kb.invokeAction."""
+    arguments = prepare_action_arguments(action_code=action_code, arguments=arguments)
     loader = platform._load_ontology_cached(base_id)  # noqa: SLF001
     if isinstance(loader, OntologyLoader):
         loader.configure(platform=platform)
@@ -107,6 +111,23 @@ async def invoke_object_action(
         _json_for_log(_summarize_result(result)),
     )
     return result
+
+
+def prepare_action_arguments(
+    *, action_code: str, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """Add DataCloud processing labels to document write actions."""
+    if not action_code.startswith("write_"):
+        return arguments
+    prepared = dict(arguments)
+    raw_labels = prepared.get("labels")
+    if raw_labels is not None and not isinstance(raw_labels, Mapping):
+        raise ValueError("arguments.labels must be an object")
+    prepared["labels"] = build_processing_labels(
+        initial_status=DocumentProcessingStatus.PENDING_DISCOVERY,
+        labels=raw_labels,
+    )
+    return prepared
 
 
 def unwrap_action_result(action_result: dict[str, Any]) -> dict[str, Any]:

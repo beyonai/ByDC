@@ -1,4 +1,4 @@
-"""DatacloudPlatform — unified ontology + term + execution + storage platform entry point.
+"""DatacloudPlatform — unified backend-routed platform entry point.
 
 Multi-base router: injects OntologyBaseRegistry, routes every operation by base_id.
 Each base independently declares its 4 Backend dimensions via source_type presets
@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, final
 from datacloud_platform.backends._contracts import (
     _HasBasePath,
     _HasExecutionBackend,
+    _HasDocumentLibraryBackend,
     _HasOntologyBackend,
     _HasStorageBackend,
     _HasTermBackend,
@@ -29,7 +30,9 @@ from datacloud_platform.backends.term import TermBackend
 from datacloud_platform.mixins import (
     ActionCRUDMixin,
     DatasourceMixin,
+    DocumentMixin,
     ExecutionMixin,
+    DocumentLibraryBackendMixin,
     KnowledgeMixin,
     LibraryMixin,
     OntologyBuildMixin,
@@ -53,6 +56,7 @@ from datacloud_platform.ontology_store import OntologyStore
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.execution import ExecutionBackend
+    from datacloud_platform.backends.document_library import DocumentLibraryBackend
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
     from datacloud_platform.backends.storage import StorageBackend
     from datacloud_platform.backends.term import TermBackend
@@ -66,6 +70,7 @@ logger = logging.getLogger(__name__)
 class DatacloudPlatform(
     _HasOntologyBackend,
     _HasExecutionBackend,
+    _HasDocumentLibraryBackend,
     _HasStorageBackend,
     _HasTermBackend,
     _HasBasePath,
@@ -79,8 +84,10 @@ class DatacloudPlatform(
     ViewMixin,
     RelationMixin,
     DatasourceMixin,
+    DocumentMixin,
     ActionCRUDMixin,
     KnowledgeMixin,
+    DocumentLibraryBackendMixin,
     TermMixin,
     TermConnectionNetworkMixin,
     OntologyDocFragmentMixin,
@@ -174,6 +181,14 @@ class DatacloudPlatform(
         entry = self._resolve_entry(base_id)
         names = self._resolve_names(entry)
         backend = self._get_backend("term", names["term"])
+        _configure_if_supported(backend, entry)
+        return backend  # type: ignore[no-any-return]
+
+    def _document_library_for(self, base_id: str) -> DocumentLibraryBackend:
+        """Resolve and cache the DocumentLibraryBackend for a base."""
+        entry = self._resolve_entry(base_id)
+        names = self._resolve_names(entry)
+        backend = self._get_backend("document_library", names["document_library"])
         _configure_if_supported(backend, entry)
         return backend  # type: ignore[no-any-return]
 
