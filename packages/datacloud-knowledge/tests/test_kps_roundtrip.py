@@ -37,7 +37,7 @@ from rdflib import Graph
 def _build_base_config() -> OwlGenConfig:
     """构建最小测试用 OwlGenConfig。"""
     return OwlGenConfig(
-        domain_code="D1",
+        domain_codes=("D1",),
         domain_name="测试域",
         domain_desc="",
         library_code="L1",

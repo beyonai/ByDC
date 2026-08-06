@@ -113,7 +113,7 @@ def _build_config(output_dir: str = "/tmp/e2e-owl-output") -> OwlGenConfig:
     ]
 
     return OwlGenConfig(
-        domain_code="D1",
+        domain_codes=("D1",),
         domain_name="销售域",
         domain_desc="CRM 销售管理领域",
         library_code="L1",

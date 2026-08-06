@@ -122,7 +122,7 @@ class TestTermDef:
             term_name="客户",
             term_type_code="object",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
         )
         assert term.term_code == "by_customer"
         assert term.term_name == "客户"
@@ -137,7 +137,7 @@ class TestTermDef:
             term_name="客户",
             term_type_code="object",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
             synonyms=("顾客", "Client"),
         )
         assert term.synonyms == ("顾客", "Client")
@@ -149,7 +149,7 @@ class TestTermDef:
             term_name="签约成功",
             term_type_code="opp_status",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
             parent_term_code="status",
         )
         assert term.parent_term_code == "status"
@@ -161,7 +161,7 @@ class TestTermDef:
             term_name="测试",
             term_type_code="object",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
         )
         with pytest.raises(FrozenInstanceError):
             term.term_code = "changed"
@@ -175,7 +175,7 @@ class TestTermDef:
             term_name="客户",
             term_type_code="object",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
         )
         assert term.compute_term_id() == "L1#object#by_customer"
 
@@ -186,7 +186,7 @@ class TestTermDef:
             term_name="客户名称",
             term_type_code="prop",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
             parent_term_code="by_customer",
         )
         tid = term.compute_term_id(parent_term_id="L1#object#by_customer")
@@ -199,7 +199,7 @@ class TestTermDef:
             term_name="签约成功",
             term_type_code="opp_status",
             library_code="L1",
-            domain_code="D1",
+            domain_codes=("D1",),
             parent_term_code="status",
         )
         tid = term.compute_term_id(parent_term_id="L1#prop#status")
@@ -212,7 +212,7 @@ class TestTermDef:
             term_name="子X",
             term_type_code="value",
             library_code="L2",
-            domain_code="D1",
+            domain_codes=("D1",),
             parent_term_code="prop_x",
         )
         assert term_with_parent.compute_term_id() == "L2#value#child_x"
@@ -370,7 +370,7 @@ class TestKnowledgePackage:
                     term_name="对象",
                     term_type_code="object",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                 ),
             ),
             relations=(),
@@ -391,14 +391,14 @@ class TestKnowledgePackage:
                     term_name="客户",
                     term_type_code="object",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                 ),
                 TermDef(
                     term_code="customer_name",
                     term_name="客户名称",
                     term_type_code="prop",
                     library_code="L1",
-                    domain_code="D1",
+                    domain_codes=("D1",),
                     parent_term_code="by_customer",
                 ),
             ),

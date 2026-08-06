@@ -36,7 +36,7 @@ from datacloud_knowledge.ingestion.owl_generate.renderers.term_types import buil
 def _minimal_config(**overrides: object) -> OwlGenConfig:
     """构建最小合法 OwlGenConfig，可覆盖任意字段。"""
     defaults: dict[str, object] = {
-        "domain_code": "D1",
+        "domain_codes": ("D1",),
         "domain_name": "测试域",
         "domain_desc": "用于单元测试的领域",
         "library_code": "L1",
@@ -79,7 +79,7 @@ class TestBuildTermDef:
         assert term.term_name == "测试对象"
         assert term.term_type_code == "object"
         assert term.library_code == "L1"
-        assert term.domain_code == "D1"
+        assert term.domain_codes == ("D1",)
         assert term.parent_term_code is None
         assert term.synonyms == ()
         assert term.term_desc == "这是一个测试对象"
