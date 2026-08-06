@@ -536,3 +536,67 @@ def test_http_adapter_forwards_filters() -> None:
     assert result.total == 1
     assert result.items[0].term_id == "t2"
     assert result.items[0].out_degree == 3
+
+
+def test_http_adapter_forwards_sort_payload() -> None:
+    """T-50：http adapter 远程转发，sort dict 原值透传（同一对象），响应解析不变。"""
+    from datacloud_knowledge.adapters.http.adapter import HttpTermAdapter
+
+    adapter = HttpTermAdapter(base_url="http://remote.test", pid="p1")
+    sort: dict[str, Any] = {"by": "similarity", "params": {"query": "合同"}}
+    adapter._client = Mock()  # type: ignore[assignment]
+    resp = Mock()
+    resp.json.return_value = {
+        "resultObject": {
+            "items": [
+                {
+                    "term_id": "t2",
+                    "term_code": "E2",
+                    "term_name": "Two",
+                    "term_type_code": "Event",
+                    "out_degree": 3,
+                    "in_degree": 1,
+                }
+            ],
+            "total": 1,
+        }
+    }
+    adapter._client.post.return_value = resp  # type: ignore[attr-defined]
+
+    result = adapter.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=["kb1"],
+        sort=sort,
+        page=1,
+        page_size=20,
+    )
+
+    payload = adapter._client.post.call_args[1]["json"]  # type: ignore[attr-defined]
+    assert payload["sort"] is sort
+    assert payload["filters"] == []
+    assert result.total == 1
+    assert result.items[0].term_id == "t2"
+    assert result.items[0].out_degree == 3
+
+
+def test_http_adapter_omits_sort_when_none() -> None:
+    """T-50：sort=None（默认）→ payload 省略 "sort" key，远端走默认排序。"""
+    from datacloud_knowledge.adapters.http.adapter import HttpTermAdapter
+
+    adapter = HttpTermAdapter(base_url="http://remote.test", pid="p1")
+    adapter._client = Mock()  # type: ignore[assignment]
+    resp = Mock()
+    resp.json.return_value = {
+        "resultObject": {"items": [], "total": 0},
+    }
+    adapter._client.post.return_value = resp  # type: ignore[attr-defined]
+
+    result = adapter.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=["kb1"],
+    )
+
+    payload = adapter._client.post.call_args[1]["json"]  # type: ignore[attr-defined]
+    assert "sort" not in payload
+    assert result.total == 0
+    assert result.items == []

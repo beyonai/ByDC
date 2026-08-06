@@ -883,13 +883,17 @@ class HttpTermAdapter:
         object_codes: list[str],
         kb_resource_ids: list[str],
         filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> EnumeratedObjectInstances:
-        """远程转发对象实例枚举 — filters 透传（None 归一化为空数组，语义等价无条件）。
+        """远程转发对象实例枚举 — filters/sort 透传。
 
         映射到 POST /core/term/enumerateObjectInstances。
-        非法 filter type/params 由远端 knowledge 服务校验。
+        filters None 归一化为空数组（语义等价无条件）；
+        sort None 省略 key（远端走默认排序，与 filters 的空数组语义不同——
+        排序规格不可由空 dict 表达，"省略即默认"）。
+        非法 filter/sort 形状由远端 knowledge 服务校验。
         """
         payload: dict[str, object] = {
             "objectCodes": object_codes,
@@ -898,6 +902,8 @@ class HttpTermAdapter:
             "page": page,
             "pageSize": page_size,
         }
+        if sort is not None:
+            payload["sort"] = sort
         resp = self._client.post("/core/term/enumerateObjectInstances", json=payload)
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
