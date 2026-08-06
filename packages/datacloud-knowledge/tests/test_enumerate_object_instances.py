@@ -3,6 +3,12 @@
 使用 sqlite 内存库执行生成的 SQL（sqlite 3.38+ 支持 ``->>`` 运算符），
 验证度数语义 / 条件过滤 / 范围过滤 / 分页 / 动态排序 / 注册表校验。
 
+度数语义（T-65，**范围统计**）：out_degree/in_degree 只统计对端 term
+（out → target_term_id / in → source_term_id）落在
+``object_codes ∪ kb_resource_ids`` **并集**范围内的实例级 BUSINESS 边；
+对端维度之间是 OR（任一命中即计），与主查询 WHERE 的 AND 交集语义不同。
+下表中「度数期望」仅在范围覆盖全图时成立（如 object_codes=["Event","Document"]）。
+
 已知小图（8 个 term + 12 条 relation）：
 
     term:
@@ -10,7 +16,7 @@
       t4 Event    kb1    t5 Event  (无kb)  t6 Event  kb1
       t7 Event    kb1    t8 Event  kb2
 
-    term_relation（全图度数期望）:
+    term_relation（度数期望，全范围时 = 全图）:
       r1  t1→t2  BUSINESS      r2  t1→t3  BUSINESS
       r3  t2→t1  BUSINESS      r4  t4→t4  BUSINESS   (自环)
       r5  t4→t1  BUSINESS      r6  t2→t4  BUSINESS
@@ -71,7 +77,7 @@ _RELATIONS = [
     ("r12", "t5", "t8", None, None, "BUSINESS"),
 ]
 
-# 期望全图度数 (term_id -> (out, in))
+# 期望度数（全范围时 = 全图）(term_id -> (out, in))
 EXPECTED_DEGREES: dict[str, tuple[int, int]] = {
     "t1": (3, 2),
     "t2": (3, 1),
@@ -166,7 +172,11 @@ def _item_ids(result: EnumeratedObjectInstances) -> list[str]:
 
 
 def test_degree_correctness_known_graph(known_graph_reader: PostgresTermReader) -> None:
-    """已知小图：每节点 out_degree/in_degree 精确值（含类型级边排除 + BUSINESS 过滤 + 自环）。"""
+    """已知小图：object_codes 覆盖全图（范围统计退化为全图度数）→ 每节点精确值。
+
+    含类型级边排除 + BUSINESS 过滤 + 自环；范围 = {Event, Document} 覆盖全部
+    8 节点，对端均在范围内，故与全图度数一致。
+    """
     # out >= 0 全通过，触发 JOIN → 返回全部 8 节点 + 真实度数
     result = known_graph_reader.enumerate_object_instances(
         object_codes=["Event", "Document"],
@@ -221,6 +231,124 @@ def test_self_loop_counts_in_out_each_once(known_graph_reader: PostgresTermReade
     item = _item_map(result)["t4"]
     # out = {r4 自环, r5} = 2; in = {r4 自环, r6} = 2
     assert (item.out_degree, item.in_degree) == (2, 2)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 4b. 范围统计度数语义（T-65）：对端在 object_codes ∪ kb_resource_ids 并集内才计数
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_range_degree_both_ends_in_scope_count(
+    known_graph_reader: PostgresTermReader,
+) -> None:
+    """a) 范围内两端边计入：object_codes 覆盖全图时 A→B 全数计数（= 全图度数）。"""
+    result = known_graph_reader.enumerate_object_instances(
+        object_codes=["Event", "Document"],
+        kb_resource_ids=[],
+        filters=_degree_filter("out", "gte", 0),
+    )
+    # t1 out = {r1→t2, r2→t3, r8→t8} = 3：对端均在 object_codes 范围内
+    assert _item_map(result)["t1"].out_degree == 3
+
+
+def test_range_degree_opposite_type_out_of_scope_excluded(
+    known_graph_reader: PostgresTermReader,
+) -> None:
+    """b) 对端类型不在 object_codes 范围 → 不计（r2: t1→t3，t3=Document ∉ {Event}）。"""
+    result = known_graph_reader.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=[],
+        filters=_degree_filter("out", "gte", 0),
+    )
+    item = _item_map(result)["t1"]
+    # 全图 out=3（r1+r2+r8）；范围 out=2：r2 对端 t3 类型 Document 不在范围 → 剔除
+    assert item.out_degree == 2
+
+
+def test_range_degree_opposite_kb_out_of_scope_excluded(
+    known_graph_reader: PostgresTermReader,
+) -> None:
+    """c) 对端 kb_resource_id 不在范围 → 不计（kb 维度：t2 在范围，t3/t8 不在）。"""
+    result = known_graph_reader.enumerate_object_instances(
+        object_codes=[],
+        kb_resource_ids=["kb1"],
+        filters=_degree_filter("out", "gte", 0),
+    )
+    item = _item_map(result)["t1"]
+    # 全图 out=3；范围 kb1：r1(→t2 kb1) 计入，r2(→t3 kb2)、r8(→t8 kb2) 剔除 → 1
+    assert item.out_degree == 1
+
+
+def test_range_degree_union_or_semantics(
+    known_graph_reader: PostgresTermReader,
+) -> None:
+    """d) 并集：对端满足 object_codes 或 kb_resource_ids 任一维度即计（OR）。"""
+    result = known_graph_reader.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=["kb1"],
+        filters=_degree_filter("out", "gte", 0),
+    )
+    by_id = _item_map(result)
+    # t1 out = r1(→t2 双维命中) + r8(→t8 仅类型命中：kb2 ∉ kb1) = 2；
+    #         r2(→t3 Document/kb2 两维均不命中) → 剔除
+    assert by_id["t1"].out_degree == 2
+    # t6 in = r7(←t5 仅类型命中：无 kb_resource_id) + r11(←t2 双维命中) = 2
+    assert by_id["t6"].in_degree == 2
+
+
+def test_range_degree_in_direction_symmetric(
+    known_graph_reader: PostgresTermReader,
+) -> None:
+    """e) in 方向对称：对端（source）不在范围 → 入度剔除，与出度同规则。"""
+    result = known_graph_reader.enumerate_object_instances(
+        object_codes=[],
+        kb_resource_ids=["kb1"],
+        filters=_degree_filter("in", "gte", 0),
+    )
+    item = _item_map(result)["t6"]
+    # 全图 in=2（r7←t5 + r11←t2）；范围 kb1 下 r7 对端 t5 无 kb_resource_id → 剔除 → 1
+    assert item.in_degree == 1
+
+
+def test_range_degree_no_filter_and_pagination_regression(
+    known_graph_reader: PostgresTermReader,
+) -> None:
+    """f) 回归：无 filter 行为 / 分页 / total 在范围统计下不变（诚实）。"""
+    # 无 filter → 不做 JOIN，度数恒 0，term_id ASC，total 诚实
+    plain = known_graph_reader.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=["kb1"],
+    )
+    assert _item_ids(plain) == ["t1", "t2", "t4", "t6", "t7"]
+    assert plain.total == 5
+    for item in plain.items:
+        assert (item.out_degree, item.in_degree) == (0, 0)
+    # 有 degree filter → 范围度数排序 + 分页不重不漏 + total 诚实
+    page1 = known_graph_reader.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=["kb1"],
+        filters=_degree_filter("out", "gte", 0),
+        page=1,
+        page_size=2,
+    )
+    page2 = known_graph_reader.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=["kb1"],
+        filters=_degree_filter("out", "gte", 0),
+        page=2,
+        page_size=2,
+    )
+    page3 = known_graph_reader.enumerate_object_instances(
+        object_codes=["Event"],
+        kb_resource_ids=["kb1"],
+        filters=_degree_filter("out", "gte", 0),
+        page=3,
+        page_size=2,
+    )
+    assert (page1.total, page2.total, page3.total) == (5, 5, 5)
+    # 范围度数排序 = out DESC, term_id ASC：t2(3) → t1(2),t4(2) → t6(0),t7(0)
+    all_ids = _item_ids(page1) + _item_ids(page2) + _item_ids(page3)
+    assert all_ids == ["t2", "t1", "t4", "t6", "t7"]
 
 
 # ═════════════════════════════════════════════════════════════════════════════

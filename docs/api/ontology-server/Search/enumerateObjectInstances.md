@@ -66,7 +66,7 @@ POST /api/v1/rpc/search/enumerateObjectInstances
 
 ## filters — degree（度数对比条件）
 
-度数只统计**实例之间的关系**：`term_relation` 中 `source_term_id` 与 `target_term_id` 均非空（实例级边）且 `relation_category = 'BUSINESS'` 的行；自环（source=target）计入出度与入度各一次；度数基于**全图**（不因范围过滤截断邻域）。
+度数只统计**实例之间的关系**：`term_relation` 中 `source_term_id` 与 `target_term_id` 均非空（实例级边）且 `relation_category = 'BUSINESS'` 的行；自环（source=target）计入出度与入度各一次；度数基于**范围统计**——只统计对端（出度 → 目标 term / 入度 → 来源 term）落在 `object_codes ∪ kb_resource_ids` **并集**内的实例级 BUSINESS 边（对端满足任一维度即计，两维之间 OR；主查询范围过滤仍为 AND）。
 
 ### Schema
 

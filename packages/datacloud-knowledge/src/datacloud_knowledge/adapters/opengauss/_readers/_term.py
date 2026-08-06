@@ -104,7 +104,9 @@ def _degree_metric_expr(metric: str) -> str:
     """degree metric 白名单 → SQL 度量表达式（防注入：白名单映射，绝不拼接输入）。
 
     度数语义（钉死）：只统计实例级边（两端 id 均非空）+ BUSINESS 类别；
-    自环（source=target）进出各计一次；全图度数（LEFT JOIN 不截断邻域）。
+    自环（source=target）进出各计一次；**范围统计**（T-65）：对端 term 必须
+    落在 object_codes ∪ kb_resource_ids 并集内（EXISTS 截断邻域，见
+    _degree_opposite_range）。
     双 JOIN 计数用 COUNT(DISTINCT relation_id) 防止 out/in 交叉膨胀。
     """
     out_expr = "COUNT(DISTINCT out_rel.relation_id)"
@@ -121,6 +123,47 @@ def _degree_metric_expr(metric: str) -> str:
         f"CASE WHEN {out_expr} = 0 AND {in_expr} = 0 THEN NULL "
         f"WHEN {in_expr} = 0 THEN 1e999 "
         f"ELSE {out_expr} * 1.0 / {in_expr} END"
+    )
+
+
+def _degree_opposite_range(
+    rel_alias: str,
+    opposite_col: str,
+    *,
+    object_codes: list[str],
+    kb_resource_ids: list[str],
+) -> str:
+    """对端范围判定 EXISTS 子查询 — 度数范围统计（T-65）并集语义。
+
+    对端 term（out → ``target_term_id`` / in → ``source_term_id``）满足
+    object_codes 或 kb_resource_ids **任一**维度（OR）即视为在范围内；某维
+    为空时只生成该维条件。两维均空不会到达此路径（enumerate_object_instances
+    范围全空提前返回空结果）。
+
+    返回形如::
+
+        EXISTS (
+                    SELECT 1 FROM term ot
+                     WHERE ot.term_id = out_rel.target_term_id
+                       AND (ot.term_type_code IN :degree_object_codes
+                         OR ot.ext_attrs->>'kb_resource_id' IN :degree_kb_resource_ids)
+                  )
+
+    对端条件使用**独立参数名**（degree_object_codes / degree_kb_resource_ids），
+    与主查询 WHERE 的 :object_codes/:kb_resource_ids 分开绑定（同一值两份参数），
+    防两处 IN 列表被同名参数串绑。
+    """
+    dims: list[str] = []
+    if object_codes:
+        dims.append("ot.term_type_code IN :degree_object_codes")
+    if kb_resource_ids:
+        dims.append("ot.ext_attrs->>'kb_resource_id' IN :degree_kb_resource_ids")
+    return (
+        "EXISTS (\n"
+        "            SELECT 1 FROM term ot\n"
+        f"             WHERE ot.term_id = {rel_alias}.{opposite_col}\n"
+        f"               AND ({' OR '.join(dims)})\n"
+        "          )"
     )
 
 
@@ -2634,6 +2677,13 @@ class _TermReader(_ReaderBase):
         排序框架：sort 按 ``_SORT_REGISTRY`` 查表（by 走 dict key）；similarity
         为注册表首个（且目前唯一）排序类型（Embedding 向量或 BM25 降级）。
 
+        度数语义（T-65，**范围统计**）：out_degree/in_degree 只统计对端 term
+        （out → target_term_id / in → source_term_id）落在
+        ``object_codes ∪ kb_resource_ids`` **并集**范围内的实例级 BUSINESS 边；
+        对端维度之间 OR（任一命中即计），主查询 WHERE 范围维度之间仍 AND。
+        实现：out_rel/in_rel LEFT JOIN ON 追加对端 EXISTS 范围条件（独立
+        参数 degree_object_codes / degree_kb_resource_ids 绑定同一值）。
+
         Args:
             object_codes: 对象类型编码范围（尊重输入不校验）。与 kb_resource_ids 为 AND。
             kb_resource_ids: 知识库资源 ID 范围（``ext_attrs->>'kb_resource_id'``）。
@@ -2738,7 +2788,14 @@ class _TermReader(_ReaderBase):
                 "       ON out_rel.source_term_id = t.term_id\n"
                 "      AND out_rel.source_term_id IS NOT NULL\n"
                 "      AND out_rel.target_term_id  IS NOT NULL\n"
-                "      AND out_rel.relation_category = 'BUSINESS'"
+                "      AND out_rel.relation_category = 'BUSINESS'\n"
+                "      AND "
+                + _degree_opposite_range(
+                    "out_rel",
+                    "target_term_id",
+                    object_codes=object_codes,
+                    kb_resource_ids=kb_resource_ids,
+                )
             )
         if "in" in required_joins:
             select_cols.append(f"{_degree_metric_expr('in')} AS in_degree")
@@ -2747,7 +2804,14 @@ class _TermReader(_ReaderBase):
                 "       ON in_rel.target_term_id = t.term_id\n"
                 "      AND in_rel.source_term_id IS NOT NULL\n"
                 "      AND in_rel.target_term_id  IS NOT NULL\n"
-                "      AND in_rel.relation_category = 'BUSINESS'"
+                "      AND in_rel.relation_category = 'BUSINESS'\n"
+                "      AND "
+                + _degree_opposite_range(
+                    "in_rel",
+                    "source_term_id",
+                    object_codes=object_codes,
+                    kb_resource_ids=kb_resource_ids,
+                )
             )
 
         where_conditions: list[str] = []
@@ -2789,8 +2853,13 @@ class _TermReader(_ReaderBase):
         params: dict[str, object] = {}
         if object_codes:
             params["object_codes"] = object_codes
+            if required_joins:
+                # 度数对端范围条件独立参数（同一值两份绑定，勿与主 WHERE 混用）
+                params["degree_object_codes"] = object_codes
         if kb_resource_ids:
             params["kb_resource_ids"] = kb_resource_ids
+            if required_joins:
+                params["degree_kb_resource_ids"] = kb_resource_ids
         params.update(bind_params)
         params.update(sort_binds)
         params["limit"] = page_size
@@ -2800,8 +2869,12 @@ class _TermReader(_ReaderBase):
         binds: list[Any] = []
         if object_codes:
             binds.append(bindparam("object_codes", expanding=True))
+            if required_joins:
+                binds.append(bindparam("degree_object_codes", expanding=True))
         if kb_resource_ids:
             binds.append(bindparam("kb_resource_ids", expanding=True))
+            if required_joins:
+                binds.append(bindparam("degree_kb_resource_ids", expanding=True))
         stmt = text(sql) if not binds else text(sql).bindparams(*binds)
         total_stmt = text(total_sql) if not binds else text(total_sql).bindparams(*binds)
         with self._get_session() as session:

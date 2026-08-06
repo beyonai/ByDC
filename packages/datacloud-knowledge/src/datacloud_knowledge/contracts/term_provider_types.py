@@ -37,7 +37,8 @@ class ObjectInstanceItem:
     """对象实例枚举结果项（term 行 + 图度数）。
 
     ``out_degree``/``in_degree`` 仅在请求包含 degree filter（触发 JOIN）时
-    为真实全图度数；无 degree filter 时不做 JOIN，恒为 0。
+    为真实**范围度数**（对端在 object_codes ∪ kb_resource_ids 并集内才计数，
+    T-65）；无 degree filter 时不做 JOIN，恒为 0。
     """
 
     term_id: str
