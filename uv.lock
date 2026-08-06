@@ -1064,6 +1064,7 @@ dependencies = [
     { name = "boto3" },
     { name = "fastapi" },
     { name = "jieba" },
+    { name = "langchain" },
     { name = "llama-index-embeddings-openai" },
     { name = "matplotlib" },
     { name = "networkx" },
@@ -1107,6 +1108,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "jieba", specifier = ">=0.42.1" },
+    { name = "langchain", specifier = ">=0.3.0" },
     { name = "llama-index-embeddings-openai", specifier = ">=0.3.0" },
     { name = "matplotlib", specifier = ">=3.7" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13" },
@@ -1146,11 +1148,13 @@ version = "0.1.0"
 source = { editable = "packages/datacloud-platform" }
 dependencies = [
     { name = "anyio" },
+    { name = "datacloud-knowledge" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "mcp" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pyyaml" },
     { name = "uvicorn" },
 ]
 
@@ -1170,12 +1174,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.0" },
+    { name = "datacloud-knowledge", editable = "packages/datacloud-knowledge" },
     { name = "datacloud-knowledge", marker = "extra == 'opengauss'", editable = "packages/datacloud-knowledge" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "mcp", specifier = ">=1.18.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "uvicorn", specifier = ">=0.32.0" },
 ]
 provides-extras = ["opengauss"]
