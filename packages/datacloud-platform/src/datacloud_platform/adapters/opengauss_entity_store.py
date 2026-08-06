@@ -315,8 +315,9 @@ class OpenGaussEntityStore:
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
         ext_property_in_filters: dict[str, list[Any]] | None = None,
+        top_level_or_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
-        page_size: int = 20,
+        page_size: int | None = 20,
     ) -> tuple[list[dict[str, Any]], int]:
         """Paginated search with keyword, code-set, owner, and extProperty filtering.
 
@@ -324,6 +325,11 @@ class OpenGaussEntityStore:
         column.  ``owner_type`` / ``user_code`` are matched at top-level as well
         as inside ``ext_property`` for backward compatibility with OWL-imported
         entities.
+
+        ``top_level_or_filters`` matches top-level JSON keys with OR semantics:
+        an entity passes if ANY (key, value) pair matches
+        (e.g. ``{"source_class": [c], "target_class": [c]}``).  ``page_size``
+        may be ``None`` to disable pagination and return all matches.
         """
         bid = base_id or self._default_base_id
         model = _ENTITY_TABLES[entity_type]
@@ -377,12 +383,22 @@ class OpenGaussEntityStore:
             if ext_property_in_filters:
                 for key, values in ext_property_in_filters.items():
                     if values:
-                        json_value = data_col.op("->")("ext_property").op("->>")(
-                            key
-                        )
+                        json_value = data_col.op("->")("ext_property").op("->>")(key)
                         base_where.append(
                             json_value.in_([str(value) for value in values])
                         )
+
+            # OR pushdown over top-level JSON keys: any (key, value) pair
+            # matching passes (e.g. source_class = c OR target_class = c).
+            if top_level_or_filters:
+                or_conds = []
+                for key, values in top_level_or_filters.items():
+                    if not values:
+                        continue
+                    for value in values:
+                        or_conds.append(data_col.op("->>")(key) == str(value))
+                if or_conds:
+                    base_where.append(or_(*or_conds))
 
             # Lightweight count query — reads no JSONB data
             count_stmt = (
@@ -395,15 +411,12 @@ class OpenGaussEntityStore:
             if total == 0:
                 return [], 0
 
-            # Data query — reads only the requested page
+            # Data query — reads only the requested page (all rows when
+            # page_size is None)
             code_attr = getattr(model, code_col_name)
-            data_stmt = (
-                select(model.data)  # type: ignore[attr-defined]
-                .where(*base_where)
-                .order_by(code_attr)
-                .limit(page_size)
-                .offset((page - 1) * page_size)
-            )
+            data_stmt = select(model.data).where(*base_where).order_by(code_attr)  # type: ignore[attr-defined]
+            if page_size is not None:
+                data_stmt = data_stmt.limit(page_size).offset((page - 1) * page_size)
             rows = session.execute(data_stmt).all()
             items: list[dict[str, Any]] = [dict(r[0]) for r in rows if r[0] is not None]
             return items, total
