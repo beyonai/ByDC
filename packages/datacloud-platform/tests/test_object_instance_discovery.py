@@ -7,6 +7,7 @@ T1 骨架范围：模型默认值、①参数校验、②管道异常上抛（�
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -15,10 +16,13 @@ from fastapi.testclient import TestClient
 
 from datacloud_platform.api.routers.rpc.router import create_rpc_router
 from datacloud_platform.mixins import ObjectInstanceDiscoveryMixin
+from datacloud_platform.mixins import object_instance_discovery as discovery_module
+from datacloud_platform.mixins.object_instance_discovery import _extract_written_term_id
 from datacloud_platform.models.document import DocumentContentResult
 from datacloud_platform.models.shared import (
     ObjectInstanceDiscoveryHit,
     ObjectInstanceDiscoveryResult,
+    ObjectInstanceWriteMissingTermIdError,
 )
 
 BASE_ID = "BYCLAW_DATACLOUD"
@@ -36,6 +40,9 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         self.document: DocumentContentResult | None = None
         self.incomplete_location: bool = False
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.relations: list[dict[str, Any]] = []
+        self.created_relations: list[dict[str, Any]] = []
+        self.object_files: list[list[dict[str, Any]]] = []
 
     async def get_document_content_by_term_id(
         self, base_id: str, *, term_id: str
@@ -56,7 +63,7 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
 
     def list_term_relations(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("list_term_relations", {"base_id": base_id, **kwargs}))
-        return {"data": []}
+        return {"data": list(self.relations)}
 
     def create_term_relation(
         self, base_id: str, *, relation: dict[str, Any]
@@ -64,6 +71,7 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         self.calls.append(
             ("create_term_relation", {"base_id": base_id, "relation": relation})
         )
+        self.created_relations.append(relation)
         return {"relationId": "rel-x"}
 
     async def save_or_update_object_files(
@@ -75,6 +83,7 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
                 {"base_id": base_id, "object_files": object_files},
             )
         )
+        self.object_files.append(object_files)
 
 
 def _make_document(term_id: str = "term-input") -> DocumentContentResult:
@@ -229,6 +238,160 @@ class TestDiscoverTodoPlaceholders:
                 object_codes=["by_opportunity"],
                 session_id="session-1",
             )
+
+
+# ============================================================================
+# ⑤ 新实例创建 + ⑥ term_id 强校验
+# ============================================================================
+
+
+class TestExtractWrittenTermId:
+    def test_snake_case_term_id(self) -> None:
+        assert _extract_written_term_id({"records": [{"term_id": "t1"}]}) == "t1"
+
+    def test_camel_case_term_id(self) -> None:
+        assert _extract_written_term_id({"records": [{"termId": "t1"}]}) == "t1"
+
+    def test_missing_records_raises(self) -> None:
+        with pytest.raises(
+            ObjectInstanceWriteMissingTermIdError, match="missing term_id"
+        ):
+            _extract_written_term_id({"records": []})
+
+    def test_blank_term_id_raises(self) -> None:
+        with pytest.raises(
+            ObjectInstanceWriteMissingTermIdError, match="missing term_id"
+        ):
+            _extract_written_term_id({"records": [{"termId": "   "}]})
+
+    def test_strips_term_id(self) -> None:
+        assert (
+            _extract_written_term_id({"records": [{"term_id": "  term-x  "}]})
+            == "term-x"
+        )
+
+    def test_raw_envelope_is_normalized(self) -> None:
+        raw = {
+            "content": [
+                {"text": '{"code": 200, "data": {"records": [{"termId": "t9"}]}}'}
+            ]
+        }
+        assert _extract_written_term_id(raw) == "t9"
+
+
+class TestCreateDiscoveredInstance:
+    @pytest.mark.asyncio
+    async def test_invokes_write_action_with_expected_arguments(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        captured: dict[str, Any] = {}
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            captured.update(kwargs)
+            return {"records": [{"termId": "term-new-1"}], "total": 1, "meta": {}}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        term_id = await platform._create_discovered_instance(
+            base_id=BASE_ID,
+            object_code="by_opportunity",
+            term_name="张三",
+            session_id="session-1",
+        )
+        assert term_id == "term-new-1"
+        assert captured["base_id"] == BASE_ID
+        assert captured["object_code"] == "by_opportunity"
+        assert captured["labels"]["dc_status"] == "待整理"
+        assert captured["source_path"] == "/by_opportunity/张三.md"
+        assert "张三" in captured["content"]
+        assert captured["file_description"] == "张三对象实例文档"
+
+    @pytest.mark.asyncio
+    async def test_write_response_missing_term_id_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"fileName": "张三.md"}], "total": 1, "meta": {}}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        with pytest.raises(
+            ObjectInstanceWriteMissingTermIdError, match="missing term_id"
+        ):
+            await platform._create_discovered_instance(
+                base_id=BASE_ID,
+                object_code="by_opportunity",
+                term_name="张三",
+                session_id="session-1",
+            )
+
+    @pytest.mark.asyncio
+    async def test_write_response_term_id_returns_strict_value(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"term_id": "  term-strict  "}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        term_id = await platform._create_discovered_instance(
+            base_id=BASE_ID,
+            object_code="by_opportunity",
+            term_name="张三",
+            session_id="session-1",
+        )
+        assert term_id == "term-strict"
+
+
+# ============================================================================
+# ⑦ 文件登记
+# ============================================================================
+
+
+class TestRegisterObjectFile:
+    @pytest.mark.asyncio
+    async def test_registers_file_with_session_and_strict_term_id(self) -> None:
+        platform = _FakePlatform()
+        await platform._register_object_file(
+            base_id=BASE_ID,
+            object_code="by_opportunity",
+            term_name="张三",
+            term_id="term-new-1",
+            session_id="session-1",
+            action_result={
+                "records": [{"termId": "term-new-1", "fileName": "张三.md"}]
+            },
+        )
+        assert len(platform.object_files) == 1
+        entry = platform.object_files[0][0]
+        assert entry["sessionId"] == "session-1"
+        assert entry["objectCode"] == "by_opportunity"
+        assert entry["statusCd"] == "待整理"
+        ext = json.loads(entry["extContent"])
+        assert ext["term_id"] == "term-new-1"
+
+    @pytest.mark.asyncio
+    async def test_registers_file_falls_back_to_strict_term_id(self) -> None:
+        platform = _FakePlatform()
+        await platform._register_object_file(
+            base_id=BASE_ID,
+            object_code="by_opportunity",
+            term_name="张三",
+            term_id="term-new-1",
+            session_id="session-1",
+            action_result={"records": [{"fileName": "张三.md"}]},
+        )
+        entry = platform.object_files[0][0]
+        ext = json.loads(entry["extContent"])
+        assert ext["term_id"] == "term-new-1"
 
 
 # ============================================================================

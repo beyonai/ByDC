@@ -12,11 +12,31 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from datacloud_platform.models.document import DocumentContentResult
+from datacloud_platform.mixins.document import (
+    _build_object_file_status,
+    build_processing_labels,
+)
+from datacloud_platform.models.document import (
+    DocumentContentResult,
+    DocumentEnrichObjectScope,
+    DocumentObjectItem,
+    DocumentProcessingStatus,
+)
 from datacloud_platform.models.shared import (
     ObjectInstanceDiscoveryHit,
     ObjectInstanceDiscoveryResult,
+    ObjectInstanceWriteMissingTermIdError,
 )
+from datacloud_platform.services.object_action import (
+    invoke_object_write_action,
+    unwrap_action_result,
+)
+
+_PENDING_LABELS: dict[str, Any] = {
+    "dc_status": "待整理",
+    "dc_failure_reason": None,
+    "dc_failure_count": 0,
+}
 
 
 class _ObjectInstanceDiscoveryPlatform(Protocol):
@@ -98,8 +118,51 @@ class ObjectInstanceDiscoveryMixin:
         candidate: dict[str, Any],
         session_id: str,
     ) -> ObjectInstanceDiscoveryHit:
-        """⑤⑥⑦⑧ 新实例创建链路：创建 → 强校验 → 登记 → 提及关系（T2/T3 实现）。"""
+        """⑤⑥⑦⑧ 新实例创建链路：创建 → 强校验 → 登记 → 提及关系（T4 串联实现）。"""
         raise NotImplementedError("new instance creation flow is not implemented")
+
+    async def _create_discovered_instance(
+        self: Any,
+        *,
+        base_id: str,
+        object_code: str,
+        term_name: str,
+        session_id: str,
+    ) -> str:
+        """⑤⑥ 新实例创建 + term_id 强校验。
+
+        经 ``invoke_object_write_action``（services/object_action.py）写入知识库
+        文件（write_<object_code> action），对响应做 term_id 强校验。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            object_code: 新实例对象类型编码。
+            term_name: 新实例名称。
+            session_id: 会话 ID（本方法不使用，保留签名以透传后续登记）。
+
+        Returns:
+            强校验非空的 term_id。
+
+        Raises:
+            ObjectInstanceWriteMissingTermIdError: write 响应缺 term_id。
+        """
+        labels = build_processing_labels(
+            initial_status=DocumentProcessingStatus.PENDING_ORGANIZATION,
+            labels=_PENDING_LABELS,
+        )
+        term_name = term_name.strip()
+        content = f"# {term_name}\n\n{term_name}对象实例文档。"
+        source_path = f"/{object_code}/{term_name}.md"
+        result = await invoke_object_write_action(
+            platform=self,
+            base_id=base_id,
+            object_code=object_code,
+            content=content,
+            labels=labels,
+            file_description=f"{term_name}对象实例文档",
+            source_path=source_path,
+        )
+        return _extract_written_term_id(result)
 
     def _discover_existing_object_instances(
         self: _ObjectInstanceDiscoveryPlatform,
@@ -144,3 +207,83 @@ class ObjectInstanceDiscoveryMixin:
             NotImplementedError: 本版未实现。
         """
         raise NotImplementedError("new instance discovery is not implemented")
+
+    async def _register_object_file(
+        self: _ObjectInstanceDiscoveryPlatform,
+        *,
+        base_id: str,
+        object_code: str,
+        term_name: str,
+        term_id: str,
+        session_id: str,
+        action_result: dict[str, Any],
+    ) -> None:
+        """⑦ 文件登记：复用 document.py 的 ``_build_object_file_status`` 模式。
+
+        登记条目含 sessionId / objectName / objectCode / fileName / filePath /
+        version / statusCd（待整理）/ extContent{kb_resource_id, kb_id,
+        kb_directory, term_id=强校验值}。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            object_code: 新实例对象类型编码。
+            term_name: 新实例名称。
+            term_id: 强校验后的 term_id（write action 响应）。
+            session_id: 会话 ID（透传为登记条目 sessionId）。
+            action_result: write action 归一化响应（提供 fileName/termId）。
+        """
+        term_name = term_name.strip()
+        file_path = f"/{object_code}/{term_name}.md"
+        document = DocumentObjectItem(
+            termId=term_id,
+            termName=term_name,
+            termCode=term_name,
+            termTypeCode=object_code,
+            filePath=file_path,
+            kbResourceId="",
+        )
+        object_scope = DocumentEnrichObjectScope(
+            objectCode=object_code,
+            objectName=term_name,
+        )
+        object_file = _build_object_file_status(
+            session_id=session_id,
+            document=document,
+            object_scope=object_scope,
+            status=DocumentProcessingStatus.PENDING_ORGANIZATION,
+            labels=_PENDING_LABELS,
+            action_result=action_result,
+        )
+        await self.save_or_update_object_files(base_id, object_files=[object_file])
+
+
+def _extract_written_term_id(action_result: dict[str, Any]) -> str:
+    """⑥ term_id 强校验：从 write action 响应中提取 records[0] 的 term_id。
+
+    响应先经 ``unwrap_action_result`` 归一化为 ``{records, total, meta}``；
+    取 ``records[0].term_id / termId``，缺失或为空则抛错（不延迟、不做 pending）。
+
+    Args:
+        action_result: write action 原始响应（可为未归一化信封）。
+
+    Returns:
+        强校验非空的 term_id（去除首尾空白）。
+
+    Raises:
+        ObjectInstanceWriteMissingTermIdError: records 缺失或 term_id 缺失/为空。
+    """
+    normalized = unwrap_action_result(action_result)
+    records = normalized.get("records")
+    first = (
+        records[0]
+        if isinstance(records, list) and records and isinstance(records[0], dict)
+        else None
+    )
+    term_id = (
+        str(first.get("term_id") or first.get("termId") or "").strip() if first else ""
+    )
+    if not term_id:
+        raise ObjectInstanceWriteMissingTermIdError(
+            "write action response is missing term_id"
+        )
+    return term_id
