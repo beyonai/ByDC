@@ -38,6 +38,21 @@ _PENDING_LABELS: dict[str, Any] = {
     "dc_failure_count": 0,
 }
 
+# ── 词典缓存单例（R-5）────────────────────────────────────────────────────────
+# 归属：编排侧（本模块）模块级单例，读取经 ``list_vocabulary`` 协议；
+# 缓存只做「候选判定」，不做「最终锚定」——真命中必须经反查拿 term_id（T7）。
+# 缓存旧（增删词未刷新）最多损失快路（多走一次 DB 查询），不产生错误锚定。
+_cached_vocabulary: frozenset[str] | None = None
+
+
+def invalidate_vocabulary_cache() -> None:
+    """显式失效词典缓存：发现管道创建 term / 回填词后调用。
+
+    置空缓存，下次 discover 重新经 ``list_vocabulary()`` 全量加载 → 飞轮实时。
+    """
+    global _cached_vocabulary
+    _cached_vocabulary = None
+
 
 class _ObjectInstanceDiscoveryPlatform(Protocol):
     """ObjectInstanceDiscoveryMixin 所依赖的 Platform 最小能力协议。"""
@@ -52,6 +67,7 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     async def save_or_update_object_files(
         self, base_id: str, *, object_files: list[dict[str, Any]]
     ) -> Any: ...
+    def list_vocabulary(self, base_id: str) -> list[str]: ...
 
 
 class ObjectInstanceDiscoveryMixin:
@@ -121,6 +137,27 @@ class ObjectInstanceDiscoveryMixin:
                 )
             )
         return ObjectInstanceDiscoveryResult(items=items)
+
+    def _vocabulary_words(
+        self: _ObjectInstanceDiscoveryPlatform, base_id: str
+    ) -> frozenset[str]:
+        """惰性加载词典缓存（单例，R-5）。
+
+        全量 term_vocabulary → frozenset，O(1) 命中判定。只做候选判定，
+        不做最终锚定（真命中必须经反查拿 term_id）。失效经
+        :func:`invalidate_vocabulary_cache` 显式触发，下次访问重载。
+
+        Args:
+            base_id: 本体库/系统空间标识（透传 list_vocabulary 协议）。
+
+        Returns:
+            词典词集合（frozenset）。
+        """
+        global _cached_vocabulary
+        if _cached_vocabulary is None:
+            words = self.list_vocabulary(base_id)
+            _cached_vocabulary = frozenset(words)
+        return _cached_vocabulary
 
     async def _create_new_instance_flow(
         self: Any,

@@ -43,6 +43,9 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         self.relations: list[dict[str, Any]] = []
         self.created_relations: list[dict[str, Any]] = []
         self.object_files: list[list[dict[str, Any]]] = []
+        self.vocab_words: list[str] = []
+        self.term_search_results: dict[str, Any] = {"data": [], "totalCount": 0}
+        self.name_rows: list[dict[str, Any]] = []
 
     async def get_document_content_by_term_id(
         self, base_id: str, *, term_id: str
@@ -60,6 +63,10 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
                 f"term knowledge location is incomplete: term_id={term_id}"
             )
         return self.document
+
+    def list_vocabulary(self, base_id: str) -> list[str]:
+        self.calls.append(("list_vocabulary", {"base_id": base_id}))
+        return list(self.vocab_words)
 
     def list_term_relations(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("list_term_relations", {"base_id": base_id, **kwargs}))
@@ -762,3 +769,113 @@ class TestDiscoverOrchestration:
         )
         assert [h.instance_id for h in result.items] == ["term-new-1"]
         assert result.items[0].is_new is True
+
+
+# ============================================================================
+# T6 词典缓存单例：惰性加载一次 / invalidate 后重载 / 新词生效
+# ============================================================================
+
+
+class TestVocabularyCache:
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self) -> Any:
+        """模块级缓存为单例，测试前后显式失效，避免跨用例污染。"""
+        discovery_module.invalidate_vocabulary_cache()
+        yield
+        discovery_module.invalidate_vocabulary_cache()
+
+    def test_lazy_loads_once(self) -> None:
+        platform = _FakePlatform()
+        platform.vocab_words = ["苹果", "华为"]
+        words = platform._vocabulary_words(BASE_ID)
+        assert words == frozenset({"苹果", "华为"})
+        assert isinstance(words, frozenset)
+        # 再次访问不触发第二次 list_vocabulary
+        platform._vocabulary_words(BASE_ID)
+        list_calls = [c for c in platform.calls if c[0] == "list_vocabulary"]
+        assert len(list_calls) == 1
+
+    def test_invalidate_reloads(self) -> None:
+        platform = _FakePlatform()
+        platform.vocab_words = ["苹果"]
+        assert platform._vocabulary_words(BASE_ID) == frozenset({"苹果"})
+        discovery_module.invalidate_vocabulary_cache()
+        assert platform._vocabulary_words(BASE_ID) == frozenset({"苹果"})
+        list_calls = [c for c in platform.calls if c[0] == "list_vocabulary"]
+        assert len(list_calls) == 2
+
+    def test_reload_after_invalidate_includes_new_words(self) -> None:
+        platform = _FakePlatform()
+        platform.vocab_words = ["苹果"]
+        assert platform._vocabulary_words(BASE_ID) == frozenset({"苹果"})
+        # 词典新增词（模拟 D-2 回填 / ⑤ 创建后触发器投影）
+        platform.vocab_words = ["苹果", "华为"]
+        discovery_module.invalidate_vocabulary_cache()
+        assert platform._vocabulary_words(BASE_ID) == frozenset({"苹果", "华为"})
+
+
+# ============================================================================
+# T6 适配器同步：remote / none 不抛 NotImplementedError，data_adapter 代理转发
+# ============================================================================
+
+
+class TestVocabularyAdapterSync:
+    def test_none_adapter_returns_empty_list(self) -> None:
+        from datacloud_platform.adapters.none_adapters import _NoopTermBackend
+
+        backend = _NoopTermBackend()
+        assert backend.list_vocabulary() == []
+
+    def test_none_adapter_batch_create_is_noop(self) -> None:
+        from datacloud_platform.adapters.none_adapters import _NoopTermBackend
+
+        backend = _NoopTermBackend()
+        backend.batch_create_vocabulary(words=["苹果"])  # 不应抛异常
+        assert backend.list_vocabulary() == []
+
+    def test_remote_adapter_returns_empty_list(self) -> None:
+        from datacloud_platform.adapters.remote_adapter import RemoteTermBackend
+
+        backend = RemoteTermBackend(source_url="http://localhost:9999")
+        assert backend.list_vocabulary() == []
+
+    def test_data_adapter_proxies_list_vocabulary_to_reader(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from datacloud_platform.adapters.data_adapter import _term as term_adapter
+        from datacloud_platform.adapters.data_adapter._term import TermBackendMixin
+
+        class _StubReader:
+            def list_vocabulary(self) -> list[str]:
+                return ["苹果", "华为"]
+
+        monkeypatch.setattr(
+            term_adapter, "create_reader", lambda *a, **k: _StubReader()
+        )
+        backend = TermBackendMixin()
+        assert backend.list_vocabulary() == ["苹果", "华为"]
+
+    def test_data_adapter_proxies_batch_create_to_writer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from datacloud_platform.adapters.data_adapter import _term as term_adapter
+        from datacloud_platform.adapters.data_adapter._term import TermBackendMixin
+
+        captured: dict[str, Any] = {}
+
+        class _StubWriter:
+            def __enter__(self) -> "_StubWriter":
+                return self
+
+            def __exit__(self, *args: Any) -> None:
+                return None
+
+            def batch_create_vocabulary(self, *, words: list[str]) -> None:
+                captured["words"] = words
+
+        monkeypatch.setattr(
+            term_adapter, "create_writer", lambda *a, **k: _StubWriter()
+        )
+        backend = TermBackendMixin()
+        backend.batch_create_vocabulary(words=["苹果", "华为"])
+        assert captured["words"] == ["苹果", "华为"]
