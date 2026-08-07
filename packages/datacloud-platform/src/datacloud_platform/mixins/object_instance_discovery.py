@@ -1,15 +1,17 @@
 """非结构化对象实例发现编排（ObjectInstanceDiscoveryMixin）。
 
 流程：① 参数校验 → ② 输入实例定位并读取知识库文件（get_document_content_by_term_id）
-→ ③ 已有实例发现（TODO 占位）→ ④ 新实例发现（TODO 占位）→ ⑤ 新实例创建（write
-action）→ ⑥ term_id 强校验 → ⑦ 文件登记 → ⑧ 「提及」关系（源→目标，单向幂等）
-→ ⑨ 返回结果。
+→ ④ LLM 抽取（B 模式，T8）→ ③ AC 锚定（词典快路 + 反查兜底，T7）→ 冲突候选
+待裁决（T10）→ ⑤ 新实例创建（write action / AUTO_DISCOVERED 直写）→ ⑥ term_id
+强校验 → ⑦ 文件登记 → ⑧ 「提及」关系（源→目标，单向幂等）→ ⑨ 返回结果。
 
 无降级：任何异常直接上抛，由 RPC 层统一映射为错误码。
 """
 
 from __future__ import annotations
 
+import logging
+from dataclasses import asdict, dataclass
 from typing import Any, Protocol
 
 from datacloud_platform.mixins.document import (
@@ -32,11 +34,34 @@ from datacloud_platform.services.object_action import (
     unwrap_action_result,
 )
 
+logger = logging.getLogger(__name__)
+
 _PENDING_LABELS: dict[str, Any] = {
     "dc_status": "待整理",
     "dc_failure_reason": None,
     "dc_failure_count": 0,
 }
+
+# ③ 锚定反查单次检索条数上限（词面相等/子串重叠判定所需的候选窗口）
+_ANCHOR_SEARCH_TOP_K = 50
+
+
+@dataclass(frozen=True)
+class _AnchorResult:
+    """③ 锚定结果分发（Spec §5.1）。
+
+    Attributes:
+        existing: 唯一词面相等命中 → 已有实例候选行（is_new=False，含 evidence）。
+        ambiguity: 词面相等命中 ≥2 term → 同名多候选（T10 歧义裁决）。
+        synonym: 与已有 term 子串重叠（非相等）→ 同义候选（T10 同义裁决）。
+        unanchored: 未锚定 mention 原样返回（走 ⑤ 新实例创建）。
+    """
+
+    existing: list[dict[str, Any]]
+    ambiguity: list[dict[str, Any]]
+    synonym: list[dict[str, Any]]
+    unanchored: list[dict[str, Any]]
+
 
 # ── 词典缓存单例（R-5）────────────────────────────────────────────────────────
 # 归属：编排侧（本模块）模块级单例，读取经 ``list_vocabulary`` 协议；
@@ -68,6 +93,8 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
         self, base_id: str, *, object_files: list[dict[str, Any]]
     ) -> Any: ...
     def list_vocabulary(self, base_id: str) -> list[str]: ...
+    def search_terms(self, base_id: str, **kwargs: Any) -> Any: ...
+    def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]: ...
 
 
 class ObjectInstanceDiscoveryMixin:
@@ -98,7 +125,7 @@ class ObjectInstanceDiscoveryMixin:
         Raises:
             ValueError: 入参非法（instance_id 为空 / object_codes 缺失）。
             KeyError: 输入实例不存在。
-            NotImplementedError: ③④ 发现逻辑 TODO 占位。
+            NotImplementedError: ④ 发现逻辑 TODO 占位（T8 替换）。
         """
         # ① 参数校验
         if not instance_id.strip():
@@ -113,21 +140,21 @@ class ObjectInstanceDiscoveryMixin:
             base_id, term_id=instance_id
         )
 
-        # ③ 已有实例发现（TODO 占位 → NotImplementedError）
-        existing = self._discover_existing_object_instances(
+        # ④ LLM 抽取（B 模式，T8）→ mention 列表（实现编排 ④→③，对外顺序不变）
+        mentions = self._discover_new_object_instances(
             base_id, content=document.content, object_codes=object_codes
         )
 
-        # ④ 新实例发现（TODO 占位 → NotImplementedError）
-        candidates = self._discover_new_object_instances(
-            base_id, content=document.content, object_codes=object_codes
+        # ③ AC 锚定（词典快路 + 反查兜底，T7）→ 结果分发
+        anchor = self._discover_existing_object_instances(
+            base_id, mentions=mentions, object_codes=object_codes
         )
 
-        # ⑤⑥⑦⑧ 串联：已有在前、新在后；新实例逐项 创建 → 强校验 → 登记 → 提及关系
+        # ⑤⑥⑦⑧ 串联：已有在前、新在后；未锚定逐项 创建 → 强校验 → 登记 → 提及关系
         items: list[ObjectInstanceDiscoveryHit] = [
-            _build_existing_hit(row) for row in existing
+            _build_existing_hit(row) for row in anchor.existing
         ]
-        for candidate in candidates:
+        for candidate in anchor.unanchored:
             items.append(
                 await self._create_new_instance_flow(
                     base_id=base_id,
@@ -135,6 +162,15 @@ class ObjectInstanceDiscoveryMixin:
                     candidate=candidate,
                     session_id=session_id,
                 )
+            )
+        # 歧义/同义冲突候选：T10 同步裁决接入前保守跳过（不建重复实例、不产已有 hit）
+        pending_count = len(anchor.ambiguity) + len(anchor.synonym)
+        if pending_count:
+            logger.info(
+                "discover: %d 个冲突候选待 T10 裁决（歧义=%d 同义=%d）",
+                pending_count,
+                len(anchor.ambiguity),
+                len(anchor.synonym),
             )
         return ObjectInstanceDiscoveryResult(items=items)
 
@@ -264,28 +300,136 @@ class ObjectInstanceDiscoveryMixin:
         return _extract_written_term_id(result)
 
     def _discover_existing_object_instances(
-        self: _ObjectInstanceDiscoveryPlatform,
+        self: Any,
         base_id: str,
         *,
-        content: str,
+        mentions: list[dict[str, Any]],
         object_codes: list[str],
-    ) -> list[dict[str, Any]]:
-        """③ 已有实例发现（TODO 占位，后续迭代 T6 实现）。
+    ) -> _AnchorResult:
+        """③ 已有实例发现（AC 文本锚定，Spec §5.1）。
 
-        接入点（spec D-4.3）：
-            ``search_terms_by_labels(
-                label_filters=[{field_code: "kb_file_path", ...}],
-                label_condition="or",
-                term_type_codes=object_codes,
-            )``
-            + ``_match_chunks_to_terms_by_filepath``
-            （``adapters/data_adapter/_ontology_metadata.py`` 既有匹配管道）
-        → ``is_new=False`` 候选列表。
+        对 ④ 产出的 mention 列表做 词典快路命中 → 反查兜底拿 term_id →
+        结果分发：
 
-        Raises:
-            NotImplementedError: 本版未实现。
+        - 唯一词面相等命中 1 term → ``existing``（is_new=False，evidence=mention）
+        - 词面相等命中 ≥2 term → ``ambiguity``（同名多候选，T10 歧义裁决）
+        - 与已有 term 子串重叠（非相等）→ ``synonym``（同义候选，T10 裁决）
+        - 无命中 / 缓存命中但反查落空 → ``unanchored``（走 ⑤ 新实例创建）
+
+        ``object_codes`` 保留以维持签名稳定（v3 锚定不做类型过滤，命中即已有实例）。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            mentions: ④ 产出的 mention 列表 ``[{term_name, object_code, evidence, raw_type}]``。
+            object_codes: 非结构化对象类型编码列表（本版仅透传，不参与过滤）。
+
+        Returns:
+            锚定结果分发（_AnchorResult 四桶）。
         """
-        raise NotImplementedError("existing instance discovery is not implemented")
+        vocabulary = self._vocabulary_words(base_id)
+        existing: list[dict[str, Any]] = []
+        ambiguity: list[dict[str, Any]] = []
+        synonym: list[dict[str, Any]] = []
+        unanchored: list[dict[str, Any]] = []
+
+        for mention in mentions:
+            name = str(mention.get("term_name") or "").strip()
+            if not name:
+                logger.debug("跳过空 mention: %s", mention)
+                continue
+            # 快路：词典缓存命中判定（O(1)）
+            if name not in vocabulary:
+                unanchored.append(mention)
+                continue
+            # 反查兜底：按 mention 拿 term_id 才算真命中
+            rows, surface_exact = self._reverse_lookup_terms(base_id, name)
+            if not rows:
+                # 缓存旧（词已删/改名/孤儿词）→ 按未锚定处理，不报错、不建实例
+                logger.info("词典命中但反查落空（缓存旧或孤儿词）: %s", name)
+                unanchored.append(mention)
+                continue
+            # 分发（词面相等判定）
+            if surface_exact:
+                # 精确路径（term_name / term_code / TermName 别名）→ 全部词面相等命中
+                surface = rows
+            else:
+                # BM25 / ilike 部分匹配路径 → 仅 term_name 词面相等者才算
+                surface = [row for row in rows if _row_term_name(row) == name]
+            if len(surface) == 1:
+                hit_row = _term_row_to_hit_row(surface[0])
+                hit_row["evidence"] = name
+                existing.append(hit_row)
+            elif len(surface) >= 2:
+                ambiguity.append({"mention": name, "terms": surface})
+            else:
+                overlap = [
+                    row for row in rows if _substring_overlap(name, _row_term_name(row))
+                ]
+                if overlap:
+                    synonym.append(
+                        {"mention": name, "term": _term_row_to_hit_row(overlap[0])}
+                    )
+                else:
+                    unanchored.append(mention)
+        return _AnchorResult(
+            existing=existing,
+            ambiguity=ambiguity,
+            synonym=synonym,
+            unanchored=unanchored,
+        )
+
+    def _reverse_lookup_terms(
+        self: _ObjectInstanceDiscoveryPlatform, base_id: str, name: str
+    ) -> tuple[list[dict[str, Any]], bool]:
+        """按 mention 反查 term（拿 term_id 才算真命中）。
+
+        三级兜底（R-1）：
+        ① ``search_terms`` 精确匹配（term_name / term_code，别名经 TermName 自动参与）
+        ② 无命中 → ``search_terms`` BM25 全文兜底（JOIN term_name）
+        ③ 仍无命中 → ``list_term_names(name_text=mention)`` ilike 别名反查
+           → term_ids 反查 term 详情
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            name: mention 文本。
+
+        Returns:
+            ``(rows, surface_exact)``：
+            - rows: 匹配 term 行列表（空列表 = 未锚定）。
+            - surface_exact: True=全部行按词面精确命中（term_name/term_code/别名
+              完全相等，别名反查路径亦属词面命中）；False=仅模糊/部分匹配
+              （BM25 / ilike），需调用方按 term_name 词面相等再判定。
+        """
+        exact = self.search_terms(
+            base_id, term_name=name, query_type="exact", top_k=_ANCHOR_SEARCH_TOP_K
+        )
+        rows = _search_result_items(exact)
+        if rows:
+            return rows, True
+
+        fuzzy = self.search_terms(
+            base_id, keyword=name, query_type="fulltext", top_k=_ANCHOR_SEARCH_TOP_K
+        )
+        rows = _search_result_items(fuzzy)
+        if rows:
+            return rows, False
+
+        name_rows = self.list_term_names(base_id, name_text=name)
+        if not name_rows:
+            return [], False
+        term_ids = sorted({str(r["term_id"]) for r in name_rows if r.get("term_id")})
+        if not term_ids:
+            return [], False
+        by_ids = self.search_terms(
+            base_id, term_ids=term_ids, top_k=_ANCHOR_SEARCH_TOP_K
+        )
+        detail_rows = _search_result_items(by_ids)
+        if not detail_rows:
+            return [], False
+        # ilike 路径：name_text 完全相等 = 词面命中（别名反查路径 R-1）；
+        # 仅部分匹配（ilike %mention%）→ 模糊，需调用方做子串/相等判定。
+        surface_exact = any(str(r.get("name_text") or "") == name for r in name_rows)
+        return detail_rows, surface_exact
 
     def _discover_new_object_instances(
         self: _ObjectInstanceDiscoveryPlatform,
@@ -294,13 +438,13 @@ class ObjectInstanceDiscoveryMixin:
         content: str,
         object_codes: list[str],
     ) -> list[dict[str, Any]]:
-        """④ 新实例发现（TODO 占位，后续迭代 T7 实现）。
+        """④ 新实例发现（TODO 占位，后续迭代 T8 实现）。
 
-        接入点（spec D-4.4）：
-            ``build_llm`` + prompt + JSON 解析重试
-            （参考 ``services/object_instance_build``、``mixins/document_enrich.py``
-            的 LLM 抽取模式）
-        → ``[{term_name, object_code, evidence}]`` → 去重（排除已有实例）。
+        接入点（spec D-4.4 / §6 B 模式）：
+            ``build_llm`` + prompt（类型枚举 = object_codes 的 TermType 中文名）
+            + temp=0 + 16K 截断 + JSON 解析重试（≤3 次退避）
+            → ``[{term_name, object_code|AUTO_DISCOVERED, evidence, raw_type}]``
+            → D-2 回填 ``batch_create_vocabulary``（抽到就填，幂等）。
 
         Raises:
             NotImplementedError: 本版未实现。
@@ -438,21 +582,93 @@ def _relation_items(page: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
+def _search_result_items(result: Any) -> list[dict[str, Any]]:
+    """从 search_terms 响应提取术语行（兼容 QueryResult dataclass / dict 信封）。
+
+    TermItem 为 frozen dataclass → asdict 归一化为 dict，供锚定判定使用。
+    """
+    if result is None:
+        return []
+    if isinstance(result, dict):
+        raw = result.get("items") or result.get("data") or result.get("records") or []
+    else:
+        raw = getattr(result, "items", None)
+        if raw is None:
+            raw = getattr(result, "data", None) or []
+    rows: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            rows.append(item)
+        elif hasattr(item, "__dataclass_fields__"):
+            rows.append(asdict(item))
+        else:
+            rows.append(
+                {
+                    key: getattr(item, key)
+                    for key in vars(item)
+                    if not key.startswith("_")
+                }
+            )
+    return rows
+
+
+def _row_term_name(row: dict[str, Any]) -> str:
+    """取术语行的标准名称（兼容 camelCase / snake_case）。"""
+    return str(row.get("term_name") or row.get("termName") or "").strip()
+
+
+def _substring_overlap(left: str, right: str) -> bool:
+    """词面互为子串（非相等）——同义裁决候选触发条件。"""
+    return left != right and (left in right or right in left)
+
+
+def _term_row_to_hit_row(row: dict[str, Any]) -> dict[str, Any]:
+    """把 search_terms 术语行归一化为已有实例候选行（_build_existing_hit 输入形态）。
+
+    兼容 TermItem 的 ``term_type`` 字段与既有 ``term_type_code`` / ``termTypeCode``。
+    """
+    return {
+        "term_id": str(row.get("term_id") or row.get("termId") or ""),
+        "term_code": str(row.get("term_code") or row.get("termCode") or ""),
+        "term_name": str(row.get("term_name") or row.get("termName") or ""),
+        "term_type_code": str(
+            row.get("term_type_code")
+            or row.get("termTypeCode")
+            or row.get("term_type")
+            or ""
+        ),
+        "file_name": str(row.get("file_name") or row.get("fileName") or "") or None,
+        "kb_resource_id": str(
+            row.get("kb_resource_id") or row.get("kbResourceId") or ""
+        )
+        or None,
+        "kb_id": str(row.get("kb_id") or row.get("kbId") or "") or None,
+    }
+
+
 def _build_existing_hit(row: dict[str, Any]) -> ObjectInstanceDiscoveryHit:
     """把已有实例候选行组装为发现结果项（is_new=False）。
 
     候选行字段与 ObjectInstanceHit 对齐：
-    term_id / term_code / term_name / term_type_code / file_name / kb_resource_id / kb_id
+    term_id / term_code / term_name / term_type_code（或 term_type）/
+    file_name / kb_resource_id / kb_id / evidence
     （同时兼容 camelCase 变体）。
     """
+    evidence = row.get("evidence")
     return ObjectInstanceDiscoveryHit(
         instance_id=str(row["term_id"]),
         instance_code=str(row.get("term_code") or row.get("termCode") or ""),
         instance_name=str(row.get("term_name") or row.get("termName") or ""),
-        object_code=str(row.get("term_type_code") or row.get("termTypeCode") or ""),
+        object_code=str(
+            row.get("term_type_code")
+            or row.get("termTypeCode")
+            or row.get("term_type")
+            or ""
+        ),
         file_name=str(row.get("file_name") or row.get("fileName") or "") or None,
         kb_resource_id=str(row.get("kb_resource_id") or row.get("kbResourceId") or "")
         or None,
         kb_id=str(row.get("kb_id") or row.get("kbId") or "") or None,
         is_new=False,
+        evidence=str(evidence) if evidence is not None else None,
     )

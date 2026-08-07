@@ -68,6 +68,14 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         self.calls.append(("list_vocabulary", {"base_id": base_id}))
         return list(self.vocab_words)
 
+    def search_terms(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("search_terms", {"base_id": base_id, **kwargs}))
+        return self.term_search_results
+
+    def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]:
+        self.calls.append(("list_term_names", {"base_id": base_id, **kwargs}))
+        return list(self.name_rows)
+
     def list_term_relations(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("list_term_relations", {"base_id": base_id, **kwargs}))
         return {"data": list(self.relations)}
@@ -215,18 +223,11 @@ class TestDiscoverPipelineErrors:
 
 
 # ============================================================================
-# ③④ TODO 占位
+# ③④ TODO 占位（T7 起 ③ 就位；④ 仍占位，T8 替换）
 # ============================================================================
 
 
 class TestDiscoverTodoPlaceholders:
-    def test_existing_discovery_raises_not_implemented(self) -> None:
-        platform = _FakePlatform()
-        with pytest.raises(NotImplementedError, match="not implemented"):
-            platform._discover_existing_object_instances(
-                BASE_ID, content="正文", object_codes=["by_opportunity"]
-            )
-
     def test_new_discovery_raises_not_implemented(self) -> None:
         platform = _FakePlatform()
         with pytest.raises(NotImplementedError, match="not implemented"):
@@ -235,7 +236,8 @@ class TestDiscoverTodoPlaceholders:
             )
 
     @pytest.mark.asyncio
-    async def test_main_flow_short_circuits_at_existing_placeholder(self) -> None:
+    async def test_main_flow_short_circuits_at_new_placeholder(self) -> None:
+        """T7 编排改为 ④→③：④ 仍为占位 → 主流程先短路在 ④。"""
         platform = _FakePlatform()
         platform.document = _make_document()
         with pytest.raises(NotImplementedError, match="not implemented"):
@@ -245,6 +247,163 @@ class TestDiscoverTodoPlaceholders:
                 object_codes=["by_opportunity"],
                 session_id="session-1",
             )
+
+
+# ============================================================================
+# T7 ③ AC 锚定：词典快路 + 反查兜底 + 结果分发
+# ============================================================================
+
+
+def _mention(name: str, object_code: str = "by_opportunity") -> dict[str, Any]:
+    return {"term_name": name, "object_code": object_code, "evidence": None}
+
+
+def _term_row(
+    term_id: str, term_name: str, term_type: str = "by_opportunity"
+) -> dict[str, Any]:
+    return {
+        "term_id": term_id,
+        "term_code": f"code-{term_id}",
+        "term_name": term_name,
+        "term_type": term_type,
+        "library_id": BASE_ID,
+    }
+
+
+class TestAnchorExistingDiscovery:
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self) -> Any:
+        discovery_module.invalidate_vocabulary_cache()
+        yield
+        discovery_module.invalidate_vocabulary_cache()
+
+    def test_unique_surface_hit_builds_existing(self) -> None:
+        """唯一词面相等命中 → existing hit（is_new=False，evidence=mention）。"""
+        platform = _FakePlatform()
+        platform.vocab_words = ["张三"]
+        platform.term_search_results = {
+            "total": 1,
+            "items": [_term_row("t1", "张三")],
+        }
+        result = platform._discover_existing_object_instances(
+            BASE_ID, mentions=[_mention("张三")], object_codes=["by_opportunity"]
+        )
+        assert len(result.existing) == 1
+        row = result.existing[0]
+        assert row["term_id"] == "t1"
+        assert row["term_name"] == "张三"
+        assert row["evidence"] == "张三"
+        hit = discovery_module._build_existing_hit(row)
+        assert hit.instance_id == "t1"
+        assert hit.is_new is False
+        assert hit.evidence == "张三"
+
+    def test_duplicate_same_name_produces_ambiguity_candidates(self) -> None:
+        """词面相等命中 ≥2 term → 歧义候选队列，不直接建 hit。"""
+        platform = _FakePlatform()
+        platform.vocab_words = ["张三"]
+        platform.term_search_results = {
+            "total": 2,
+            "items": [_term_row("t1", "张三"), _term_row("t2", "张三")],
+        }
+        result = platform._discover_existing_object_instances(
+            BASE_ID, mentions=[_mention("张三")], object_codes=["by_opportunity"]
+        )
+        assert result.existing == []
+        assert len(result.ambiguity) == 1
+        assert result.ambiguity[0]["mention"] == "张三"
+        assert [t["term_id"] for t in result.ambiguity[0]["terms"]] == ["t1", "t2"]
+        assert result.unanchored == []
+
+    def test_substring_overlap_produces_synonym_candidates(self) -> None:
+        """mention 与已有 term 子串重叠（非相等）→ 同义候选队列。"""
+        platform = _FakePlatform()
+        platform.vocab_words = ["苹果公司", "苹果"]
+
+        def _search(base_id: str, **kwargs: Any) -> dict[str, Any]:
+            if kwargs.get("query_type") == "exact":
+                return {"total": 0, "items": []}
+            return {"total": 1, "items": [_term_row("t1", "苹果")]}
+
+        platform.search_terms = _search  # type: ignore[method-assign]
+        result = platform._discover_existing_object_instances(
+            BASE_ID, mentions=[_mention("苹果公司")], object_codes=["by_opportunity"]
+        )
+        assert result.existing == []
+        assert len(result.synonym) == 1
+        assert result.synonym[0]["mention"] == "苹果公司"
+        assert result.synonym[0]["term"]["term_name"] == "苹果"
+        assert result.unanchored == []
+
+    def test_no_hit_produces_unanchored(self) -> None:
+        """mention 不在词典 → 未锚定（走新实例创建），不产出已有 hit。"""
+        platform = _FakePlatform()
+        platform.vocab_words = ["苹果"]
+        result = platform._discover_existing_object_instances(
+            BASE_ID, mentions=[_mention("华为")], object_codes=["by_opportunity"]
+        )
+        assert result.existing == []
+        assert result.ambiguity == []
+        assert result.synonym == []
+        assert result.unanchored == [_mention("华为")]
+
+    def test_cache_hit_but_reverse_lookup_miss_falls_back_to_unanchored(self) -> None:
+        """缓存命中但反查落空（词已删/改名/孤儿词）→ 未锚定，不报错、不建实例。"""
+        platform = _FakePlatform()
+        platform.vocab_words = ["孤儿词"]
+        platform.term_search_results = {"total": 0, "items": []}
+        platform.name_rows = []
+        result = platform._discover_existing_object_instances(
+            BASE_ID, mentions=[_mention("孤儿词")], object_codes=["by_opportunity"]
+        )
+        assert result.existing == []
+        assert result.unanchored == [_mention("孤儿词")]
+
+    def test_alias_reverse_lookup_via_list_term_names(self) -> None:
+        """别名反查路径：search 落空 → list_term_names(ilike) → term_ids 反查拿 term 详情。"""
+        platform = _FakePlatform()
+        platform.vocab_words = ["苹果公司"]
+        platform.term_search_results = {"total": 0, "items": []}
+        platform.name_rows = [
+            {"name_id": "n1", "term_id": "t9", "name_text": "苹果公司"}
+        ]
+        # 第三次调用 search_terms（term_ids 反查）返回 term 详情
+        called: list[dict[str, Any]] = []
+
+        original_search = platform.search_terms
+
+        def _search(base_id: str, **kwargs: Any) -> dict[str, Any]:
+            called.append(kwargs)
+            if kwargs.get("term_ids"):
+                return {"total": 1, "items": [_term_row("t9", "Apple Inc.")]}
+            return {"total": 0, "items": []}
+
+        platform.search_terms = _search  # type: ignore[method-assign]
+        result = platform._discover_existing_object_instances(
+            BASE_ID, mentions=[_mention("苹果公司")], object_codes=["by_opportunity"]
+        )
+        assert original_search is not None
+        assert len(result.existing) == 1
+        assert result.existing[0]["term_id"] == "t9"
+        assert result.existing[0]["evidence"] == "苹果公司"
+        # exact → fulltext → term_ids 反查，共三次
+        assert len(called) == 3
+
+    def test_blank_mention_is_skipped(self) -> None:
+        platform = _FakePlatform()
+        platform.vocab_words = ["苹果"]
+        platform.term_search_results = {
+            "total": 1,
+            "items": [_term_row("t1", "苹果")],
+        }
+        result = platform._discover_existing_object_instances(
+            BASE_ID,
+            mentions=[_mention("  "), _mention("苹果")],
+            object_codes=["by_opportunity"],
+        )
+        assert len(result.existing) == 1
+        assert result.existing[0]["term_name"] == "苹果"
+        assert len(result.unanchored) == 0
 
 
 # ============================================================================
@@ -662,6 +821,103 @@ class TestDiscoverRpcErrorMapping:
 
 
 # ============================================================================
+# T7 RPC 级：输入实例含已有实例 mention → items 已有在前（is_new=False）
+# ============================================================================
+
+
+class _RpcAnchorPlatform(ObjectInstanceDiscoveryMixin):
+    """RPC 级锚定平台：真实 mixin 主流程 + 可控词典/反查。"""
+
+    def __init__(self) -> None:
+        self.vocab_words: list[str] = []
+        self.term_search_results: dict[str, Any] = {"total": 0, "items": []}
+        self.name_rows: list[dict[str, Any]] = []
+        self.mentions: list[dict[str, Any]] = []
+
+    async def get_document_content_by_term_id(
+        self, base_id: str, *, term_id: str
+    ) -> DocumentContentResult:
+        return _make_document(term_id)
+
+    def list_vocabulary(self, base_id: str) -> list[str]:
+        return list(self.vocab_words)
+
+    def search_terms(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        return self.term_search_results
+
+    def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]:
+        return list(self.name_rows)
+
+    def list_term_relations(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        return {"data": []}
+
+    def create_term_relation(
+        self, base_id: str, *, relation: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"relationId": "rel-x"}
+
+    async def save_or_update_object_files(
+        self, base_id: str, *, object_files: list[dict[str, Any]]
+    ) -> None:
+        return None
+
+    def _discover_new_object_instances(
+        self, base_id: str, *, content: str, object_codes: list[str]
+    ) -> list[dict[str, Any]]:
+        return list(self.mentions)
+
+
+class TestDiscoverRpcAnchor:
+    def test_existing_instance_mention_comes_first(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _RpcAnchorPlatform()
+        platform.vocab_words = ["张三"]
+        platform.term_search_results = {
+            "total": 1,
+            "items": [_term_row("term-existing-1", "张三")],
+        }
+        platform.mentions = [
+            {"term_name": "张三", "object_code": "by_opportunity", "evidence": "张三"},
+            {
+                "term_name": "新客户A",
+                "object_code": "by_opportunity",
+                "evidence": "新客户A",
+            },
+        ]
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-1"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        client = _rpc_client(platform)
+        resp = client.post(
+            "/api/v1/rpc/search/discoverObjectInstancesUnstructured",
+            json={
+                "params": {
+                    "base_id": BASE_ID,
+                    "instance_id": "term-input",
+                    "object_codes": ["by_opportunity"],
+                }
+            },
+            headers={"X-Session-Id": "s1"},
+        )
+        body = resp.json()
+        assert body["code"] == 200, body
+        items = body["data"]["items"]
+        # 已有在前、新在后（RPC 序列化为 snake_case dataclass 字段名）
+        assert [item["instance_id"] for item in items] == [
+            "term-existing-1",
+            "term-new-1",
+        ]
+        assert items[0]["is_new"] is False
+        assert items[0]["evidence"] == "张三"
+        assert items[1]["is_new"] is True
+
+
+# ============================================================================
 # T4 串联：mock ③④ 占位方法后验证 ⑤⑥⑦⑧ 全链路
 # ============================================================================
 
@@ -675,21 +931,6 @@ class TestDiscoverOrchestration:
         platform.document = _make_document()
         monkeypatch.setattr(
             platform,
-            "_discover_existing_object_instances",
-            lambda *a, **k: [
-                {
-                    "term_id": "term-existing-1",
-                    "term_name": "已有实例",
-                    "term_code": "existing-1",
-                    "term_type_code": "by_opportunity",
-                    "file_name": "/by_opportunity/已有实例.md",
-                    "kb_resource_id": "kr1",
-                    "kb_id": "kb1",
-                }
-            ],
-        )
-        monkeypatch.setattr(
-            platform,
             "_discover_new_object_instances",
             lambda *a, **k: [
                 {
@@ -698,6 +939,33 @@ class TestDiscoverOrchestration:
                     "evidence": "证据片段",
                 }
             ],
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: discovery_module._AnchorResult(
+                existing=[
+                    {
+                        "term_id": "term-existing-1",
+                        "term_name": "已有实例",
+                        "term_code": "existing-1",
+                        "term_type_code": "by_opportunity",
+                        "file_name": "/by_opportunity/已有实例.md",
+                        "kb_resource_id": "kr1",
+                        "kb_id": "kb1",
+                        "evidence": "已有实例",
+                    }
+                ],
+                ambiguity=[],
+                synonym=[],
+                unanchored=[
+                    {
+                        "term_name": "新实例",
+                        "object_code": "by_opportunity",
+                        "evidence": "证据片段",
+                    }
+                ],
+            ),
         )
 
         async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
@@ -720,6 +988,7 @@ class TestDiscoverOrchestration:
         existing, new = result.items
         assert existing.is_new is False
         assert existing.instance_name == "已有实例"
+        assert existing.evidence == "已有实例"
         assert new.is_new is True
         assert new.instance_name == "新实例"
         assert new.relation_name == "提及"
@@ -746,13 +1015,18 @@ class TestDiscoverOrchestration:
         platform.document = _make_document()
         monkeypatch.setattr(
             platform,
-            "_discover_existing_object_instances",
-            lambda *a, **k: [],
+            "_discover_new_object_instances",
+            lambda *a, **k: [{"term_name": "新实例A", "object_code": "by_opportunity"}],
         )
         monkeypatch.setattr(
             platform,
-            "_discover_new_object_instances",
-            lambda *a, **k: [{"term_name": "新实例A", "object_code": "by_opportunity"}],
+            "_discover_existing_object_instances",
+            lambda *a, **k: discovery_module._AnchorResult(
+                existing=[],
+                ambiguity=[],
+                synonym=[],
+                unanchored=[{"term_name": "新实例A", "object_code": "by_opportunity"}],
+            ),
         )
 
         async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
@@ -769,6 +1043,83 @@ class TestDiscoverOrchestration:
         )
         assert [h.instance_id for h in result.items] == ["term-new-1"]
         assert result.items[0].is_new is True
+
+    @pytest.mark.asyncio
+    async def test_ambiguity_candidates_are_deferred_not_created(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """歧义候选（同名多候选）在 T10 裁决前保守跳过：不建重复实例、不产已有 hit。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        monkeypatch.setattr(
+            platform,
+            "_discover_new_object_instances",
+            lambda *a, **k: [
+                {"term_name": "张三", "object_code": "by_opportunity", "evidence": None}
+            ],
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: discovery_module._AnchorResult(
+                existing=[],
+                ambiguity=[
+                    {
+                        "mention": "张三",
+                        "terms": [
+                            _term_row("t1", "张三"),
+                            _term_row("t2", "张三"),
+                        ],
+                    }
+                ],
+                synonym=[],
+                unanchored=[],
+            ),
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        assert result.items == []
+        assert all(c[0] != "create_term_relation" for c in platform.calls)
+
+    @pytest.mark.asyncio
+    async def test_synonym_candidates_are_deferred_not_created(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """同义候选（子串重叠）在 T10 裁决前保守跳过。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        monkeypatch.setattr(
+            platform,
+            "_discover_new_object_instances",
+            lambda *a, **k: [
+                {
+                    "term_name": "苹果公司",
+                    "object_code": "by_opportunity",
+                    "evidence": None,
+                }
+            ],
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: discovery_module._AnchorResult(
+                existing=[],
+                ambiguity=[],
+                synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
+                unanchored=[],
+            ),
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        assert result.items == []
 
 
 # ============================================================================
