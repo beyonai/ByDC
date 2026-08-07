@@ -685,6 +685,20 @@ class TermReader(Protocol):
         term_type_codes: list[str] | None = None,
     ) -> dict[str, Any]: ...
 
+    # ── TermVocabulary ──────────────────────────────────────────────
+
+    def list_vocabulary(self) -> list[str]:
+        """读取 term_vocabulary 全量去重词表（TermName 主名+别名投影）。
+
+        与写入侧 :meth:`TermWriter.batch_create_vocabulary` 对称的读取通道，
+        作为 AC 文本锚定的词典数据源。数据由触发器 ``trg_term_name_vocab``
+        在 term_name INSERT 时自动去重维护，读取侧无需实时 DISTINCT。
+
+        Returns:
+            全量词表（word 列表）。
+        """
+        ...
+
 
 class TermSearchEngine(Protocol):
     """文本召回引擎。每种策略独立暴露，由调用方控制策略组合和 RRF 融合。

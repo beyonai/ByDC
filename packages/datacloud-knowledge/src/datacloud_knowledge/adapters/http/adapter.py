@@ -1128,6 +1128,10 @@ class HttpTermAdapter:
             "HTTP 后端不支持 batch_create_vocabulary，分词词典仅 OpenGauss 支持"
         )
 
+    def list_vocabulary(self) -> list[str]:
+        """HTTP API 不支持分词词典读取。"""
+        raise NotImplementedError("HTTP 后端不支持 list_vocabulary，分词词典仅 OpenGauss 支持")
+
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
         """HTTP API 不支持 name_id 级 search_scope 查询。"""
         raise NotImplementedError("HTTP 后端不支持 get_name_search_scope，请使用 OpenGauss 后端")

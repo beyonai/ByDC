@@ -18,6 +18,7 @@ from ._readers._name import _NameReader
 from ._readers._relation import _RelationReader
 from ._readers._term import _TermReader
 from ._readers._term_type import _TermTypeReader
+from ._readers._vocabulary import _VocabularyReader
 
 
 class PostgresTermReader(
@@ -28,6 +29,7 @@ class PostgresTermReader(
     _RelationReader,
     _TermReader,
     _TermTypeReader,
+    _VocabularyReader,
 ):
     """PostgreSQL TermReader implementation — Mixin composition."""
 

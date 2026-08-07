@@ -37,6 +37,7 @@ class FakeTermReader:
     def __init__(self) -> None:
         """初始化空术语存储。"""
         self._terms: dict[str, TermDetail] = {}
+        self._vocab_words: list[str] = []
 
     # ── 测试 fixture 供给方法 ──────────────────────────────────────────
 
@@ -52,6 +53,22 @@ class FakeTermReader:
         for t in terms:
             self._terms[t.term_id] = t
         return self
+
+    def set_vocabulary(self, *words: str) -> FakeTermReader:
+        """预置 term_vocabulary 词表（T6 list_vocabulary 测试供给）。
+
+        Args:
+            *words: 词表词汇（可变参数）。
+
+        Returns:
+            self，支持链式调用。
+        """
+        self._vocab_words = list(words)
+        return self
+
+    def list_vocabulary(self) -> list[str]:
+        """返回预置的 term_vocabulary 词表（TermReader 协议同步）。"""
+        return list(self._vocab_words)
 
     # ── TermReader 新增方法实现 ────────────────────────────────────────
 
@@ -455,6 +472,10 @@ class FakeTermWriter:
 
     def batch_create_vocabulary(self, *, words: Any = None) -> None:
         """空实现。"""
+
+    def list_vocabulary(self) -> list[str]:
+        """空实现（与 batch_create_vocabulary 对称的读取侧）。"""
+        return []
 
     def get_name_search_scope(self, *, name_id: str = "") -> dict[str, object] | None:
         """空实现。"""
