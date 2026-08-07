@@ -66,6 +66,17 @@ class TermBackend(Protocol):
         """
         ...
 
+    def search_terms_by_labels(
+        self,
+        *,
+        label_filters: list[dict[str, Any]],
+        label_condition: str = "or",
+        term_type_codes: list[str] | None = None,
+        top_k: int = 200,
+    ) -> list[dict[str, Any]]:
+        """纯标签过滤术语，不依赖关键词或文本候选集。"""
+        ...
+
     def get_term_detail(
         self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
