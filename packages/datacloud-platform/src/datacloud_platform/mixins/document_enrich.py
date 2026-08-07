@@ -17,7 +17,7 @@ from datacloud_knowledge.intent.llm_utils import (
     build_llm,
     stream_invoke_with_thinking,
 )
-from yaml import YAMLError, safe_load
+from yaml import YAMLError, safe_dump, safe_load
 
 from datacloud_platform.backends.document_library import DocumentLibraryError
 from datacloud_platform.models.document import (
@@ -137,8 +137,7 @@ _SYSTEM_PROMPT = """\
    原文或补充素材标签，不得自行生成 term_id。
 9. 关系区块每行的唯一合法格式是
    `(关系名称)[对象类型/对象实例](term_id)`；关系名称和目标对象类型必须符合
-   对象定义列出的允许关系，目标实例必须在正文中被引用，不得增加、反向、
-   修改 term_id 或添加项目符号。
+   对象定义列出的允许关系，不得增加、反向、修改 term_id 或添加项目符号。
 10. 原文是事实基线，只使用原文和补充素材中可验证的信息，不编造事实、
    数值、属性或关系；没有依据时宁可不补充。
 11. `[对象类型/对象实例](term_id)` 是素材来源标签，也是正文引用已知实例时
@@ -1285,7 +1284,7 @@ def _build_messages(
             "禁止省略括号内的 term_id，禁止虚构或修改 term_id：\n"
             f"{known_references}\n\n"
             "关系行格式严格为 `(关系名称)[对象类型/对象实例](term_id)`。"
-            "关系区块只填写正文能够明确表达的业务关系，关系名称必须根据正文语义"
+            "关系区块只填写素材能够明确表达的业务关系，关系名称必须根据素材语义"
             "从下列允许类型中选择：\n"
             f"{allowed_relations}\n\n"
             "## 对象定义中的完整 template（生成约束）\n"
@@ -1335,15 +1334,10 @@ def _normalize_enriched_output(
     parsed_yaml: object = safe_load(yaml_text)
     if not isinstance(parsed_yaml, Mapping):
         raise ValueError("YAML front matter must be a mapping")
-    actual_keys = {str(key) for key in parsed_yaml}
-    expected_keys = set(property_codes)
-    if actual_keys != expected_keys:
-        missing = sorted(expected_keys - actual_keys)
-        unexpected = sorted(actual_keys - expected_keys)
-        raise ValueError(
-            "YAML front matter keys do not match object properties: "
-            f"missing={missing}, unexpected={unexpected}"
-        )
+    normalized_yaml_text = _normalize_yaml_front_matter(
+        parsed_yaml,
+        property_codes=property_codes,
+    )
 
     relation_match = _RELATION_SECTION_PATTERN.fullmatch(document_content)
     if relation_match is None:
@@ -1355,7 +1349,6 @@ def _normalize_enriched_output(
         raise ValueError("LLM output contains multiple relation blocks")
 
     body = _normalize_body_entity_references(body, reference_term_ids)
-    body_reference_labels = _body_entity_reference_labels(body)
     raw_relation_lines = relation_match.group("relations").strip()
     generated_relation_lines = (
         tuple(line.strip() for line in raw_relation_lines.splitlines())
@@ -1366,10 +1359,7 @@ def _normalize_enriched_output(
         generated_relation_lines,
         allowed_relation_types=allowed_relation_types,
         reference_term_ids=reference_term_ids,
-        body_reference_labels=body_reference_labels,
     )
-    if len(set(actual_relation_lines)) != len(actual_relation_lines):
-        raise ValueError("LLM output contains duplicate relation lines")
 
     if re.search(r"\{\{[^{}\n]+\}\}", body):
         raise ValueError("LLM output contains unreplaced template placeholders")
@@ -1393,12 +1383,44 @@ def _normalize_enriched_output(
         if (match := _RELATION_LINE_PATTERN.fullmatch(line)) is not None
     )
     relations = _deduplicate_relations(
-        (*explicit_relations, *_extract_body_mention_relations(body))
+        (
+            *explicit_relations,
+            *_extract_body_mention_relations(body, reference_term_ids),
+        )
     )
     return _NormalizedEnrichedOutput(
-        content=f"---\n{yaml_text}\n---\n\n{body}",
+        content=f"---\n{normalized_yaml_text}\n---\n\n{body}",
         relations=relations,
     )
+
+
+def _normalize_yaml_front_matter(
+    parsed_yaml: Mapping[object, object],
+    *,
+    property_codes: Sequence[str],
+) -> str:
+    expected_keys = set(property_codes)
+    actual_keys = {str(key) for key in parsed_yaml}
+    missing = sorted(expected_keys - actual_keys)
+    unexpected = sorted(actual_keys - expected_keys)
+    if missing or unexpected:
+        logger.warning(
+            "Normalized LLM YAML front matter keys: missing=%s unexpected=%s",
+            missing,
+            unexpected,
+        )
+    normalized = {
+        property_code: parsed_yaml.get(property_code)
+        for property_code in property_codes
+    }
+    return str(
+        safe_dump(
+            normalized,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+    ).strip()
 
 
 def _normalize_relation_lines(
@@ -1406,32 +1428,36 @@ def _normalize_relation_lines(
     *,
     allowed_relation_types: Sequence[tuple[str, str]],
     reference_term_ids: Mapping[str, str],
-    body_reference_labels: set[str],
 ) -> tuple[str, ...]:
-    normalized: list[str] = []
+    normalized: dict[str, None] = {}
     for line in relation_lines:
         match = _RELATION_LINE_PATTERN.fullmatch(line)
         if match is None:
-            raise ValueError(
-                "LLM output relation must use `(关系名称)[对象类型/对象实例](term_id)`"
+            logger.warning(
+                "Ignored malformed LLM relation line: line=%r expected_format=%s",
+                line,
+                "(关系名称)[对象类型/对象实例](term_id)",
             )
+            continue
         relation_type = (
             match.group("relation_name"),
             match.group("target_object_type"),
         )
         if relation_type not in allowed_relation_types:
-            raise ValueError(f"LLM output contains unknown outgoing relation: {line}")
+            logger.warning("Ignored unknown LLM outgoing relation: line=%r", line)
+            continue
         label = (
             f"{match.group('target_object_type')}/{match.group('target_instance_name')}"
         )
-        if label not in body_reference_labels:
-            raise ValueError(
-                f"LLM output relation target is not referenced in body: {label}"
-            )
         term_id = reference_term_ids.get(label)
         if term_id is None:
-            raise ValueError(f"LLM output relation target is unknown: {label}")
-        normalized.append(f"({match.group('relation_name')})[{label}]({term_id})")
+            logger.warning(
+                "Ignored LLM relation with unknown target: line=%r label=%r",
+                line,
+                label,
+            )
+            continue
+        normalized[f"({match.group('relation_name')})[{label}]({term_id})"] = None
     return tuple(normalized)
 
 
@@ -1443,7 +1469,12 @@ def _normalize_body_entity_references(
         label = match.group("label")
         term_id = reference_term_ids.get(label)
         if term_id is None:
-            raise ValueError(f"LLM output contains unknown entity reference: {label}")
+            logger.warning(
+                "Preserved unknown LLM entity reference without extracting relation: "
+                "reference=%r",
+                match.group(0),
+            )
+            return match.group(0)
         return f"[{label}]({term_id})"
 
     normalized = _MARKDOWN_ENTITY_LINK_PATTERN.sub(replace_reference, body)
@@ -1451,20 +1482,17 @@ def _normalize_body_entity_references(
     return _BARE_ENTITY_REFERENCE_PATTERN.sub(replace_reference, normalized)
 
 
-def _body_entity_reference_labels(body: str) -> set[str]:
-    return {
-        match.group("label") for match in _MARKDOWN_ENTITY_LINK_PATTERN.finditer(body)
-    }
-
-
 def _extract_body_mention_relations(
     body: str,
+    reference_term_ids: Mapping[str, str],
 ) -> tuple[DocumentEnrichRelation, ...]:
     relations: list[DocumentEnrichRelation] = []
     for match in _MARKDOWN_ENTITY_LINK_PATTERN.finditer(body):
-        target_object_type, separator, target_instance_name = match.group(
-            "label"
-        ).partition("/")
+        label = match.group("label")
+        trusted_term_id = reference_term_ids.get(label)
+        if trusted_term_id is None or match.group("term_id") != trusted_term_id:
+            continue
+        target_object_type, separator, target_instance_name = label.partition("/")
         if not separator:
             continue
         relations.append(
@@ -1472,7 +1500,7 @@ def _extract_body_mention_relations(
                 relationName=_MENTION_RELATION_NAME,
                 targetObjectType=target_object_type,
                 targetInstanceName=target_instance_name,
-                targetTermId=match.group("term_id"),
+                targetTermId=trusted_term_id,
             )
         )
     return tuple(relations)
