@@ -8,6 +8,7 @@ RemoteTermBackend (TermBackend Protocol).
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from contextlib import suppress
 from typing import Any, cast
 
@@ -1997,6 +1998,18 @@ class RemoteTermBackend:
 
     def delete_term_name(self, *, name_id: str) -> None:
         raise NotImplementedError("Remote term name not yet implemented")
+
+    # ── TermVocabulary ───────────────────────────────────────────────
+
+    def list_vocabulary(self) -> list[str]:
+        """Remote term vocabulary read — not yet implemented."""
+        logger.debug("Remote term: list_vocabulary not yet implemented")
+        return []
+
+    def batch_create_vocabulary(self, *, words: Sequence[str]) -> None:
+        """Remote term vocabulary write — not yet implemented."""
+        _ = words
+        raise NotImplementedError("Remote term vocabulary write not yet implemented")
 
     # ── TermKnowledge ───────────────────────────────────────────────────
 

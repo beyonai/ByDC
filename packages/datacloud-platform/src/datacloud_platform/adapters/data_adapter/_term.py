@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 from datacloud_platform.adapters.data_adapter._base import DataCloudDataBackendBase
@@ -641,6 +642,25 @@ class TermBackendMixin(DataCloudDataBackendBase):
     def delete_term_name(self, *, name_id: str) -> None:
         with create_writer() as writer:
             writer.delete_term_name(name_id=name_id)
+
+    # ── TermVocabulary ────────────────────────────────────────────────────
+
+    def list_vocabulary(self) -> list[str]:
+        """读取 term_vocabulary 全量去重词表（AC 锚定词典数据源）。
+
+        经 knowledge 侧 TermReader 协议代理转发。
+        """
+        reader = create_reader()
+        return reader.list_vocabulary()
+
+    def batch_create_vocabulary(self, *, words: Sequence[str]) -> None:
+        """批量写入分词词典（幂等去重），D-2 回填通道。
+
+        Args:
+            words: 词汇文本列表。
+        """
+        with create_writer() as writer:
+            writer.batch_create_vocabulary(words=list(words))
 
 
 # ── 模块级辅助函数 ──────────────────────────────────────────────────────────────

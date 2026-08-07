@@ -5,6 +5,7 @@ Used as fallback when a backend type has no implementation configured for a base
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from datacloud_platform.models.document import MetadataSearchPage
@@ -895,6 +896,16 @@ class _NoopTermBackend:
 
     def delete_term_name(self, *, name_id: str) -> None:
         raise PermissionError("Term backend not available")
+
+    # ── TermVocabulary ───────────────────────────────────────────────────
+
+    def list_vocabulary(self) -> list[str]:
+        """Return empty vocabulary — noop backend has no term data."""
+        return []
+
+    def batch_create_vocabulary(self, *, words: Sequence[str]) -> None:
+        """No-op."""
+        _ = words
 
     # ── TermKnowledge ───────────────────────────────────────────────────
 

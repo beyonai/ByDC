@@ -1449,6 +1449,20 @@ class FakeTermBackend:
                 if key in self._terms:
                     del self._terms[key]
 
+    # ── TermVocabulary ─────────────────────────────────────────────
+
+    def list_vocabulary(self) -> list[str]:
+        """Return stored vocabulary words."""
+        return list(getattr(self, "_vocab_words", []))
+
+    def batch_create_vocabulary(self, *, words: list[str]) -> None:
+        """Record vocabulary words into the in-memory store."""
+        if not hasattr(self, "_vocab_words"):
+            self._vocab_words: list[str] = []
+        for word in words:
+            if word not in self._vocab_words:
+                self._vocab_words.append(word)
+
     def get_term(self, term_code: str, term_type_code: str) -> str | None:
         """Look up term name by (code, type_code)."""
         return self._terms.get((term_code, term_type_code))

@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from datacloud_knowledge.sync import TermSyncHandler
@@ -181,6 +182,16 @@ class TermMixin(TermSyncHandler):
 
     def delete_term_name(self: _HasTermBackend, base_id: str, *, name_id: str) -> None:
         self._term_for(base_id).delete_term_name(name_id=name_id)
+
+    # ── TermVocabulary ─────────────────────────────────────────────
+
+    def list_vocabulary(self: _HasTermBackend, base_id: str) -> list[str]:
+        return self._term_for(base_id).list_vocabulary()
+
+    def batch_create_vocabulary(
+        self: _HasTermBackend, base_id: str, *, words: Sequence[str]
+    ) -> None:
+        self._term_for(base_id).batch_create_vocabulary(words=list(words))
 
     # ── TermKnowledge ──────────────────────────────────────────────
 

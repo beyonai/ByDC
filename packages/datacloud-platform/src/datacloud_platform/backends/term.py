@@ -284,6 +284,22 @@ class TermBackend(Protocol):
 
     def delete_term_name(self, *, name_id: str) -> None: ...
 
+    # ── TermVocabulary ─────────────────────────────────────────────
+
+    def list_vocabulary(self) -> list[str]:
+        """读取 term_vocabulary 全量去重词表（AC 锚定词典数据源）。
+
+        对应: OpenGauss term_vocabulary 表读取（TermReader 协议对称方法）。
+        """
+        ...
+
+    def batch_create_vocabulary(self, *, words: list[str]) -> None:
+        """批量写入分词词典（幂等去重）。
+
+        对应: POST /api/v1/knowledge 词表写入（jieba 自定义词典数据源）。
+        """
+        ...
+
     # ── TermKnowledge ──────────────────────────────────────────────
 
     def list_term_knowledges(
