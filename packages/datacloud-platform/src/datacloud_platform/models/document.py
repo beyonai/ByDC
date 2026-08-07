@@ -271,6 +271,7 @@ class DocumentEnrichRelation(_AliasedModel):
     """One outgoing relation extracted from the generated document."""
 
     relation_name: str = Field(alias="relationName")
+    target_object_code: str | None = Field(default=None, alias="targetObjectCode")
     target_object_type: str = Field(alias="targetObjectType")
     target_instance_name: str = Field(alias="targetInstanceName")
     target_term_id: str = Field(alias="targetTermId")

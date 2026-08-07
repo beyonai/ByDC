@@ -140,6 +140,7 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         relation_target_not_in_body: bool = False,
         invalid_relation_lines: bool = False,
         unknown_body_reference: bool = False,
+        missing_reference_object_code: bool = False,
     ) -> None:
         self.fail_generation = fail_generation
         self.use_generic_template = use_generic_template
@@ -148,6 +149,7 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         self.relation_target_not_in_body = relation_target_not_in_body
         self.invalid_relation_lines = invalid_relation_lines
         self.unknown_body_reference = unknown_body_reference
+        self.missing_reference_object_code = missing_reference_object_code
         self.messages: list[dict[str, str]] = []
         self.loaded_term_ids: list[str] = []
         self.requested_object_codes: list[str] = []
@@ -267,6 +269,22 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                     filePath="/customers/acme.md",
                     chunkText="当前文档的语义命中也暂时保留。",
                     score=0.8,
+                ),
+                *(
+                    (
+                        DocumentFragmentItem(
+                            termId="term-without-object-code",
+                            termName="编码缺失实例",
+                            objectCode="",
+                            knCode="kb-1",
+                            filePath="/research/missing-code.md",
+                            chunkText="该片段没有返回对象编码。",
+                            score=0.75,
+                            metadata={"objectName": "研究对象"},
+                        ),
+                    )
+                    if missing_reference_object_code
+                    else ()
                 ),
             )
         )
@@ -411,6 +429,10 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         )
         if self.unknown_body_reference:
             body_relation_content += "\n\n接口说明见 [API/REST](https://example.com)。"
+        if self.missing_reference_object_code:
+            body_relation_content += (
+                "\n\n补充参考 [研究对象/编码缺失实例](term-without-object-code)。"
+            )
         relation_content = "(协作)[合作伙伴/Alpha 合作伙伴]"
         if self.invalid_relation_lines:
             relation_content = (
@@ -461,10 +483,12 @@ async def test_enrich_uses_labelled_bounded_evidence_and_relation_fallback(
     assert "(协作)" not in result.enriched_content
     assert len(result.relations) == 2
     assert result.relations[0].relation_name == "协作"
+    assert result.relations[0].target_object_code == "partner"
     assert result.relations[0].target_object_type == "合作伙伴"
     assert result.relations[0].target_instance_name == "Alpha 合作伙伴"
     assert result.relations[0].target_term_id == "term-partner-a"
     assert result.relations[1].relation_name == "提及"
+    assert result.relations[1].target_object_code == "partner"
     assert result.relations[1].target_object_type == "合作伙伴"
     assert result.relations[1].target_instance_name == "Alpha 合作伙伴"
     assert result.relations[1].target_term_id == "term-partner-a"
@@ -693,6 +717,28 @@ async def test_enrich_preserves_unknown_body_reference_without_extracting_relati
         "Preserved unknown LLM entity reference" in record.getMessage()
         for record in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_enrich_returns_none_when_reference_object_code_is_unavailable() -> None:
+    platform = FakeDocumentEnrichPlatform(missing_reference_object_code=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    relation = next(
+        item
+        for item in result.relations
+        if item.target_term_id == "term-without-object-code"
+    )
+    assert relation.relation_name == "提及"
+    assert relation.target_object_code is None
+    assert relation.model_dump(by_alias=True)["targetObjectCode"] is None
 
 
 @pytest.mark.asyncio
