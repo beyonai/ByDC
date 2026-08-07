@@ -1,14 +1,24 @@
-"""Document-domain orchestration across ontology, term, and document-library backends."""
+"""文档领域的跨后端业务编排。
+
+本模块不直接实现知识库 HTTP 协议，而是组合 Platform 已提供的术语、关系、对象定义和
+文档库能力，完成以下业务：文档对象筛选、直接关系查询、完整内容读取、知识片段检索，
+以及文档发现/富化后台任务。外部接口的 Pydantic 入出参统一定义在
+``datacloud_platform.models.document``。
+"""
 
 from __future__ import annotations
 
 import inspect
-from collections.abc import Mapping
+import json
+import logging
+from collections.abc import AsyncIterator, Mapping
+from contextlib import asynccontextmanager
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from datacloud_platform.models.document import (
+    DocumentAsyncProcessingRequest,
     DocumentContentResult,
     DocumentFragmentItem,
     DocumentFragmentResult,
@@ -25,9 +35,18 @@ from datacloud_platform.models.document import (
     SearchDocumentFragmentsRequest,
 )
 
+logger = logging.getLogger(__name__)
+_DOCUMENT_PAGE_SIZE = 200
+_DOCUMENT_LOCK_TTL_SECONDS = 3600
+
 
 class _DocumentPlatform(Protocol):
+    """DocumentMixin 所依赖的 Platform 最小能力协议。"""
+
     def search_terms(self, base_id: str, **kwargs: Any) -> Any: ...
+    def search_terms_by_labels(
+        self, base_id: str, **kwargs: Any
+    ) -> list[dict[str, Any]]: ...
     def query_term_relations(self, base_id: str, **kwargs: Any) -> Any: ...
     def get_object_detail(
         self, base_id: str, object_code: str
@@ -44,7 +63,195 @@ class _DocumentPlatform(Protocol):
 
 
 class DocumentMixin:
-    """Platform-level document query, relation, content, and chunk orchestration."""
+    """文档领域的 Platform 级业务编排入口。
+
+    Mixin 由 ``DatacloudPlatform`` 继承。方法只负责编排，不绕过 Platform 直接访问
+    知识库；文档库请求最终通过 ``DocumentLibraryBackend`` 及其 Adapter 发出。
+    """
+
+    async def process_document_discovery(
+        self: Any,
+        *,
+        base_id: str,
+        session_id: str,
+        request: DocumentAsyncProcessingRequest,
+    ) -> None:
+        """异步处理等待发现或可自动重试的文档。
+
+        业务流程：分页查询状态为“待发现、发现失败-待重试”的文档；逐文档获取分布式
+        锁；调用 ``discover_document_entities_todo``；最后把实体数量或失败原因追加到
+        当前会话空间的进度文件。单个文档失败不会终止整批任务。
+
+        Args:
+            base_id: 本体库/系统空间标识，用于术语及文档对象查询。
+            session_id: 请求 Header 中的会话 ID，写处理日志时随记录保存。
+            request: 异步处理请求，包含知识库资源 ID、对象编码和模型配置。
+
+        Returns:
+            无返回值。该方法用于后台任务，处理结果写入会话空间。
+        """
+        await _process_document_pages(
+            self,
+            base_id=base_id,
+            session_id=session_id,
+            request=request,
+            statuses=(
+                DocumentProcessingStatus.PENDING_DISCOVERY,
+                DocumentProcessingStatus.DISCOVERY_RETRY,
+            ),
+            operation="discovery",
+        )
+
+    async def process_document_enrichment(
+        self: Any,
+        *,
+        base_id: str,
+        session_id: str,
+        request: DocumentAsyncProcessingRequest,
+    ) -> None:
+        """异步富化等待整理或可自动重试的文档。
+
+        查询“待整理、整理失败-待重试”文档，并固定附加两个筛选条件：更新时间早于
+        当前时间 7200 秒、关系出入差值为 10。每个文档持锁调用
+        ``enrich_document_todo``，把返回内容写入会话空间并记录处理结果。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            session_id: 请求 Header 中的会话 ID。
+            request: 知识库范围、对象范围和模型配置。
+
+        Returns:
+            无返回值。富化内容及执行结果写入会话空间。
+        """
+        await _process_document_pages(
+            self,
+            base_id=base_id,
+            session_id=session_id,
+            request=request,
+            statuses=(
+                DocumentProcessingStatus.PENDING_ORGANIZATION,
+                DocumentProcessingStatus.ORGANIZATION_RETRY,
+            ),
+            operation="enrichment",
+            organization_interval_seconds=7200,
+            relation_in_out_difference=10,
+        )
+
+    @asynccontextmanager
+    async def document_processing_lock(self, *, lock_key: str) -> AsyncIterator[bool]:
+        """通过 redis-py 非阻塞获取单文档分布式锁。
+
+        Args:
+            lock_key: 锁的唯一键，由操作类型、base_id、kb_resource_id 和 term_id 组成。
+
+        Yields:
+            ``True`` 表示当前任务取得锁，可以处理文档；``False`` 表示其他节点正在
+            处理同一文档，调用方应跳过。
+
+        Notes:
+            锁 TTL 为 3600 秒。退出上下文时由 redis-py 校验 token 并原子释放；如果
+            业务执行超过 TTL 导致锁已失效，只记录告警，不覆盖原业务结果。
+        """
+        from datacloud_platform.redis_client import create_async_redis_client
+
+        client = create_async_redis_client()
+        lock = client.lock(
+            lock_key,
+            timeout=_DOCUMENT_LOCK_TTL_SECONDS,
+            blocking_timeout=0,
+        )
+        acquired = bool(await lock.acquire(blocking=False))
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                try:
+                    await lock.release()
+                except Exception as exc:  # noqa: BLE001
+                    if type(exc).__name__ != "LockNotOwnedError":
+                        raise
+                    logger.warning("Document lock expired before release: %s", lock_key)
+            await client.aclose()
+
+    async def discover_document_entities_todo(
+        self,
+        *,
+        document: DocumentObjectItem,
+        object_codes: tuple[str, ...],
+        model_config: dict[str, Any],
+    ) -> int:
+        """发现单个文档中的实体（待接入具体实现）。
+
+        Args:
+            document: 待处理文档对象，包含术语、知识库和文件路径信息。
+            object_codes: 允许发现的对象类型编码。
+            model_config: 调用方传入的模型及推理配置，当前按原结构透传。
+
+        Returns:
+            从该文档中成功发现并写入的实体数量。
+
+        Raises:
+            NotImplementedError: 当前仅定义扩展协议，尚未接入实体发现实现。
+        """
+        raise NotImplementedError("document entity discovery is not implemented")
+
+    async def enrich_document_todo(
+        self,
+        *,
+        document: DocumentObjectItem,
+        object_codes: tuple[str, ...],
+        model_config: dict[str, Any],
+    ) -> str:
+        """富化单个文档并返回最终内容（待接入具体实现）。
+
+        Args:
+            document: 待富化的文档对象。
+            object_codes: 富化时允许使用的对象类型编码。
+            model_config: 调用方传入的模型及推理配置。
+
+        Returns:
+            富化后的完整 Markdown 文档内容。
+
+        Raises:
+            NotImplementedError: 当前仅定义扩展协议，尚未接入富化实现。
+        """
+        raise NotImplementedError("document enrichment is not implemented")
+
+    def append_document_session_report(self, **report: Any) -> None:
+        """向当前会话空间追加一条文档处理结果。
+
+        Args:
+            **report: JSON 可序列化的处理信息，通常包含 session_id、operation、
+                term_id、file_path、status，以及 entity_count 或 error。
+
+        Returns:
+            无返回值。数据以 JSON Lines 格式追加到
+            ``/datacloud/document-processing/progress.jsonl``。
+        """
+        storage = _current_result_file_storage()
+        storage.append_text(
+            "/datacloud/document-processing/progress.jsonl",
+            json.dumps(report, ensure_ascii=False, default=str) + "\n",
+        )
+
+    def write_enriched_document_to_session(
+        self, *, document: DocumentObjectItem, content: str
+    ) -> None:
+        """把单个文档的富化结果写入当前会话空间。
+
+        Args:
+            document: 文档对象；其 term_id 用作安全化后的文件名。
+            content: 富化后的完整 Markdown 内容。
+
+        Returns:
+            无返回值。文件路径为
+            ``/datacloud/document-processing/enrichment/{termId}.md``。
+        """
+        storage = _current_result_file_storage()
+        safe_term_id = document.term_id.replace("/", "_")
+        storage.write_text(
+            f"/datacloud/document-processing/enrichment/{safe_term_id}.md", content
+        )
 
     async def query_document_objects(
         self: _DocumentPlatform,
@@ -52,6 +259,22 @@ class DocumentMixin:
         *,
         request: QueryDocumentObjectsRequest,
     ) -> DocumentObjectPage:
+        """按文档元数据条件分页查询文档对象。
+
+        业务流程：可选地根据关系出入差值解析候选术语及文件路径；构造
+        ``metadataSearch`` DSL；按 ``knCode + filePath`` 回查术语；再用对象编码过滤。
+        核心 DSL 为 ``(filePath IN 候选路径 OR dc_status IN 状态) AND
+        updateAt < now - organizationIntervalSeconds``。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            request: 查询条件，包含 kb_resource_ids、状态、对象编码、整理间隔、关系
+                出入差值及分页参数。
+
+        Returns:
+            ``DocumentObjectPage``，包含术语 ID/名称/编码/类型、文件路径、知识库资源
+            ID、处理状态、失败信息及分页信息。
+        """
         candidate_file_paths: tuple[str, ...] = ()
         if request.relation_in_out_difference is not None:
             term_ids = await resolve_term_ids_by_relation_in_out_difference(
@@ -113,11 +336,24 @@ class DocumentMixin:
         *,
         request: QueryRelatedDocumentObjectsRequest,
     ) -> RelatedDocumentRelationPage:
+        """查询指定术语的一层直接关系，并补全关系两端文档信息。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            request: term_id、关系方向、深度和分页参数。接口用于直接关系时深度为 1。
+
+        Returns:
+            关系分页结果。每条关系包含关系属性，以及来源/目标术语的名称、编码、
+            term_type_code、kb_resource_id 和 file_path。
+
+        Raises:
+            KeyError: 关系引用的来源或目标术语无法批量查询到。
+        """
         raw = self.query_term_relations(
             base_id,
             term_id=request.term_id,
-            direction="both",
-            depth=1,
+            direction=request.direction,
+            depth=request.depth,
             page_index=request.page_index,
             page_size=request.page_size,
         )
@@ -179,6 +415,19 @@ class DocumentMixin:
     async def get_document_content_by_term_id(
         self: _DocumentPlatform, base_id: str, *, term_id: str
     ) -> DocumentContentResult:
+        """根据术语 ID 定位并读取完整知识库文件。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            term_id: 文档术语唯一 ID。
+
+        Returns:
+            术语 ID、kb_resource_id、文件路径及完整文本内容。
+
+        Raises:
+            KeyError: 术语不存在。
+            ValueError: 术语缺少 kb_resource_id 或 kb_file_path。
+        """
         result = self.search_terms(base_id, term_ids=[term_id], top_k=1, offset=0)
         rows = _term_result_items(result)
         if not rows:
@@ -206,6 +455,20 @@ class DocumentMixin:
         *,
         request: SearchDocumentFragmentsRequest,
     ) -> DocumentFragmentResult:
+        """在对象绑定的知识库和目录范围内检索文档片段。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            request: 对象编码列表、查询文本和最大返回条数 top_k。
+
+        Returns:
+            ``DocumentFragmentResult``，每项包含来源知识库、文件路径、chunk 文本、
+            得分、行号、图片路径及元数据。
+
+        Raises:
+            KeyError: 任一对象编码不存在。
+            ValueError: 对象没有知识库绑定，或 kb_resource_id 不是整数。
+        """
         resource_ids: list[int] = []
         directories: list[str] = []
         for object_code in request.object_codes:
@@ -251,9 +514,258 @@ class DocumentMixin:
                 ]
             }
         rows = await self.search_knowledge_items(base_id, payload=payload)
-        return DocumentFragmentResult(
-            items=tuple(DocumentFragmentItem.model_validate(row) for row in rows)
+        term_details = resolve_fragment_term_details(
+            platform=self,
+            base_id=base_id,
+            fragment_rows=rows,
+            object_codes=request.object_codes,
         )
+        return DocumentFragmentResult(
+            items=tuple(
+                DocumentFragmentItem.model_validate(
+                    {
+                        **row,
+                        **term_details.get(
+                            (
+                                str(row.get("knCode") or ""),
+                                str(row.get("filePath") or ""),
+                            ),
+                            {},
+                        ),
+                    }
+                )
+                for row in rows
+            )
+        )
+
+
+def resolve_fragment_term_details(
+    *,
+    platform: Any,
+    base_id: str,
+    fragment_rows: tuple[dict[str, Any], ...],
+    object_codes: tuple[str, ...],
+) -> dict[tuple[str, str], dict[str, str]]:
+    """批量回查 chunk 来源文件对应的文档术语信息。
+
+    Args:
+        platform: 提供 ``search_terms_by_labels`` 的 Platform。
+        base_id: 本体库/系统空间标识。
+        fragment_rows: 文档库 chunk 检索的原始命中列表。其中 ``knCode`` 是门户
+            kb_resource_id，``filePath`` 是知识库内完整文件路径。
+        object_codes: 调用方允许的对象编码，即术语的 term_type_code。
+
+    Returns:
+        以 ``(kb_resource_id, file_path)`` 为键的术语字段映射，字段包含 termId、
+        termCode、termName 和 objectCode。未找到术语的 chunk 保留空字段。
+    """
+    candidate_keys: set[tuple[str, str]] = set()
+    for fragment in fragment_rows:
+        kb_resource_id = str(fragment.get("knCode") or "")
+        file_path = str(fragment.get("filePath") or "")
+        if kb_resource_id and file_path:
+            candidate_keys.add((kb_resource_id, file_path))
+    if not candidate_keys:
+        return {}
+    file_paths = tuple(dict.fromkeys(file_path for _, file_path in candidate_keys))
+    result = platform.search_terms_by_labels(
+        base_id,
+        label_filters=[
+            {"field_code": "kb_file_path", "filter_value": file_path}
+            for file_path in file_paths
+        ],
+        label_condition="or",
+        term_type_codes=list(object_codes) or None,
+        top_k=200,
+    )
+    allowed_object_codes = set(object_codes)
+    details: dict[tuple[str, str], dict[str, str]] = {}
+    for row in _term_result_items(result):
+        metadata = _term_metadata(row)
+        object_code = str(
+            row.get("term_type_code")
+            or row.get("termTypeCode")
+            or row.get("term_type")
+            or row.get("termType")
+            or ""
+        )
+        if allowed_object_codes and object_code not in allowed_object_codes:
+            continue
+        key = (
+            str(metadata.get("kb_resource_id") or ""),
+            str(
+                metadata.get("kb_file_path")
+                or metadata.get("file_path")
+                or metadata.get("filePath")
+                or ""
+            ),
+        )
+        if key not in candidate_keys:
+            continue
+        details[key] = {
+            "termId": str(row.get("term_id") or row.get("termId") or ""),
+            "termCode": str(row.get("term_code") or row.get("termCode") or ""),
+            "termName": str(row.get("term_name") or row.get("termName") or ""),
+            "objectCode": object_code,
+        }
+    return details
+
+
+async def _process_document_pages(
+    platform: Any,
+    *,
+    base_id: str,
+    session_id: str,
+    request: DocumentAsyncProcessingRequest,
+    statuses: tuple[DocumentProcessingStatus, ...],
+    operation: str,
+    organization_interval_seconds: int | None = None,
+    relation_in_out_difference: int | None = None,
+) -> None:
+    """先拉取全部候选页，再按顺序逐文档处理。
+
+    先完成分页快照可以避免处理过程中状态变化导致后续页记录偏移或遗漏。发现与富化
+    共用该流程，通过 ``operation`` 选择单文档处理分支。
+
+    Args:
+        platform: 提供文档查询、锁、TODO 处理及会话写入能力的 Platform。
+        base_id: 本体库/系统空间标识。
+        session_id: 会话 ID。
+        request: 异步处理范围和模型配置。
+        statuses: 本次任务允许消费的文档状态。
+        operation: ``discovery`` 或 ``enrichment``。
+        organization_interval_seconds: 可选的更新时间间隔秒数。
+        relation_in_out_difference: 可选的关系出入差值，不取绝对值。
+    """
+    page_index = 1
+    documents: list[DocumentObjectItem] = []
+    while True:
+        page = await platform.query_document_objects(
+            base_id,
+            request=QueryDocumentObjectsRequest(
+                kbResourceIds=request.kb_resource_ids,
+                statuses=statuses,
+                objectCodes=request.object_codes,
+                organizationIntervalSeconds=organization_interval_seconds,
+                relationInOutDifference=relation_in_out_difference,
+                pageIndex=page_index,
+                pageSize=_DOCUMENT_PAGE_SIZE,
+            ),
+        )
+        documents.extend(page.items)
+        if page_index >= page.pagination.total_pages:
+            break
+        page_index += 1
+    for document in documents:
+        await _process_one_document(
+            platform,
+            base_id=base_id,
+            session_id=session_id,
+            request=request,
+            document=document,
+            operation=operation,
+        )
+
+
+async def _process_one_document(
+    platform: Any,
+    *,
+    base_id: str,
+    session_id: str,
+    request: DocumentAsyncProcessingRequest,
+    document: DocumentObjectItem,
+    operation: str,
+) -> None:
+    """在分布式锁保护下处理一个文档并记录结果。
+
+    未取得锁时写入 ``skipped_locked``；业务成功写入 ``completed``；任何单文档异常
+    写入 ``failed + error``，异常不会继续向上抛出，因此不会中断批次中其他文档。
+
+    Args:
+        platform: 文档处理 Platform。
+        base_id: 本体库/系统空间标识，用于组成锁键。
+        session_id: 写入处理报告的会话 ID。
+        request: 对象范围和模型配置。
+        document: 当前处理的文档对象。
+        operation: ``discovery`` 或 ``enrichment``。
+    """
+    lock_key = (
+        f"datacloud:document:{operation}:{base_id}:"
+        f"{document.kb_resource_id}:{document.term_id}"
+    )
+    async with platform.document_processing_lock(lock_key=lock_key) as acquired:
+        if not acquired:
+            platform.append_document_session_report(
+                session_id=session_id,
+                operation=operation,
+                term_id=document.term_id,
+                file_path=document.file_path,
+                status="skipped_locked",
+            )
+            return
+        try:
+            if operation == "discovery":
+                entity_count = await platform.discover_document_entities_todo(
+                    document=document,
+                    object_codes=request.object_codes,
+                    model_config=request.model_config_payload,
+                )
+                platform.append_document_session_report(
+                    session_id=session_id,
+                    operation=operation,
+                    term_id=document.term_id,
+                    file_path=document.file_path,
+                    status="completed",
+                    entity_count=entity_count,
+                )
+            else:
+                content = await platform.enrich_document_todo(
+                    document=document,
+                    object_codes=request.object_codes,
+                    model_config=request.model_config_payload,
+                )
+                platform.write_enriched_document_to_session(
+                    document=document, content=content
+                )
+                platform.append_document_session_report(
+                    session_id=session_id,
+                    operation=operation,
+                    term_id=document.term_id,
+                    file_path=document.file_path,
+                    status="completed",
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Document %s failed: %s", operation, document.term_id)
+            platform.append_document_session_report(
+                session_id=session_id,
+                operation=operation,
+                term_id=document.term_id,
+                file_path=document.file_path,
+                status="failed",
+                error=str(exc),
+            )
+
+
+def _current_result_file_storage() -> Any:
+    """取得当前请求的结果文件存储，缺失时回退到本地存储。
+
+    Returns:
+        实现 ``write_text``/``append_text`` 的 ResultFileStorage。若 InvocationContext
+        已配置存储则直接复用，否则以 context.workspace_dir 或当前目录建立本地存储。
+    """
+    from datacloud_data_sdk.context import get_current_context
+    from datacloud_data_sdk.file_storage.base import ResultFileStorage
+    from datacloud_data_sdk.file_storage.local import LocalResultFileStorage
+
+    try:
+        context = get_current_context()
+    except Exception:  # noqa: BLE001
+        context = None
+    storage = getattr(context, "result_file_storage", None)
+    if isinstance(storage, ResultFileStorage):
+        return storage
+    workspace_dir = str(getattr(context, "workspace_dir", "") or "")
+    return LocalResultFileStorage(workspace_dir or ".")
 
 
 def _normalize_directory(value: str) -> str:
@@ -268,7 +780,19 @@ def build_processing_labels(
     initial_status: DocumentProcessingStatus,
     labels: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return business labels with validated document-processing defaults."""
+    """补齐并校验写入文档对象时使用的 ``dc_`` 处理标签。
+
+    Args:
+        initial_status: 调用场景的默认初始状态，通常是“待发现”或“待整理”。
+        labels: 调用方已有业务标签；已有 dc_status 优先于默认值。
+
+    Returns:
+        合并后的标签，固定包含 dc_status、dc_failure_reason、dc_failure_count 和
+        dc_last_organized_at，不修改其他业务标签。
+
+    Raises:
+        ValueError: 状态不在枚举中，或失败次数不是非负整数。
+    """
     result = dict(labels or {})
     supplied_status = result.get("dc_status", initial_status)
     result["dc_status"] = DocumentProcessingStatus(str(supplied_status)).value
@@ -289,7 +813,18 @@ def build_metadata_search_payload(
     candidate_file_paths: tuple[str, ...],
     now: datetime,
 ) -> dict[str, Any]:
-    """Build ``(filePath IN paths OR dc_status IN statuses) AND updateAt``."""
+    """构造文档库 ``metadataSearch`` 的 Agent DSL 请求体。
+
+    Args:
+        request: 文档对象查询条件和分页参数。
+        candidate_file_paths: 由关系出入差值计算得到的候选文件路径。
+        now: 计算更新时间截止点的当前时间，显式传入以便测试。
+
+    Returns:
+        下游请求体，条件语义为 ``(filePath IN paths OR dc_status IN statuses)
+        AND updateAt < now - organizationIntervalSeconds``；知识库资源 ID 写入
+        knCodeList，page_index/page_size 映射为 pageNum/pageSize。
+    """
     or_conditions: list[dict[str, Any]] = []
     if candidate_file_paths:
         or_conditions.append(
@@ -315,10 +850,10 @@ def build_metadata_search_payload(
     if request.organization_interval_seconds is not None:
         cutoff = now - timedelta(seconds=request.organization_interval_seconds)
         and_conditions.append(
-            {"lt": {"fieldName": "updateAt", "value": cutoff.isoformat()}}
+            {"lt": {"fieldName": "updatedAt", "value": cutoff.isoformat()}}
         )
     return {
-        "knCodeList": list(request.kb_resource_ids),
+        "resourceIdList": list(request.kb_resource_ids),
         "where": {"and": and_conditions},
         "pageNum": request.page_index,
         "pageSize": request.page_size,
@@ -336,6 +871,7 @@ async def _call_platform_todo(platform: Any, method_name: str, **kwargs: Any) ->
 async def resolve_term_ids_by_relation_in_out_difference(
     *, platform: Any, base_id: str, difference: int
 ) -> tuple[str, ...]:
+    """调用待实现能力，按有符号关系出入差值解析并去重术语 ID。"""
     values = await _call_platform_todo(
         platform,
         "resolve_term_ids_by_relation_in_out_difference",
@@ -348,6 +884,7 @@ async def resolve_term_ids_by_relation_in_out_difference(
 async def resolve_file_paths_by_term_ids(
     *, platform: Any, base_id: str, term_ids: tuple[str, ...]
 ) -> tuple[str, ...]:
+    """批量查询术语并从元数据中提取、去重 ``kb_file_path``。"""
     if not term_ids:
         return ()
     result = platform.search_terms(
@@ -368,6 +905,18 @@ async def resolve_document_objects_by_file_paths(
     kb_resource_ids: tuple[str, ...],
     file_paths_by_kb_id: Mapping[str, tuple[str, ...]],
 ) -> list[dict[str, Any]]:
+    """按知识库与文件路径回查文档术语，并执行二次边界校验。
+
+    Args:
+        platform: 提供 search_terms 的 Platform。
+        base_id: 本体库/系统空间标识。
+        kb_resource_ids: 调用方允许访问的门户知识库资源 ID。
+        file_paths_by_kb_id: metadataSearch 返回的内部 kb_id 到文件路径集合映射。
+
+    Returns:
+        同时满足内部 kb_id、门户 kb_resource_id 和文件路径约束的原始术语列表，避免
+        不同知识库存在相同路径时发生数据串库。
+    """
     rows: list[dict[str, Any]] = []
     allowed_kb_resource_ids = set(kb_resource_ids)
     for kb_id, raw_file_paths in file_paths_by_kb_id.items():
@@ -398,7 +947,9 @@ async def resolve_document_objects_by_file_paths(
 
 def _term_result_items(result: Any) -> list[dict[str, Any]]:
     raw_items = (
-        result.get("items", [])
+        result
+        if isinstance(result, (list, tuple))
+        else result.get("items", [])
         if isinstance(result, Mapping)
         else getattr(result, "items", [])
     )

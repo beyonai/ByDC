@@ -1844,6 +1844,18 @@ class RemoteTermBackend:
         logger.debug("Remote term: search_terms_batch not yet implemented")
         return {kw: {"data": [], "totalCount": 0} for kw in keywords}
 
+    def search_terms_by_labels(
+        self,
+        *,
+        label_filters: list[dict[str, Any]],
+        label_condition: str = "or",
+        term_type_codes: list[str] | None = None,
+        top_k: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Remote pure-label term search — not yet implemented."""
+        logger.debug("Remote term: search_terms_by_labels not yet implemented")
+        return []
+
     def get_term_detail(
         self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:

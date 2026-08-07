@@ -21,7 +21,7 @@ from datacloud_platform.services.kb_document_reader import (
     _build_headers,
 )
 
-METADATA_SEARCH_PATH = "/api/v1/knowledgeItems/metadataSearch"
+METADATA_SEARCH_PATH = "/byaiService/datasetController/knowledgeItems/metadataSearch"
 KNOWLEDGE_ITEMS_SEARCH_PATH = "/byaiService/datasetController/knowledgeItems/search"
 _TIMEOUT_SECONDS = 30.0
 PostJson = Callable[[str, dict[str, Any], dict[str, str]], object]

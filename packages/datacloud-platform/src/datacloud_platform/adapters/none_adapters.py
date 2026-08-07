@@ -695,6 +695,17 @@ class _NoopTermBackend:
         """Return empty batch results."""
         return {kw: {"data": [], "totalCount": 0} for kw in keywords}
 
+    def search_terms_by_labels(
+        self,
+        *,
+        label_filters: list[dict[str, Any]],
+        label_condition: str = "or",
+        term_type_codes: list[str] | None = None,
+        top_k: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Return no pure-label term matches."""
+        return []
+
     def enumerate_object_instances(
         self,
         *,

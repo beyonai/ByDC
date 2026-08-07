@@ -18,6 +18,8 @@ from fastapi import Request
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.backends.document_library import DocumentLibraryError
 from datacloud_platform.models.document import (
+    DocumentAsyncProcessingAccepted,
+    DocumentAsyncProcessingRequest,
     GetDocumentContentRequest,
     QueryDocumentObjectsRequest,
     QueryRelatedDocumentObjectsRequest,
@@ -139,6 +141,55 @@ async def _search_knowledge_fragments(
     return ok(data=result.model_dump(by_alias=True, mode="json"))
 
 
+def _required_session_id(request: Request) -> str:
+    session_id = request.headers.get("X-Session-Id", "").strip()
+    if not session_id:
+        raise ValueError("X-Session-Id header is required")
+    return session_id
+
+
+async def _discover_document_objects_async(
+    platform: DatacloudPlatform, params: dict[str, Any], request: Request
+) -> Any:
+    """Accept a background document entity-discovery task."""
+    session_id = _required_session_id(request)
+    base_id = str(
+        params.pop("base_id", None) or params.pop("baseId", None) or DEFAULT_BASE_ID
+    )
+    processing_request = DocumentAsyncProcessingRequest.model_validate(params)
+    request.state.background_tasks.add_task(
+        platform.process_document_discovery,
+        base_id=base_id,
+        session_id=session_id,
+        request=processing_request,
+    )
+    accepted = DocumentAsyncProcessingAccepted(
+        sessionId=session_id, taskType="documentDiscovery"
+    )
+    return ok(data=accepted.model_dump(by_alias=True, mode="json"))
+
+
+async def _enrich_document_objects_async(
+    platform: DatacloudPlatform, params: dict[str, Any], request: Request
+) -> Any:
+    """Accept a background document enrichment task."""
+    session_id = _required_session_id(request)
+    base_id = str(
+        params.pop("base_id", None) or params.pop("baseId", None) or DEFAULT_BASE_ID
+    )
+    processing_request = DocumentAsyncProcessingRequest.model_validate(params)
+    request.state.background_tasks.add_task(
+        platform.process_document_enrichment,
+        base_id=base_id,
+        session_id=session_id,
+        request=processing_request,
+    )
+    accepted = DocumentAsyncProcessingAccepted(
+        sessionId=session_id, taskType="documentEnrichment"
+    )
+    return ok(data=accepted.model_dump(by_alias=True, mode="json"))
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 REGISTRY: dict[str, Any] = {
@@ -147,4 +198,6 @@ REGISTRY: dict[str, Any] = {
     "queryRelatedDocumentObjects": _query_related_document_objects,
     "getDocumentContentByTermId": _get_document_content_by_term_id,
     "searchKnowledgeFragments": _search_knowledge_fragments,
+    "discoverDocumentObjectsAsync": _discover_document_objects_async,
+    "enrichDocumentObjectsAsync": _enrich_document_objects_async,
 }

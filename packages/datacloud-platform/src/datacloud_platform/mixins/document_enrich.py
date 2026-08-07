@@ -211,6 +211,7 @@ class DocumentEnrichMixin:
         normalized_object_code = target_object.object_code
         object_names.setdefault(target_object.object_code, target_object.object_name)
         normalized_term_id = term_id.strip()
+        original_content = ""
         _log_enrich_stage(
             stage="start",
             status="started",
@@ -219,22 +220,6 @@ class DocumentEnrichMixin:
             term_id=normalized_term_id,
             details={"scope_count": len(normalized_scope_codes)},
         )
-        if not normalized_scope_codes:
-            return _log_and_skip(
-                reason="object_scope must contain at least one object",
-                base_id=base_id,
-                object_code=normalized_object_code,
-                term_id=normalized_term_id,
-                total_started=total_started,
-            )
-        if not normalized_object_code:
-            return _log_and_skip(
-                reason="object_code must not be blank",
-                base_id=base_id,
-                object_code=normalized_object_code,
-                term_id=normalized_term_id,
-                total_started=total_started,
-            )
         if not normalized_term_id:
             return _log_and_skip(
                 reason="term_id must not be blank",
@@ -260,6 +245,7 @@ class DocumentEnrichMixin:
                     term_id=normalized_term_id,
                     total_started=total_started,
                 )
+            original_content = original.content
             if not original.content.strip():
                 return _log_and_skip(
                     reason=f"document content is empty: term_id={normalized_term_id}",
@@ -267,6 +253,7 @@ class DocumentEnrichMixin:
                     object_code=normalized_object_code,
                     term_id=normalized_term_id,
                     total_started=total_started,
+                    enriched_content=original_content,
                 )
             _log_enrich_stage(
                 stage=current_stage,
@@ -277,6 +264,25 @@ class DocumentEnrichMixin:
                 elapsed_ms=_elapsed_ms(stage_started),
                 details={"content_length": len(original.content)},
             )
+
+            if not normalized_scope_codes:
+                return _log_and_skip(
+                    reason="object_scope must contain at least one object",
+                    base_id=base_id,
+                    object_code=normalized_object_code,
+                    term_id=normalized_term_id,
+                    total_started=total_started,
+                    enriched_content=original_content,
+                )
+            if not normalized_object_code:
+                return _log_and_skip(
+                    reason="object_code must not be blank",
+                    base_id=base_id,
+                    object_code=normalized_object_code,
+                    term_id=normalized_term_id,
+                    total_started=total_started,
+                    enriched_content=original_content,
+                )
 
             current_stage = "load_object_definition"
             stage_started = perf_counter()
@@ -291,6 +297,7 @@ class DocumentEnrichMixin:
                     object_code=normalized_object_code,
                     term_id=normalized_term_id,
                     total_started=total_started,
+                    enriched_content=original_content,
                 )
 
             object_relation_definitions = _object_relation_definitions(object_detail)
@@ -397,6 +404,7 @@ class DocumentEnrichMixin:
                     object_code=normalized_object_code,
                     term_id=normalized_term_id,
                     total_started=total_started,
+                    enriched_content=original_content,
                 )
 
             current_stage = "build_prompt"
@@ -528,6 +536,7 @@ class DocumentEnrichMixin:
             return DocumentEnrichResult(
                 status=DocumentEnrichStatus.FAILED,
                 exceptionInfo=f"{type(exc).__name__}: {exc}",
+                enrichedContent=original_content,
             )
 
     async def _generate_enriched_document(
@@ -1258,6 +1267,7 @@ def _log_and_skip(
     object_code: str,
     term_id: str,
     total_started: float,
+    enriched_content: str = "",
 ) -> DocumentEnrichResult:
     _log_enrich_stage(
         stage="complete",
@@ -1268,11 +1278,12 @@ def _log_and_skip(
         elapsed_ms=_elapsed_ms(total_started),
         details={"reason": reason},
     )
-    return _skipped(reason)
+    return _skipped(reason, enriched_content=enriched_content)
 
 
-def _skipped(reason: str) -> DocumentEnrichResult:
+def _skipped(reason: str, *, enriched_content: str = "") -> DocumentEnrichResult:
     return DocumentEnrichResult(
         status=DocumentEnrichStatus.SKIPPED,
         exceptionInfo=reason,
+        enrichedContent=enriched_content,
     )

@@ -74,6 +74,11 @@ class QueryRelatedDocumentObjectsRequest(_AliasedModel):
     term_id: str = Field(alias="termId", min_length=1)
     page_index: int = Field(default=1, alias="pageIndex", ge=1)
     page_size: int = Field(default=20, alias="pageSize", ge=1, le=200)
+    object_codes: list[str] = Field(default=[], alias="objectCodes")
+    # direction: "outgoing", "incoming", or "both"(default).
+    # depth: Recursion depth(1 = direct only).
+    direction: str = Field(default="both", alias="direction")
+    depth: int = Field(default=1, alias="depth")
 
     @field_validator("term_id")
     @classmethod
@@ -184,7 +189,34 @@ class SearchDocumentFragmentsRequest(_AliasedModel):
         return value
 
 
+class DocumentAsyncProcessingRequest(_AliasedModel):
+    kb_resource_ids: tuple[str, ...] = Field(alias="kbResourceIds", min_length=1)
+    object_codes: tuple[str, ...] = Field(alias="objectCodes", min_length=1)
+    model_config_payload: dict[str, Any] = Field(alias="modelConfig")
+
+    @field_validator("kb_resource_ids", "object_codes", mode="before")
+    @classmethod
+    def _normalize_processing_scope(cls, value: object) -> tuple[str, ...]:
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("must be an array")
+        normalized = tuple(dict.fromkeys(str(item).strip() for item in value))
+        if not normalized or any(not item for item in normalized):
+            raise ValueError("must not contain blank values")
+        return normalized
+
+
+class DocumentAsyncProcessingAccepted(_AliasedModel):
+    session_id: str = Field(alias="sessionId")
+    task_type: str = Field(alias="taskType")
+    accepted: bool = True
+
+
 class DocumentFragmentItem(_AliasedModel):
+    term_id: str = Field(default="", alias="termId")
+    term_code: str = Field(default="", alias="termCode")
+    term_name: str = Field(default="", alias="termName")
+    object_code: str = Field(default="", alias="objectCode")
+    kb_code: str = Field(default="", alias="kbCode")
     kn_code: str = Field(default="", alias="knCode")
     file_path: str = Field(default="", alias="filePath")
     chunk_no: int | None = Field(default=None, alias="chunkNo")

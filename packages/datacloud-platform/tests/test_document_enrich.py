@@ -28,6 +28,7 @@ from datacloud_platform.models.document import (
 
 BASE_ID = "base-1"
 TARGET_TERM_ID = "term-target"
+ORIGINAL_CONTENT = "# 客户增长计划\n\n客户增长计划聚焦续约和渠道协同。"
 
 
 def test_remove_leading_thinking_keeps_only_final_document() -> None:
@@ -95,7 +96,7 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                 termId=TARGET_TERM_ID,
                 kbResourceId="kb-1",
                 filePath="/customers/acme.md",
-                content="# 客户增长计划\n\n客户增长计划聚焦续约和渠道协同。",
+                content=ORIGINAL_CONTENT,
             ),
             "term-partner-b": DocumentContentResult(
                 termId="term-partner-b",
@@ -388,7 +389,7 @@ async def test_enrich_uses_labelled_bounded_evidence_and_relation_fallback(
 
 
 @pytest.mark.asyncio
-async def test_enrich_skips_invalid_scope_without_retrieval() -> None:
+async def test_enrich_loads_original_before_skipping_invalid_scope() -> None:
     platform = FakeDocumentEnrichPlatform()
 
     result = await platform.enrich(
@@ -400,8 +401,8 @@ async def test_enrich_skips_invalid_scope_without_retrieval() -> None:
 
     assert result.status is DocumentEnrichStatus.SKIPPED
     assert result.exception_info == "object_scope must contain at least one object"
-    assert result.enriched_content == ""
-    assert platform.loaded_term_ids == []
+    assert result.enriched_content == ORIGINAL_CONTENT
+    assert platform.loaded_term_ids == [TARGET_TERM_ID]
 
 
 @pytest.mark.asyncio
@@ -419,6 +420,7 @@ async def test_enrich_skips_when_target_object_detail_is_missing() -> None:
     assert result.exception_info == (
         "object detail not found: base_id=base-1 object_code=missing-object"
     )
+    assert result.enriched_content == ORIGINAL_CONTENT
     assert platform.requested_object_codes == ["missing-object"]
     assert platform.messages == []
 
@@ -436,7 +438,7 @@ async def test_enrich_returns_failed_status_and_exception_information() -> None:
 
     assert result.status is DocumentEnrichStatus.FAILED
     assert result.exception_info == "RuntimeError: model unavailable"
-    assert result.enriched_content == ""
+    assert result.enriched_content == ORIGINAL_CONTENT
 
 
 @pytest.mark.asyncio
@@ -472,3 +474,4 @@ async def test_enrich_rejects_output_that_does_not_follow_strict_format() -> Non
     assert result.exception_info == (
         "ValueError: LLM output must start with YAML front matter"
     )
+    assert result.enriched_content == ORIGINAL_CONTENT

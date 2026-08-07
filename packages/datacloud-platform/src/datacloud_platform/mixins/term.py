@@ -36,6 +36,12 @@ class TermMixin(TermSyncHandler):
     ) -> dict[str, Any]:
         return self._term_for(base_id).search_terms_batch(**kwargs)
 
+    def search_terms_by_labels(
+        self: _HasTermBackend, base_id: str, **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        """按 term_tags 纯标签过滤术语，不触发文本检索。"""
+        return self._term_for(base_id).search_terms_by_labels(**kwargs)
+
     def enumerate_object_instances(
         self: _HasTermBackend,
         base_id: str,
