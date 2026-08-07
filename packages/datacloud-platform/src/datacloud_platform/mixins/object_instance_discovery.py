@@ -256,6 +256,50 @@ class ObjectInstanceDiscoveryMixin:
         )
         await self.save_or_update_object_files(base_id, object_files=[object_file])
 
+    def _establish_mention_relation(
+        self: _ObjectInstanceDiscoveryPlatform,
+        *,
+        base_id: str,
+        source_term_id: str,
+        target_term_id: str,
+    ) -> bool:
+        """⑧ 建立「提及」关系（源→目标，单向、幂等）。
+
+        先按源实例 + 关键词「提及」查重；已存在同源同目标的提及关系则跳过，
+        否则创建 camelCase 三字段关系。方向固定为 源=输入实例 → 目标=发现实例，
+        不建反向。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            source_term_id: 输入实例 term_id（关系源）。
+            target_term_id: 发现实例 term_id（关系目标）。
+
+        Returns:
+            True=本次创建了关系；False=关系已存在（跳过）。
+
+        Raises:
+            list/create 失败时原样上抛（无降级）。
+        """
+        page = self.list_term_relations(
+            base_id, source_term_id=source_term_id, keyword="提及"
+        )
+        for row in _relation_items(page):
+            relation_name = str(
+                row.get("relation_name") or row.get("relationName") or ""
+            )
+            target = str(row.get("target_term_id") or row.get("targetTermId") or "")
+            if relation_name == "提及" and target == target_term_id:
+                return False
+        self.create_term_relation(
+            base_id,
+            relation={
+                "sourceTermId": source_term_id,
+                "targetTermId": target_term_id,
+                "relationName": "提及",
+            },
+        )
+        return True
+
 
 def _extract_written_term_id(action_result: dict[str, Any]) -> str:
     """⑥ term_id 强校验：从 write action 响应中提取 records[0] 的 term_id。
@@ -287,3 +331,9 @@ def _extract_written_term_id(action_result: dict[str, Any]) -> str:
             "write action response is missing term_id"
         )
     return term_id
+
+
+def _relation_items(page: dict[str, Any]) -> list[dict[str, Any]]:
+    """从 list_term_relations 响应中提取关系记录行（兼容 data/items/records）。"""
+    rows = page.get("data") or page.get("items") or page.get("records") or []
+    return [row for row in rows if isinstance(row, dict)]

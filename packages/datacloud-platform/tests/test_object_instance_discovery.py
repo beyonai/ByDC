@@ -395,6 +395,93 @@ class TestRegisterObjectFile:
 
 
 # ============================================================================
+# ⑧ 「提及」关系（源→目标，单向幂等）
+# ============================================================================
+
+
+class TestEstablishMentionRelation:
+    def test_existing_relation_skips_create(self) -> None:
+        platform = _FakePlatform()
+        platform.relations = [
+            {
+                "relation_name": "提及",
+                "source_term_id": "term-input",
+                "target_term_id": "term-new-1",
+            }
+        ]
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is False
+        assert platform.created_relations == []
+        assert platform.calls[-1][0] == "list_term_relations"
+
+    def test_missing_relation_creates_camel_case(self) -> None:
+        platform = _FakePlatform()
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is True
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "term-new-1",
+                "relationName": "提及",
+            }
+        ]
+
+    def test_same_name_different_target_still_creates(self) -> None:
+        platform = _FakePlatform()
+        platform.relations = [
+            {
+                "relation_name": "提及",
+                "source_term_id": "term-input",
+                "target_term_id": "term-other",
+            }
+        ]
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is True
+        assert len(platform.created_relations) == 1
+        assert platform.created_relations[0]["targetTermId"] == "term-new-1"
+
+    def test_camel_case_rows_are_matched(self) -> None:
+        platform = _FakePlatform()
+        platform.relations = [{"relationName": "提及", "targetTermId": "term-new-1"}]
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is False
+
+    def test_only_source_to_target_direction(self) -> None:
+        platform = _FakePlatform()
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is True
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "term-new-1",
+                "relationName": "提及",
+            }
+        ]
+        relation_calls = [c for c in platform.calls if c[0] == "create_term_relation"]
+        assert len(relation_calls) == 1
+
+
+# ============================================================================
 # 平台接线
 # ============================================================================
 
