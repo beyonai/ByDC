@@ -524,6 +524,33 @@ class _RpcFakePlatform:
         raise RuntimeError("boom")
 
 
+class _RpcComboPlatform(ObjectInstanceDiscoveryMixin):
+    """组合平台：走真实 mixin 主流程（① 校验 + ③④ 占位短路），供 RPC 层测试。"""
+
+    def __init__(self, behavior: str = "not_implemented") -> None:
+        self.behavior = behavior
+
+    async def get_document_content_by_term_id(
+        self, base_id: str, *, term_id: str
+    ) -> DocumentContentResult:
+        if self.behavior == "not_found":
+            raise KeyError(f"term not found: {term_id}")
+        return _make_document(term_id)
+
+    def list_term_relations(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        return {"data": []}
+
+    def create_term_relation(
+        self, base_id: str, *, relation: dict[str, Any]
+    ) -> dict[str, Any]:
+        return {"relationId": "rel-x"}
+
+    async def save_or_update_object_files(
+        self, base_id: str, *, object_files: list[dict[str, Any]]
+    ) -> None:
+        return None
+
+
 def _rpc_client(platform: Any) -> TestClient:
     app = FastAPI()
     app.include_router(create_rpc_router(platform=platform))
@@ -563,3 +590,175 @@ class TestDiscoverRpc:
         body = resp.json()
         assert body["code"] == 400
         assert "X-Session-Id" in body["message"]
+
+
+# ============================================================================
+# RPC 级错误码映射（T4 全套：404/400/403/500）
+# ============================================================================
+
+
+def _discover_rpc_post(client: TestClient, **headers: str) -> Any:
+    return client.post(
+        "/api/v1/rpc/search/discoverObjectInstancesUnstructured",
+        json={
+            "params": {
+                "base_id": BASE_ID,
+                "instance_id": "term-input",
+                "object_codes": ["by_opportunity"],
+            }
+        },
+        headers=headers,
+    )
+
+
+class TestDiscoverRpcErrorMapping:
+    def test_missing_term_returns_404(self) -> None:
+        client = _rpc_client(_RpcFakePlatform("not_found"))
+        body = _discover_rpc_post(client, **{"X-Session-Id": "s1"}).json()
+        assert body["code"] == 404
+        assert "term not found" in body["message"]
+
+    def test_incomplete_kb_location_returns_400(self) -> None:
+        client = _rpc_client(_RpcFakePlatform("invalid_params"))
+        body = _discover_rpc_post(client, **{"X-Session-Id": "s1"}).json()
+        assert body["code"] == 400
+        assert "incomplete" in body["message"]
+
+    def test_permission_denied_returns_403(self) -> None:
+        client = _rpc_client(_RpcFakePlatform("permission_denied"))
+        body = _discover_rpc_post(client, **{"X-Session-Id": "s1"}).json()
+        assert body["code"] == 403
+
+    def test_unexpected_error_returns_500(self) -> None:
+        client = _rpc_client(_RpcFakePlatform("internal_error"))
+        body = _discover_rpc_post(client, **{"X-Session-Id": "s1"}).json()
+        assert body["code"] == 500
+
+    def test_missing_object_codes_returns_400(self) -> None:
+        """RPC 路径走真实 mixin ① 校验：空 object_codes → ValueError → 400。"""
+        platform = _RpcComboPlatform()
+        client = _rpc_client(platform)
+        resp = client.post(
+            "/api/v1/rpc/search/discoverObjectInstancesUnstructured",
+            json={
+                "params": {
+                    "base_id": BASE_ID,
+                    "instance_id": "term-input",
+                    "object_codes": [],
+                }
+            },
+            headers={"X-Session-Id": "s1"},
+        )
+        body = resp.json()
+        assert body["code"] == 400
+        assert "object_codes" in body["message"]
+
+
+# ============================================================================
+# T4 串联：mock ③④ 占位方法后验证 ⑤⑥⑦⑧ 全链路
+# ============================================================================
+
+
+class TestDiscoverOrchestration:
+    @pytest.mark.asyncio
+    async def test_full_flow_orchestrates_create_register_relation(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: [
+                {
+                    "term_id": "term-existing-1",
+                    "term_name": "已有实例",
+                    "term_code": "existing-1",
+                    "term_type_code": "by_opportunity",
+                    "file_name": "/by_opportunity/已有实例.md",
+                    "kb_resource_id": "kr1",
+                    "kb_id": "kb1",
+                }
+            ],
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_new_object_instances",
+            lambda *a, **k: [
+                {
+                    "term_name": "新实例",
+                    "object_code": "by_opportunity",
+                    "evidence": "证据片段",
+                }
+            ],
+        )
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-1"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        # 已有在前、新在后
+        assert [h.instance_id for h in result.items] == [
+            "term-existing-1",
+            "term-new-1",
+        ]
+        existing, new = result.items
+        assert existing.is_new is False
+        assert existing.instance_name == "已有实例"
+        assert new.is_new is True
+        assert new.instance_name == "新实例"
+        assert new.relation_name == "提及"
+        assert new.evidence == "证据片段"
+        # 登记先于建关系
+        call_names = [c[0] for c in platform.calls]
+        assert call_names.index("save_or_update_object_files") < call_names.index(
+            "create_term_relation"
+        )
+        # 关系：源=输入实例、目标=新实例（仅一次，无反向）
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "term-new-1",
+                "relationName": "提及",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_full_flow_without_existing_only_creates_new(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: [],
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_new_object_instances",
+            lambda *a, **k: [{"term_name": "新实例A", "object_code": "by_opportunity"}],
+        )
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-1"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        assert [h.instance_id for h in result.items] == ["term-new-1"]
+        assert result.items[0].is_new is True

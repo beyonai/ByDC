@@ -98,28 +98,90 @@ class ObjectInstanceDiscoveryMixin:
         )
 
         # ③ 已有实例发现（TODO 占位 → NotImplementedError）
-        self._discover_existing_object_instances(
+        existing = self._discover_existing_object_instances(
             base_id, content=document.content, object_codes=object_codes
         )
 
-        # ④ 新实例发现（TODO 占位 → NotImplementedError，③ 短路后不可达）
-        self._discover_new_object_instances(
+        # ④ 新实例发现（TODO 占位 → NotImplementedError）
+        candidates = self._discover_new_object_instances(
             base_id, content=document.content, object_codes=object_codes
         )
 
-        # ⑤⑥⑦⑧ 串联（T2/T3/T4 实现）：新实例创建 → term_id 强校验 → 文件登记 → 提及关系
-        return ObjectInstanceDiscoveryResult(items=[])
+        # ⑤⑥⑦⑧ 串联：已有在前、新在后；新实例逐项 创建 → 强校验 → 登记 → 提及关系
+        items: list[ObjectInstanceDiscoveryHit] = [
+            _build_existing_hit(row) for row in existing
+        ]
+        for candidate in candidates:
+            items.append(
+                await self._create_new_instance_flow(
+                    base_id=base_id,
+                    source_term_id=instance_id,
+                    candidate=candidate,
+                    session_id=session_id,
+                )
+            )
+        return ObjectInstanceDiscoveryResult(items=items)
 
     async def _create_new_instance_flow(
-        self: _ObjectInstanceDiscoveryPlatform,
+        self: Any,
         *,
         base_id: str,
         source_term_id: str,
         candidate: dict[str, Any],
         session_id: str,
     ) -> ObjectInstanceDiscoveryHit:
-        """⑤⑥⑦⑧ 新实例创建链路：创建 → 强校验 → 登记 → 提及关系（T4 串联实现）。"""
-        raise NotImplementedError("new instance creation flow is not implemented")
+        """⑤⑥⑦⑧ 新实例创建链路：创建 → 强校验 → 登记 → 提及关系。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            source_term_id: 输入实例 term_id（提及关系源）。
+            candidate: 新实例候选 ``{"term_name", "object_code", "evidence"}``。
+            session_id: 会话 ID（透传文件登记）。
+
+        Returns:
+            新实例发现结果项（is_new=True，relation_name="提及"）。
+
+        Raises:
+            ValueError: 候选缺 object_code/term_name。
+            ObjectInstanceWriteMissingTermIdError: write 响应缺 term_id。
+        """
+        object_code = str(candidate["object_code"]).strip()
+        term_name = str(candidate["term_name"]).strip()
+        if not object_code or not term_name:
+            raise ValueError("discovered candidate must have object_code and term_name")
+        evidence = candidate.get("evidence")
+        evidence_text = str(evidence) if evidence is not None else None
+
+        term_id = await self._create_discovered_instance(
+            base_id=base_id,
+            object_code=object_code,
+            term_name=term_name,
+            session_id=session_id,
+        )
+        await self._register_object_file(
+            base_id=base_id,
+            object_code=object_code,
+            term_name=term_name,
+            term_id=term_id,
+            session_id=session_id,
+            action_result={"records": [{"term_id": term_id}]},
+        )
+        self._establish_mention_relation(
+            base_id=base_id,
+            source_term_id=source_term_id,
+            target_term_id=term_id,
+        )
+        return ObjectInstanceDiscoveryHit(
+            instance_id=term_id,
+            instance_code=term_name,
+            instance_name=term_name,
+            object_code=object_code,
+            file_name=f"/{object_code}/{term_name}.md",
+            kb_resource_id=None,
+            kb_id=None,
+            is_new=True,
+            evidence=evidence_text,
+        )
 
     async def _create_discovered_instance(
         self: Any,
@@ -337,3 +399,23 @@ def _relation_items(page: dict[str, Any]) -> list[dict[str, Any]]:
     """从 list_term_relations 响应中提取关系记录行（兼容 data/items/records）。"""
     rows = page.get("data") or page.get("items") or page.get("records") or []
     return [row for row in rows if isinstance(row, dict)]
+
+
+def _build_existing_hit(row: dict[str, Any]) -> ObjectInstanceDiscoveryHit:
+    """把已有实例候选行组装为发现结果项（is_new=False）。
+
+    候选行字段与 ObjectInstanceHit 对齐：
+    term_id / term_code / term_name / term_type_code / file_name / kb_resource_id / kb_id
+    （同时兼容 camelCase 变体）。
+    """
+    return ObjectInstanceDiscoveryHit(
+        instance_id=str(row["term_id"]),
+        instance_code=str(row.get("term_code") or row.get("termCode") or ""),
+        instance_name=str(row.get("term_name") or row.get("termName") or ""),
+        object_code=str(row.get("term_type_code") or row.get("termTypeCode") or ""),
+        file_name=str(row.get("file_name") or row.get("fileName") or "") or None,
+        kb_resource_id=str(row.get("kb_resource_id") or row.get("kbResourceId") or "")
+        or None,
+        kb_id=str(row.get("kb_id") or row.get("kbId") or "") or None,
+        is_new=False,
+    )
