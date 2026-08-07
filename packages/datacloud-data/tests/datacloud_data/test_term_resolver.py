@@ -1,5 +1,8 @@
 """TermResolver 测试。"""
 
+from unittest.mock import MagicMock
+
+from datacloud_data_sdk.exceptions import TermNotFoundError
 from datacloud_data_sdk.ontology.models import OntologyField
 from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_data_sdk.plan.models import ObjectViewField, ObjectViewFunctionParam
@@ -101,6 +104,36 @@ def test_resolve_fields_resolves_term_bound_values_list() -> None:
     values = {"status": ["待办", "已完成"]}
     result = resolver.resolve_fields(values, field_specs)
     assert result["status"] == ["TODO", "DONE"]
+
+
+def test_resolve_fields_ignores_invalid_term_values_when_enabled() -> None:
+    """宽松模式下标量无效值置空，列表只保留有效术语。"""
+    loader = MagicMock()
+    values = {"待办": "TODO", "已完成": "DONE"}
+
+    def resolve_value(term_set: str, value: str, **_: object) -> str:
+        if value not in values:
+            raise TermNotFoundError(term_set, value)
+        return values[value]
+
+    loader.resolve_value.side_effect = resolve_value
+    resolver = TermResolver(term_loader=loader)
+    field_specs = [
+        ObjectViewField(name="status", type="string", term_set="status.code"),
+        ObjectViewField(name="statusList", type="array", term_set="status.code"),
+    ]
+
+    result = resolver.resolve_fields(
+        {
+            "status": "不存在",
+            "statusList": ["待办", "不存在", "已完成"],
+        },
+        field_specs,
+        ignore_invalid_terms=True,
+    )
+
+    assert result["status"] is None
+    assert result["statusList"] == ["TODO", "DONE"]
 
 
 def test_resolve_filter_values_resolves_term_bound_value() -> None:

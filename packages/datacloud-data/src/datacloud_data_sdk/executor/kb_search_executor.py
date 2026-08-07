@@ -250,6 +250,8 @@ class KbSearchExecutor:
         arguments: dict[str, Any],
     ) -> dict[str, Any]:
         """Execute write_* action by delegating to a knowledge write backend."""
+        arguments = dict(arguments)
+        ignore_invalid_terms = arguments.pop("ignoreInvalidTerms", False) is True
         cls = self._loader.get_ontology_class(object_code)
         kb_configs = getattr(self._loader._config, "kb_source_configs", None)
         configured_backend = getattr(self._loader._config, "kb_search_backend", None)
@@ -308,7 +310,11 @@ class KbSearchExecutor:
                     meta_extra=_standard_action_meta(cls, datasource_alias, query),
                 )
 
-            labels = self._resolve_label_terms(item.get("labels") or {}, cls)
+            labels = self._resolve_label_terms(
+                item.get("labels") or {},
+                cls,
+                ignore_invalid_terms=ignore_invalid_terms,
+            )
             labels = self._filter_labels_to_fields(labels, cls)
             markdown_file_path = _to_markdown_file_path(file_path, self._get_kb_directory(cls))
             labels = self._inject_primary_key_label(labels, cls, markdown_file_path)
@@ -414,6 +420,8 @@ class KbSearchExecutor:
         融合更新：仅将融合后文件写入知识库；原融合文件和现整理文件路径仅作来源引用记录，
         不会被修改或重新写入。调用方负责提供融合后的 content，此方法不做内容合并计算。
         """
+        arguments = dict(arguments)
+        ignore_invalid_terms = arguments.pop("ignoreInvalidTerms", False) is True
         cls = self._loader.get_ontology_class(object_code)
         kb_configs = getattr(self._loader._config, "kb_source_configs", None)
         configured_backend = getattr(self._loader._config, "kb_search_backend", None)
@@ -475,7 +483,11 @@ class KbSearchExecutor:
             )
 
         # labels 只应用于融合后文件
-        merged_labels = self._resolve_label_terms(arguments.get("labels") or {}, cls)
+        merged_labels = self._resolve_label_terms(
+            arguments.get("labels") or {},
+            cls,
+            ignore_invalid_terms=ignore_invalid_terms,
+        )
         markdown_file_path = _to_markdown_file_path(merged_path, kb_directory)
         merged_labels = self._inject_primary_key_label(merged_labels, cls, markdown_file_path)
 
@@ -1499,27 +1511,24 @@ class KbSearchExecutor:
         field_codes.update(PROCESSING_METADATA_FIELDS)
         return {k: v for k, v in labels.items() if k in field_codes}
 
-    def _resolve_label_terms(self, labels: Any, cls: Any) -> dict[str, Any]:
+    def _resolve_label_terms(
+        self,
+        labels: Any,
+        cls: Any,
+        *,
+        ignore_invalid_terms: bool = False,
+    ) -> dict[str, Any]:
         if not isinstance(labels, dict):
             return {}
         term_loader = getattr(self._loader._config, "term_loader", None)
         if term_loader is None:
             return dict(labels)
 
-        field_map = {field.field_code: field for field in getattr(cls, "fields", [])}
-        resolved = dict(labels)
-        resolver = TermResolver(term_loader)
-        for field_code, value in labels.items():
-            field = field_map.get(str(field_code))
-            if field is None or not getattr(field, "term_set", None):
-                continue
-            resolved_filter = resolver.resolve_filter_values(
-                [{"field": field.field_code, "op": "eq", "value": value}],
-                [field],
-            )
-            if isinstance(resolved_filter, list) and resolved_filter:
-                resolved[field_code] = resolved_filter[0].get("value")
-        return resolved
+        return TermResolver(term_loader).resolve_fields(
+            dict(labels),
+            list(getattr(cls, "fields", [])),
+            ignore_invalid_terms=ignore_invalid_terms,
+        )
 
     @staticmethod
     def _normalize_write_items(arguments: dict[str, Any]) -> list[dict[str, Any]]:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import re
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import asdict, is_dataclass
@@ -18,10 +19,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
 from typing import Any, Protocol
 
+from yaml import safe_dump, safe_load
+
 from datacloud_platform.models.document import (
     DocumentAsyncProcessingRequest,
     DocumentContentResult,
     DocumentEnrichObjectScope,
+    DocumentEnrichRelation,
     DocumentEnrichStatus,
     DocumentFragmentItem,
     DocumentFragmentResult,
@@ -54,6 +58,9 @@ class _DocumentPlatform(Protocol):
     def get_object_detail(
         self, base_id: str, object_code: str
     ) -> dict[str, Any] | None: ...
+    def get_term_detail(
+        self, base_id: str, *, library_id: str, term_id: str
+    ) -> Any: ...
     async def search_knowledge_item_metadata(
         self, base_id: str, *, payload: dict[str, Any]
     ) -> MetadataSearchPage: ...
@@ -817,19 +824,30 @@ async def _process_one_document(
                     enrich_result.status
                 )
                 action_result: dict[str, Any] | None = None
+                action_labels: dict[str, Any] = {}
                 if content.strip():
+                    content = _append_related_docs_block(
+                        platform=platform,
+                        base_id=base_id,
+                        content=content,
+                        relations=enrich_result.relations,
+                        object_scope_by_code=enrich_scope_by_code,
+                    )
+                    content_labels = _extract_front_matter_labels(content)
+                    action_labels = {
+                        **content_labels,
+                        "dc_status": processing_status.value,
+                        "dc_failure_reason": enrich_result.exception_info,
+                        "dc_failure_count": document.failure_count
+                        + int(enrich_result.status is DocumentEnrichStatus.FAILED),
+                        "dc_last_organized_at": datetime.now(UTC).isoformat(),
+                    }
                     action_result = await invoke_object_write_action(
                         platform=platform,
                         base_id=base_id,
                         object_code=target_object.object_code,
                         content=content,
-                        labels={
-                            "dc_status": processing_status.value,
-                            "dc_failure_reason": enrich_result.exception_info,
-                            "dc_failure_count": document.failure_count
-                            + int(enrich_result.status is DocumentEnrichStatus.FAILED),
-                            "dc_last_organized_at": datetime.now(UTC).isoformat(),
-                        },
+                        labels=action_labels,
                         file_description=f"{document.term_name}富化文档",
                         source_path=document.file_path,
                     )
@@ -841,11 +859,8 @@ async def _process_one_document(
                             document=document,
                             object_scope=target_object,
                             status=processing_status,
-                            ext_content={
-                                "enrichStatus": enrich_result.status.value,
-                                "error": enrich_result.exception_info,
-                                "actionResult": action_result,
-                            },
+                            labels=action_labels,
+                            action_result=action_result,
                         )
                     ],
                 )
@@ -878,7 +893,6 @@ async def _process_one_document(
                                 document=document,
                                 object_scope=target_object,
                                 status=DocumentProcessingStatus.ORGANIZATION_RETRY,
-                                ext_content={"error": str(exc)},
                             )
                         ],
                     )
@@ -905,16 +919,54 @@ def _build_object_file_status(
     document: DocumentObjectItem,
     object_scope: DocumentEnrichObjectScope,
     status: DocumentProcessingStatus,
-    ext_content: Mapping[str, Any] | None = None,
+    labels: Mapping[str, Any] | None = None,
+    action_result: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    labels = labels or {}
+    records = action_result.get("records") if action_result else None
+    first_record = (
+        records[0]
+        if isinstance(records, list) and records and isinstance(records[0], Mapping)
+        else {}
+    )
+    fallback_file_name = PurePosixPath(document.file_path).name
+    file_name = str(
+        first_record.get("fileName")
+        or first_record.get("file_name")
+        or fallback_file_name
+    )
+    kb_directory = object_scope.kb_directory.strip()
+    if kb_directory and not kb_directory.startswith("/"):
+        kb_directory = f"/{kb_directory}"
+    fallback_file_path = str(
+        PurePosixPath("/" + kb_directory.strip("/")) / file_name
+    )
+    file_path = str(
+        first_record.get("filePath")
+        or first_record.get("file_path")
+        or fallback_file_path
+    )
     return {
         "sessionId": session_id,
         "objectName": object_scope.object_name,
         "objectCode": object_scope.object_code,
-        "fileName": PurePosixPath(document.file_path).name,
-        "version": "1",
+        "fileName": file_name,
+        "filePath": file_path,
+        "version": str(labels.get("version") or "1"),
         "statusCd": status.value,
-        "extContent": json.dumps(ext_content or {}, ensure_ascii=False, default=str),
+        "extContent": json.dumps(
+            {
+                "kb_resource_id": object_scope.kb_resource_id,
+                "kb_id": object_scope.kb_id,
+                "kb_directory": kb_directory,
+                "term_id": str(
+                    first_record.get("term_id")
+                    or first_record.get("termId")
+                    or document.term_id
+                ),
+            },
+            ensure_ascii=False,
+        ),
     }
 
 
@@ -931,10 +983,147 @@ def _resolve_document_object_scope(
     object_name = str(detail.get("objectName") or detail.get("object_name") or "")
     if not object_name:
         raise KeyError(f"object name not found: {object_code}")
+    ext_property = detail.get("extProperty") or detail.get("ext_property") or {}
+    if not isinstance(ext_property, Mapping):
+        ext_property = {}
     return DocumentEnrichObjectScope(
         objectCode=resolved_code,
         objectName=object_name,
+        kbResourceId=str(
+            ext_property.get("kb_resource_id") or ext_property.get("kbResourceId") or ""
+        ),
+        kbId=str(ext_property.get("kb_id") or ext_property.get("kbId") or ""),
+        kbDirectory=str(
+            ext_property.get("kb_directory") or ext_property.get("kbDirectory") or ""
+        ),
     )
+
+
+def _append_related_docs_block(
+    *,
+    platform: Any,
+    base_id: str,
+    content: str,
+    relations: tuple[DocumentEnrichRelation, ...],
+    object_scope_by_code: Mapping[str, DocumentEnrichObjectScope],
+) -> str:
+    """根据目标术语类型定位对象，并生成知识库可识别的 ``related_docs`` 块。"""
+    if not relations:
+        return content
+
+    related_docs: list[dict[str, str]] = []
+    target_type_by_term_id: dict[str, str] = {}
+    resolved_scopes = dict(object_scope_by_code)
+    for relation in relations:
+        target_term_id = relation.target_term_id.strip()
+        if not target_term_id:
+            raise KeyError("target_term_id not found for enriched relation")
+        target_object_code = target_type_by_term_id.get(target_term_id)
+        if target_object_code is None:
+            target_detail = platform.get_term_detail(
+                base_id,
+                library_id="",
+                term_id=target_term_id,
+            )
+            target_object_code = _term_type_code_from_detail(
+                target_detail,
+                target_term_id=target_term_id,
+            )
+            target_type_by_term_id[target_term_id] = target_object_code
+
+        target_scope = resolved_scopes.get(target_object_code)
+        if target_scope is None:
+            target_scope = _resolve_document_object_scope(
+                platform=platform,
+                base_id=base_id,
+                object_code=target_object_code,
+            )
+            resolved_scopes[target_object_code] = target_scope
+        if not target_scope.kb_resource_id:
+            raise KeyError(
+                f"kb_resource_id not found for relation target object: "
+                f"{target_object_code}"
+            )
+        if not target_scope.kb_directory:
+            raise KeyError(
+                f"kb_directory not found for relation target object: "
+                f"{target_object_code}"
+            )
+        file_name = relation.target_instance_name
+        if not file_name.lower().endswith(".md"):
+            file_name += ".md"
+        target_doc_id = str(
+            PurePosixPath("/" + target_scope.kb_directory.strip("/")) / file_name
+        )
+        related_docs.append(
+            {
+                "target_doc_id": target_doc_id,
+                "relation": relation.relation_name,
+                "kb_resource_id": target_scope.kb_resource_id,
+            }
+        )
+
+    yaml_content = safe_dump(
+        {"related_docs": related_docs},
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+    ).strip()
+    yaml_content = yaml_content.replace("related_docs:\n-", "related_docs:\n\n-", 1)
+    return (
+        f"{content.rstrip()}\n\n"
+        f"--- related_docs ---\n\n"
+        f"{yaml_content}\n\n"
+        f"--- related_docs ---"
+    )
+
+
+def _term_type_code_from_detail(detail: Any, *, target_term_id: str) -> str:
+    """从目标术语详情中提取实际对象编码。"""
+    if detail is None:
+        raise KeyError(f"relation target term not found: {target_term_id}")
+    if isinstance(detail, Mapping):
+        raw = detail
+    elif hasattr(detail, "model_dump"):
+        raw = detail.model_dump()
+    elif is_dataclass(detail) and not isinstance(detail, type):
+        raw = asdict(detail)
+    else:
+        raise TypeError("term detail must be a mapping, dataclass, or Pydantic model")
+    target_object_code = str(
+        raw.get("term_type_code")
+        or raw.get("termTypeCode")
+        or raw.get("term_type")
+        or raw.get("termType")
+        or ""
+    ).strip()
+    if not target_object_code:
+        raise KeyError(
+            f"term type not found for relation target term: {target_term_id}"
+        )
+    return target_object_code
+
+
+_FRONT_MATTER_PATTERN = re.compile(
+    r"\A---[ \t]*\r?\n(?P<yaml>.*?)\r?\n---[ \t]*(?:\r?\n|\Z)",
+    re.DOTALL,
+)
+
+
+def _extract_front_matter_labels(content: str) -> dict[str, Any]:
+    """提取富化文档 YAML front matter，并转换为 JSON 兼容的业务标签。"""
+    match = _FRONT_MATTER_PATTERN.match(content)
+    if match is None:
+        return {}
+    parsed = safe_load(match.group("yaml"))
+    if parsed is None:
+        return {}
+    if not isinstance(parsed, Mapping):
+        raise ValueError("document front matter must be a mapping")
+    normalized = json.loads(json.dumps(dict(parsed), ensure_ascii=False, default=str))
+    if not isinstance(normalized, dict):
+        raise ValueError("normalized document front matter must be a mapping")
+    return {str(key): value for key, value in normalized.items()}
 
 
 def _current_result_file_storage() -> Any:
@@ -1298,7 +1487,12 @@ def _to_item(row: dict[str, Any]) -> DocumentObjectItem:
         termId=str(row.get("term_id") or row.get("termId") or ""),
         termName=str(row.get("term_name") or row.get("termName") or ""),
         termCode=str(row.get("term_code") or row.get("termCode") or ""),
-        termTypeCode=str(row.get("term_type") or row.get("term_type_code") or row.get("termTypeCode") or ""),
+        termTypeCode=str(
+            row.get("term_type")
+            or row.get("term_type_code")
+            or row.get("termTypeCode")
+            or ""
+        ),
         filePath=str(
             metadata.get("kb_file_path")
             or metadata.get("file_path")

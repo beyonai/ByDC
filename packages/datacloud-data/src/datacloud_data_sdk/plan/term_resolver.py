@@ -74,16 +74,17 @@ class TermResolver:
         library_id: int | None = None,
         raw_value: Any,
         param_name: str,
+        ignore_invalid_terms: bool = False,
     ) -> Any:
         """将单值或列表术语值解析为标准值。"""
         if not self._term_loader:
             return raw_value
 
-        def _resolve_single(value: Any) -> Any:
+        from datacloud_data_sdk.exceptions import TermResolutionError
+
+        def _resolve_scalar(value: Any) -> Any:
             if _should_skip_term_value(value):
                 return value
-            if isinstance(value, (list, tuple)):
-                return [_resolve_single(item) for item in value]
             value_str = str(value)
             keyword = value_str
             # if term_type == "lookup" else None
@@ -98,9 +99,44 @@ class TermResolver:
                 param_name=param_name,
             )
 
-        return _resolve_single(raw_value)
+        if isinstance(raw_value, (list, tuple)):
+            resolved_items: list[Any] = []
+            for item in raw_value:
+                try:
+                    if isinstance(item, (list, tuple)):
+                        resolved_items.append(
+                            self._resolve_term_value(
+                                term_set=term_set,
+                                term_type=term_type,
+                                term_field=term_field,
+                                dataset_id=dataset_id,
+                                library_id=library_id,
+                                raw_value=item,
+                                param_name=param_name,
+                                ignore_invalid_terms=ignore_invalid_terms,
+                            )
+                        )
+                    else:
+                        resolved_items.append(_resolve_scalar(item))
+                except (TermResolutionError, ValueError):
+                    if not ignore_invalid_terms:
+                        raise
+            return resolved_items
 
-    def resolve(self, action: OntologyAction, params: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return _resolve_scalar(raw_value)
+        except (TermResolutionError, ValueError):
+            if ignore_invalid_terms:
+                return None
+            raise
+
+    def resolve(
+        self,
+        action: OntologyAction,
+        params: dict[str, Any],
+        *,
+        ignore_invalid_terms: bool = False,
+    ) -> dict[str, Any]:
         """
         解析动作参数中的术语
 
@@ -134,31 +170,16 @@ class TermResolver:
                 continue
             param_name = p.param_name or p.param_code
             try:
-                if isinstance(raw, (list, tuple)):
-                    out_list: list[str] = []
-                    for v in raw:
-                        out_list.append(
-                            self._resolve_term_value(
-                                term_set=p.term_set,
-                                term_type=p.term_type,
-                                term_field=p.term_field,
-                                dataset_id=p.dataset_id,
-                                library_id=p.library_id or p.dataset_id,
-                                raw_value=v,
-                                param_name=param_name,
-                            )
-                        )
-                    resolved[p.param_code] = out_list
-                else:
-                    resolved[p.param_code] = self._resolve_term_value(
-                        term_set=p.term_set,
-                        term_type=p.term_type,
-                        term_field=p.term_field,
-                        dataset_id=p.dataset_id,
-                        library_id=p.library_id or p.dataset_id,
-                        raw_value=raw,
-                        param_name=param_name,
-                    )
+                resolved[p.param_code] = self._resolve_term_value(
+                    term_set=p.term_set,
+                    term_type=p.term_type,
+                    term_field=p.term_field,
+                    dataset_id=p.dataset_id,
+                    library_id=p.library_id or p.dataset_id,
+                    raw_value=raw,
+                    param_name=param_name,
+                    ignore_invalid_terms=ignore_invalid_terms,
+                )
             except (TermNotFoundError, TermAmbiguousError):
                 raise
             except ValueError as e:
@@ -170,6 +191,8 @@ class TermResolver:
         self,
         params: dict[str, Any],
         param_specs: list[ObjectViewFunctionParam],
+        *,
+        ignore_invalid_terms: bool = False,
     ) -> dict[str, Any]:
         """对含 term_set 的参数做名称/标签→code/name 解析（供 ObjectViewFunctionParam 使用）。
 
@@ -191,31 +214,16 @@ class TermResolver:
                 continue
             param_name = p.param_name or p.param_code
             try:
-                if isinstance(raw, (list, tuple)):
-                    out_list: list[str] = []
-                    for v in raw:
-                        out_list.append(
-                            self._resolve_term_value(
-                                term_set=p.term_set,
-                                term_type=p.term_type,
-                                term_field=p.term_field,
-                                dataset_id=p.dataset_id,
-                                library_id=p.library_id or p.dataset_id,
-                                raw_value=v,
-                                param_name=param_name,
-                            )
-                        )
-                    resolved[p.param_code] = out_list
-                else:
-                    resolved[p.param_code] = self._resolve_term_value(
-                        term_set=p.term_set,
-                        term_type=p.term_type,
-                        term_field=p.term_field,
-                        dataset_id=p.dataset_id,
-                        library_id=p.library_id or p.dataset_id,
-                        raw_value=raw,
-                        param_name=param_name,
-                    )
+                resolved[p.param_code] = self._resolve_term_value(
+                    term_set=p.term_set,
+                    term_type=p.term_type,
+                    term_field=p.term_field,
+                    dataset_id=p.dataset_id,
+                    library_id=p.library_id or p.dataset_id,
+                    raw_value=raw,
+                    param_name=param_name,
+                    ignore_invalid_terms=ignore_invalid_terms,
+                )
             except (TermNotFoundError, TermAmbiguousError):
                 raise
             except ValueError as e:
@@ -227,6 +235,8 @@ class TermResolver:
         self,
         values: dict[str, Any],
         field_specs: list[ObjectViewField],
+        *,
+        ignore_invalid_terms: bool = False,
     ) -> dict[str, Any]:
         """对含 term_set 的 field 做名称/标签→code/name 解析（供 KB tags 等使用）。"""
         if not self._term_loader:
@@ -234,19 +244,23 @@ class TermResolver:
 
         param_specs = [
             ObjectViewFunctionParam(
-                param_code=f.name,
-                param_name=f.description,
-                param_type=f.type,
+                param_code=getattr(f, "name", getattr(f, "field_code", "")),
+                param_name=getattr(f, "description", "") or getattr(f, "field_name", ""),
+                param_type=getattr(f, "type", getattr(f, "field_type", "STRING")),
                 direction="IN",
-                term_set=f.term_set,
-                term_type=f.term_type,
-                term_field=f.term_field,
-                dataset_id=f.dataset_id,
-                library_id=f.library_id or f.dataset_id,
+                term_set=getattr(f, "term_set", None),
+                term_type=getattr(f, "term_type", None),
+                term_field=getattr(f, "term_field", None),
+                dataset_id=getattr(f, "dataset_id", None),
+                library_id=getattr(f, "library_id", None) or getattr(f, "dataset_id", None),
             )
             for f in field_specs
         ]
-        return self.resolve_params(values, param_specs)
+        return self.resolve_params(
+            values,
+            param_specs,
+            ignore_invalid_terms=ignore_invalid_terms,
+        )
 
     def resolve_filter_values(
         self,

@@ -9,7 +9,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from datacloud_data_sdk.exceptions import KbExecutionError
+from datacloud_data_sdk.exceptions import KbExecutionError, TermNotFoundError
 from datacloud_data_sdk.executor.kb_search_backend import (
     PROCESSING_METADATA_FIELDS,
     HttpKnowledgeSearchBackend,
@@ -41,6 +41,7 @@ class DummyConfig:
     kb_search_backend: Any = None
     kb_backends: dict[str, Any] = field(default_factory=dict)
     default_kb_backend: str | None = None
+    term_loader: Any = None
 
 
 class DummyLoader(OntologyLoader):
@@ -497,6 +498,52 @@ async def test_kb_write_preserves_processing_labels_for_backend() -> None:
     assert response_record["fileName"] == "meeting.md"
     assert response_record["filePath"] == "/Document/meeting.md"
     assert not set(PROCESSING_METADATA_FIELDS).intersection(response_record)
+
+
+@pytest.mark.asyncio
+async def test_kb_write_ignores_only_invalid_label_terms_when_enabled() -> None:
+    backend = CustomSearchBackend()
+    cls = OntologyClass(
+        object_code="Document",
+        object_name="文档",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="documents",
+        fields=[
+            OntologyField(
+                field_code="reviewers",
+                field_name="复核人",
+                field_type="ARRAY",
+                term_set="staff.code",
+            )
+        ],
+    )
+    term_loader = MagicMock()
+    values = {"张三": "E001", "李四": "E002"}
+
+    def resolve_value(term_set: str, value: str, **_: object) -> str:
+        if value not in values:
+            raise TermNotFoundError(term_set, value)
+        return values[value]
+
+    term_loader.resolve_value.side_effect = resolve_value
+    loader = DummyLoader(
+        cls,
+        DummyConfig(kb_search_backend=backend, term_loader=term_loader),
+    )
+
+    await KbSearchExecutor(loader).write(
+        "Document",
+        {
+            "ignoreInvalidTerms": True,
+            "source_path": "/Document/meeting.md",
+            "content": "会议内容",
+            "labels": {"reviewers": ["张三", "不存在", "李四"]},
+        },
+    )
+
+    assert backend.write_request is not None
+    assert backend.write_request.labels == {"reviewers": ["E001", "E002"]}
 
 
 @pytest.mark.asyncio

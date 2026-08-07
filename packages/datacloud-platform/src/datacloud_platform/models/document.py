@@ -290,6 +290,9 @@ class DocumentEnrichObjectScope(_AliasedModel):
 
     object_code: str = Field(alias="objectCode", min_length=1)
     object_name: str = Field(alias="objectName", min_length=1)
+    kb_resource_id: str = Field(default="", alias="kbResourceId")
+    kb_id: str = Field(default="", alias="kbId")
+    kb_directory: str = Field(default="", alias="kbDirectory")
 
     @field_validator("object_code", "object_name")
     @classmethod

@@ -247,6 +247,7 @@ _WRAPPER_INPUT_KEYS = frozenset(
 _MISSING = object()
 _OPERATION_CONFIRM_PARAM = "userConfirmed"
 _OPERATION_CONFIRM_PARAM_ALIASES = frozenset({_OPERATION_CONFIRM_PARAM, "user_confirmed"})
+_IGNORE_INVALID_TERMS_PARAM = "ignoreInvalidTerms"
 
 
 def _normalize_mapping_location(location: str) -> str:
@@ -879,6 +880,7 @@ class Action:
         params: dict[str, Any],
         *,
         term_loader: Any = None,
+        ignore_invalid_terms: bool = False,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         """对操作类动作执行逐参数术语转换，并汇总全部错误。"""
         resolved = dict(params)
@@ -906,6 +908,7 @@ class Action:
                     library_id=param.library_id,
                     raw_value=params[param.param_code],
                     param_name=param.param_name or param.param_code,
+                    ignore_invalid_terms=ignore_invalid_terms,
                 )
             except (TermNotFoundError, TermAmbiguousError) as exc:
                 errors.append(
@@ -968,6 +971,7 @@ class Action:
         original_params: dict[str, Any],
         term_loader: Any = None,
         execution_steps: list[dict[str, Any]] | None = None,
+        ignore_invalid_terms: bool = False,
     ) -> tuple[dict[str, Any] | None, dict[str, Any], dict[str, Any]]:
         """处理操作类动作的必填参数与术语校验逻辑。"""
         params.pop(_OPERATION_CONFIRM_PARAM, None)
@@ -996,6 +1000,7 @@ class Action:
         resolved_params, term_errors = await self._resolve_operation_terms(
             params,
             term_loader=term_loader,
+            ignore_invalid_terms=ignore_invalid_terms,
         )
         await self._record_operation_step(
             execution_steps,
@@ -1080,6 +1085,7 @@ class Action:
 
         params = dict(params)
         original_params = _safe_copy(params)
+        ignore_invalid_terms = params.get(_IGNORE_INVALID_TERMS_PARAM) is True
         term_loader = getattr(self._loader._config, "term_loader", None) if self._loader else None
         include_execution_steps = self._should_include_execution_steps()
         execution_steps: list[dict[str, Any]] | None = [] if include_execution_steps else None
@@ -1139,6 +1145,7 @@ class Action:
                 threshold=threshold,
             )
 
+        params.pop(_IGNORE_INVALID_TERMS_PARAM, None)
         mapped_params = self._normalize_input_params(params)
         param_mapping_data = {
             "params": mapped_params,
@@ -1169,6 +1176,7 @@ class Action:
                 else {"value": original_params},
                 term_loader=term_loader,
                 execution_steps=execution_steps,
+                ignore_invalid_terms=ignore_invalid_terms,
             )
             if ask_user_response is not None:
                 return ask_user_response
@@ -1176,7 +1184,11 @@ class Action:
         elif term_loader:
             from datacloud_data_sdk.plan.term_resolver import TermResolver
 
-            resolved_params = TermResolver(term_loader).resolve(self._action, params)
+            resolved_params = TermResolver(term_loader).resolve(
+                self._action,
+                params,
+                ignore_invalid_terms=ignore_invalid_terms,
+            )
             term_resolved_data = {
                 "params": resolved_params,
                 "changed": resolved_params != params,
@@ -1340,6 +1352,9 @@ class Action:
             term_loader=term_loader,
             execution_steps=execution_steps,
         )
+
+        if action_family not in {"write", "update_kb"}:
+            params.pop(_IGNORE_INVALID_TERMS_PARAM, None)
 
         # 对象级虚拟动作：按 action_family 路由
         if action_family == "query":

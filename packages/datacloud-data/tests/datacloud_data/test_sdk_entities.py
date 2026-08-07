@@ -1,10 +1,10 @@
 import asyncio
 import sqlite3
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from datacloud_data_sdk.context import InvocationContext
-from datacloud_data_sdk.exceptions import ActionNotFoundError
+from datacloud_data_sdk.exceptions import ActionNotFoundError, TermNotFoundError
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.ontology.term_loader import KbTermLoader
 from datacloud_data_sdk.plan.term_resolver import TermResolver
@@ -984,6 +984,36 @@ def test_operation_schema_requires_business_params() -> None:
     assert schema["inputSchema"]["properties"]["title"]["type"] == "string"
     assert schema["inputSchema"]["properties"]["priority"]["enum"] == ["HIGH", "LOW"]
     assert "userConfirmed" not in schema["inputSchema"]["properties"]
+    assert "ignoreInvalidTerms" not in schema["inputSchema"]["properties"]
+
+
+@pytest.mark.asyncio
+async def test_operation_ignores_invalid_scalar_terms_when_enabled() -> None:
+    loader = _build_operation_loader()
+    term_loader = MagicMock()
+
+    def resolve_value(term_set: str, value: str, **_: object) -> str:
+        raise TermNotFoundError(term_set, value)
+
+    term_loader.resolve_value.side_effect = resolve_value
+    loader._config.term_loader = term_loader
+    obj = loader.get_object("approval_task")
+
+    result = await obj.invoke_action(
+        "submit_approval",
+        {
+            "title": "测试审批",
+            "priority": "不存在",
+            "owner_id": "不存在",
+            "userConfirmed": True,
+            "ignoreInvalidTerms": True,
+        },
+    )
+
+    assert result["records"] == [{"priority": None, "owner_id": None}]
+    assert "ignoreInvalidTerms" not in result["normalized_params"]
+    assert result["resolved_params"]["priority"] is None
+    assert result["resolved_params"]["owner_id"] is None
 
 
 @pytest.mark.asyncio
