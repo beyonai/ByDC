@@ -394,9 +394,10 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
             "# 客户增长计划\n\n"
             "## 增长目标\n\n提升客户续约表现。\n\n"
             "## 执行策略\n\n"
-            "客户增长计划通过 [合作伙伴/Alpha 合作伙伴](错误-id) 扩展渠道。\n\n"
+            "客户增长计划通过 [合作伙伴/Alpha 合作伙伴](错误-id) 扩展渠道，"
+            "并由 [合作伙伴/Alpha 合作伙伴](term-partner-a) 联合交付。\n\n"
             "<!--- relation --->\n"
-            "\n"
+            "(协作)[合作伙伴/Alpha 合作伙伴]\n"
             "<!--- relation --->"
         )
 
@@ -427,11 +428,15 @@ async def test_enrich_uses_labelled_bounded_evidence_and_relation_fallback(
     assert "错误-id" not in result.enriched_content
     assert "<!--- relation --->" not in result.enriched_content
     assert "(协作)" not in result.enriched_content
-    assert len(result.relations) == 1
+    assert len(result.relations) == 2
     assert result.relations[0].relation_name == "协作"
     assert result.relations[0].target_object_type == "合作伙伴"
     assert result.relations[0].target_instance_name == "Alpha 合作伙伴"
     assert result.relations[0].target_term_id == "term-partner-a"
+    assert result.relations[1].relation_name == "提及"
+    assert result.relations[1].target_object_type == "合作伙伴"
+    assert result.relations[1].target_instance_name == "Alpha 合作伙伴"
+    assert result.relations[1].target_term_id == "term-partner-a"
     prompt = platform.messages[1]["content"]
     assert "renewal_date" in prompt
     assert "## 增长目标" in prompt

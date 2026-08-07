@@ -66,6 +66,7 @@ _LEADING_THINKING_PATTERN = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 _RELATION_BOUNDARY = "<!--- relation --->"
+_MENTION_RELATION_NAME = "提及"
 _RELATION_BLOCK_PATTERN = re.compile(
     rf"\n?{re.escape(_RELATION_BOUNDARY)}\n.*?\n"
     rf"{re.escape(_RELATION_BOUNDARY)}\n?",
@@ -136,8 +137,8 @@ _SYSTEM_PROMPT = """\
    原文或补充素材标签，不得自行生成 term_id。
 9. 关系区块每行的唯一合法格式是
    `(关系名称)[对象类型/对象实例](term_id)`；关系名称和目标对象类型必须符合
-   对象定义列出的允许关系，目标实例必须在正文中被引用，不得遗漏正文中符合允许
-   关系的引用，不得增加、反向、修改 term_id 或添加项目符号。
+   对象定义列出的允许关系，目标实例必须在正文中被引用，不得增加、反向、
+   修改 term_id 或添加项目符号。
 10. 原文是事实基线，只使用原文和补充素材中可验证的信息，不编造事实、
    数值、属性或关系；没有依据时宁可不补充。
 11. `[对象类型/对象实例](term_id)` 是素材来源标签，也是正文引用已知实例时
@@ -1284,9 +1285,8 @@ def _build_messages(
             "禁止省略括号内的 term_id，禁止虚构或修改 term_id：\n"
             f"{known_references}\n\n"
             "关系行格式严格为 `(关系名称)[对象类型/对象实例](term_id)`。"
-            "正文引用的对象实例只要其对象类型符合下列允许关系，就必须在关系区块"
-            "输出对应关系；关系名称必须根据正文语义从允许类型中选择，不得只因为"
-            "当前实例尚未存在该出边就省略：\n"
+            "关系区块只填写正文能够明确表达的业务关系，关系名称必须根据正文语义"
+            "从下列允许类型中选择：\n"
             f"{allowed_relations}\n\n"
             "## 对象定义中的完整 template（生成约束）\n"
             f"{document_template_guidance}\n\n"
@@ -1368,12 +1368,6 @@ def _normalize_enriched_output(
         reference_term_ids=reference_term_ids,
         body_reference_labels=body_reference_labels,
     )
-    actual_relation_lines = _complete_relations_from_body(
-        actual_relation_lines,
-        allowed_relation_types=allowed_relation_types,
-        reference_term_ids=reference_term_ids,
-        body_reference_labels=body_reference_labels,
-    )
     if len(set(actual_relation_lines)) != len(actual_relation_lines):
         raise ValueError("LLM output contains duplicate relation lines")
 
@@ -1388,7 +1382,7 @@ def _normalize_enriched_output(
         raise ValueError(
             f"LLM output does not follow document template: missing={missing_headings}"
         )
-    relations = tuple(
+    explicit_relations = tuple(
         DocumentEnrichRelation(
             relationName=match.group("relation_name"),
             targetObjectType=match.group("target_object_type"),
@@ -1397,6 +1391,9 @@ def _normalize_enriched_output(
         )
         for line in actual_relation_lines
         if (match := _RELATION_LINE_PATTERN.fullmatch(line)) is not None
+    )
+    relations = _deduplicate_relations(
+        (*explicit_relations, *_extract_body_mention_relations(body))
     )
     return _NormalizedEnrichedOutput(
         content=f"---\n{yaml_text}\n---\n\n{body}",
@@ -1438,39 +1435,6 @@ def _normalize_relation_lines(
     return tuple(normalized)
 
 
-def _complete_relations_from_body(
-    relation_lines: Sequence[str],
-    *,
-    allowed_relation_types: Sequence[tuple[str, str]],
-    reference_term_ids: Mapping[str, str],
-    body_reference_labels: set[str],
-) -> tuple[str, ...]:
-    completed = list(relation_lines)
-    related_labels = {
-        f"{match.group('target_object_type')}/{match.group('target_instance_name')}"
-        for line in relation_lines
-        if (match := _RELATION_LINE_PATTERN.fullmatch(line)) is not None
-    }
-    for label in sorted(body_reference_labels):
-        if label in related_labels:
-            continue
-        target_object_type, _, _ = label.partition("/")
-        relation_names = [
-            relation_name
-            for relation_name, allowed_target_type in allowed_relation_types
-            if allowed_target_type == target_object_type
-        ]
-        if not relation_names:
-            continue
-        if len(relation_names) > 1:
-            raise ValueError(
-                "LLM output omitted an ambiguous body relation: "
-                f"target={label}, allowed_relation_names={relation_names}"
-            )
-        completed.append(f"({relation_names[0]})[{label}]({reference_term_ids[label]})")
-    return tuple(completed)
-
-
 def _normalize_body_entity_references(
     body: str,
     reference_term_ids: Mapping[str, str],
@@ -1491,6 +1455,37 @@ def _body_entity_reference_labels(body: str) -> set[str]:
     return {
         match.group("label") for match in _MARKDOWN_ENTITY_LINK_PATTERN.finditer(body)
     }
+
+
+def _extract_body_mention_relations(
+    body: str,
+) -> tuple[DocumentEnrichRelation, ...]:
+    relations: list[DocumentEnrichRelation] = []
+    for match in _MARKDOWN_ENTITY_LINK_PATTERN.finditer(body):
+        target_object_type, separator, target_instance_name = match.group(
+            "label"
+        ).partition("/")
+        if not separator:
+            continue
+        relations.append(
+            DocumentEnrichRelation(
+                relationName=_MENTION_RELATION_NAME,
+                targetObjectType=target_object_type,
+                targetInstanceName=target_instance_name,
+                targetTermId=match.group("term_id"),
+            )
+        )
+    return tuple(relations)
+
+
+def _deduplicate_relations(
+    relations: Sequence[DocumentEnrichRelation],
+) -> tuple[DocumentEnrichRelation, ...]:
+    deduplicated: dict[tuple[str, str], DocumentEnrichRelation] = {}
+    for relation in relations:
+        key = (relation.relation_name, relation.target_term_id)
+        deduplicated.setdefault(key, relation)
+    return tuple(deduplicated.values())
 
 
 def _required_template_headings(document_template: str) -> tuple[str, ...]:
