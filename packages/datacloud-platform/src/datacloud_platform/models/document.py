@@ -23,6 +23,14 @@ class DocumentProcessingStatus(StrEnum):
     COMPLETED = "已完成"
 
 
+class DocumentEnrichStatus(StrEnum):
+    """Outcome of one document-enrichment attempt."""
+
+    SUCCESS = "success"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
 class _AliasedModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
@@ -223,3 +231,35 @@ class DocumentFragmentItem(_AliasedModel):
 
 class DocumentFragmentResult(_AliasedModel):
     items: tuple[DocumentFragmentItem, ...] = ()
+
+
+class DocumentEnrichRelation(_AliasedModel):
+    """One outgoing relation extracted from the generated document."""
+
+    relation_name: str = Field(alias="relationName")
+    target_object_type: str = Field(alias="targetObjectType")
+    target_instance_name: str = Field(alias="targetInstanceName")
+
+
+class DocumentEnrichResult(_AliasedModel):
+    """Stable result returned by ``DocumentEnrichMixin.enrich``."""
+
+    status: DocumentEnrichStatus
+    exception_info: str | None = Field(default=None, alias="exceptionInfo")
+    enriched_content: str = Field(default="", alias="enrichedContent")
+    relations: tuple[DocumentEnrichRelation, ...] = ()
+
+
+class DocumentEnrichObjectScope(_AliasedModel):
+    """One ontology object included in document-enrichment retrieval."""
+
+    object_code: str = Field(alias="objectCode", min_length=1)
+    object_name: str = Field(alias="objectName", min_length=1)
+
+    @field_validator("object_code", "object_name")
+    @classmethod
+    def _strip_scope_value(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value

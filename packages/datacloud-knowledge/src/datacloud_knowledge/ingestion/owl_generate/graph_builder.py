@@ -56,6 +56,23 @@ _XSD_NS = "http://www.w3.org/2001/XMLSchema#"
 # 默认 xml:base（与应用本体命名空间保持一致）
 _DEFAULT_BASE = "http://example.org/entity/ontology#"
 
+# 文件类型 → 默认 base（对齐现有 OWL 产物格式：每种文件类型独立命名空间）
+# 依据 examples/chatbi_demo/resource 下实际产出的 .owl 文件：
+#   *_terms.owl            → term/ontology#
+#   *_term_types.owl       → termtype/ontology#
+#   *_relations.owl        → relation/ontology#
+#   actions/*.owl          → action/ontology#
+#   *_definition.owl       → entity/ontology#（即 _DEFAULT_BASE）
+#   *_mapping.owl          → entity/mapping#（旧模板渲染，不在 GraphBuilder 导出范围）
+#   *_dbsource.owl         → dbsource/ontology#（同上）
+#   scene_*_definition.owl → scene/ontology#（同上）
+_FILE_BASE_MAP: dict[str, str] = {
+    "terms": "http://example.org/term/ontology#",
+    "term_types": "http://example.org/termtype/ontology#",
+    "relations": "http://example.org/relation/ontology#",
+    "actions": "http://example.org/action/ontology#",
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # OWL 实体类型 → RDF Class 映射
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -104,6 +121,25 @@ def _serialize_truthy(value: object) -> str:
     return "true" if value else "false"
 
 
+def _rebind_uri(uri: Any, old_base: str, new_base: str) -> Any:
+    """将 URIRef 的 base 前缀从 old_base 重写到 new_base。
+
+    用于按文件类型输出独立命名空间的 OWL 文件：
+    主图统一使用 _DEFAULT_BASE（entity/ontology#）构造 URI，
+    export_*_graph 导出到 *_terms.owl / *_relations.owl 等文件时，
+    将 subject/predicate/object 中带旧 base 前缀的 URIRef 重写到文件类型 base。
+
+    Literal 与不含旧 base 前缀的 URIRef 原样返回。
+    """
+    from rdflib import URIRef
+
+    if isinstance(uri, URIRef):
+        s = str(uri)
+        if s.startswith(old_base):
+            return URIRef(new_base + s[len(old_base) :])
+    return uri
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 数据类型映射（从 _xml.py 迁移）
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -144,7 +180,7 @@ class GraphBuilder:
         """初始化 GraphBuilder。
 
         Args:
-            base: XML base URI，默认为 http://beyond.ai/ontology#。
+            base: XML base URI，默认为 http://example.org/entity/ontology#。
         """
         # 延迟导入 rdflib，避免作为强制依赖
         from rdflib import OWL, RDF, RDFS, XSD, Graph, Namespace
@@ -606,7 +642,7 @@ class GraphBuilder:
     def export_terms_graph(self, term_type_code: str | None = None) -> Any:
         """导出仅包含术语定义的独立 Graph。
 
-        用于生成 _terms.owl 或 _term_types.owl 独立文件。
+        用于生成 _terms.owl 独立文件（命名空间 term/ontology#，对齐现有格式）。
 
         Args:
             term_type_code: 过滤特定术语类型编码，None 导出所有。
@@ -614,10 +650,15 @@ class GraphBuilder:
         Returns:
             仅含术语三元组的 rdflib.Graph。
         """
-        from rdflib import Graph
+        from rdflib import Graph, Namespace
 
+        target_base = _FILE_BASE_MAP["terms"]
         g = Graph()
-        g.bind("", self._ns)
+        g.bind("", Namespace(target_base))
+        g.bind("owl", self._OWL)
+        g.bind("rdf", self._RDF)
+        g.bind("rdfs", self._RDFS)
+        g.bind("xsd", self._XSD)
         for s, _p, _o in self._graph.triples((None, self._RDF.type, self._ns.TermDefinition)):
             if term_type_code is not None:
                 # 过滤特定术语类型
@@ -625,30 +666,48 @@ class GraphBuilder:
                 if type_val and str(type_val) != term_type_code:
                     continue
             for sp, po in self._graph.predicate_objects(s):
-                g.add((s, sp, po))
+                g.add(
+                    (
+                        _rebind_uri(s, self._base, target_base),
+                        _rebind_uri(sp, self._base, target_base),
+                        _rebind_uri(po, self._base, target_base),
+                    )
+                )
         return g
 
     def export_term_types_graph(self) -> Any:
         """导出仅包含术语类型定义的独立 Graph。
 
-        用于生成 _term_types.owl 独立文件。
+        用于生成 _term_types.owl 独立文件（命名空间 termtype/ontology#）。
 
         Returns:
             仅含 TermTypeDefinition 三元组的 rdflib.Graph。
         """
-        from rdflib import Graph
+        from rdflib import Graph, Namespace
 
+        target_base = _FILE_BASE_MAP["term_types"]
         g = Graph()
-        g.bind("", self._ns)
+        g.bind("", Namespace(target_base))
+        g.bind("owl", self._OWL)
+        g.bind("rdf", self._RDF)
+        g.bind("rdfs", self._RDFS)
+        g.bind("xsd", self._XSD)
         for s, _p, _o in self._graph.triples((None, self._RDF.type, self._ns.TermTypeDefinition)):
             for sp, po in self._graph.predicate_objects(s):
-                g.add((s, sp, po))
+                g.add(
+                    (
+                        _rebind_uri(s, self._base, target_base),
+                        _rebind_uri(sp, self._base, target_base),
+                        _rebind_uri(po, self._base, target_base),
+                    )
+                )
         return g
 
     def export_relations_graph(self, relation_category: str | None = None) -> Any:
         """导出仅包含关系定义的独立 Graph。
 
-        用于生成 _attribute_relations.owl / _object_relations.owl 等独立文件。
+        用于生成 _attribute_relations.owl / _object_relations.owl 等独立文件
+        （命名空间 relation/ontology#，对齐现有格式）。
 
         Args:
             relation_category: 过滤特定关系类别，None 导出所有。
@@ -656,21 +715,34 @@ class GraphBuilder:
         Returns:
             仅含关系三元组的 rdflib.Graph。
         """
-        from rdflib import Graph
+        from rdflib import Graph, Namespace
 
+        target_base = _FILE_BASE_MAP["relations"]
         g = Graph()
-        g.bind("", self._ns)
+        g.bind("", Namespace(target_base))
+        g.bind("owl", self._OWL)
+        g.bind("rdf", self._RDF)
+        g.bind("rdfs", self._RDFS)
+        g.bind("xsd", self._XSD)
         for s, _p, _o in self._graph.triples((None, self._RDF.type, self._ns.TermRelation)):
             if relation_category is not None:
                 cat_val = self._graph.value(s, self._ns.relationCategory)
                 if cat_val and str(cat_val) != relation_category:
                     continue
             for sp, po in self._graph.predicate_objects(s):
-                g.add((s, sp, po))
+                g.add(
+                    (
+                        _rebind_uri(s, self._base, target_base),
+                        _rebind_uri(sp, self._base, target_base),
+                        _rebind_uri(po, self._base, target_base),
+                    )
+                )
         return g
 
     def export_actions_graph(self, action_code: str | None = None) -> Any:
         """导出仅包含 Action 定义的独立 Graph。
+
+        用于生成 actions/*.owl 独立文件（命名空间 action/ontology#，对齐现有格式）。
 
         Args:
             action_code: 过滤特定 Action 编码，None 导出所有。
@@ -678,17 +750,28 @@ class GraphBuilder:
         Returns:
             仅含 Action 三元组的 rdflib.Graph。
         """
-        from rdflib import Graph
+        from rdflib import Graph, Namespace
 
+        target_base = _FILE_BASE_MAP["actions"]
         g = Graph()
-        g.bind("", self._ns)
+        g.bind("", Namespace(target_base))
+        g.bind("owl", self._OWL)
+        g.bind("rdf", self._RDF)
+        g.bind("rdfs", self._RDFS)
+        g.bind("xsd", self._XSD)
         for s, _p, _o in self._graph.triples((None, self._RDF.type, self._ns.ActionDefinition)):
             if action_code is not None:
                 ac_val = self._graph.value(s, self._ns.actionCode)
                 if ac_val and str(ac_val) != action_code:
                     continue
             for sp, po in self._graph.predicate_objects(s):
-                g.add((s, sp, po))
+                g.add(
+                    (
+                        _rebind_uri(s, self._base, target_base),
+                        _rebind_uri(sp, self._base, target_base),
+                        _rebind_uri(po, self._base, target_base),
+                    )
+                )
         return g
 
     # ── 内部辅助方法 ──────────────────────────────────────────────────────────

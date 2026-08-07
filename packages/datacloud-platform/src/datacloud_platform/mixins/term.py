@@ -42,6 +42,27 @@ class TermMixin(TermSyncHandler):
         """按 term_tags 纯标签过滤术语，不触发文本检索。"""
         return self._term_for(base_id).search_terms_by_labels(**kwargs)
 
+    def enumerate_object_instances(
+        self: _HasTermBackend,
+        base_id: str,
+        *,
+        object_codes: list[str] | None,
+        kb_resource_ids: list[str] | None,
+        filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Any:
+        """枚举带度数的对象实例 — 委托 TermBackend（filters/sort 原样透传）。"""
+        return self._term_for(base_id).enumerate_object_instances(
+            object_codes=object_codes,
+            kb_resource_ids=kb_resource_ids,
+            filters=filters,
+            sort=sort,
+            page=page,
+            page_size=page_size,
+        )
+
     def get_term_detail(
         self: _HasTermBackend, base_id: str, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:

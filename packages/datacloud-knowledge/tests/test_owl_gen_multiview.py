@@ -79,7 +79,7 @@ def _build_config() -> OwlGenConfig:
         ),
     ]
     return OwlGenConfig(
-        domain_code="D1",
+        domain_codes=("D1",),
         domain_name="d",
         domain_desc="d",
         library_code="L1",
@@ -290,7 +290,7 @@ def test_render_terms_dedupes_props_across_objects_with_generic_desc() -> None:
 
 def test_resolved_views_wraps_legacy_single_view_fields() -> None:
     config = OwlGenConfig(
-        domain_code="D1",
+        domain_codes=("D1",),
         domain_name="d",
         domain_desc="d",
         library_code="L1",

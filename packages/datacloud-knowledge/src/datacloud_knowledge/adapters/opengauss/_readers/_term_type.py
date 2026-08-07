@@ -22,7 +22,7 @@ class _TermTypeReader(_ReaderBase):
 
     Domain code↔id translation helpers (_resolve_domain_code,
     _batch_resolve_domain_codes) and utility methods (_build_domain_list,
-    _format_time, _batch_get_term_names) are inherited from _ReaderBase.
+    _format_time, _batch_get_term_infos) are inherited from _ReaderBase.
     """
 
     def list_term_types(

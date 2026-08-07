@@ -28,6 +28,52 @@ LabelCondition = Literal["and", "or"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 枚举型查询类型（enumerate_object_instances）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectInstanceItem:
+    """对象实例枚举结果项（term 行 + 图度数）。
+
+    ``out_degree``/``in_degree`` 仅在请求包含 degree filter（触发 JOIN）时
+    为真实**范围度数**（对端在 object_codes ∪ kb_resource_ids 并集内才计数，
+    T-65）；无 degree filter 时不做 JOIN，恒为 0。
+    """
+
+    term_id: str
+    term_code: str
+    term_name: str
+    term_type_code: str
+    out_degree: int = 0
+    in_degree: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class EnumeratedObjectInstances:
+    """对象实例枚举信封 — items + 诚实 total（同条件 COUNT 变体）。"""
+
+    items: list[ObjectInstanceItem]
+    total: int
+
+
+@dataclass(frozen=True, slots=True)
+class SortSpec:
+    """枚举查询排序规格 — sort 数组单元素请求形状。
+
+    与 FilterSpec 请求元素同构：单一 key（by）+ params 参数字典。
+    ``by`` 目前仅支持 ``"similarity"``（语义相似度排序，EmbeddingService
+    形态 T-51 落地）；新排序依据 = 扩展 Literal + _SORT_REGISTRY 条目（T-51），
+    本层仅定形状，不做任何排序逻辑。
+    """
+
+    by: Literal["similarity"]
+    """排序依据。目前仅 "similarity"。"""
+    params: dict[str, Any] = field(default_factory=dict)
+    """类型专属参数字典（如 embedding 查询所需参数，T-51 定义）。"""
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # 输入类型
 # ═══════════════════════════════════════════════════════════════════════════════
 

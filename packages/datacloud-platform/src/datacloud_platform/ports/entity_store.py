@@ -170,8 +170,9 @@ class EntityStore(Protocol):
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
         ext_property_in_filters: dict[str, list[Any]] | None = None,
+        top_level_or_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
-        page_size: int = 20,
+        page_size: int | None = 20,
     ) -> tuple[list[dict[str, Any]], int]:
         """Paginated search with keyword, code-set, owner, and extProperty filtering.
 

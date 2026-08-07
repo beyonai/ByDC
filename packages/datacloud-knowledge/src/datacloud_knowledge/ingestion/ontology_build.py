@@ -68,13 +68,10 @@ def _validate_cascade_relations(
         if not cascade_delete:
             continue
         relation_code = str(relation.get("relation_code") or "")
-        relation_type = str(
-            relation.get("relation_type") or "MANY_TO_ONE"
-        ).upper()
+        relation_type = str(relation.get("relation_type") or "MANY_TO_ONE").upper()
         if relation_type not in {"MANY_TO_ONE", "ONE_TO_ONE"}:
             raise ValueError(
-                f"级联关系 {relation_code} 的 relation_type 只能是 "
-                "MANY_TO_ONE 或 ONE_TO_ONE"
+                f"级联关系 {relation_code} 的 relation_type 只能是 MANY_TO_ONE 或 ONE_TO_ONE"
             )
         join_keys = relation.get("join_keys")
         if not isinstance(join_keys, list) or not join_keys:
@@ -82,28 +79,20 @@ def _validate_cascade_relations(
         for join_key in join_keys:
             if not isinstance(join_key, dict):
                 raise TypeError(f"级联关系 {relation_code} 的 join key 必须是对象")
-            source_field = str(
-                join_key.get("sourceField") or ""
-            )
-            target_field = str(
-                join_key.get("targetField") or ""
-            )
+            source_field = str(join_key.get("sourceField") or "")
+            target_field = str(join_key.get("targetField") or "")
             if not source_field or not target_field:
                 raise ValueError(f"级联关系 {relation_code} 的 join key 两端不能为空")
             source_definition = fields_by_code.get(source_field)
             if source_definition is None:
                 raise ValueError(
-                    f"级联关系 {relation_code} 的 source join key 字段不存在: "
-                    f"{source_field}"
+                    f"级联关系 {relation_code} 的 source join key 字段不存在: {source_field}"
                 )
-            if bool(
-                source_definition.get("is_required")
-                or source_definition.get("required")
-            ):
+            if bool(source_definition.get("is_required") or source_definition.get("required")):
                 raise ValueError(
-                    f"级联关系 {relation_code} 的 source join key 必须允许清空: "
-                    f"{source_field}"
+                    f"级联关系 {relation_code} 的 source join key 必须允许清空: {source_field}"
                 )
+
 
 # ── OntologyBuildSession ──────────────────────────────────────────────────────
 

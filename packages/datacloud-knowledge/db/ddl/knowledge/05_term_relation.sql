@@ -31,3 +31,7 @@ COMMENT ON COLUMN term_relation.cardinality            IS '数量约束：1:1 | 
 COMMENT ON COLUMN term_relation.ext_attrs              IS '自定义扩展属性';
 COMMENT ON COLUMN term_relation.created_time           IS '创建时间';
 COMMENT ON COLUMN term_relation.updated_time           IS '更新时间';
+
+-- 度数聚合查询索引（GROUP BY JOIN 前置条件）
+CREATE INDEX IF NOT EXISTS idx_term_relation_source ON term_relation(source_term_id);
+CREATE INDEX IF NOT EXISTS idx_term_relation_target ON term_relation(target_term_id);

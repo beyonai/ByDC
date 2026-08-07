@@ -318,9 +318,8 @@ async def _handle_operation_form_clarify(
         if resume_action is None:
             resume_action = {}
         context = context_by_id.get(current_tool_call_id, {})
-        cascade_mode = (
-            pending_action.get("formMode") == "cascade_delete"
-            or isinstance(context.get("cascade_context"), dict)
+        cascade_mode = pending_action.get("formMode") == "cascade_delete" or isinstance(
+            context.get("cascade_context"), dict
         )
         if cascade_mode:
             confirmed = (

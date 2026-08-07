@@ -139,6 +139,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         type_code: str,
         direction: str = "both",
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
@@ -150,6 +151,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
                 type_code=type_code,
                 direction=direction,
                 relation_category=relation_category,
+                relation_code=relation_code,
                 keyword=keyword,
                 page_index=page_index,
                 page_size=page_size,
@@ -172,7 +174,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
-            writer.update_term_type(  # type: ignore[call-arg]
+            writer.update_term_type(
                 library_id=library_id, type_code=type_code, updates=updates
             )
 
@@ -180,7 +182,7 @@ class TermEntityMixin(DataCloudDataBackendBase):
         from datacloud_knowledge.adapters import create_writer  # noqa: PLC0415
 
         with create_writer() as writer:
-            writer.delete_term_type(library_id=library_id, type_code=type_code)  # type: ignore[call-arg]
+            writer.delete_term_type(library_id=library_id, type_code=type_code)
 
     # ── Domain ──────────────────────────────────────────────────────────
 

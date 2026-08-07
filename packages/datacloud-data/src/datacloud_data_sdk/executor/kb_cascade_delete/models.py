@@ -138,9 +138,7 @@ class CascadeDeleteContext:
                     owner_term_id=str(item.get("ownerTermId") or ""),
                     file_fingerprint=str(item.get("fileFingerprint") or ""),
                     join_keys=tuple(
-                        dict(key)
-                        for key in item.get("joinKeys") or []
-                        if isinstance(key, dict)
+                        dict(key) for key in item.get("joinKeys") or [] if isinstance(key, dict)
                     ),
                 )
                 for item in data.get("items") or []

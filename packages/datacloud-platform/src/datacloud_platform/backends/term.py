@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from datacloud_platform.models.shared import EmbeddingHit
+    from datacloud_platform.models.shared import EmbeddingHit, ObjectInstanceListPage
 
 
 class TermBackend(Protocol):
@@ -77,6 +77,45 @@ class TermBackend(Protocol):
         """纯标签过滤术语，不依赖关键词或文本候选集。"""
         ...
 
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str] | None,
+        kb_resource_ids: list[str] | None,
+        filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> ObjectInstanceListPage:
+        """枚举带度数的对象实例（filters 条件框架，v1 只 AND）。
+
+        枚举型接口（非检索）：确定性条件过滤 → 集合确定 → total 诚实 →
+        offset/limit 分页安全。不复用检索内核（无分词/无 RRF/无双路召回）。
+
+        Args:
+            object_codes:   对象类型编码范围。与 kb_resource_ids 为 AND。
+            kb_resource_ids: 知识库资源 ID 范围（``ext_attrs->>'kb_resource_id'``）。
+            filters:        条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]。
+                            **原样透传，不解析 type/params**；非法 type/params
+                            由 knowledge 层 validate 抛 ValueError →
+                            RPC 层 _EXCEPTION_MAP 自动映射 400 invalid_params。
+            sort:           排序规格 = {"by": <注册表 key>, "params": {...}}。
+                            **原样透传，不解析**（同 filters 约定）；非法 by/params
+                            由 knowledge 层 validate 抛 ValueError → 400。
+            page:           页码（>=1，1-based）。
+            page_size:      每页条数（>=1）。
+
+        Returns:
+            ``ObjectInstanceListPage``（items 为 9 字段 ObjectInstanceListItem，
+            含 out_degree/in_degree）+ 诚实 total + 分页回显。
+
+        范围语义：object_codes 与 kb_resource_ids 全空 → 空结果
+        （items=[], total=0），即使 filters 有值（filters 不代替范围）。
+
+        对应: POST /api/v1/rpc/search/enumerateObjectInstances
+        """
+        ...
+
     def get_term_detail(
         self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
@@ -142,10 +181,11 @@ class TermBackend(Protocol):
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
+        term_type_code: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
-        """查询术语一跳关系（含 keyword + 分页）。
+        """查询术语一跳关系（含 keyword + term_type_code 过滤 + 分页）。
 
         对应: POST /api/v1/rpc/term/getRelations
         """
@@ -310,11 +350,12 @@ class TermBackend(Protocol):
         type_code: str,
         direction: str = "both",
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
-        """术语类型一跳关系（直接查 term_relation.term_type_code 列）。
+        """术语类型一跳关系（JOIN term 表按 term.term_type_code 过滤）。
 
         对应: POST /api/v1/rpc/termType/getRelations
         """

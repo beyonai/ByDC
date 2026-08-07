@@ -579,9 +579,7 @@ class KbSearchExecutor:
         if isinstance(cascade, dict) and not arguments.get("_skipCascade"):
             return await self._execute_cascade_delete(
                 root_object_code=object_code,
-                root_source_paths=[
-                    str(path) for path in arguments.get("source_paths") or []
-                ],
+                root_source_paths=[str(path) for path in arguments.get("source_paths") or []],
                 cascade=cascade,
             )
         strict = arguments.get("_strictDelete") is True
@@ -828,9 +826,7 @@ class KbSearchExecutor:
             )
 
         delete_items = [
-            dict(item)
-            for item in payload.get("deleteItems") or []
-            if isinstance(item, dict)
+            dict(item) for item in payload.get("deleteItems") or [] if isinstance(item, dict)
         ]
         grouped: dict[tuple[int, str], list[str]] = {}
         for item in delete_items:
@@ -856,17 +852,11 @@ class KbSearchExecutor:
                     deleted=deleted,
                     detached=detached,
                 )
-            deleted.extend(
-                {"objectCode": object_code, "sourcePath": path} for path in paths
-            )
+            deleted.extend({"objectCode": object_code, "sourcePath": path} for path in paths)
 
         try:
             await self._assert_no_incoming_cascade_edges(
-                [
-                    dict(root)
-                    for root in payload.get("roots") or []
-                    if isinstance(root, dict)
-                ]
+                [dict(root) for root in payload.get("roots") or [] if isinstance(root, dict)]
             )
         except Exception as exc:  # noqa: BLE001
             return self._cascade_error_response(
@@ -1025,9 +1015,7 @@ class KbSearchExecutor:
         object_code = str(item.get("objectCode") or "")
         source_path = str(item.get("sourcePath") or "")
         relation_id = str(item.get("relationId") or "")
-        join_keys = [
-            key for key in item.get("joinKeys") or [] if isinstance(key, dict)
-        ]
+        join_keys = [key for key in item.get("joinKeys") or [] if isinstance(key, dict)]
         source_fields = [
             str(key.get("sourceField") or key.get("from_field") or "")
             for key in join_keys

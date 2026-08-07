@@ -88,3 +88,4 @@
 | [searchScene](Search/searchScene.md) | POST | `/api/v1/ontologyBases/{baseId}/scenes/{sceneId}/search` | 场景内全文/语义/混合检索。 |
 | [searchOntologyBase](Search/searchOntologyBase.md) | POST | `/api/v1/ontologyBases/{baseId}/search` | 跨场景全文/语义/混合检索。 |
 | [searchObjectInstancesUnstructured](Search/searchObjectInstancesUnstructured.md) | POST | `/api/v1/rpc/search/searchObjectInstancesUnstructured` | 非结构化对象实例检索。支持自然语言句子 / 多词语批量，双路召回 + RRF 融合。 |
+| [enumerateObjectInstances](Search/enumerateObjectInstances.md) | POST | `/api/v1/rpc/search/enumerateObjectInstances` | 枚举非结构化对象实例（度数条件过滤 + 相似度排序）。filters 条件框架 + sort 排序框架 + 类型/知识库范围，诚实 totalCount + 稳定分页。 |

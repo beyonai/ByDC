@@ -42,15 +42,18 @@ def test_query_objects_by_knowledge_delegates_to_backend(
     platform: DatacloudPlatform,
 ) -> None:
     onto_local, *_ = platform._fakes  # type: ignore[attr-defined]
-    onto_local._knowledge_objects = ([  # type: ignore[attr-defined]
-        {
-            "objectCode": "customer",
-            "objectName": "客户",
-            "baseId": LOCAL,
-            "kbResourceId": "kb-1",
-            "kbDirectory": "/a",
-        }
-    ], 1)
+    onto_local._knowledge_objects = (
+        [  # type: ignore[attr-defined]
+            {
+                "objectCode": "customer",
+                "objectName": "客户",
+                "baseId": LOCAL,
+                "kbResourceId": "kb-1",
+                "kbDirectory": "/a",
+            }
+        ],
+        1,
+    )
 
     items, total = platform.query_objects_by_knowledge(
         LOCAL,

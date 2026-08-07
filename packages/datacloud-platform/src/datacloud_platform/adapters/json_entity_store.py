@@ -150,8 +150,9 @@ class _ScopedEntityStore:
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
         ext_property_in_filters: dict[str, list[Any]] | None = None,
+        top_level_or_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
-        page_size: int = 20,
+        page_size: int | None = 20,
     ) -> tuple[list[dict[str, Any]], int]:
         return self._parent.search(
             entity_type,
@@ -162,6 +163,7 @@ class _ScopedEntityStore:
             user_code=user_code,
             ext_property_filters=ext_property_filters,
             ext_property_in_filters=ext_property_in_filters,
+            top_level_or_filters=top_level_or_filters,
             page=page,
             page_size=page_size,
         )
@@ -249,14 +251,20 @@ class JsonEntityStore:
         user_code: str | None = None,
         ext_property_filters: dict[str, Any] | None = None,
         ext_property_in_filters: dict[str, list[Any]] | None = None,
+        top_level_or_filters: dict[str, list[Any]] | None = None,
         page: int = 1,
-        page_size: int = 20,
+        page_size: int | None = 20,
     ) -> tuple[list[dict[str, Any]], int]:
         """Paginated search with keyword, code-set, owner, and extProperty filtering.
 
         Loads the lightweight index, filters in Python, sorts by code,
         slices for pagination, then batch-reads matching entity files.
         All post-index filters load the full entity dict for evaluation.
+
+        ``top_level_or_filters`` matches top-level JSON keys with OR
+        semantics: an entity passes if ANY (key, value) pair matches
+        (e.g. ``{"source_class": [c], "target_class": [c]}``).  ``page_size``
+        may be ``None`` to disable pagination and return all matches.
         """
         _ = base_id
         if codes is not None and len(codes) == 0:
@@ -265,7 +273,11 @@ class JsonEntityStore:
         # When heavy filters are present, skip the index-level keyword shortcut
         # and evaluate against full entity data for consistent total counts.
         has_heavy_filters = bool(
-            owner_type or user_code or ext_property_filters or ext_property_in_filters
+            owner_type
+            or user_code
+            or ext_property_filters
+            or ext_property_in_filters
+            or top_level_or_filters
         )
 
         if has_heavy_filters:
@@ -286,6 +298,7 @@ class JsonEntityStore:
                     user_code,
                     ext_property_filters,
                     ext_property_in_filters,
+                    top_level_or_filters,
                 ):
                     continue
                 filtered.append(data)
@@ -293,6 +306,8 @@ class JsonEntityStore:
                 key=lambda d: d.get("object_code") or d.get("view_code") or ""
             )
             total = len(filtered)
+            if page_size is None:
+                return filtered[(page - 1) :], total
             offset = (page - 1) * page_size
             return filtered[offset : offset + page_size], total
 
@@ -315,8 +330,11 @@ class JsonEntityStore:
         matching_codes.sort()
         total = len(matching_codes)
 
-        offset = (page - 1) * page_size
-        page_codes = matching_codes[offset : offset + page_size]
+        if page_size is None:
+            page_codes = matching_codes[(page - 1) :]
+        else:
+            offset = (page - 1) * page_size
+            page_codes = matching_codes[offset : offset + page_size]
 
         items: list[dict[str, Any]] = []
         for code in page_codes:
@@ -598,11 +616,16 @@ def _json_entity_match(
     user_code: str | None,
     ext_property_filters: dict[str, Any] | None,
     ext_property_in_filters: dict[str, list[Any]] | None = None,
+    top_level_or_filters: dict[str, list[Any]] | None = None,
 ) -> bool:
     """Match an entity data dict against owner_type, user_code, and extProperty filters.
 
     Mirrors the dual-location lookup of ``_raw_to_summary``: checks both
     top-level and ``ext_property`` for ``owner_type`` / ``user_code``.
+
+    ``top_level_or_filters`` matches TOP-LEVEL JSON keys with OR semantics:
+    passes if ANY (key, value) pair matches (mirrors the SQL ``OR`` pushdown
+    in :class:`OpenGaussEntityStore`).
     """
     if owner_type or user_code:
         ext = data.get("ext_property", {}) or {}
@@ -637,5 +660,19 @@ def _json_entity_match(
                 actual is None or str(actual) not in normalized_values
             ):
                 return False
+
+    if top_level_or_filters:
+        or_matched = False
+        for key, expected_values in top_level_or_filters.items():
+            if not expected_values:
+                continue
+            actual = data.get(key)
+            if actual is not None and str(actual) in {
+                str(value) for value in expected_values
+            }:
+                or_matched = True
+                break
+        if not or_matched:
+            return False
 
     return True

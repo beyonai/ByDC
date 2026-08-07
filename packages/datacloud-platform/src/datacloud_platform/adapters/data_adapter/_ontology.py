@@ -501,12 +501,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     "ownerType": summary.owner_type,
                     "userCode": summary.user_code,
                     "baseId": base_id,
-                    "kbResourceId": str(
-                        ext_property.get("kb_resource_id", "") or ""
-                    ),
-                    "kbDirectory": str(
-                        ext_property.get("kb_directory", "") or ""
-                    ),
+                    "kbResourceId": str(ext_property.get("kb_resource_id", "") or ""),
+                    "kbDirectory": str(ext_property.get("kb_directory", "") or ""),
                 }
             )
         return items, total
@@ -1029,25 +1025,43 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         self,
         raw: dict[str, Any],
         store: Any,
+        name_map: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        """Convert a raw relation dict to a Relation model dict, resolving object names."""
+        """Convert a raw relation dict to a Relation model dict, resolving object names.
+
+        When *name_map* is provided, source/target names are resolved from it
+        (batch-read by the caller); codes missing from the map fall back to
+        per-code ``store.get`` lookups to preserve existing behavior.
+        """
         src = raw.get("source_class", "")
         tgt = raw.get("target_class", "")
         # Resolve names from object store
         src_name = ""
         tgt_name = ""
-        src_obj = store.get("objects", src)
-        if src_obj:
-            src_name = src_obj.get("object_name", src_obj.get("objectName", "")) or ""
-        tgt_obj = store.get("objects", tgt)
-        if tgt_obj:
-            tgt_name = tgt_obj.get("object_name", tgt_obj.get("objectName", "")) or ""
+        if name_map is not None and src in name_map:
+            src_name = name_map[src]
+        else:
+            src_obj = store.get("objects", src)
+            if src_obj:
+                src_name = (
+                    src_obj.get("object_name", src_obj.get("objectName", "")) or ""
+                )
+        if name_map is not None and tgt in name_map:
+            tgt_name = name_map[tgt]
+        else:
+            tgt_obj = store.get("objects", tgt)
+            if tgt_obj:
+                tgt_name = (
+                    tgt_obj.get("object_name", tgt_obj.get("objectName", "")) or ""
+                )
 
         jk = raw.get("join_keys")
         attribute = dict(raw.get("attribute") or {})
         if jk:
             attribute["join_keys"] = jk
-        cascade_delete = raw.get("cascade_delete", attribute.get("cascade_delete", False))
+        cascade_delete = raw.get(
+            "cascade_delete", attribute.get("cascade_delete", False)
+        )
         if type(cascade_delete) is bool:
             attribute["cascade_delete"] = cascade_delete
         rel = Relation(
@@ -1144,23 +1158,41 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             List of relation dicts (full detail, alias-mapped).
         """
         store = self._entity_store.sub_store(base_id)
-        all_items = store.list_all("relations")
-        result: list[dict[str, Any]] = []
-        for raw in all_items:
-            rel_dict = self._raw_to_relation_dict(raw, store)
-            src: str = rel_dict.get("sourceObjectCode", "")
-            tgt: str = rel_dict.get("targetObjectCode", "")
-            if src != object_code and tgt != object_code:
-                continue
-            rel_owner: str = rel_dict.get("ownerType", "enterprise")
-            if owner_type and rel_owner != owner_type:
-                continue
-            if owner_type == "personal" and user_code:
-                rel_user: str | None = rel_dict.get("userCode")
-                if rel_user != user_code:
+        # Push the source/target match down to the store (SQL JSONB OR on
+        # OpenGauss, filtered scan on the JSON backend) instead of pulling
+        # every relation with list_all() and filtering in Python.
+        items, _total = store.search(
+            "relations",
+            top_level_or_filters={
+                "source_class": [object_code],
+                "target_class": [object_code],
+            },
+            owner_type=owner_type,
+            user_code=user_code if owner_type == "personal" else None,
+            page_size=None,
+        )
+        # Batch-resolve object names once instead of 2N point reads inside
+        # _raw_to_relation_dict (reuse search codes= pushdown, page_size
+        # widened so no code-set is truncated at the default 20).
+        obj_codes: set[str] = set()
+        for raw in items:
+            if raw.get("source_class"):
+                obj_codes.add(raw["source_class"])
+            if raw.get("target_class"):
+                obj_codes.add(raw["target_class"])
+        name_map: dict[str, str] = {}
+        if obj_codes:
+            page_size = max(len(obj_codes), 20)
+            objects, _ = store.search(
+                "objects", codes=sorted(obj_codes), page_size=page_size
+            )
+            for obj in objects:
+                code = obj.get("object_code") or obj.get("objectCode") or ""
+                if not code:
                     continue
-            result.append(rel_dict)
-        return result
+                name = obj.get("object_name") or obj.get("objectName") or ""
+                name_map[code] = name
+        return [self._raw_to_relation_dict(raw, store, name_map) for raw in items]
 
     def create_relation(self, base_id: str, rel: Any) -> Any:
         """Persist a new relation via EntityStore.

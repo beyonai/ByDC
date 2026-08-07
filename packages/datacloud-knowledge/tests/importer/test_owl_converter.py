@@ -240,7 +240,7 @@ class TestConvertTerm:
         assert result["term_desc"] == "人员描述"
         assert result["library_code"] == "HR"
         assert result["term_type_code"] == "OBJECT"
-        assert result["domain_code"] == "HR"
+        assert result["domain_codes"] == ["HR"]
 
     def test_convert_term_with_synonyms(self) -> None:
         """测试同义词解析。"""
@@ -300,7 +300,7 @@ class TestConvertTerm:
         assert result["synonyms"] == []
 
     def test_convert_term_missing_domain_code(self) -> None:
-        """测试缺失 domain_code 返回 None。"""
+        """测试缺失 domain_code 时 domain_codes 为空列表。"""
         owl_entity = {
             "term_name": "人员",
             "term_type_code": "OBJECT",
@@ -308,7 +308,7 @@ class TestConvertTerm:
 
         result = convert_term(owl_entity)
 
-        assert result["domain_code"] is None
+        assert result["domain_codes"] == []
 
 
 class TestConvertRelation:

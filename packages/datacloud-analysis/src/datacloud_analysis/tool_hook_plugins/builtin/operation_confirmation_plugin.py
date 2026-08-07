@@ -112,9 +112,7 @@ async def _try_fill_file_content(
 
     records = tool_params.get("records")
     if isinstance(records, list):
-        new_records = [
-            await _fill_record_file_content(record, storage) for record in records
-        ]
+        new_records = [await _fill_record_file_content(record, storage) for record in records]
         if any(new is not orig for new, orig in zip(new_records, records, strict=True)):
             return {**tool_params, "records": new_records}
         return tool_params
@@ -301,7 +299,7 @@ def _build_invocation_context(metadata: dict[str, Any], storage: Any) -> Any:
     user_id = _resolve_gateway_user_id(gw_ctx) if gw_ctx is not None else ""
     session_id = str(getattr(gw_ctx, "session_id", "") or "")
     token = str(getattr(gw_ctx, "beyond_token", "") or configurable.get("beyond_token") or "")
-    if not token :
+    if not token:
         token = getattr(gw_ctx, "extras", {}).get("beyond_token", "")
     locale = str(configurable.get("locale") or "zh_CN")
     workspace_dir = str(configurable.get("workspace_dir") or "")
@@ -432,9 +430,7 @@ async def _before_call_back_in_context(
         discovered = await discover_cascade_context(
             loader=loader,
             root_object_code=root_object_code,
-            root_source_paths=[
-                str(path) for path in tool_params.get("source_paths") or []
-            ],
+            root_source_paths=[str(path) for path in tool_params.get("source_paths") or []],
         )
         if discovered is not None:
             cascade_context = discovered.to_dict()
@@ -453,19 +449,19 @@ async def _before_call_back_in_context(
     form_id = str(operation_form_action.get("formId") or operation_form.get("formId") or "")
     logger.info("[operation_confirmation] interrupt tool=%s form_id=%s", tool_name, form_id)
     context: dict[str, Any] = {
-            "interrupt_type": _INTERRUPT_TYPE,
-            "tool_call_id": tool_call_id,
-            "tool_name": tool_name,
-            "structured_input": deepcopy(tool_params),
-            "operation_form": operation_form,
-            "operation_form_action": operation_form_action,
-            "operation_confirm_context": {
-                "formId": form_id,
-                "actionCode": str(getattr(action, "action_code", tool_name) or tool_name),
-                "actionFamily": str(getattr(action, "action_family", "") or ""),
-                "originalParamsHash": _stable_hash(tool_params),
-            },
-        }
+        "interrupt_type": _INTERRUPT_TYPE,
+        "tool_call_id": tool_call_id,
+        "tool_name": tool_name,
+        "structured_input": deepcopy(tool_params),
+        "operation_form": operation_form,
+        "operation_form_action": operation_form_action,
+        "operation_confirm_context": {
+            "formId": form_id,
+            "actionCode": str(getattr(action, "action_code", tool_name) or tool_name),
+            "actionFamily": str(getattr(action, "action_family", "") or ""),
+            "originalParamsHash": _stable_hash(tool_params),
+        },
+    }
     if cascade_context is not None:
         context["cascade_context"] = cascade_context
     raise ClarificationNeededError(context)

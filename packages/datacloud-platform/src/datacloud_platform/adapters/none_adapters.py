@@ -706,6 +706,22 @@ class _NoopTermBackend:
         """Return no pure-label term matches."""
         return []
 
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str] | None,
+        kb_resource_ids: list[str] | None,
+        filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Any:
+        """Return empty page — noop backend has no term data (sync)."""
+        _ = object_codes, kb_resource_ids, filters, sort
+        from datacloud_platform.models.shared import ObjectInstanceListPage
+
+        return ObjectInstanceListPage(items=[], total=0, page=page, page_size=page_size)
+
     def get_term_detail(
         self, *, library_id: str, term_id: str
     ) -> dict[str, Any] | None:
@@ -761,11 +777,21 @@ class _NoopTermBackend:
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
+        term_type_code: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
         """Return empty result."""
-        _ = term_id, relation_category, direction, depth, keyword, page_index, page_size
+        _ = (
+            term_id,
+            relation_category,
+            direction,
+            depth,
+            keyword,
+            term_type_code,
+            page_index,
+            page_size,
+        )
         return {"data": [], "totalCount": 0}
 
     def query_term_relations_tree(
@@ -941,10 +967,21 @@ class _NoopTermBackend:
         type_code: str,
         direction: str = "both",
         relation_category: str | None = None,
+        relation_code: str | None = None,
         keyword: str | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
+        _ = (
+            library_id,
+            type_code,
+            direction,
+            relation_category,
+            relation_code,
+            keyword,
+            page_index,
+            page_size,
+        )
         return {"items": [], "total": 0}
 
     def create_term_type(

@@ -12,6 +12,7 @@ from collections.abc import Sequence
 from typing import Any, Protocol, Self
 
 from .term_provider_types import (
+    EnumeratedObjectInstances,
     ImportResult,
     LabelCondition,
     LabelFilter,
@@ -541,6 +542,39 @@ class TermReader(Protocol):
 
         ...
 
+    def enumerate_object_instances(
+        self,
+        *,
+        object_codes: list[str],
+        kb_resource_ids: list[str],
+        filters: list[dict[str, Any]] | None = None,
+        sort: dict[str, Any] | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> EnumeratedObjectInstances:
+        """枚举带度数的对象实例（filters 条件框架版）。
+
+        枚举型接口：确定性条件过滤 → 集合确定 → total 诚实 → offset/limit 分页安全。
+        单条 SQL 完成「范围过滤 + 度数聚合 + 条件过滤 + 稳定排序 + 分页」。
+
+        Args:
+            object_codes: 对象类型编码范围（与 kb_resource_ids 为 AND，尊重输入不校验）。
+            kb_resource_ids: 知识库资源 ID 范围（ext_attrs->>'kb_resource_id'）。
+            filters: 条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]，
+                     v1 只 AND；type 不在注册表 → ValueError。
+            sort: 排序规格 = {"by": "similarity", "params": {...}}（与 filters
+                  同构：单一 key + params）。目前仅 "similarity"；未知 by → ValueError。
+                  None = 默认排序（term_id ASC 稳定序）。本层仅签名，实际排序
+                  （EmbeddingService 形态）T-51 落地。
+            page: 页码（>=1，1-based）。
+            page_size: 每页条数（>=1）。
+
+        Returns:
+            items（含 out_degree/in_degree）+ 诚实 total。object_codes 与
+            kb_resource_ids 全空时返回空（即使 filters 有值）。
+        """
+        ...
+
     def list_terms(
         self,
         *,
@@ -648,6 +682,7 @@ class TermReader(Protocol):
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
+        term_type_code: str | None = None,
     ) -> dict[str, Any]: ...
 
 
