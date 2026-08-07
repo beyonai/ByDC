@@ -133,6 +133,12 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     def create_term_name(
         self, base_id: str, *, name: dict[str, Any]
     ) -> dict[str, Any]: ...
+    def get_term_detail(
+        self, base_id: str, *, library_id: str, term_id: str
+    ) -> dict[str, Any] | None: ...
+    def update_term_co_occurrence(
+        self, base_id: str, *, term_id: str, patch: dict[str, int]
+    ) -> None: ...
 
 
 class ObjectInstanceDiscoveryMixin:
@@ -201,15 +207,17 @@ class ObjectInstanceDiscoveryMixin:
                     session_id=session_id,
                 )
             )
-        # 歧义/同义冲突候选：T10 同步裁决接入前保守跳过（不建重复实例、不产已有 hit）
-        pending_count = len(anchor.ambiguity) + len(anchor.synonym)
-        if pending_count:
-            logger.info(
-                "discover: %d 个冲突候选待 T10 裁决（歧义=%d 同义=%d）",
-                pending_count,
-                len(anchor.ambiguity),
-                len(anchor.synonym),
+        # T10 同步裁决：仅与库冲突候选（同名多候选→歧义、子串重叠→同义）；
+        # 同义 → 写 TermName 别名不建实例；歧义 → 独立新实例；无冲突 → 直通不调裁决
+        items.extend(
+            await self._adjudicate_candidates(
+                base_id=base_id,
+                ambiguity=anchor.ambiguity,
+                synonym=anchor.synonym,
+                source_term_id=instance_id,
+                session_id=session_id,
             )
+        )
         return ObjectInstanceDiscoveryResult(items=items)
 
     def _vocabulary_words(
@@ -429,6 +437,271 @@ class ObjectInstanceDiscoveryMixin:
         invalidate_vocabulary_cache()
         return term_id
 
+    async def _adjudicate_candidates(
+        self: Any,
+        *,
+        base_id: str,
+        ambiguity: list[dict[str, Any]],
+        synonym: list[dict[str, Any]],
+        source_term_id: str,
+        session_id: str,
+    ) -> list[ObjectInstanceDiscoveryHit]:
+        """T10 同步裁决（Spec §7）。
+
+        候选范围严格收窄（Spec §7.1）：
+        - 同名多候选（词面相等 ≥2 term）→ 歧义判断
+        - 子串重叠（非相等）→ 同义判断
+        - 干净命中 / 新实例间两两 → **不裁决**
+
+        结果（temp=0 一票，带上下文）：
+        - ``same=true`` / ``same_entity=true`` → ``create_term_name`` 归并别名
+          到主 term（触发器自动进词典，随后缓存失效）；**不建新实例**
+        - ``false`` → 独立新实例（复用 ``_create_new_instance_flow``；类型规则
+          D-3：mention 自带可定类型 → 该类型，确定不了 → AUTO_DISCOVERED）
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            ambiguity: 歧义候选列表（同名多候选）。
+            synonym: 同义候选列表（子串重叠）。
+            source_term_id: 输入实例 term_id（新实例提及关系源）。
+            session_id: 会话 ID（透传）。
+
+        Returns:
+            新实例发现结果项（别名归并不产出 hit）。
+        """
+        hits: list[ObjectInstanceDiscoveryHit] = []
+        for candidate in synonym:
+            mention = str(candidate["mention"])
+            term = candidate["term"]
+            verdict = await self._invoke_synonym_judge(base_id, candidate=candidate)
+            if verdict.get("same") is True:
+                canonical = str(
+                    verdict.get("canonical") or term.get("term_id") or ""
+                ).strip()
+                if canonical:
+                    self._write_alias(
+                        base_id=base_id, term_id=canonical, name_text=mention
+                    )
+            else:
+                hits.append(
+                    await self._create_new_instance_flow(
+                        base_id=base_id,
+                        source_term_id=source_term_id,
+                        candidate={
+                            "term_name": mention,
+                            "object_code": _mention_object_code(candidate),
+                            "evidence": candidate.get("evidence"),
+                            "raw_type": candidate.get("raw_type"),
+                        },
+                        session_id=session_id,
+                    )
+                )
+        for candidate in ambiguity:
+            mention = str(candidate["mention"])
+            terms = candidate["terms"]
+            verdict = await self._invoke_ambiguity_judge(base_id, candidate=candidate)
+            if verdict.get("same_entity") is True:
+                canonical = _pick_canonical_term_id(
+                    terms, verdict.get("entity_names") or []
+                )
+                if canonical:
+                    self._write_alias(
+                        base_id=base_id, term_id=canonical, name_text=mention
+                    )
+            else:
+                hits.append(
+                    await self._create_new_instance_flow(
+                        base_id=base_id,
+                        source_term_id=source_term_id,
+                        candidate={
+                            "term_name": mention,
+                            "object_code": _mention_object_code(candidate),
+                            "evidence": candidate.get("evidence"),
+                            "raw_type": candidate.get("raw_type"),
+                        },
+                        session_id=session_id,
+                    )
+                )
+        return hits
+
+    async def _invoke_synonym_judge(
+        self: Any,
+        base_id: str,
+        *,
+        candidate: dict[str, Any],
+    ) -> dict[str, Any]:
+        """同义裁决（judge_synonym 形态，Spec §7.2）。
+
+        实体A=mention（含 evidence 上下文）、实体B=已有 term；生产增强：
+        防御式读取 term 侧 co_occurrence 伙伴集（T11 未就绪 → 空 → 不带段）。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            candidate: 同义候选 ``{"mention", "term", ...}``。
+
+        Returns:
+            裁决对象 ``{"same": bool, "canonical": str}``。
+        """
+        mention = str(candidate["mention"])
+        term = candidate["term"]
+        evidence = candidate.get("evidence")
+        mention_context = str(evidence) if evidence is not None else ""
+        overlap = self._co_occurrence_overlap(base_id, [str(term.get("term_id") or "")])
+        messages = _build_synonym_prompt(
+            mention=mention,
+            mention_context=mention_context,
+            term_row=term,
+            partner_overlap=overlap,
+        )
+        verdict: dict[str, Any] = await self._invoke_judge_llm_verified(messages)
+        return verdict
+
+    async def _invoke_ambiguity_judge(
+        self: Any,
+        base_id: str,
+        *,
+        candidate: dict[str, Any],
+    ) -> dict[str, Any]:
+        """歧义裁决（judge_ambiguity 形态，Spec §7.2）。
+
+        同词面不同 term 各自上下文（term_name + 类型 + 文件），防御式附
+        co_occurrence 伙伴集交集。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            candidate: 歧义候选 ``{"mention", "terms", ...}``。
+
+        Returns:
+            裁决对象 ``{"same_entity": bool, "entity_names": [...]}``。
+        """
+        mention = str(candidate["mention"])
+        terms = candidate["terms"]
+        contexts = [
+            f"{_row_term_name(row)}（类型: {row.get('term_type_code')}，"
+            f"文件: {row.get('file_name') or '无'}）"
+            for row in terms
+        ]
+        overlap = self._co_occurrence_overlap(
+            base_id, [str(row.get("term_id") or "") for row in terms]
+        )
+        messages = _build_ambiguity_prompt(
+            mention=mention, term_contexts=contexts, partner_overlap=overlap
+        )
+        verdict: dict[str, Any] = await self._invoke_judge_llm_verified(messages)
+        return verdict
+
+    async def _invoke_judge_llm_verified(
+        self: Any, messages: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        """裁决 LLM 调用：严格 JSON 对象解析 + <think> 剥离 + ≤3 次重试退避。
+
+        Args:
+            messages: prompt 消息列表。
+
+        Returns:
+            解析后的裁决对象（dict）。
+
+        Raises:
+            RuntimeError: 重试后仍非合法 JSON 对象（无降级）。
+        """
+        last_error = ""
+        for attempt in range(_MAX_JSON_RETRIES):
+            if attempt > 0:
+                await asyncio.sleep(_JSON_RETRY_BACKOFF_SECONDS * attempt)
+                retry_messages = messages + [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"上次输出不是合法 JSON（{last_error}）。"
+                            "请重新只输出严格 JSON 对象，不要任何解释。"
+                        ),
+                    }
+                ]
+            else:
+                retry_messages = messages
+            raw = await self._invoke_judge_llm(retry_messages)
+            text = _llm_response_text(raw)
+            parsed = _parse_judge_json(text)
+            if parsed is not None:
+                return parsed
+            last_error = text[:200] if text else "空输出"
+        raise RuntimeError(
+            f"裁决 LLM 输出非法 JSON（重试 {_MAX_JSON_RETRIES} 次仍失败）: {last_error}"
+        )
+
+    async def _invoke_judge_llm(self: Any, messages: list[dict[str, str]]) -> Any:
+        """调用裁决 LLM（build_llm + stream_invoke_with_thinking，temp=0 环境默认）。
+
+        经 ``anyio.to_thread.run_sync`` 移出事件循环线程。
+        """
+        return await to_thread.run_sync(partial(_judge_llm_sync, messages=messages))
+
+    def _write_alias(
+        self: _ObjectInstanceDiscoveryPlatform,
+        *,
+        base_id: str,
+        term_id: str,
+        name_text: str,
+    ) -> None:
+        """同义/歧义归并落库：create_term_name 写别名 + 缓存失效（D-5，Spec §7.3）。
+
+        别名经触发器 ``trg_term_name_vocab`` 自动投影进词典 → 下次 ③ 锚定可命中。
+        search_scope 通用作用域（user 级留空）。
+        """
+        self.create_term_name(
+            base_id,
+            name={
+                "termId": term_id,
+                "nameText": name_text,
+                "searchScope": {},
+            },
+        )
+        invalidate_vocabulary_cache()
+
+    def _co_occurrence_overlap(
+        self: _ObjectInstanceDiscoveryPlatform,
+        base_id: str,
+        term_ids: list[str],
+    ) -> str | None:
+        """防御式读取：term_tags.co_occurrence 伙伴集交集（D-7 语境信号）。
+
+        经 ``get_term_detail`` 读各 term 的 ``term_tags.co_occurrence``
+        （``{partner_term_id: count}``）；求伙伴集交集。T11 未就绪时伙伴集
+        为空 → 返回 None → prompt 不带共现段，不阻塞。
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            term_ids: 参与交集计算的 term_id 列表（去空）。
+
+        Returns:
+            共现语境段文本；无交集/无数据时 None。
+        """
+        partner_sets: list[set[str]] = []
+        for term_id in term_ids:
+            if not term_id:
+                continue
+            detail = self.get_term_detail(base_id, library_id=base_id, term_id=term_id)
+            tags = (detail or {}).get("term_tags") or {}
+            co = tags.get("co_occurrence") or {}
+            if isinstance(co, dict):
+                partner_sets.append(
+                    {
+                        str(partner)
+                        for partner, count in co.items()
+                        if count and int(count) > 0
+                    }
+                )
+        if not partner_sets:
+            return None
+        common = (
+            set.intersection(*partner_sets)
+            if len(partner_sets) > 1
+            else partner_sets[0]
+        )
+        if not common:
+            return None
+        return "共现伙伴交集: " + ", ".join(sorted(common)[:20])
+
     def _discover_existing_object_instances(
         self: Any,
         base_id: str,
@@ -490,14 +763,28 @@ class ObjectInstanceDiscoveryMixin:
                 hit_row["evidence"] = name
                 existing.append(hit_row)
             elif len(surface) >= 2:
-                ambiguity.append({"mention": name, "terms": surface})
+                ambiguity.append(
+                    {
+                        "mention": name,
+                        "terms": surface,
+                        "object_code": mention.get("object_code"),
+                        "raw_type": mention.get("raw_type"),
+                        "evidence": mention.get("evidence"),
+                    }
+                )
             else:
                 overlap = [
                     row for row in rows if _substring_overlap(name, _row_term_name(row))
                 ]
                 if overlap:
                     synonym.append(
-                        {"mention": name, "term": _term_row_to_hit_row(overlap[0])}
+                        {
+                            "mention": name,
+                            "term": _term_row_to_hit_row(overlap[0]),
+                            "object_code": mention.get("object_code"),
+                            "raw_type": mention.get("raw_type"),
+                            "evidence": mention.get("evidence"),
+                        }
                     )
                 else:
                     unanchored.append(mention)
@@ -1093,3 +1380,141 @@ def _normalize_extracted_mentions(
             row["raw_type"] = str(raw_type).strip()
         normalized.append(row)
     return normalized
+
+
+# ── T10 同步裁决辅助（Spec §7）───────────────────────────────────────────────
+
+
+def _judge_llm_sync(messages: list[dict[str, str]]) -> Any:
+    """同步调用裁决 LLM（移出事件循环线程执行，temp=0 环境默认）。"""
+    llm = build_llm()
+    return stream_invoke_with_thinking(llm, messages, on_event=None)
+
+
+def _parse_judge_json(text: str) -> dict[str, Any] | None:
+    """解析裁决 LLM 输出的严格 JSON 对象（含前导 <think> 剥离）。
+
+    Args:
+        text: LLM 输出原文。
+
+    Returns:
+        裁决对象（dict）；非合法 JSON 对象时返回 None（触发重试）。
+    """
+    stripped = _LEADING_THINKING_PATTERN.sub("", text).strip()
+    if not stripped:
+        return None
+    try:
+        data = json.loads(stripped)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _build_synonym_prompt(
+    *,
+    mention: str,
+    mention_context: str,
+    term_row: dict[str, Any],
+    partner_overlap: str | None,
+) -> list[dict[str, str]]:
+    """同义裁决 prompt（judge_synonym 形态，Spec §7.2）。
+
+    Args:
+        mention: 候选 mention（实体A）。
+        mention_context: mention 在文档中的原文片段（evidence，可为空）。
+        term_row: 已有 term 行（实体B）。
+        partner_overlap: 共现伙伴交集段（T11 信号，可为 None）。
+
+    Returns:
+        system + user 消息列表。
+    """
+    system = (
+        "你是企业知识库实体归并裁决器。判断两个实体是否指向同一现实实体"
+        "（全称/简称/别名关系也算同一实体）。只输出严格 JSON 对象，不要任何解释。"
+    )
+    parts = [f"实体A: {mention}"]
+    if mention_context:
+        parts.append(f"实体A上下文: {mention_context}")
+    parts.append(
+        f"实体B: {_row_term_name(term_row)}"
+        f"（类型: {term_row.get('term_type_code') or '未知'}）"
+    )
+    if partner_overlap:
+        parts.append(partner_overlap)
+    parts.append(
+        '判断 A/B 是否同一实体 → 输出 {"same": bool, "canonical": "主实体ID或名称"}'
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "\n".join(parts)},
+    ]
+
+
+def _build_ambiguity_prompt(
+    *,
+    mention: str,
+    term_contexts: list[str],
+    partner_overlap: str | None,
+) -> list[dict[str, str]]:
+    """歧义裁决 prompt（judge_ambiguity 形态，Spec §7.2）。
+
+    Args:
+        mention: 同词面 mention。
+        term_contexts: 各 term 的语境描述列表。
+        partner_overlap: 共现伙伴交集段（可为 None）。
+
+    Returns:
+        system + user 消息列表。
+    """
+    system = (
+        "你是企业知识库同名实体裁决器。判断同词面出现在多个语境时，"
+        "是同一实体还是同名异义。只输出严格 JSON 对象，不要任何解释。"
+    )
+    context_lines = "\n".join(
+        f"语境{i + 1}: {context}" for i, context in enumerate(term_contexts)
+    )
+    parts = [
+        f"词面 '{mention}' 出现在多个语境，可能是同一实体或多个同名异义实体。",
+        context_lines,
+    ]
+    if partner_overlap:
+        parts.append(partner_overlap)
+    parts.append(
+        '判断：同一实体 or 同名异义 → {"same_entity": bool, "entity_names": ["主实体名称", ...]}'
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": "\n".join(parts)},
+    ]
+
+
+def _mention_object_code(candidate: dict[str, Any]) -> str:
+    """裁决后新实例类型规则（D-3）：能定类型用该类型，定不了 → AUTO_DISCOVERED。
+
+    Args:
+        candidate: 冲突候选（含 ④ 抽取的 object_code）。
+
+    Returns:
+        新实例 object_code（缺失/空 → AUTO_DISCOVERED）。
+    """
+    code = str(candidate.get("object_code") or "").strip()
+    return code if code else _AUTO_DISCOVERED_CODE
+
+
+def _pick_canonical_term_id(
+    terms: list[dict[str, Any]], entity_names: list[Any]
+) -> str:
+    """歧义归并选主 term：优先与裁决 entity_names 匹配的 term，否则取第一个。
+
+    Args:
+        terms: 同名多候选 term 行列表。
+        entity_names: 裁决输出的主实体名列表。
+
+    Returns:
+        主 term_id（空串 = 无法确定 → 调用方跳过归并）。
+    """
+    names = {str(n).strip() for n in entity_names if str(n).strip()}
+    for row in terms:
+        if _row_term_name(row) in names:
+            return str(row.get("term_id") or row.get("termId") or "")
+    return str(terms[0].get("term_id") or terms[0].get("termId") or "")

@@ -180,6 +180,17 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
             )
         )
 
+    def get_term_detail(
+        self, base_id: str, *, library_id: str, term_id: str
+    ) -> dict[str, Any] | None:
+        self.calls.append(
+            (
+                "get_term_detail",
+                {"base_id": base_id, "library_id": library_id, "term_id": term_id},
+            )
+        )
+        return {"term_id": term_id, "term_tags": {}}
+
 
 def _make_document(term_id: str = "term-input") -> DocumentContentResult:
     return DocumentContentResult(
@@ -1107,10 +1118,10 @@ class TestDiscoverOrchestration:
         assert result.items[0].is_new is True
 
     @pytest.mark.asyncio
-    async def test_ambiguity_candidates_are_deferred_not_created(
+    async def test_ambiguity_same_entity_merges_alias_not_created(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """歧义候选（同名多候选）在 T10 裁决前保守跳过：不建重复实例、不产已有 hit。"""
+        """歧义候选裁决 same_entity=true → 归并别名到主 term，不建新实例、不产已有 hit。"""
         platform = _FakePlatform()
         platform.document = _make_document()
 
@@ -1144,6 +1155,11 @@ class TestDiscoverOrchestration:
                 unanchored=[],
             ),
         )
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same_entity": true, "entity_names": ["张三"]}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
         result = await platform.discover_object_instances_unstructured(
             BASE_ID,
             instance_id="term-input",
@@ -1151,13 +1167,18 @@ class TestDiscoverOrchestration:
             session_id="session-1",
         )
         assert result.items == []
+        # 归并：别名写回主 term（termId=canonical、nameText=mention）
+        alias_call = next(c for c in platform.calls if c[0] == "create_term_name")
+        assert alias_call[1]["name"]["termId"] == "t1"
+        assert alias_call[1]["name"]["nameText"] == "张三"
+        # 无新实例（不建 term、不建关系）
         assert all(c[0] != "create_term_relation" for c in platform.calls)
 
     @pytest.mark.asyncio
-    async def test_synonym_candidates_are_deferred_not_created(
+    async def test_synonym_same_writes_alias_not_created(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """同义候选（子串重叠）在 T10 裁决前保守跳过。"""
+        """同义候选裁决 same=true → 写 TermName 别名（term_id=canonical），不建新实例。"""
         platform = _FakePlatform()
         platform.document = _make_document()
 
@@ -1183,6 +1204,11 @@ class TestDiscoverOrchestration:
                 unanchored=[],
             ),
         )
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same": true, "canonical": "t1"}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
         result = await platform.discover_object_instances_unstructured(
             BASE_ID,
             instance_id="term-input",
@@ -1190,6 +1216,10 @@ class TestDiscoverOrchestration:
             session_id="session-1",
         )
         assert result.items == []
+        alias_call = next(c for c in platform.calls if c[0] == "create_term_name")
+        assert alias_call[1]["name"]["termId"] == "t1"
+        assert alias_call[1]["name"]["nameText"] == "苹果公司"
+        assert all(c[0] != "create_term_relation" for c in platform.calls)
 
 
 # ============================================================================
@@ -1973,3 +2003,287 @@ class TestAutoDiscoveredCreateChannel:
                 "relationName": "提及",
             }
         ]
+
+
+# ============================================================================
+# T10 同步裁决：同名多候选（歧义）/ 子串重叠（同义），temp=0 带上下文一票
+# ============================================================================
+
+
+class TestAdjudication:
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self) -> Any:
+        discovery_module.invalidate_vocabulary_cache()
+        yield
+        discovery_module.invalidate_vocabulary_cache()
+
+    @pytest.mark.asyncio
+    async def test_no_conflict_skips_adjudication(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """无冲突候选 → 直通不调裁决 LLM。"""
+        platform = _FakePlatform()
+        called: list[Any] = []
+        monkeypatch.setattr(
+            platform,
+            "_invoke_judge_llm",
+            lambda messages: called.append(1) or _AiMessage("{}"),
+        )
+        hits = await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[],
+            source_term_id="term-input",
+            session_id="session-1",
+        )
+        assert hits == []
+        assert not called
+
+    @pytest.mark.asyncio
+    async def test_synonym_same_writes_alias(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """同义 same=true → create_term_name（term_id=canonical、name_text=mention）、无新 term、缓存失效。"""
+        platform = _FakePlatform()
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same": true, "canonical": "t1"}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        hits = await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
+            source_term_id="term-input",
+            session_id="session-1",
+        )
+        assert hits == []
+        alias = next(c for c in platform.calls if c[0] == "create_term_name")
+        assert alias[1]["name"]["termId"] == "t1"
+        assert alias[1]["name"]["nameText"] == "苹果公司"
+        # 无新 term 创建（create_term 未被调）
+        assert all(c[0] != "create_term" for c in platform.calls)
+        # 别名落库后缓存失效 → 下次 discover 重载
+        assert discovery_module._cached_vocabulary is None
+
+    @pytest.mark.asyncio
+    async def test_synonym_not_same_creates_new_instance(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """同义 same=false → 独立新实例（复用 _create_new_instance_flow，能定类型用该类型）。"""
+        platform = _FakePlatform()
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same": false, "canonical": ""}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        created: list[dict[str, Any]] = []
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            created.append(kwargs)
+            return {"records": [{"termId": "term-adj-1"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        hits = await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[
+                {
+                    "mention": "苹果公司",
+                    "term": _term_row("t1", "苹果"),
+                    "object_code": "by_opportunity",
+                }
+            ],
+            source_term_id="term-input",
+            session_id="session-1",
+        )
+        assert len(hits) == 1
+        assert hits[0].instance_id == "term-adj-1"
+        assert hits[0].instance_name == "苹果公司"
+        assert hits[0].object_code == "by_opportunity"
+        assert hits[0].is_new is True
+        assert len(created) == 1
+        # 同义裁决 false 不写别名
+        assert all(c[0] != "create_term_name" for c in platform.calls)
+
+    @pytest.mark.asyncio
+    async def test_ambiguity_distinct_creates_auto_discovered_when_no_type(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """歧义 same_entity=false 且 mention 类型定不了 → AUTO_DISCOVERED 通道。"""
+        platform = _FakePlatform()
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same_entity": false, "entity_names": ["张三"]}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        created_terms: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            platform,
+            "create_term",
+            lambda base_id, *, term: (
+                created_terms.append(term),
+                {"term_ids": ["term-adj-2"]},
+            )[1],
+        )
+        monkeypatch.setattr(
+            platform,
+            "create_term_knowledge",
+            lambda base_id, *, knowledge: {"knowledgeId": "k"},
+        )
+        hits = await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[
+                {
+                    "mention": "张三",
+                    "terms": [_term_row("t1", "张三"), _term_row("t2", "张三")],
+                    "object_code": "AUTO_DISCOVERED",
+                    "raw_type": "人员",
+                }
+            ],
+            synonym=[],
+            source_term_id="term-input",
+            session_id="session-1",
+        )
+        assert len(hits) == 1
+        assert hits[0].object_code == "AUTO_DISCOVERED"
+        assert hits[0].instance_id == "term-adj-2"
+        assert created_terms and created_terms[0]["term_type_code"] == "AUTO_DISCOVERED"
+        assert created_terms[0]["ext_attrs"]["raw_type"] == "人员"
+
+    @pytest.mark.asyncio
+    async def test_co_occurrence_signal_defensive_when_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """term_tags 无 co_occurrence（T11 未就绪）→ prompt 不带共现段，不阻塞。"""
+        platform = _FakePlatform()
+        captured: dict[str, Any] = {}
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            captured["messages"] = messages
+            return _AiMessage('{"same": true, "canonical": "t1"}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
+            source_term_id="term-input",
+            session_id="session-1",
+        )
+        user = next(m for m in captured["messages"] if m["role"] == "user")
+        assert "共现" not in user["content"]
+        assert "co_occurrence" not in user["content"]
+
+    @pytest.mark.asyncio
+    async def test_judge_invalid_json_retries(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """裁决 LLM 非法 JSON → 重试（≤3 次退避），第二次成功即返回。"""
+        platform = _FakePlatform()
+        calls: list[Any] = []
+        outputs = ["不是JSON{{", '{"same": true, "canonical": "t1"}']
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            calls.append(messages)
+            return _AiMessage(outputs[min(len(calls) - 1, 1)])
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        monkeypatch.setattr(discovery_module, "_JSON_RETRY_BACKOFF_SECONDS", 0)
+        hits = await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
+            source_term_id="term-input",
+            session_id="session-1",
+        )
+        assert hits == []
+        assert len(calls) == 2
+        alias = next(c for c in platform.calls if c[0] == "create_term_name")
+        assert alias[1]["name"]["nameText"] == "苹果公司"
+
+    @pytest.mark.asyncio
+    async def test_judge_think_block_stripped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """裁决响应 <think> 块剥离后解析。"""
+        platform = _FakePlatform()
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('<think>判断中</think>\n{"same": false, "canonical": ""}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-adj-3"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        hits = await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[
+                {
+                    "mention": "苹果公司",
+                    "term": _term_row("t1", "苹果"),
+                    "object_code": "by_opportunity",
+                }
+            ],
+            source_term_id="term-input",
+            session_id="session-1",
+        )
+        assert len(hits) == 1
+        assert hits[0].instance_id == "term-adj-3"
+
+    @pytest.mark.asyncio
+    async def test_full_flow_adjudicates_synonym_candidate(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """主流程：synonym 候选 → 裁决 same=true → 别名落库，无新实例。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        # 词典含 mention 词（④ 回填后词典即含该词）→ 快路命中 → 反查 → 子串重叠 → synonym 候选
+        platform.vocab_words = ["苹果", "苹果公司"]
+
+        def fake_search(base_id: str, **kwargs: Any) -> dict[str, Any]:
+            # 精确查询（term_name=苹果公司）无命中；BM25 兜底返回子串相关行"苹果"
+            if kwargs.get("query_type") == "fulltext":
+                return {"total": 1, "items": [_term_row("t1", "苹果")]}
+            return {"total": 0, "items": []}
+
+        monkeypatch.setattr(platform, "search_terms", fake_search)
+        raw = (
+            '[{"term_name": "苹果公司", "object_code": "by_opportunity",'
+            ' "evidence": "苹果公司"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform,
+            "get_term_type",
+            lambda base_id, *, library_id, type_code: {"type_name": "商机"},
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same": true, "canonical": "t1"}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        assert result.items == []
+        alias = next(c for c in platform.calls if c[0] == "create_term_name")
+        assert alias[1]["name"]["nameText"] == "苹果公司"
+        assert all(c[0] != "create_term_relation" for c in platform.calls)
