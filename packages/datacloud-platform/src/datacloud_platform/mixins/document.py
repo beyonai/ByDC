@@ -938,9 +938,7 @@ def _build_object_file_status(
     kb_directory = object_scope.kb_directory.strip()
     if kb_directory and not kb_directory.startswith("/"):
         kb_directory = f"/{kb_directory}"
-    fallback_file_path = str(
-        PurePosixPath("/" + kb_directory.strip("/")) / file_name
-    )
+    fallback_file_path = str(PurePosixPath("/" + kb_directory.strip("/")) / file_name)
     file_path = str(
         first_record.get("filePath")
         or first_record.get("file_path")

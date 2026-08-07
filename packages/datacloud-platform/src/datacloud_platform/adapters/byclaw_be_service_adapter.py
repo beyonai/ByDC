@@ -17,7 +17,9 @@ from datacloud_platform.services.kb_document_reader import (
     _build_headers,
 )
 
-SAVE_OR_UPDATE_OBJECT_FILES_PATH = "/byaiService/devloop/operation/saveOrUpdateObjectFiles"
+SAVE_OR_UPDATE_OBJECT_FILES_PATH = (
+    "/byaiService/devloop/operation/saveOrUpdateObjectFiles"
+)
 _TIMEOUT_SECONDS = 30.0
 PostJson = Callable[[str, dict[str, Any], dict[str, str]], object]
 
