@@ -10,6 +10,8 @@ import pytest
 
 from datacloud_platform.mixins.document_enrich import (
     DocumentEnrichMixin,
+    _extract_document_template,
+    _object_relation_definitions,
     _remove_leading_thinking,
 )
 from datacloud_platform.models.document import (
@@ -39,6 +41,56 @@ def test_remove_leading_thinking_keeps_only_final_document() -> None:
     )
 
     assert _remove_leading_thinking(content) == "---\nname: value\n---\n# 正文"
+
+
+@pytest.mark.parametrize(
+    "object_detail",
+    [
+        {"template": "# {{name}}\n\n## 业务说明\n\n{{description}}"},
+        {
+            "extProperty": (
+                '{"template":"# {{name}}\\n\\n## 业务说明\\n\\n{{description}}"}'
+            )
+        },
+    ],
+)
+def test_extract_document_template_supports_object_detail_variants(
+    object_detail: dict[str, object],
+) -> None:
+    assert _extract_document_template(object_detail) == (
+        "# {{name}}\n\n## 业务说明\n\n{{description}}"
+    )
+
+
+def test_object_relation_definitions_supports_ext_property_rules() -> None:
+    object_detail = {
+        "objectCode": "Ability",
+        "extProperty": {
+            "rules": (
+                "source_object_type: Ability\n"
+                "allowed_relations:\n"
+                "- direction: outgoing\n"
+                "  relation_code: supports\n"
+                "  relation_name: 支撑\n"
+                "  target_object_types:\n"
+                "  - Feature\n"
+                "  - Ability\n"
+            )
+        },
+    }
+
+    assert _object_relation_definitions(object_detail) == (
+        {
+            "relationName": "支撑",
+            "sourceObjectCode": "Ability",
+            "targetObjectCode": "Feature",
+        },
+        {
+            "relationName": "支撑",
+            "sourceObjectCode": "Ability",
+            "targetObjectCode": "Ability",
+        },
+    )
 
 
 def _object_scope() -> list[DocumentEnrichObjectScope]:
@@ -98,11 +150,28 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                 filePath="/customers/acme.md",
                 content=ORIGINAL_CONTENT,
             ),
+            "term-partner-a": DocumentContentResult(
+                termId="term-partner-a",
+                kbResourceId="kb-1",
+                filePath="/partners/alpha.md",
+                content=(
+                    "---\n"
+                    "internal_only: remove-me\n"
+                    "---\n"
+                    "# Alpha 合作伙伴\n\n"
+                    "面向客户的联合方案。\n\n"
+                    "Alpha 负责支持客户/客户增长计划的北区渠道建设。\n\n"
+                    "后续将扩展联合交付范围。"
+                ),
+            ),
             "term-partner-b": DocumentContentResult(
                 termId="term-partner-b",
                 kbResourceId="kb-1",
                 filePath="/partners/beta.md",
                 content=(
+                    "---\n"
+                    "internal_only: remove-me\n"
+                    "---\n"
                     "# Beta 合作伙伴\n\n"
                     "完全无关的办公地点说明。\n\n"
                     "客户增长计划依赖 Beta 合作伙伴提供渠道覆盖和联合交付。"
@@ -161,12 +230,18 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         self.fragments = DocumentFragmentResult(
             items=(
                 DocumentFragmentItem(
+                    termId="term-partner-a",
+                    termName="Alpha 合作伙伴",
+                    objectCode="partner",
                     knCode="kb-1",
                     filePath="/partners/alpha.md",
                     chunkText="Alpha 合作伙伴负责北区渠道和客户联合方案。",
                     score=0.95,
                 ),
                 DocumentFragmentItem(
+                    termId="term-research",
+                    termName="续约研究",
+                    objectCode="customer",
                     knCode="kb-1",
                     filePath="/research/renewal.md",
                     chunkText="续约成功率通常受交付响应速度影响。",
@@ -175,6 +250,15 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                         "termTypeCode": "customer",
                         "termName": "续约研究",
                     },
+                ),
+                DocumentFragmentItem(
+                    termId=TARGET_TERM_ID,
+                    termName="客户增长计划",
+                    objectCode="customer",
+                    knCode="kb-1",
+                    filePath="/customers/acme.md",
+                    chunkText="当前文档的语义命中也暂时保留。",
+                    score=0.8,
                 ),
             )
         )
@@ -187,6 +271,7 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
     ) -> RelatedDocumentRelationPage:
         assert base_id == BASE_ID
         assert request.term_id == TARGET_TERM_ID
+        assert request.direction == "incoming"
         return self.relations
 
     async def get_document_content_by_term_id(
@@ -232,6 +317,8 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                 ],
                 "extProperty": {
                     "template": (
+                        "## 2. 头部字段填写说明\n\n"
+                        "续约日期必须来自可靠素材。\n\n"
                         "## 5. 实例卡片模板\n\n"
                         "```markdown\n"
                         "---\n"
@@ -294,10 +381,10 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                 "## 概述\n\n客户增长计划聚焦续约。\n\n"
                 "## 核心信息\n\n计划续约日期为 2027-01-01。\n\n"
                 "## 详细说明\n\n"
-                "通过 [[合作伙伴/Alpha 合作伙伴]] 扩展渠道。\n\n"
+                "通过 [合作伙伴/Alpha 合作伙伴]() 扩展渠道。\n\n"
                 "## 相关信息\n\n相关事实以检索素材为依据。\n\n"
                 "<!--- relation --->\n"
-                "(协作)[[合作伙伴/Alpha 合作伙伴]]\n"
+                "(协作)[合作伙伴/Alpha 合作伙伴]\n"
                 "<!--- relation --->"
             )
         return (
@@ -307,9 +394,9 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
             "# 客户增长计划\n\n"
             "## 增长目标\n\n提升客户续约表现。\n\n"
             "## 执行策略\n\n"
-            "客户增长计划通过 [[合作伙伴/Alpha 合作伙伴]] 扩展渠道。\n\n"
+            "客户增长计划通过 [合作伙伴/Alpha 合作伙伴](错误-id) 扩展渠道。\n\n"
             "<!--- relation --->\n"
-            "(协作)[[合作伙伴/Alpha 合作伙伴]]\n"
+            "\n"
             "<!--- relation --->"
         )
 
@@ -336,27 +423,42 @@ async def test_enrich_uses_labelled_bounded_evidence_and_relation_fallback(
     assert result.enriched_content.startswith("---\nrenewal_date:")
     assert "## 增长目标" in result.enriched_content
     assert "## 执行策略" in result.enriched_content
-    assert "[[合作伙伴/Alpha 合作伙伴]]" in result.enriched_content
+    assert "[合作伙伴/Alpha 合作伙伴](term-partner-a)" in result.enriched_content
+    assert "错误-id" not in result.enriched_content
     assert "<!--- relation --->" not in result.enriched_content
     assert "(协作)" not in result.enriched_content
     assert len(result.relations) == 1
     assert result.relations[0].relation_name == "协作"
     assert result.relations[0].target_object_type == "合作伙伴"
     assert result.relations[0].target_instance_name == "Alpha 合作伙伴"
+    assert result.relations[0].target_term_id == "term-partner-a"
     prompt = platform.messages[1]["content"]
     assert "renewal_date" in prompt
     assert "## 增长目标" in prompt
-    assert "(协作)[[合作伙伴/Alpha 合作伙伴]]" in prompt
-    assert "[客户/客户增长计划]" in prompt
-    assert "[合作伙伴/Alpha 合作伙伴]" in prompt
-    assert "[合作伙伴/Beta 合作伙伴]" in prompt
+    assert "关系名称：协作；目标对象类型：合作伙伴" in prompt
+    assert "## 对象定义中的文档格式模板（必须严格使用）" in prompt
+    assert "## 对象定义中的完整 template（生成约束）" in prompt
+    assert "续约日期必须来自可靠素材" in prompt
+    assert "## 增长目标" in prompt
+    assert "## 执行策略" in prompt
+    assert "[客户/客户增长计划](term-target)" in prompt
+    assert "[合作伙伴/Alpha 合作伙伴](term-partner-a)" in prompt
+    assert "[合作伙伴/Beta 合作伙伴](term-partner-b)" in prompt
+    assert "[客户/续约研究](term-research)" in prompt
     assert "[客户/对象定义]" in prompt
     assert "[合作伙伴/对象定义]" not in prompt
     assert "当前合同的计划续约日期" in prompt
     assert "Alpha 合作伙伴负责北区渠道" in prompt
+    assert "当前文档的语义命中也暂时保留" in prompt
     assert "客户增长计划依赖 Beta 合作伙伴" in prompt
     assert "完全无关的办公地点说明" not in prompt
-    assert platform.loaded_term_ids == [TARGET_TERM_ID, "term-partner-b"]
+    assert "internal_only: remove-me" not in prompt
+    assert "Alpha 负责支持客户/客户增长计划" in prompt
+    assert platform.loaded_term_ids == [
+        TARGET_TERM_ID,
+        "term-partner-a",
+        "term-partner-b",
+    ]
     assert platform.requested_object_codes == ["customer"]
     assert {
         record.name
@@ -385,7 +487,7 @@ async def test_enrich_uses_labelled_bounded_evidence_and_relation_fallback(
         message for message in log_messages if "llm_output" in message
     )
     assert 'renewal_date: "2027-01-01"' in llm_output_log
-    assert "(协作)[[合作伙伴/Alpha 合作伙伴]]" in llm_output_log
+    assert "[合作伙伴/Alpha 合作伙伴](错误-id)" in llm_output_log
 
 
 @pytest.mark.asyncio
@@ -457,6 +559,10 @@ async def test_enrich_uses_generic_template_when_object_template_is_missing() ->
     assert "## 核心信息" in result.enriched_content
     assert "## 详细说明" in result.enriched_content
     assert "## 相关信息" in result.enriched_content
+    assert (
+        "## 通用文档格式模板（对象定义未提供 template）"
+        in (platform.messages[1]["content"])
+    )
 
 
 @pytest.mark.asyncio

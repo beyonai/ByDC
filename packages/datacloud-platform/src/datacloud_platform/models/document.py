@@ -239,6 +239,7 @@ class DocumentEnrichRelation(_AliasedModel):
     relation_name: str = Field(alias="relationName")
     target_object_type: str = Field(alias="targetObjectType")
     target_instance_name: str = Field(alias="targetInstanceName")
+    target_term_id: str = Field(alias="targetTermId")
 
 
 class DocumentEnrichResult(_AliasedModel):
