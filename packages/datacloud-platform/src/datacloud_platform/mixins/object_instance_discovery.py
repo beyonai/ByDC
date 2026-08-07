@@ -123,6 +123,16 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
         self, base_id: str, *, library_id: str, type_code: str
     ) -> dict[str, Any] | None: ...
     def batch_create_vocabulary(self, base_id: str, *, words: list[str]) -> None: ...
+    def ensure_term_type(
+        self, *, base_id: str, type_code: str, type_name: str
+    ) -> None: ...
+    def create_term(self, base_id: str, *, term: dict[str, Any]) -> dict[str, Any]: ...
+    def create_term_knowledge(
+        self, base_id: str, *, knowledge: dict[str, Any]
+    ) -> dict[str, Any]: ...
+    def create_term_name(
+        self, base_id: str, *, name: dict[str, Any]
+    ) -> dict[str, Any]: ...
 
 
 class ObjectInstanceDiscoveryMixin:
@@ -258,6 +268,9 @@ class ObjectInstanceDiscoveryMixin:
             object_code=object_code,
             term_name=term_name,
             session_id=session_id,
+            raw_type=str(candidate["raw_type"])
+            if candidate.get("raw_type") is not None
+            else None,
         )
         await self._register_object_file(
             base_id=base_id,
@@ -291,17 +304,24 @@ class ObjectInstanceDiscoveryMixin:
         object_code: str,
         term_name: str,
         session_id: str,
+        raw_type: str | None = None,
     ) -> str:
         """⑤⑥ 新实例创建 + term_id 强校验。
 
-        经 ``invoke_object_write_action``（services/object_action.py）写入知识库
-        文件（write_<object_code> action），对响应做 term_id 强校验。
+        两条通道（Spec §3.1）：
+
+        - 常规类型：经 ``invoke_object_write_action``（services/object_action.py）
+          写入知识库文件（write_<object_code> action），对响应做 term_id 强校验。
+        - ``AUTO_DISCOVERED``：方案 (a) 兜底直写——无 ontology 对象，跳过
+          action 管道，直建 term + knowledge（``ext_attrs.raw_type`` 保留 LLM
+          原始类型名，``labels.dc_status`` 待整理），登记/关系照旧。
 
         Args:
             base_id: 本体库/系统空间标识。
             object_code: 新实例对象类型编码。
             term_name: 新实例名称。
             session_id: 会话 ID（本方法不使用，保留签名以透传后续登记）。
+            raw_type: LLM 原始类型名（仅 AUTO_DISCOVERED 分支使用）。
 
         Returns:
             强校验非空的 term_id。
@@ -309,6 +329,13 @@ class ObjectInstanceDiscoveryMixin:
         Raises:
             ObjectInstanceWriteMissingTermIdError: write 响应缺 term_id。
         """
+        if object_code == _AUTO_DISCOVERED_CODE:
+            term_id: str = self._create_auto_discovered_instance(
+                base_id=base_id,
+                term_name=term_name,
+                raw_type=raw_type,
+            )
+            return term_id
         labels = build_processing_labels(
             initial_status=DocumentProcessingStatus.PENDING_ORGANIZATION,
             labels=_PENDING_LABELS,
@@ -327,6 +354,78 @@ class ObjectInstanceDiscoveryMixin:
         )
         term_id = _extract_written_term_id(result)
         # ⑤ 新实例落库 → 词表已更新 → 飞轮实时（下次 discover 重载词典）
+        invalidate_vocabulary_cache()
+        return term_id
+
+    def _create_auto_discovered_instance(
+        self: _ObjectInstanceDiscoveryPlatform,
+        *,
+        base_id: str,
+        term_name: str,
+        raw_type: str | None,
+    ) -> str:
+        """方案 (a) 兜底直写：AUTO_DISCOVERED 类型实例直接入库。
+
+        背景（Spec §3.1）：⑤ 现走 ``invoke_object_write_action`` →
+        ``loader.get_object(object_code)`` 对无 ontology 对象的类型抛
+        ``ObjectNotFoundError``（未映射 → 500）。AUTO_DISCOVERED 无 ontology
+        对象 → 改走 ``create_term``（TermBackend → insert_term）直建 term +
+        ``create_term_knowledge``（insert_term_knowledge），跳过 action 管道。
+
+        流程：
+        1. ``ensure_term_type`` 幂等落地 TermType 预置行（is_builtin=true）
+        2. ``create_term`` 直写（term_type_code=AUTO_DISCOVERED、
+           ``ext_attrs.raw_type`` 保留原始类型名、``labels.dc_status=待整理``）
+        3. ``create_term_knowledge`` 补充知识
+        4. 缓存失效（飞轮实时）
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            term_name: 新实例名称。
+            raw_type: LLM 原始类型名（可为 None）。
+
+        Returns:
+            create_term 响应中的 term_id（强校验非空）。
+
+        Raises:
+            ObjectInstanceWriteMissingTermIdError: create_term 响应缺 term_id。
+        """
+        term_name = term_name.strip()
+        # TermType 预置行（幂等：重复执行不报错，is_builtin 由 knowledge 层保障）
+        self.ensure_term_type(
+            base_id=base_id,
+            type_code=_AUTO_DISCOVERED_CODE,
+            type_name=_AUTO_DISCOVERED_TYPE_NAME,
+        )
+        labels = build_processing_labels(
+            initial_status=DocumentProcessingStatus.PENDING_ORGANIZATION,
+            labels=_PENDING_LABELS,
+        )
+        ext_attrs: dict[str, Any] = {}
+        if raw_type:
+            ext_attrs["raw_type"] = raw_type
+        result = self.create_term(
+            base_id,
+            term={
+                "term_name": term_name,
+                "term_type_code": _AUTO_DISCOVERED_CODE,
+                "labels": labels,
+                "ext_attrs": ext_attrs,
+            },
+        )
+        term_id = _extract_imported_term_id(result)
+        self.create_term_knowledge(
+            base_id,
+            knowledge={
+                "termId": term_id,
+                "descSummary": f"自动发现对象实例：{term_name}",
+                "desc": (
+                    f"{term_name} 为 LLM 自动发现的对象实例"
+                    f"（原始类型：{raw_type or '未知'}）。"
+                ),
+            },
+        )
+        # 直写落库 → 词表已更新 → 飞轮实时
         invalidate_vocabulary_cache()
         return term_id
 
@@ -717,6 +816,35 @@ def _extract_written_term_id(action_result: dict[str, Any]) -> str:
     if not term_id:
         raise ObjectInstanceWriteMissingTermIdError(
             "write action response is missing term_id"
+        )
+    return term_id
+
+
+def _extract_imported_term_id(result: dict[str, Any]) -> str:
+    """⑥ term_id 强校验：从 create_term/import_terms 响应中提取 term_ids[0]。
+
+    方案 (a) 直写通道（AUTO_DISCOVERED，T9）的强校验等价物：
+    ``create_term`` 返回 ``{created, updated, skipped, term_ids, errors}``，
+    取 ``term_ids[0]``，缺失或为空则抛错（与 action 管道同样不延迟、不做 pending）。
+
+    Args:
+        result: create_term/import_terms 归一化响应。
+
+    Returns:
+        强校验非空的 term_id。
+
+    Raises:
+        ObjectInstanceWriteMissingTermIdError: term_ids 缺失或首项为空。
+    """
+    term_ids = result.get("term_ids") or result.get("termIds") or []
+    term_id = (
+        str(term_ids[0]).strip()
+        if isinstance(term_ids, list) and term_ids and term_ids[0]
+        else ""
+    )
+    if not term_id:
+        raise ObjectInstanceWriteMissingTermIdError(
+            "create_term response is missing term_id"
         )
     return term_id
 

@@ -1741,3 +1741,235 @@ class TestDiscoverFullFlowWithExtraction:
             "/by_opportunity/新客户B.md",
         ]
         assert len(platform.created_relations) == 2
+
+
+# ============================================================================
+# T9 AUTO_DISCOVERED 创建通道：方案 (a) 兜底直写 + TermType 预置行
+# ============================================================================
+
+
+class TestAutoDiscoveredCreateChannel:
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self) -> Any:
+        discovery_module.invalidate_vocabulary_cache()
+        yield
+        discovery_module.invalidate_vocabulary_cache()
+
+    @pytest.mark.asyncio
+    async def test_direct_write_channel_with_raw_type_and_labels(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """AUTO_DISCOVERED 项走直写通道：不调 action 管道，
+        ext_attrs.raw_type / labels.dc_status 落库，登记条目含 term_id，缓存失效。"""
+        platform = _FakePlatform()
+        written: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            platform,
+            "create_term",
+            lambda base_id, *, term: (
+                written.append({"base_id": base_id, **term}),
+                {
+                    "created": 1,
+                    "updated": 0,
+                    "skipped": 0,
+                    "term_ids": ["term-ad-1"],
+                    "errors": [],
+                },
+            )[1],
+        )
+        monkeypatch.setattr(
+            platform,
+            "create_term_knowledge",
+            lambda base_id, *, knowledge: {"knowledgeId": "k1"},
+        )
+        action_calls: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            discovery_module,
+            "invoke_object_write_action",
+            lambda **kwargs: (
+                action_calls.append(kwargs) or {"records": [{"termId": "bad"}]}
+            ),
+        )
+        hit = await platform._create_new_instance_flow(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            candidate={
+                "term_name": "新品类X",
+                "object_code": "AUTO_DISCOVERED",
+                "evidence": "X",
+                "raw_type": "未知业务对象",
+            },
+            session_id="session-1",
+        )
+        assert not action_calls  # 跳过 action 管道（方案 (a)）
+        assert len(written) == 1
+        term = written[0]
+        assert term["base_id"] == BASE_ID
+        assert term["term_name"] == "新品类X"
+        assert term["term_type_code"] == "AUTO_DISCOVERED"
+        assert term["ext_attrs"]["raw_type"] == "未知业务对象"
+        assert term["labels"]["dc_status"] == "待整理"
+        assert hit.instance_id == "term-ad-1"
+        assert hit.object_code == "AUTO_DISCOVERED"
+        assert hit.is_new is True
+        # 登记条目含 term_id（强校验值）
+        assert len(platform.object_files) == 1
+        ext = json.loads(platform.object_files[0][0]["extContent"])
+        assert ext["term_id"] == "term-ad-1"
+        # 直写后缓存失效（飞轮实时）
+        assert discovery_module._cached_vocabulary is None
+
+    @pytest.mark.asyncio
+    async def test_ensure_term_type_called_and_idempotent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """TermType 预置行经 ensure_term_type 幂等落地（重复执行不报错）。"""
+        platform = _FakePlatform()
+        ensured: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            platform,
+            "ensure_term_type",
+            lambda **kwargs: ensured.append((kwargs["type_code"], kwargs["type_name"])),
+        )
+        monkeypatch.setattr(
+            platform,
+            "create_term",
+            lambda base_id, *, term: {
+                "created": 1,
+                "updated": 0,
+                "skipped": 0,
+                "term_ids": ["term-ad-1"],
+                "errors": [],
+            },
+        )
+        monkeypatch.setattr(
+            platform,
+            "create_term_knowledge",
+            lambda base_id, *, knowledge: {"knowledgeId": "k1"},
+        )
+        candidate = {
+            "term_name": "新品类X",
+            "object_code": "AUTO_DISCOVERED",
+            "raw_type": "未知业务对象",
+        }
+        # 首次 + 重复执行均不抛错（幂等）
+        await platform._create_new_instance_flow(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            candidate=candidate,
+            session_id="session-1",
+        )
+        await platform._create_new_instance_flow(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            candidate={**candidate, "term_name": "新品类Y"},
+            session_id="session-1",
+        )
+        assert ensured == [
+            ("AUTO_DISCOVERED", "自动发现类型"),
+            ("AUTO_DISCOVERED", "自动发现类型"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_non_auto_discovered_keeps_action_pipeline(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """非 AUTO_DISCOVERED 项仍走 action 管道（⑤ 回归不破坏）。"""
+        platform = _FakePlatform()
+        created_terms: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            platform,
+            "create_term",
+            lambda base_id, *, term: (
+                created_terms.append(term),
+                {"term_ids": ["term-ad-x"]},
+            )[1],
+        )
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-1"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        hit = await platform._create_new_instance_flow(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            candidate={
+                "term_name": "张三",
+                "object_code": "by_opportunity",
+                "evidence": "e",
+            },
+            session_id="session-1",
+        )
+        assert hit.instance_id == "term-new-1"
+        assert hit.object_code == "by_opportunity"
+        assert not created_terms  # 未走直写通道
+
+    @pytest.mark.asyncio
+    async def test_full_flow_creates_auto_discovered_instance(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """主流程：AUTO_DISCOVERED mention → 直写创建 + 登记 + 提及关系。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        platform.vocab_words = []
+        raw = (
+            '[{"term_name": "新品类X", "object_code": "by_unknown_type",'
+            ' "evidence": "X", "raw_type": "未知业务对象"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform,
+            "get_term_type",
+            lambda base_id, *, library_id, type_code: {"type_name": "商机"},
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        created_terms: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            platform,
+            "create_term",
+            lambda base_id, *, term: (
+                created_terms.append(term),
+                {
+                    "created": 1,
+                    "updated": 0,
+                    "skipped": 0,
+                    "term_ids": ["term-ad-1"],
+                    "errors": [],
+                },
+            )[1],
+        )
+        monkeypatch.setattr(
+            platform,
+            "create_term_knowledge",
+            lambda base_id, *, knowledge: {"knowledgeId": "k1"},
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        assert [h.instance_name for h in result.items] == ["新品类X"]
+        hit = result.items[0]
+        assert hit.instance_id == "term-ad-1"
+        assert hit.object_code == "AUTO_DISCOVERED"
+        assert hit.is_new is True
+        assert len(created_terms) == 1
+        assert created_terms[0]["ext_attrs"]["raw_type"] == "未知业务对象"
+        assert created_terms[0]["labels"]["dc_status"] == "待整理"
+        # 提及关系：输入实例 → 新实例
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "term-ad-1",
+                "relationName": "提及",
+            }
+        ]
