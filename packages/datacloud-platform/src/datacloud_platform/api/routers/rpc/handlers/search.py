@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
+from datacloud_platform.api.routers.rpc.handlers.kb_action import (
+    _required_session_id,
+)
 from datacloud_platform.models.common import ok
 from datacloud_platform.constants import DEFAULT_BASE_ID
 
@@ -165,12 +168,36 @@ async def _enumerate_object_instances(
     )
 
 
+async def _discover_object_instances_unstructured(
+    platform: DatacloudPlatform, params: dict[str, Any], req: Request
+) -> Any:
+    """非结构化对象实例发现 RPC handler。
+
+    入参（snake_case，沿用 searchObjectInstancesUnstructured 约定）：
+        base_id:      str，默认 DEFAULT_BASE_ID
+        instance_id:  str，必填（输入实例 term_id，空 → 400）
+        object_codes: list[str]，必填且非空（空/缺失 → 400）
+
+    请求头要求 X-Session-Id（缺失 → 400），用于文件登记条目的 sessionId 字段。
+    错误语义由 router._EXCEPTION_MAP 统一映射：KeyError → 404、ValueError → 400、
+    NotImplementedError → 501、PermissionError → 403、其他 → 500。
+    """
+    result = await platform.discover_object_instances_unstructured(
+        base_id=params.get("base_id", DEFAULT_BASE_ID),
+        instance_id=params.get("instance_id", ""),
+        object_codes=params.get("object_codes") or [],
+        session_id=_required_session_id(req),
+    )
+    return ok(data={"items": result.items})
+
+
 REGISTRY: dict[str, Any] = {
     "searchOntology": _search_ontology,
     "searchScene": _search_scene,
     "searchInstances": _search_instances,
     "searchObjectInstancesUnstructured": _search_object_instances_unstructured,
     "enumerateObjectInstances": _enumerate_object_instances,
+    "discoverObjectInstancesUnstructured": _discover_object_instances_unstructured,
 }
 
 

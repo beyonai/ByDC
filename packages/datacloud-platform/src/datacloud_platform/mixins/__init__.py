@@ -14,6 +14,9 @@ from datacloud_platform.mixins.document_library_backend import (
 )
 from datacloud_platform.mixins.library import LibraryMixin
 from datacloud_platform.mixins.ontology_build import OntologyBuildMixin
+from datacloud_platform.mixins.object_instance_discovery import (
+    ObjectInstanceDiscoveryMixin,
+)
 from datacloud_platform.mixins.ontology_crud import OntologyCRUDMixin
 from datacloud_platform.mixins.ontology_query import OntologyQueryMixin
 from datacloud_platform.mixins.ontology_workspace import OntologyWorkspaceMixin
@@ -39,6 +42,7 @@ __all__ = [
     "KnowledgeMixin",
     "DocumentLibraryBackendMixin",
     "LibraryMixin",
+    "ObjectInstanceDiscoveryMixin",
     "OntologyBuildMixin",
     "OntologyCRUDMixin",
     "OntologyDocFragmentMixin",

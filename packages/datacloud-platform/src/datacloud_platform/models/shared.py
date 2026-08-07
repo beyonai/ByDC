@@ -233,3 +233,59 @@ class ObjectInstanceListPage:
 
     page_size: int
     """每页条数（>=1）。"""
+
+
+@dataclass(frozen=True)
+class ObjectInstanceDiscoveryHit:
+    """非结构化对象实例发现结果项（含已有/新标记与关系信息）。
+
+    instance_id 为 term_id：已有实例为库中原值；新实例为 write action
+    响应强校验非空的已创建 term_id。
+    """
+
+    instance_id: str
+    """实例 ID（term_id，全局唯一）。"""
+
+    instance_code: str
+    """实例编码（term_code，业务编码）。"""
+
+    instance_name: str
+    """实例名称（term_name）。"""
+
+    object_code: str
+    """对象类型编码（term_type_code）。"""
+
+    file_name: str | None
+    """对应的知识库文件路径（ext_attrs.kb_file_path）。None 表示无/未知。"""
+
+    kb_resource_id: str | None
+    """知识库资源 ID（ext_attrs.kb_resource_id）。None 表示未知。"""
+
+    kb_id: str | None
+    """知识库 ID（ext_attrs.kb_id）。None 表示未知。"""
+
+    is_new: bool
+    """True=本次新创建，False=库中已有。"""
+
+    evidence: str | None = None
+    """原文证据片段；本版恒为 None（TODO）。"""
+
+    relation_name: str = "提及"
+    """已建立/将建立的关系名。"""
+
+
+@dataclass(frozen=True)
+class ObjectInstanceDiscoveryResult:
+    """发现结果信封（参照 ObjectInstanceSearchResult / ObjectInstanceListPage 模式）。
+
+    已有实例在前、新实例在后。
+    """
+
+    items: list[ObjectInstanceDiscoveryHit]
+
+
+class ObjectInstanceWriteMissingTermIdError(RuntimeError):
+    """Write action 响应缺少 term_id 时抛出。
+
+    映射为 500 internal_error（不延迟、不做 pending 标记）。
+    """
