@@ -10,9 +10,19 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import re
 from dataclasses import asdict, dataclass
+from functools import partial
 from typing import Any, Protocol
+
+from anyio import to_thread
+from datacloud_knowledge.intent.llm_utils import (
+    build_llm,
+    stream_invoke_with_thinking,
+)
 
 from datacloud_platform.mixins.document import (
     _build_object_file_status,
@@ -44,6 +54,20 @@ _PENDING_LABELS: dict[str, Any] = {
 
 # ③ 锚定反查单次检索条数上限（词面相等/子串重叠判定所需的候选窗口）
 _ANCHOR_SEARCH_TOP_K = 50
+
+# ④ B 模式抽取（Spec §6）
+_MAX_EXTRACT_CHARS = (
+    16_000  # 长文截断单次上限（document_enrich _MAX_ORIGINAL_CHARS 同值）
+)
+_MAX_JSON_RETRIES = 3  # 非法 JSON 重试次数（≤3 次退避）
+_JSON_RETRY_BACKOFF_SECONDS = 0.5  # 重试退避基数（attempt * 基数）
+_AUTO_DISCOVERED_CODE = "AUTO_DISCOVERED"  # LLM 自动发现类型（禁用 "UNKNOWN"）
+_AUTO_DISCOVERED_TYPE_NAME = "自动发现类型"  # TermType 预置行 type_name（T9）
+
+_LEADING_THINKING_PATTERN = re.compile(
+    r"\A\s*(?:<(?:think|thinking|analysis)>.*?</(?:think|thinking|analysis)>\s*)+",
+    re.DOTALL | re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -95,6 +119,10 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     def list_vocabulary(self, base_id: str) -> list[str]: ...
     def search_terms(self, base_id: str, **kwargs: Any) -> Any: ...
     def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]: ...
+    def get_term_type(
+        self, base_id: str, *, library_id: str, type_code: str
+    ) -> dict[str, Any] | None: ...
+    def batch_create_vocabulary(self, base_id: str, *, words: list[str]) -> None: ...
 
 
 class ObjectInstanceDiscoveryMixin:
@@ -141,7 +169,7 @@ class ObjectInstanceDiscoveryMixin:
         )
 
         # ④ LLM 抽取（B 模式，T8）→ mention 列表（实现编排 ④→③，对外顺序不变）
-        mentions = self._discover_new_object_instances(
+        mentions = await self._discover_new_object_instances(
             base_id, content=document.content, object_codes=object_codes
         )
 
@@ -297,7 +325,10 @@ class ObjectInstanceDiscoveryMixin:
             file_description=f"{term_name}对象实例文档",
             source_path=source_path,
         )
-        return _extract_written_term_id(result)
+        term_id = _extract_written_term_id(result)
+        # ⑤ 新实例落库 → 词表已更新 → 飞轮实时（下次 discover 重载词典）
+        invalidate_vocabulary_cache()
+        return term_id
 
     def _discover_existing_object_instances(
         self: Any,
@@ -431,25 +462,139 @@ class ObjectInstanceDiscoveryMixin:
         surface_exact = any(str(r.get("name_text") or "") == name for r in name_rows)
         return detail_rows, surface_exact
 
-    def _discover_new_object_instances(
-        self: _ObjectInstanceDiscoveryPlatform,
+    async def _discover_new_object_instances(
+        self: Any,
         base_id: str,
         *,
         content: str,
         object_codes: list[str],
     ) -> list[dict[str, Any]]:
-        """④ 新实例发现（TODO 占位，后续迭代 T8 实现）。
+        """④ 新实例发现（B 模式 LLM 抽取，Spec §6）。
 
-        接入点（spec D-4.4 / §6 B 模式）：
-            ``build_llm`` + prompt（类型枚举 = object_codes 的 TermType 中文名）
-            + temp=0 + 16K 截断 + JSON 解析重试（≤3 次退避）
-            → ``[{term_name, object_code|AUTO_DISCOVERED, evidence, raw_type}]``
-            → D-2 回填 ``batch_create_vocabulary``（抽到就填，幂等）。
+        流程：
+        1. 类型枚举 = ``object_codes`` 经 ``get_term_type`` 取中文名（library 域限定，
+           缺行回退原始 code + 日志）
+        2. 长文 16K 截断单次（不 chunk）
+        3. ``build_llm`` + ``stream_invoke_with_thinking``（temp=0 由环境默认）一票抽取
+        4. 严格 JSON 解析 + ``<think>`` 剥离 + 非法 JSON 重试（≤3 次退避）
+        5. 类型归一：``object_code ∈ object_codes`` → 该 code；∉ → ``AUTO_DISCOVERED``
+           （禁用 "UNKNOWN"），LLM 原始类型名存 ``raw_type``
+        6. D-2 回填：抽到就填 ``batch_create_vocabulary``（幂等去重，无门槛）
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            content: 输入实例 KB 全文。
+            object_codes: 非结构化对象类型编码列表（优先类型枚举源）。
+
+        Returns:
+            mention 列表 ``[{term_name, object_code, evidence, raw_type}]``。
 
         Raises:
-            NotImplementedError: 本版未实现。
+            RuntimeError: LLM 输出重试后仍非合法 JSON（无降级）。
         """
-        raise NotImplementedError("new instance discovery is not implemented")
+        type_entries = self._build_type_enumeration(base_id, object_codes)
+        truncated = _truncate_content(content.strip(), _MAX_EXTRACT_CHARS)
+        base_messages = _build_extract_prompt(
+            type_entries=type_entries, content=truncated
+        )
+
+        last_error = ""
+        mentions: list[dict[str, Any]] = []
+        for attempt in range(_MAX_JSON_RETRIES):
+            if attempt > 0:
+                await asyncio.sleep(_JSON_RETRY_BACKOFF_SECONDS * attempt)
+                retry_messages = base_messages + [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"上次输出不是合法 JSON（{last_error}）。"
+                            "请重新只输出严格 JSON 数组，不要任何解释。"
+                        ),
+                    }
+                ]
+            else:
+                retry_messages = base_messages
+            raw = await self._invoke_extract_llm(retry_messages)
+            text = _llm_response_text(raw)
+            parsed = _parse_mentions_json(text)
+            if parsed is not None:
+                mentions = _normalize_extracted_mentions(parsed, object_codes)
+                break
+            last_error = text[:200] if text else "空输出"
+        else:
+            raise RuntimeError(
+                f"LLM 抽取输出非法 JSON（重试 {_MAX_JSON_RETRIES} 次仍失败）: "
+                f"{last_error}"
+            )
+
+        # D-2 回填：抽到就填（幂等去重），无 confidence/频次门槛
+        words = [
+            str(m["term_name"]).strip()
+            for m in mentions
+            if str(m.get("term_name") or "").strip()
+        ]
+        if words:
+            self.batch_create_vocabulary(base_id, words=words)
+            # D-2 回填 → 词表已更新 → 飞轮实时（下次 ③ 快路命中回填词）
+            invalidate_vocabulary_cache()
+        logger.info(
+            "discover extraction: base_id=%s mentions=%d backfill_words=%d",
+            base_id,
+            len(mentions),
+            len(words),
+        )
+        return mentions
+
+    def _build_type_enumeration(
+        self: _ObjectInstanceDiscoveryPlatform,
+        base_id: str,
+        object_codes: list[str],
+    ) -> list[dict[str, str]]:
+        """类型枚举：object_codes 经 get_term_type 取中文名（library 域限定）。
+
+        缺行（无 TermType 行 / 读取失败返回 None）→ 回退原始 code + 日志，
+        供 ④ prompt 枚举与 T9 直写 type_name 回退展示使用。
+
+        Args:
+            base_id: 本体库/系统空间标识（即 library 域）。
+            object_codes: 调用方传入的优先类型编码列表。
+
+        Returns:
+            ``[{"code": ..., "name": ...}, ...]``。
+        """
+        entries: list[dict[str, str]] = []
+        for code in object_codes:
+            type_row = self.get_term_type(
+                base_id, library_id=base_id, type_code=str(code)
+            )
+            name = str(
+                (type_row or {}).get("type_name")
+                or (type_row or {}).get("typeName")
+                or ""
+            ).strip()
+            if not name:
+                name = str(code)
+                logger.warning(
+                    "get_term_type 缺行，类型枚举回退原始 code: base_id=%s type_code=%s",
+                    base_id,
+                    code,
+                )
+            entries.append({"code": str(code), "name": name})
+        return entries
+
+    async def _invoke_extract_llm(self: Any, messages: list[dict[str, str]]) -> Any:
+        """调用 LLM（build_llm + stream_invoke_with_thinking，document_enrich 模式）。
+
+        经 ``anyio.to_thread.run_sync`` 移出事件循环线程；temp=0 由
+        ``build_llm`` 环境默认（DATACLOUD_LLM_TEMPERATURE 默认 0.0）。
+
+        Args:
+            messages: prompt 消息列表。
+
+        Returns:
+            累积 AIMessage（含 content）。
+        """
+        return await to_thread.run_sync(partial(_extract_llm_sync, messages=messages))
 
     async def _register_object_file(
         self: _ObjectInstanceDiscoveryPlatform,
@@ -672,3 +817,151 @@ def _build_existing_hit(row: dict[str, Any]) -> ObjectInstanceDiscoveryHit:
         is_new=False,
         evidence=str(evidence) if evidence is not None else None,
     )
+
+
+# ── ④ B 模式抽取辅助（T8，Spec §6）──────────────────────────────────────────
+
+
+def _build_extract_prompt(
+    type_entries: list[dict[str, str]], content: str
+) -> list[dict[str, str]]:
+    """构造 ④ 抽取 prompt（B 模式）。
+
+    system 承载：优先类型枚举（object_code=类型中文名）、AUTO_DISCOVERED
+    归一规则、严格 JSON 输出 schema；user 直接承载截断后的文档正文
+    （不加前缀，保证长度 ≤ 16K 上限）。
+
+    Args:
+        type_entries: 类型枚举 ``[{"code", "name"}]``（TermType 中文名，缺行回退 code）。
+        content: 已截断的文档正文。
+
+    Returns:
+        OpenAI 风格消息列表（system + user）。
+    """
+    enum_lines = "\n".join(f"{entry['code']}={entry['name']}" for entry in type_entries)
+    system = (
+        "你是企业知识库对象实例抽取器。请从 user 消息提供的文档正文中，"
+        "抽取出现的对象实例（业务实体），输出严格 JSON 数组。\n\n"
+        "优先类型枚举（object_code=类型中文名）：\n"
+        f"{enum_lines}\n\n"
+        "实体类型属于上述枚举时 object_code 填对应编码；不属于上述任何枚举时，"
+        f"object_code 固定填 {_AUTO_DISCOVERED_CODE}，并在 raw_type 字段中给出"
+        "你识别到的原始类型名。\n\n"
+        "输出格式（严格 JSON 数组，每条含 term_name / object_code / evidence / raw_type）：\n"
+        '[{"term_name": "实例名称", "object_code": "类型编码或 AUTO_DISCOVERED",'
+        ' "evidence": "文档中的原文片段", "raw_type": "原始类型名"}]\n'
+        "只输出 JSON 数组，不要任何解释或 markdown 代码块。"
+    )
+    return [
+        {"role": "system", "content": system},
+        {"role": "user", "content": content},
+    ]
+
+
+def _truncate_content(content: str, max_chars: int) -> str:
+    """长文截断单次（Spec §6.1，不 chunk）。
+
+    超限时取前 ``max_chars`` 字符并以省略号收尾，标识截断位置。
+
+    Args:
+        content: 原始文本。
+        max_chars: 截断上限（字符数）。
+
+    Returns:
+        截断后文本（未超限时原样返回）。
+    """
+    if len(content) <= max_chars:
+        return content
+    return content[: max_chars - 1].rstrip() + "…"
+
+
+def _extract_llm_sync(messages: list[dict[str, str]]) -> Any:
+    """同步调用 LLM 抽取（移出事件循环线程执行）。
+
+    ``build_llm`` 默认 temp=0（环境变量 DATACLOUD_LLM_TEMPERATURE 默认 0.0），
+    ``stream_invoke_with_thinking`` 在无回调时等价 ``invoke``（返回累积 AIMessage）。
+
+    Args:
+        messages: prompt 消息列表。
+
+    Returns:
+        累积 AIMessage（含 content）。
+    """
+    llm = build_llm()
+    return stream_invoke_with_thinking(llm, messages, on_event=None)
+
+
+def _llm_response_text(raw: Any) -> str:
+    """从 LLM 响应中提取纯文本内容（兼容 str / AIMessage / 多块 list）。"""
+    content = getattr(raw, "content", None)
+    if content is None:
+        content = raw
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict):
+                text = block.get("text")
+                if text:
+                    parts.append(str(text))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "".join(parts)
+    return str(content or "")
+
+
+def _parse_mentions_json(text: str) -> list[dict[str, Any]] | None:
+    """解析 LLM 输出的严格 JSON 数组（含前导 <think> 剥离）。
+
+    Args:
+        text: LLM 输出原文。
+
+    Returns:
+        mention 列表（dict 行）；非合法 JSON 数组时返回 None（触发重试）。
+    """
+    stripped = _LEADING_THINKING_PATTERN.sub("", text).strip()
+    if not stripped:
+        return None
+    try:
+        data = json.loads(stripped)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _normalize_extracted_mentions(
+    parsed: list[Any], object_codes: list[str]
+) -> list[dict[str, Any]]:
+    """类型归一 + 字段净化（Spec §6.1）。
+
+    - ``object_code ∈ object_codes`` → 保留该 code
+    - ``object_code ∉ object_codes`` → ``AUTO_DISCOVERED``（禁用 "UNKNOWN"），
+      原始类型名保留在 ``raw_type``
+    - 空白 term_name 行丢弃；evidence / raw_type 非空才写入输出
+
+    Args:
+        parsed: JSON 解析后的列表（可能含非 dict 脏行）。
+        object_codes: 调用方优先类型编码列表。
+
+    Returns:
+        归一化 mention 列表 ``[{term_name, object_code, evidence?, raw_type?}]``。
+    """
+    allowed = set(object_codes)
+    normalized: list[dict[str, Any]] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        term_name = str(item.get("term_name") or item.get("termName") or "").strip()
+        if not term_name:
+            continue
+        code = str(item.get("object_code") or item.get("objectCode") or "").strip()
+        if code not in allowed:
+            code = _AUTO_DISCOVERED_CODE
+        row: dict[str, Any] = {"term_name": term_name, "object_code": code}
+        evidence = item.get("evidence")
+        if evidence is not None and str(evidence).strip():
+            row["evidence"] = str(evidence).strip()
+        raw_type = item.get("raw_type") or item.get("rawType")
+        if raw_type is not None and str(raw_type).strip():
+            row["raw_type"] = str(raw_type).strip()
+        normalized.append(row)
+    return normalized

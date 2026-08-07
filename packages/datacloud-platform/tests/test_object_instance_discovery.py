@@ -100,6 +100,86 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         )
         self.object_files.append(object_files)
 
+    # ── T8/T9/T10/T11 协议能力（默认实现；测试用 monkeypatch 覆盖具体行为）──
+
+    def get_term_type(
+        self, base_id: str, *, library_id: str, type_code: str
+    ) -> dict[str, Any] | None:
+        self.calls.append(
+            (
+                "get_term_type",
+                {"base_id": base_id, "library_id": library_id, "type_code": type_code},
+            )
+        )
+        return None
+
+    def batch_create_vocabulary(self, base_id: str, *, words: list[str]) -> None:
+        self.calls.append(
+            ("batch_create_vocabulary", {"base_id": base_id, "words": words})
+        )
+        self.vocab_words.extend(words)
+
+    def create_term_name(self, base_id: str, *, name: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append(("create_term_name", {"base_id": base_id, "name": name}))
+        return {"nameId": "name-x"}
+
+    def ensure_term_type(self, *, base_id: str, type_code: str, type_name: str) -> None:
+        self.calls.append(
+            (
+                "ensure_term_type",
+                {"base_id": base_id, "type_code": type_code, "type_name": type_name},
+            )
+        )
+
+    def create_term(self, base_id: str, *, term: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append(("create_term", {"base_id": base_id, "term": term}))
+        return {"created": 1, "updated": 0, "skipped": 0, "term_ids": ["term-ad-1"]}
+
+    def import_terms(
+        self,
+        base_id: str,
+        *,
+        library_id: str,
+        terms: list[dict[str, Any]],
+        backfill: bool = False,
+    ) -> dict[str, Any]:
+        self.calls.append(
+            (
+                "import_terms",
+                {
+                    "base_id": base_id,
+                    "library_id": library_id,
+                    "terms": terms,
+                    "backfill": backfill,
+                },
+            )
+        )
+        return {
+            "created": len(terms),
+            "updated": 0,
+            "skipped": 0,
+            "term_ids": [f"term-ad-{i}" for i in range(len(terms))],
+            "errors": [],
+        }
+
+    def create_term_knowledge(
+        self, base_id: str, *, knowledge: dict[str, Any]
+    ) -> dict[str, Any]:
+        self.calls.append(
+            ("create_term_knowledge", {"base_id": base_id, "knowledge": knowledge})
+        )
+        return {"knowledgeId": "know-x"}
+
+    def update_term_co_occurrence(
+        self, base_id: str, *, term_id: str, patch: dict[str, int]
+    ) -> None:
+        self.calls.append(
+            (
+                "update_term_co_occurrence",
+                {"base_id": base_id, "term_id": term_id, "patch": patch},
+            )
+        )
+
 
 def _make_document(term_id: str = "term-input") -> DocumentContentResult:
     return DocumentContentResult(
@@ -223,30 +303,8 @@ class TestDiscoverPipelineErrors:
 
 
 # ============================================================================
-# ③④ TODO 占位（T7 起 ③ 就位；④ 仍占位，T8 替换）
+# ③④ 占位（T7/T8 已替换，仅保留 RPC 501 映射回归——T12 收口）
 # ============================================================================
-
-
-class TestDiscoverTodoPlaceholders:
-    def test_new_discovery_raises_not_implemented(self) -> None:
-        platform = _FakePlatform()
-        with pytest.raises(NotImplementedError, match="not implemented"):
-            platform._discover_new_object_instances(
-                BASE_ID, content="正文", object_codes=["by_opportunity"]
-            )
-
-    @pytest.mark.asyncio
-    async def test_main_flow_short_circuits_at_new_placeholder(self) -> None:
-        """T7 编排改为 ④→③：④ 仍为占位 → 主流程先短路在 ④。"""
-        platform = _FakePlatform()
-        platform.document = _make_document()
-        with pytest.raises(NotImplementedError, match="not implemented"):
-            await platform.discover_object_instances_unstructured(
-                BASE_ID,
-                instance_id="term-input",
-                object_codes=["by_opportunity"],
-                session_id="session-1",
-            )
 
 
 # ============================================================================
@@ -861,7 +919,7 @@ class _RpcAnchorPlatform(ObjectInstanceDiscoveryMixin):
     ) -> None:
         return None
 
-    def _discover_new_object_instances(
+    async def _discover_new_object_instances(
         self, base_id: str, *, content: str, object_codes: list[str]
     ) -> list[dict[str, Any]]:
         return list(self.mentions)
@@ -929,16 +987,18 @@ class TestDiscoverOrchestration:
     ) -> None:
         platform = _FakePlatform()
         platform.document = _make_document()
-        monkeypatch.setattr(
-            platform,
-            "_discover_new_object_instances",
-            lambda *a, **k: [
+
+        async def fake_new_instances(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            return [
                 {
                     "term_name": "新实例",
                     "object_code": "by_opportunity",
                     "evidence": "证据片段",
                 }
-            ],
+            ]
+
+        monkeypatch.setattr(
+            platform, "_discover_new_object_instances", fake_new_instances
         )
         monkeypatch.setattr(
             platform,
@@ -1013,10 +1073,12 @@ class TestDiscoverOrchestration:
     ) -> None:
         platform = _FakePlatform()
         platform.document = _make_document()
+
+        async def fake_new_instances(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            return [{"term_name": "新实例A", "object_code": "by_opportunity"}]
+
         monkeypatch.setattr(
-            platform,
-            "_discover_new_object_instances",
-            lambda *a, **k: [{"term_name": "新实例A", "object_code": "by_opportunity"}],
+            platform, "_discover_new_object_instances", fake_new_instances
         )
         monkeypatch.setattr(
             platform,
@@ -1051,12 +1113,18 @@ class TestDiscoverOrchestration:
         """歧义候选（同名多候选）在 T10 裁决前保守跳过：不建重复实例、不产已有 hit。"""
         platform = _FakePlatform()
         platform.document = _make_document()
+
+        async def fake_new_instances(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            return [
+                {
+                    "term_name": "张三",
+                    "object_code": "by_opportunity",
+                    "evidence": None,
+                }
+            ]
+
         monkeypatch.setattr(
-            platform,
-            "_discover_new_object_instances",
-            lambda *a, **k: [
-                {"term_name": "张三", "object_code": "by_opportunity", "evidence": None}
-            ],
+            platform, "_discover_new_object_instances", fake_new_instances
         )
         monkeypatch.setattr(
             platform,
@@ -1092,16 +1160,18 @@ class TestDiscoverOrchestration:
         """同义候选（子串重叠）在 T10 裁决前保守跳过。"""
         platform = _FakePlatform()
         platform.document = _make_document()
-        monkeypatch.setattr(
-            platform,
-            "_discover_new_object_instances",
-            lambda *a, **k: [
+
+        async def fake_new_instances(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            return [
                 {
                     "term_name": "苹果公司",
                     "object_code": "by_opportunity",
                     "evidence": None,
                 }
-            ],
+            ]
+
+        monkeypatch.setattr(
+            platform, "_discover_new_object_instances", fake_new_instances
         )
         monkeypatch.setattr(
             platform,
@@ -1230,3 +1300,444 @@ class TestVocabularyAdapterSync:
         backend = TermBackendMixin()
         backend.batch_create_vocabulary(words=["苹果", "华为"])
         assert captured["words"] == ["苹果", "华为"]
+
+
+# ============================================================================
+# T8 ④ B 模式 LLM 抽取：类型枚举 / 16K 截断 / JSON 重试 / AUTO_DISCOVERED / 回填
+# ============================================================================
+
+
+class _AiMessage:
+    """模拟 langchain AIMessage：仅保留 content。"""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class TestDiscoverNewObjectInstances:
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self) -> Any:
+        discovery_module.invalidate_vocabulary_cache()
+        yield
+        discovery_module.invalidate_vocabulary_cache()
+
+    @pytest.mark.asyncio
+    async def test_builds_prompt_with_type_enumeration(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """prompt 类型枚举 = object_codes 的 TermType 中文名（library 域限定）。"""
+        platform = _FakePlatform()
+        captured: dict[str, Any] = {}
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            captured["messages"] = messages
+            return _AiMessage("[]")
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform,
+            "get_term_type",
+            lambda base_id, *, library_id, type_code: (
+                {"type_name": "商机"}
+                if type_code == "by_opportunity"
+                else {"type_name": "客户"}
+            ),
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        mentions = await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity", "by_customer"]
+        )
+        assert mentions == []
+        system = next(m for m in captured["messages"] if m["role"] == "system")
+        user = next(m for m in captured["messages"] if m["role"] == "user")
+        assert "by_opportunity=商机" in system["content"]
+        assert "by_customer=客户" in system["content"]
+        assert "AUTO_DISCOVERED" in system["content"]
+        assert "正文" in user["content"]
+
+    @pytest.mark.asyncio
+    async def test_type_enumeration_falls_back_to_raw_code(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """缺行（get_term_type 返回 None）→ 回退原始 code。"""
+        platform = _FakePlatform()
+        captured: dict[str, Any] = {}
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            captured["messages"] = messages
+            return _AiMessage("[]")
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity"]
+        )
+        system = next(m for m in captured["messages"] if m["role"] == "system")
+        assert "by_opportunity=by_opportunity" in system["content"]
+
+    @pytest.mark.asyncio
+    async def test_truncates_long_content_to_16k(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        captured: dict[str, Any] = {}
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            captured["messages"] = messages
+            return _AiMessage("[]")
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        long_content = "字" * 20_000
+        await platform._discover_new_object_instances(
+            BASE_ID, content=long_content, object_codes=["by_opportunity"]
+        )
+        user = next(m for m in captured["messages"] if m["role"] == "user")
+        assert len(user["content"]) <= discovery_module._MAX_EXTRACT_CHARS
+        assert user["content"].endswith("…")
+
+    @pytest.mark.asyncio
+    async def test_think_block_is_stripped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        raw = (
+            "<think>我需要分析这段文档……</think>\n"
+            '[{"term_name": "张三", "object_code": "by_opportunity",'
+            ' "evidence": "张三", "raw_type": "商机"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        mentions = await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity"]
+        )
+        assert mentions == [
+            {
+                "term_name": "张三",
+                "object_code": "by_opportunity",
+                "evidence": "张三",
+                "raw_type": "商机",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_invalid_json_retries_up_to_limit(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """非法 JSON → 重试 prompt 再解析（≤3 次退避）；第二次成功即返回。"""
+        platform = _FakePlatform()
+        calls: list[list[dict[str, str]]] = []
+        raw_outputs = [
+            "不是JSON{{",
+            '[{"term_name": "张三", "object_code": "by_opportunity"}]',
+        ]
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            calls.append(messages)
+            return _AiMessage(raw_outputs[min(len(calls) - 1, 1)])
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        monkeypatch.setattr(discovery_module, "_JSON_RETRY_BACKOFF_SECONDS", 0)
+        mentions = await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity"]
+        )
+        assert mentions == [{"term_name": "张三", "object_code": "by_opportunity"}]
+        assert len(calls) == 2
+        # 第二次调用带重试提示
+        assert "不是合法 JSON" in calls[1][-1]["content"]
+
+    @pytest.mark.asyncio
+    async def test_retries_exhausted_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        calls: list[Any] = []
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            calls.append(messages)
+            return _AiMessage("仍旧不是JSON")
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(discovery_module, "_JSON_RETRY_BACKOFF_SECONDS", 0)
+        with pytest.raises(RuntimeError, match="JSON"):
+            await platform._discover_new_object_instances(
+                BASE_ID, content="正文", object_codes=["by_opportunity"]
+            )
+        assert len(calls) == discovery_module._MAX_JSON_RETRIES
+
+    @pytest.mark.asyncio
+    async def test_out_of_enum_type_maps_to_auto_discovered(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """object_code ∉ object_codes → AUTO_DISCOVERED，raw_type 保留原始类型名。"""
+        platform = _FakePlatform()
+        raw = (
+            '[{"term_name": "新品类X", "object_code": "by_unknown_type",'
+            ' "evidence": "X", "raw_type": "未知业务对象"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        mentions = await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity"]
+        )
+        assert mentions == [
+            {
+                "term_name": "新品类X",
+                "object_code": "AUTO_DISCOVERED",
+                "evidence": "X",
+                "raw_type": "未知业务对象",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_backfills_vocabulary_idempotently(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """抽到就填：batch_create_vocabulary 被调（无门槛）；mock 记录 words。"""
+        platform = _FakePlatform()
+        raw = (
+            '[{"term_name": "张三", "object_code": "by_opportunity"},'
+            ' {"term_name": "李四", "object_code": "by_opportunity"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        backfilled: list[str] = []
+        monkeypatch.setattr(
+            platform,
+            "batch_create_vocabulary",
+            lambda base_id, *, words: backfilled.extend(words),
+        )
+        mentions = await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity"]
+        )
+        assert [m["term_name"] for m in mentions] == ["张三", "李四"]
+        assert backfilled == ["张三", "李四"]
+
+    @pytest.mark.asyncio
+    async def test_blank_term_name_rows_are_dropped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        raw = '[{"term_name": "  ", "object_code": "by_opportunity"}]'
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        backfilled: list[str] = []
+        monkeypatch.setattr(
+            platform,
+            "batch_create_vocabulary",
+            lambda base_id, *, words: backfilled.extend(words),
+        )
+        mentions = await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity"]
+        )
+        assert mentions == []
+        assert backfilled == []
+
+    @pytest.mark.asyncio
+    async def test_uses_build_llm_singleton_pattern(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """LLM 经 build_llm()（temp=0 由环境默认）+ stream_invoke_with_thinking。"""
+        platform = _FakePlatform()
+        built: list[Any] = []
+        invoked: list[Any] = []
+
+        class _FakeLlm:
+            pass
+
+        async def fake_run_sync(func: Any) -> Any:
+            return func()
+
+        monkeypatch.setattr(discovery_module.to_thread, "run_sync", fake_run_sync)
+        monkeypatch.setattr(
+            discovery_module,
+            "build_llm",
+            lambda: (built.append(_FakeLlm()), _FakeLlm())[1],
+        )
+        monkeypatch.setattr(
+            discovery_module,
+            "stream_invoke_with_thinking",
+            lambda llm, messages, on_event=None: (
+                invoked.append((llm, messages, on_event)),
+                _AiMessage("[]"),
+            )[1],
+        )
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        mentions = await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["by_opportunity"]
+        )
+        assert mentions == []
+        assert len(built) == 1
+        assert len(invoked) == 1
+        assert invoked[0][2] is None  # on_event=None（无流式回调）
+
+
+# ============================================================================
+# T8 集成：真实 ④ 抽取 + ③ 锚定 + ⑤ 创建 全链路
+# ============================================================================
+
+
+class TestDiscoverFullFlowWithExtraction:
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self) -> Any:
+        discovery_module.invalidate_vocabulary_cache()
+        yield
+        discovery_module.invalidate_vocabulary_cache()
+
+    @pytest.mark.asyncio
+    async def test_full_flow_with_real_extraction_and_anchor(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        platform.vocab_words = ["张三"]  # 张三已在词典（库中已有）
+        platform.term_search_results = {
+            "total": 1,
+            "items": [_term_row("t-existing", "张三")],
+        }
+        raw = (
+            '[{"term_name": "张三", "object_code": "by_opportunity", "evidence": "张三"},'
+            ' {"term_name": "新客户A", "object_code": "by_opportunity", "evidence": "新客户A"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform,
+            "get_term_type",
+            lambda base_id, *, library_id, type_code: {"type_name": "商机"},
+        )
+        backfilled: list[str] = []
+        monkeypatch.setattr(
+            platform,
+            "batch_create_vocabulary",
+            lambda base_id, *, words: backfilled.extend(words),
+        )
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-1"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        # 已有在前、新在后
+        assert [h.instance_id for h in result.items] == ["t-existing", "term-new-1"]
+        assert result.items[0].is_new is False
+        assert result.items[0].evidence == "张三"
+        assert result.items[1].is_new is True
+        assert result.items[1].instance_name == "新客户A"
+        # 回填：抽到就填（幂等语义由 knowledge 层 WHERE NOT EXISTS 保证）
+        assert set(backfilled) == {"张三", "新客户A"}
+        # 主流程完成后词典缓存已失效（下次 discover 重载 → 飞轮实时）
+        assert discovery_module._cached_vocabulary is None
+
+    @pytest.mark.asyncio
+    async def test_full_flow_no_anchored_mention_creates_all(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        platform.vocab_words = []
+        raw = (
+            '[{"term_name": "新客户A", "object_code": "by_opportunity"},'
+            ' {"term_name": "新客户B", "object_code": "by_opportunity"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform,
+            "get_term_type",
+            lambda base_id, *, library_id, type_code: {"type_name": "商机"},
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        created: list[str] = []
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            created.append(str(kwargs["source_path"]))
+            return {"records": [{"termId": f"term-{len(created)}"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        assert [h.instance_name for h in result.items] == ["新客户A", "新客户B"]
+        assert all(h.is_new for h in result.items)
+        assert created == [
+            "/by_opportunity/新客户A.md",
+            "/by_opportunity/新客户B.md",
+        ]
+        assert len(platform.created_relations) == 2
