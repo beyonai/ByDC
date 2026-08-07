@@ -187,6 +187,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/*.py" = ["E402", "S101", "S108", "T201", "TRY301", "N802"]
+# e2e/工具脚本：需 print 输出、URL 调用与中文文案（全角标点）
+"scripts/**/*.py" = ["RUF001", "RUF002", "RUF003", "S310", "T201"]
 "packages/datacloud-analysis/**/*.py" = [
     "A",
     "ARG",
