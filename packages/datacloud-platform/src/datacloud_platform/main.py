@@ -14,6 +14,9 @@ import logging
 from datacloud_platform.platform_file_storage import _data_dir
 
 from datacloud_platform.adapters.data_adapter import DataCloudDataBackend
+from datacloud_platform.adapters.byclaw_be_service_adapter import (
+    ServiceDiscoveryByClawBeServiceBackend,
+)
 from datacloud_platform.adapters.json_entity_store import JsonEntityStore
 from datacloud_platform.adapters.local_execution_adapter import LocalExecutionBackend
 from datacloud_platform.adapters.document_library_adapter import (
@@ -53,6 +56,7 @@ def _init_platform() -> DatacloudPlatform:
     register_backend_type("ontology", "native-data")
     register_backend_type("term", "native-data")
     register_backend_type("document_library", "service-discovery")
+    register_backend_type("byclaw_be_service", "service-discovery")
     register_backend_type("execution", "local-exec")
     register_backend_type("storage", "native-data")
 
@@ -72,6 +76,11 @@ def _init_platform() -> DatacloudPlatform:
         "document_library",
         "service-discovery",
         lambda: ServiceDiscoveryDocumentLibraryBackend(),
+    )
+    register_implementation(
+        "byclaw_be_service",
+        "service-discovery",
+        lambda: ServiceDiscoveryByClawBeServiceBackend(),
     )
     register_implementation(
         "storage",
@@ -99,6 +108,7 @@ def _init_platform() -> DatacloudPlatform:
             "ontology": "native-data",
             "term": "native-data",
             "document_library": "service-discovery",
+            "byclaw_be_service": "service-discovery",
             "execution": "local-exec",
             "storage": "native-data",
         },

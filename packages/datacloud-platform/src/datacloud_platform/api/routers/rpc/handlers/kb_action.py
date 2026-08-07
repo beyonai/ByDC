@@ -10,10 +10,13 @@ This is the same path that OntologyLoader.invoke_action() uses internally:
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
+from collections.abc import Mapping
 
 from datacloud_platform.constants import DEFAULT_BASE_ID
 from datacloud_platform.backends.document_library import DocumentLibraryError
@@ -29,6 +32,10 @@ from datacloud_platform.models.common import ok
 from datacloud_platform.services.kb_document_reader import KbDocumentReadError
 from datacloud_platform.services.object_action import invoke_object_action
 
+
+from datacloud_platform.models.document import DocumentProcessingStatus
+from datacloud_platform.mixins.document import build_processing_labels
+
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
 
@@ -36,6 +43,23 @@ logger = logging.getLogger(__name__)
 
 
 # ── invokeAction ──────────────────────────────────────────────────────────────
+
+
+def prepare_action_arguments(
+    *, action_code: str, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """Add DataCloud processing labels to document write actions."""
+    if not action_code.startswith("write_"):
+        return arguments
+    prepared = dict(arguments)
+    raw_labels = prepared.get("labels")
+    if raw_labels is not None and not isinstance(raw_labels, Mapping):
+        raise ValueError("arguments.labels must be an object")
+    prepared["labels"] = build_processing_labels(
+        initial_status=DocumentProcessingStatus.PENDING_DISCOVERY,
+        labels=raw_labels,
+    )
+    return prepared
 
 
 async def _invoke_action(
@@ -71,6 +95,7 @@ async def _invoke_action(
 
     arguments: dict[str, Any] = params.get("arguments") or {}
     base_id: str = str(params.get("base_id") or DEFAULT_BASE_ID)
+    arguments = prepare_action_arguments(action_code=action_code, arguments=arguments)
 
     data = await invoke_object_action(
         platform=platform,
@@ -79,6 +104,94 @@ async def _invoke_action(
         action_code=action_code,
         arguments=arguments,
     )
+    if action_code.startswith(("write_", "merge_write_")):
+        session_id = _required_session_id(_req)
+        object_detail = platform.get_object_detail(base_id, object_code)
+        if object_detail is None:
+            raise KeyError(f"object not found: {object_code}")
+        resolved_object_code = str(
+            object_detail.get("objectCode")
+            or object_detail.get("object_code")
+            or object_code
+        )
+        object_name = str(
+            object_detail.get("objectName") or object_detail.get("object_name") or ""
+        )
+        if not object_name:
+            raise KeyError(f"object name not found: {object_code}")
+        source_path = str(arguments.get("source_path") or "")
+        if not source_path:
+            raise ValueError("arguments.source_path is required for write actions")
+        labels = arguments.get("labels") or {}
+        object_ext = object_detail.get("ext_property") or object_detail.get(
+            "extProperty"
+        )
+        if not isinstance(object_ext, Mapping):
+            object_ext = {}
+        records = data.get("records")
+        first_record = (
+            records[0]
+            if isinstance(records, list) and records and isinstance(records[0], Mapping)
+            else {}
+        )
+        fallback_file_name = PurePosixPath(source_path).name
+        file_name = str(
+            first_record.get("fileName")
+            or first_record.get("file_name")
+            or fallback_file_name
+        )
+        kb_directory = str(
+            object_ext.get("kb_directory") or object_ext.get("kbDirectory") or ""
+        ).strip()
+        if kb_directory and not kb_directory.startswith("/"):
+            kb_directory = f"/{kb_directory}"
+        fallback_directory = f"/{kb_directory.strip('/')}" if kb_directory else "/"
+        fallback_file_path = (
+            f"{fallback_directory.rstrip('/')}/{fallback_file_name}"
+            if fallback_directory != "/"
+            else f"/{fallback_file_name}"
+        )
+        file_path = str(
+            first_record.get("filePath")
+            or first_record.get("file_path")
+            or fallback_file_path
+        )
+        await platform.save_or_update_object_files(
+            base_id,
+            object_files=[
+                {
+                    "sessionId": session_id,
+                    "objectName": object_name,
+                    "objectCode": resolved_object_code,
+                    "fileName": file_name,
+                    "filePath": file_path,
+                    "version": str(labels.get("version") or "1"),
+                    "statusCd": str(
+                        labels.get("dc_status")
+                        or DocumentProcessingStatus.PENDING_DISCOVERY.value
+                    ),
+                    "extContent": json.dumps(
+                        {
+                            "kb_resource_id": str(
+                                object_ext.get("kb_resource_id")
+                                or object_ext.get("kbResourceId")
+                                or ""
+                            ),
+                            "kb_id": str(
+                                object_ext.get("kb_id") or object_ext.get("kbId") or ""
+                            ),
+                            "kb_directory": kb_directory,
+                            "term_id": str(
+                                first_record.get("term_id")
+                                or first_record.get("termId")
+                                or ""
+                            ),
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ],
+        )
     return ok(data=data)
 
 

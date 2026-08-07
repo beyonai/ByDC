@@ -27,6 +27,7 @@ from datacloud_data_sdk.executor.kb_cascade_delete.selection import (
     verify_signed_cascade_execution,
 )
 from datacloud_data_sdk.executor.kb_search_backend import (
+    PROCESSING_METADATA_FIELDS,
     HttpKnowledgeSearchBackend,
     KnowledgeDeleteBackend,
     KnowledgeDeleteRequest,
@@ -1495,6 +1496,7 @@ class KbSearchExecutor:
             for field in getattr(cls, "fields", [])
             if str(getattr(field, "field_code", ""))
         }
+        field_codes.update(PROCESSING_METADATA_FIELDS)
         return {k: v for k, v in labels.items() if k in field_codes}
 
     def _resolve_label_terms(self, labels: Any, cls: Any) -> dict[str, Any]:
@@ -1787,6 +1789,7 @@ def _field_meta(fields: list[Any]) -> list[dict[str, str]]:
             "type": str(getattr(field, "field_type", "STRING") or "STRING").lower(),
         }
         for field in fields
+        if str(getattr(field, "field_code", "")) not in PROCESSING_METADATA_FIELDS
     ]
 
 
@@ -1830,6 +1833,7 @@ def _normalize_action_records(
         str(getattr(field, "field_code", ""))
         for field in getattr(cls, "fields", [])
         if str(getattr(field, "field_code", ""))
+        and str(getattr(field, "field_code", "")) not in PROCESSING_METADATA_FIELDS
     ]
     normalized: list[dict[str, Any]] = []
     for record in records:

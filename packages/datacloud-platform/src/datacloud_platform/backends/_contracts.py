@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from datacloud_platform.ontology_store import OntologyStore
 
 if TYPE_CHECKING:
+    from datacloud_platform.backends.byclaw_be_service import ByClawBeServiceBackend
     from datacloud_platform.backends.execution import ExecutionBackend
     from datacloud_platform.backends.document_library import DocumentLibraryBackend
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
@@ -41,6 +42,12 @@ class _HasDocumentLibraryBackend(Protocol):
     """Requires ``_document_library_for(base_id)`` routing."""
 
     def _document_library_for(self, base_id: str) -> DocumentLibraryBackend: ...
+
+
+class _HasByClawBeServiceBackend(Protocol):
+    """Requires ``_byclaw_be_service_for(base_id)`` routing."""
+
+    def _byclaw_be_service_for(self, base_id: str) -> ByClawBeServiceBackend: ...
 
 
 class _HasExecutionBackend(Protocol):

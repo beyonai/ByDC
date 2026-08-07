@@ -22,6 +22,12 @@ from datacloud_data_sdk.utils.redis_discovery import (
 
 logger = logging.getLogger(__name__)
 
+PROCESSING_METADATA_FIELDS: tuple[str, ...] = (
+    "dc_status",
+    "dc_failure_reason",
+    "dc_failure_count",
+)
+
 
 @dataclass(frozen=True)
 class KnowledgeSearchRequest:
@@ -249,11 +255,13 @@ class HttpKnowledgeSearchBackend:
         if where:
             body["where"] = where
 
-        metadata_field_list = request.select or _coerce_string_list(
-            config.get("metadataFieldList") or config.get("metadata_field_list")
+        metadata_field_list = _with_processing_metadata_fields(
+            request.select
+            or _coerce_string_list(
+                config.get("metadataFieldList") or config.get("metadata_field_list")
+            )
         )
-        if metadata_field_list:
-            body["metadataFieldList"] = metadata_field_list
+        body["metadataFieldList"] = metadata_field_list
 
         data = await self._post_json_by_discovery(
             service_name=self._resolve_service_name(config, request.datasource_alias),
@@ -296,8 +304,7 @@ class HttpKnowledgeSearchBackend:
         where = _with_file_name_filter(where, request.file_name)
         if where:
             body["where"] = where
-        if request.metadata_field_list:
-            body["metadataFieldList"] = request.metadata_field_list
+        body["metadataFieldList"] = _with_processing_metadata_fields(request.metadata_field_list)
 
         data = await self._post_json_by_discovery(
             service_name=self._resolve_service_name(config, request.datasource_alias),
@@ -1130,6 +1137,11 @@ def _coerce_string_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value if str(item)]
     return [str(value)]
+
+
+def _with_processing_metadata_fields(fields: list[str]) -> list[str]:
+    """补齐文档处理内置标签，并保持业务字段的原始顺序。"""
+    return list(dict.fromkeys([*fields, *PROCESSING_METADATA_FIELDS]))
 
 
 def _looks_like_single_backend_config(config: dict[str, Any]) -> bool:

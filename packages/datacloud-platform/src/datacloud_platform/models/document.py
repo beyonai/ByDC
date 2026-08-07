@@ -96,7 +96,7 @@ class DocumentObjectItem(_AliasedModel):
     term_type_code: str = Field(alias="termTypeCode")
     file_path: str = Field(alias="filePath")
     kb_resource_id: str = Field(alias="kbResourceId")
-    status: DocumentProcessingStatus
+    status: DocumentProcessingStatus | None = None
     failure_reason: str | None = Field(default=None, alias="failureReason")
     failure_count: int = Field(default=0, alias="failureCount", ge=0)
 
@@ -166,7 +166,14 @@ class DocumentContentResult(_AliasedModel):
 
 
 class SearchDocumentFragmentsRequest(_AliasedModel):
+    """知识片段检索条件。
+
+    ``exclude_term_ids`` 最终仅转换为 ``filePath`` 排除条件；不同知识库存在相同
+    文件路径时会被同时排除，这是当前接口语义下的已知风险。
+    """
+
     object_codes: tuple[str, ...] = Field(alias="objectCodes", min_length=1)
+    exclude_term_ids: tuple[str, ...] = Field(default=(), alias="excludeTermIds")
     query: str = Field(min_length=1)
     top_k: int = Field(alias="topK", gt=0)
 
@@ -180,6 +187,18 @@ class SearchDocumentFragmentsRequest(_AliasedModel):
             raise ValueError("objectCodes must not contain blank values")
         return normalized
 
+    @field_validator("exclude_term_ids", mode="before")
+    @classmethod
+    def _normalize_exclude_term_ids(cls, value: object) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("excludeTermIds must be an array")
+        normalized = tuple(dict.fromkeys(str(item).strip() for item in value))
+        if any(not item for item in normalized):
+            raise ValueError("excludeTermIds must not contain blank values")
+        return normalized
+
     @field_validator("query")
     @classmethod
     def _strip_query(cls, value: str) -> str:
@@ -190,13 +209,27 @@ class SearchDocumentFragmentsRequest(_AliasedModel):
 
 
 class DocumentAsyncProcessingRequest(_AliasedModel):
-    kb_resource_ids: tuple[str, ...] = Field(alias="kbResourceIds", min_length=1)
+    kb_resource_ids: tuple[str, ...] = Field(default=(), alias="kbResourceIds")
     object_codes: tuple[str, ...] = Field(alias="objectCodes", min_length=1)
-    model_config_payload: dict[str, Any] = Field(alias="modelConfig")
+    model_config_payload: dict[str, Any] | None = Field(
+        default=None, alias="modelConfig"
+    )
 
-    @field_validator("kb_resource_ids", "object_codes", mode="before")
+    @field_validator("kb_resource_ids", mode="before")
     @classmethod
-    def _normalize_processing_scope(cls, value: object) -> tuple[str, ...]:
+    def _normalize_optional_kb_scope(cls, value: object) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("must be an array")
+        normalized = tuple(dict.fromkeys(str(item).strip() for item in value))
+        if any(not item for item in normalized):
+            raise ValueError("must not contain blank values")
+        return normalized
+
+    @field_validator("object_codes", mode="before")
+    @classmethod
+    def _normalize_required_object_scope(cls, value: object) -> tuple[str, ...]:
         if not isinstance(value, (list, tuple)):
             raise ValueError("must be an array")
         normalized = tuple(dict.fromkeys(str(item).strip() for item in value))
@@ -227,6 +260,7 @@ class DocumentFragmentItem(_AliasedModel):
     start_line: int | None = Field(default=None, alias="startLine")
     end_line: int | None = Field(default=None, alias="endLine")
     metadata: dict[str, Any] = Field(default_factory=dict)
+    resource_id: int | None = Field(default=None, alias="resourceId")
 
 
 class DocumentFragmentResult(_AliasedModel):

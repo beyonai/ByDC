@@ -1,6 +1,9 @@
 """DatacloudPlatform mixin modules."""
 
 from datacloud_platform.mixins.action_crud import ActionCRUDMixin
+from datacloud_platform.mixins.byclaw_be_service_backend import (
+    ByClawBeServiceBackendMixin,
+)
 from datacloud_platform.mixins.datasource import DatasourceMixin
 from datacloud_platform.mixins.document import DocumentMixin
 from datacloud_platform.mixins.document_enrich import DocumentEnrichMixin
@@ -28,6 +31,7 @@ from datacloud_platform.mixins.workspace_action import WorkspaceActionMixin
 
 __all__ = [
     "ActionCRUDMixin",
+    "ByClawBeServiceBackendMixin",
     "DatasourceMixin",
     "DocumentMixin",
     "DocumentEnrichMixin",

@@ -7,6 +7,9 @@ Import them here so that callers can register them in the backend registry.
 
 from __future__ import annotations
 
+from datacloud_platform.adapters.byclaw_be_service_adapter import (
+    ServiceDiscoveryByClawBeServiceBackend,
+)
 from datacloud_platform.adapters.data_adapter._composite import DataCloudDataBackend
 from datacloud_platform.adapters.local_execution_adapter import LocalExecutionBackend
 from datacloud_platform.adapters.document_library_adapter import (
@@ -26,6 +29,7 @@ from datacloud_platform.adapters.remote_adapter import (
 
 __all__ = [
     "DataCloudDataBackend",
+    "ServiceDiscoveryByClawBeServiceBackend",
     "LocalExecutionBackend",
     "ServiceDiscoveryDocumentLibraryBackend",
     "RemoteOntologyBackend",

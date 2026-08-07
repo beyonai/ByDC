@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, final
 
 from datacloud_platform.backends._contracts import (
     _HasBasePath,
+    _HasByClawBeServiceBackend,
     _HasExecutionBackend,
     _HasDocumentLibraryBackend,
     _HasOntologyBackend,
@@ -29,6 +30,7 @@ from datacloud_platform.backends.resolution import resolve_backend_names
 from datacloud_platform.backends.term import TermBackend
 from datacloud_platform.mixins import (
     ActionCRUDMixin,
+    ByClawBeServiceBackendMixin,
     DatasourceMixin,
     DocumentMixin,
     DocumentEnrichMixin,
@@ -56,6 +58,7 @@ from datacloud_platform.adapters.byclaw_sync import ByClawSyncAdapter
 from datacloud_platform.ontology_store import OntologyStore
 
 if TYPE_CHECKING:
+    from datacloud_platform.backends.byclaw_be_service import ByClawBeServiceBackend
     from datacloud_platform.backends.execution import ExecutionBackend
     from datacloud_platform.backends.document_library import DocumentLibraryBackend
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
@@ -72,6 +75,7 @@ class DatacloudPlatform(
     _HasOntologyBackend,
     _HasExecutionBackend,
     _HasDocumentLibraryBackend,
+    _HasByClawBeServiceBackend,
     _HasStorageBackend,
     _HasTermBackend,
     _HasBasePath,
@@ -88,6 +92,7 @@ class DatacloudPlatform(
     DocumentMixin,
     DocumentEnrichMixin,
     ActionCRUDMixin,
+    ByClawBeServiceBackendMixin,
     KnowledgeMixin,
     DocumentLibraryBackendMixin,
     TermMixin,
@@ -191,6 +196,14 @@ class DatacloudPlatform(
         entry = self._resolve_entry(base_id)
         names = self._resolve_names(entry)
         backend = self._get_backend("document_library", names["document_library"])
+        _configure_if_supported(backend, entry)
+        return backend  # type: ignore[no-any-return]
+
+    def _byclaw_be_service_for(self, base_id: str) -> ByClawBeServiceBackend:
+        """Resolve and cache the ByClaw BE service backend for a base."""
+        entry = self._resolve_entry(base_id)
+        names = self._resolve_names(entry)
+        backend = self._get_backend("byclaw_be_service", names["byclaw_be_service"])
         _configure_if_supported(backend, entry)
         return backend  # type: ignore[no-any-return]
 

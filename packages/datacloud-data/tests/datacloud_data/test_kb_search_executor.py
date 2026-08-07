@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from datacloud_data_sdk.exceptions import KbExecutionError
 from datacloud_data_sdk.executor.kb_search_backend import (
+    PROCESSING_METADATA_FIELDS,
     HttpKnowledgeSearchBackend,
     KnowledgeDeleteResult,
     KnowledgeFileMetadata,
@@ -373,6 +374,129 @@ async def test_kb_search_executor_always_returns_primary_key_in_search_results()
     assert backend.request is not None
     assert backend.request.select == ["doc_id"]
     assert result["records"][0]["doc_id"] == "1f59ad0b0b32"
+
+
+@pytest.mark.asyncio
+async def test_http_kb_search_requests_processing_labels_from_external_api() -> None:
+    backend = HttpKnowledgeSearchBackend()
+    post = AsyncMock(return_value={"code": 0, "data": {"data": []}})
+    backend._post_json_by_discovery = post  # type: ignore[method-assign]
+
+    with patch.dict("os.environ", {"BE_DOMAINNAME": "ByaiService"}):
+        await backend.search(
+            KnowledgeSearchRequest(
+                object_code="Document",
+                datasource_alias="documents",
+                query="会议",
+                select=["title", "dc_status"],
+                kb_resource_id="1234567890",
+            )
+        )
+
+    assert post.await_args.kwargs["body"]["metadataFieldList"] == [
+        "title",
+        "dc_status",
+        "dc_failure_reason",
+        "dc_failure_count",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_kb_search_executor_hides_processing_labels_from_response() -> None:
+    class ProcessingLabelBackend(CustomSearchBackend):
+        async def search(self, request: KnowledgeSearchRequest) -> KnowledgeSearchResult:
+            self.request = request
+            return KnowledgeSearchResult(
+                records=[
+                    {
+                        "title": "会议纪要",
+                        "dc_status": "待整理",
+                        "dc_failure_reason": "timeout",
+                        "dc_failure_count": 2,
+                        "filePath": "/Document/meeting.md",
+                    }
+                ],
+                total=1,
+            )
+
+    backend = ProcessingLabelBackend()
+    cls = OntologyClass(
+        object_code="Document",
+        object_name="文档",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="documents",
+        fields=[
+            OntologyField(field_code="title", field_name="标题", field_type="STRING"),
+            OntologyField(field_code="dc_status", field_name="处理状态", field_type="STRING"),
+            OntologyField(
+                field_code="dc_failure_reason",
+                field_name="失败原因",
+                field_type="STRING",
+            ),
+            OntologyField(
+                field_code="dc_failure_count",
+                field_name="失败次数",
+                field_type="INTEGER",
+            ),
+        ],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).execute("Document", {"query": "会议"})
+
+    response_record = result["records"][0]
+    assert response_record["title"] == "会议纪要"
+    assert response_record["fileName"] == "meeting.md"
+    assert response_record["filePath"] == "/Document/meeting.md"
+    assert not set(PROCESSING_METADATA_FIELDS).intersection(response_record)
+    assert [column["name"] for column in result["meta"]["columns"]] == [
+        "title",
+        "fileName",
+        "filePath",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_kb_write_preserves_processing_labels_for_backend() -> None:
+    backend = CustomSearchBackend()
+    cls = OntologyClass(
+        object_code="Document",
+        object_name="文档",
+        description="",
+        source_type="KNOWLEDGE_BASE",
+        datasource_alias="documents",
+        fields=[OntologyField(field_code="title", field_name="标题", field_type="STRING")],
+    )
+    loader = DummyLoader(cls, DummyConfig(kb_search_backend=backend))
+
+    result = await KbSearchExecutor(loader).write(
+        "Document",
+        {
+            "source_path": "/Document/meeting.md",
+            "content": "会议内容",
+            "labels": {
+                "title": "会议纪要",
+                "dc_status": "待整理",
+                "dc_failure_reason": "timeout",
+                "dc_failure_count": 2,
+                "unknown_internal_label": "discarded",
+            },
+        },
+    )
+
+    assert backend.write_request is not None
+    assert backend.write_request.labels == {
+        "title": "会议纪要",
+        "dc_status": "待整理",
+        "dc_failure_reason": "timeout",
+        "dc_failure_count": 2,
+    }
+    response_record = result["records"][0]
+    assert response_record["title"] == "会议纪要"
+    assert response_record["fileName"] == "meeting.md"
+    assert response_record["filePath"] == "/Document/meeting.md"
+    assert not set(PROCESSING_METADATA_FIELDS).intersection(response_record)
 
 
 @pytest.mark.asyncio

@@ -15,11 +15,14 @@ from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import PurePosixPath
 from typing import Any, Protocol
 
 from datacloud_platform.models.document import (
     DocumentAsyncProcessingRequest,
     DocumentContentResult,
+    DocumentEnrichObjectScope,
+    DocumentEnrichStatus,
     DocumentFragmentItem,
     DocumentFragmentResult,
     DocumentObjectItem,
@@ -112,8 +115,8 @@ class DocumentMixin:
         """异步富化等待整理或可自动重试的文档。
 
         查询“待整理、整理失败-待重试”文档，并固定附加两个筛选条件：更新时间早于
-        当前时间 7200 秒、关系出入差值为 10。每个文档持锁调用
-        ``enrich_document_todo``，把返回内容写入会话空间并记录处理结果。
+        当前时间 7200 秒、关系出入差值为 10。每个文档持锁调用 ``enrich``，成功后
+        通过对象 ``write_*`` 动作写回数据，并在处理前后通过服务发现更新对象文件状态。
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -133,8 +136,8 @@ class DocumentMixin:
                 DocumentProcessingStatus.ORGANIZATION_RETRY,
             ),
             operation="enrichment",
-            organization_interval_seconds=7200,
-            relation_in_out_difference=10,
+            # organization_interval_seconds=7200,
+            # relation_in_out_difference=10,
         )
 
     @asynccontextmanager
@@ -178,7 +181,7 @@ class DocumentMixin:
         *,
         document: DocumentObjectItem,
         object_codes: tuple[str, ...],
-        model_config: dict[str, Any],
+        model_config: dict[str, Any] | None,
     ) -> int:
         """发现单个文档中的实体（待接入具体实现）。
 
@@ -194,28 +197,6 @@ class DocumentMixin:
             NotImplementedError: 当前仅定义扩展协议，尚未接入实体发现实现。
         """
         raise NotImplementedError("document entity discovery is not implemented")
-
-    async def enrich_document_todo(
-        self,
-        *,
-        document: DocumentObjectItem,
-        object_codes: tuple[str, ...],
-        model_config: dict[str, Any],
-    ) -> str:
-        """富化单个文档并返回最终内容（待接入具体实现）。
-
-        Args:
-            document: 待富化的文档对象。
-            object_codes: 富化时允许使用的对象类型编码。
-            model_config: 调用方传入的模型及推理配置。
-
-        Returns:
-            富化后的完整 Markdown 文档内容。
-
-        Raises:
-            NotImplementedError: 当前仅定义扩展协议，尚未接入富化实现。
-        """
-        raise NotImplementedError("document enrichment is not implemented")
 
     def append_document_session_report(self, **report: Any) -> None:
         """向当前会话空间追加一条文档处理结果。
@@ -234,25 +215,6 @@ class DocumentMixin:
             json.dumps(report, ensure_ascii=False, default=str) + "\n",
         )
 
-    def write_enriched_document_to_session(
-        self, *, document: DocumentObjectItem, content: str
-    ) -> None:
-        """把单个文档的富化结果写入当前会话空间。
-
-        Args:
-            document: 文档对象；其 term_id 用作安全化后的文件名。
-            content: 富化后的完整 Markdown 内容。
-
-        Returns:
-            无返回值。文件路径为
-            ``/datacloud/document-processing/enrichment/{termId}.md``。
-        """
-        storage = _current_result_file_storage()
-        safe_term_id = document.term_id.replace("/", "_")
-        storage.write_text(
-            f"/datacloud/document-processing/enrichment/{safe_term_id}.md", content
-        )
-
     async def query_document_objects(
         self: _DocumentPlatform,
         base_id: str,
@@ -261,10 +223,13 @@ class DocumentMixin:
     ) -> DocumentObjectPage:
         """按文档元数据条件分页查询文档对象。
 
-        业务流程：可选地根据关系出入差值解析候选术语及文件路径；构造
-        ``metadataSearch`` DSL；按 ``knCode + filePath`` 回查术语；再用对象编码过滤。
+        业务流程：可选地根据关系出入差值解析候选术语及文件路径；当对象编码非空
+        时读取对象详情中的 ``kb_resource_id`` 与 ``kb_directory``，前者和调用方指定
+        的知识库范围求交，后者组装为文件路径前缀条件；随后调用
+        ``metadataSearch``，按 ``knCode + filePath`` 回查术语并用对象编码过滤。
         核心 DSL 为 ``(filePath IN 候选路径 OR dc_status IN 状态) AND
-        updateAt < now - organizationIntervalSeconds``。
+        filePath PREFIX 对象目录 AND
+        updatedAt < now - organizationIntervalSeconds``，其中各部分均按请求条件可选。
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -288,9 +253,24 @@ class DocumentMixin:
                 term_ids=term_ids,
             )
 
+        effective_kb_resource_ids = request.kb_resource_ids
+        object_directories: tuple[str, ...] = ()
+        if request.object_codes:
+            bound_resource_ids, object_directories = resolve_object_knowledge_scope(
+                platform=self,
+                base_id=base_id,
+                object_codes=request.object_codes,
+                allowed_kb_resource_ids=request.kb_resource_ids,
+            )
+            effective_kb_resource_ids = bound_resource_ids
+            if not effective_kb_resource_ids:
+                return _build_page([], 0, request.page_index, request.page_size)
+
         payload = build_metadata_search_payload(
             request=request,
             candidate_file_paths=candidate_file_paths,
+            kb_resource_ids=effective_kb_resource_ids,
+            object_directories=object_directories,
             now=datetime.now(UTC),
         )
         metadata_page = await self.search_knowledge_item_metadata(
@@ -309,7 +289,7 @@ class DocumentMixin:
         rows = await resolve_document_objects_by_file_paths(
             platform=self,
             base_id=base_id,
-            kb_resource_ids=request.kb_resource_ids,
+            kb_resource_ids=effective_kb_resource_ids,
             file_paths_by_kb_id={
                 kb_id: tuple(dict.fromkeys(file_paths))
                 for kb_id, file_paths in paths_by_kb_id.items()
@@ -320,7 +300,12 @@ class DocumentMixin:
             rows = [
                 row
                 for row in rows
-                if str(row.get("term_type_code") or row.get("termTypeCode") or "")
+                if str(
+                    row.get("term_type")
+                    or row.get("term_type_code")
+                    or row.get("termTypeCode")
+                    or ""
+                )
                 in allowed_codes
             ]
         return _build_page(
@@ -354,6 +339,7 @@ class DocumentMixin:
             term_id=request.term_id,
             direction=request.direction,
             depth=request.depth,
+            term_type_codes=request.object_codes,
             page_index=request.page_index,
             page_size=request.page_size,
         )
@@ -459,7 +445,8 @@ class DocumentMixin:
 
         Args:
             base_id: 本体库/系统空间标识。
-            request: 对象编码列表、查询文本和最大返回条数 top_k。
+            request: 对象编码列表、查询文本、最大返回条数 top_k，以及可选的待排除
+                术语 ID 列表。排除术语统一解析为文件路径并使用 ``not + in`` 过滤。
 
         Returns:
             ``DocumentFragmentResult``，每项包含来源知识库、文件路径、chunk 文本、
@@ -506,13 +493,38 @@ class DocumentMixin:
             "topK": request.top_k,
             "searchMode": "mixedRecall",
         }
+        where_conditions: list[dict[str, Any]] = []
         if directories:
-            payload["where"] = {
-                "or": [
-                    {"prefix": {"fieldName": "filePath", "value": directory}}
-                    for directory in directories
-                ]
-            }
+            where_conditions.append(
+                {
+                    "or": [
+                        {"prefix": {"fieldName": "filePath", "value": directory}}
+                        for directory in directories
+                    ]
+                }
+            )
+        excluded_file_paths = resolve_term_file_paths(
+            platform=self,
+            base_id=base_id,
+            term_ids=request.exclude_term_ids,
+        )
+        if excluded_file_paths:
+            # 已知风险：这里只按 filePath 排除。如果多个知识库存在相同文件路径，
+            # 下游检索会把这些知识库中的同路径文件全部排除。
+            where_conditions.append(
+                {
+                    "not": {
+                        "in": {
+                            "fieldName": "filePath",
+                            "value": list(excluded_file_paths),
+                        }
+                    }
+                }
+            )
+        if len(where_conditions) == 1:
+            payload["where"] = where_conditions[0]
+        elif where_conditions:
+            payload["where"] = {"and": where_conditions}
         rows = await self.search_knowledge_items(base_id, payload=payload)
         term_details = resolve_fragment_term_details(
             platform=self,
@@ -527,7 +539,7 @@ class DocumentMixin:
                         **row,
                         **term_details.get(
                             (
-                                str(row.get("knCode") or ""),
+                                str(row.get("resourceId") or ""),
                                 str(row.get("filePath") or ""),
                             ),
                             {},
@@ -537,6 +549,38 @@ class DocumentMixin:
                 for row in rows
             )
         )
+
+
+def resolve_term_file_paths(
+    *, platform: Any, base_id: str, term_ids: tuple[str, ...]
+) -> tuple[str, ...]:
+    """批量解析并去重待排除术语对应的文件路径。"""
+    if not term_ids:
+        return ()
+    rows: list[dict[str, Any]] = []
+    for start in range(0, len(term_ids), 200):
+        batch = term_ids[start : start + 200]
+        result = platform.search_terms(
+            base_id,
+            term_ids=list(batch),
+            top_k=len(batch),
+            offset=0,
+        )
+        rows.extend(_term_result_items(result))
+    found_ids = {str(row.get("term_id") or row.get("termId") or "") for row in rows}
+    missing_ids = [term_id for term_id in term_ids if term_id not in found_ids]
+    if missing_ids:
+        raise KeyError(f"terms not found: {', '.join(missing_ids)}")
+    file_paths: list[str] = []
+    for row in rows:
+        metadata = _term_metadata(row)
+        file_path = str(metadata.get("kb_file_path") or "")
+        if not file_path:
+            term_id = str(row.get("term_id") or row.get("termId") or "")
+            raise ValueError(f"term file path is missing: term_id={term_id}")
+        if file_path not in file_paths:
+            file_paths.append(file_path)
+    return tuple(file_paths)
 
 
 def resolve_fragment_term_details(
@@ -561,7 +605,7 @@ def resolve_fragment_term_details(
     """
     candidate_keys: set[tuple[str, str]] = set()
     for fragment in fragment_rows:
-        kb_resource_id = str(fragment.get("knCode") or "")
+        kb_resource_id = str(fragment.get("resourceId") or "")
         file_path = str(fragment.get("filePath") or "")
         if kb_resource_id and file_path:
             candidate_keys.add((kb_resource_id, file_path))
@@ -624,11 +668,11 @@ async def _process_document_pages(
 ) -> None:
     """先拉取全部候选页，再按顺序逐文档处理。
 
-    先完成分页快照可以避免处理过程中状态变化导致后续页记录偏移或遗漏。发现与富化
-    共用该流程，通过 ``operation`` 选择单文档处理分支。
+    富化任务先按 ``request.object_codes`` 一次性加载本体对象详情，再完成分页快照，
+    避免循环内重复查询对象；发现与富化共用该流程，通过 ``operation`` 选择处理分支。
 
     Args:
-        platform: 提供文档查询、锁、TODO 处理及会话写入能力的 Platform。
+        platform: 提供文档查询、锁、发现、富化、动作执行及会话写入能力的 Platform。
         base_id: 本体库/系统空间标识。
         session_id: 会话 ID。
         request: 异步处理范围和模型配置。
@@ -637,6 +681,16 @@ async def _process_document_pages(
         organization_interval_seconds: 可选的更新时间间隔秒数。
         relation_in_out_difference: 可选的关系出入差值，不取绝对值。
     """
+    enrich_scope_by_code: dict[str, DocumentEnrichObjectScope] | None = None
+    if operation == "enrichment":
+        enrich_scope_by_code = {
+            object_code: _resolve_document_object_scope(
+                platform=platform,
+                base_id=base_id,
+                object_code=object_code,
+            )
+            for object_code in request.object_codes
+        }
     page_index = 1
     documents: list[DocumentObjectItem] = []
     while True:
@@ -664,6 +718,7 @@ async def _process_document_pages(
             request=request,
             document=document,
             operation=operation,
+            enrich_scope_by_code=enrich_scope_by_code,
         )
 
 
@@ -675,6 +730,7 @@ async def _process_one_document(
     request: DocumentAsyncProcessingRequest,
     document: DocumentObjectItem,
     operation: str,
+    enrich_scope_by_code: Mapping[str, DocumentEnrichObjectScope] | None = None,
 ) -> None:
     """在分布式锁保护下处理一个文档并记录结果。
 
@@ -688,6 +744,7 @@ async def _process_one_document(
         request: 对象范围和模型配置。
         document: 当前处理的文档对象。
         operation: ``discovery`` 或 ``enrichment``。
+        enrich_scope_by_code: 前置加载的对象编码到本体对象详情映射，仅富化使用。
     """
     lock_key = (
         f"datacloud:document:{operation}:{base_id}:"
@@ -719,31 +776,165 @@ async def _process_one_document(
                     entity_count=entity_count,
                 )
             else:
-                content = await platform.enrich_document_todo(
-                    document=document,
-                    object_codes=request.object_codes,
-                    model_config=request.model_config_payload,
+                from datacloud_platform.services.object_action import (
+                    invoke_object_write_action,
                 )
-                platform.write_enriched_document_to_session(
-                    document=document, content=content
+
+                if enrich_scope_by_code is None:
+                    enrich_scope_by_code = {
+                        object_code: _resolve_document_object_scope(
+                            platform=platform,
+                            base_id=base_id,
+                            object_code=object_code,
+                        )
+                        for object_code in request.object_codes
+                    }
+                target_object = enrich_scope_by_code.get(document.term_type_code)
+                if target_object is None:
+                    raise KeyError(
+                        f"term_type_code is not in object_codes: "
+                        f"{document.term_type_code}"
+                    )
+                await platform.save_or_update_object_files(
+                    base_id,
+                    object_files=[
+                        _build_object_file_status(
+                            session_id=session_id,
+                            document=document,
+                            object_scope=target_object,
+                            status=DocumentProcessingStatus.ORGANIZING,
+                        )
+                    ],
                 )
+                enrich_result = await platform.enrich(
+                    base_id,
+                    object_scope=list(enrich_scope_by_code.values()),
+                    target_object=target_object,
+                    term_id=document.term_id,
+                )
+                content = enrich_result.enriched_content
+                processing_status = _processing_status_for_enrich_result(
+                    enrich_result.status
+                )
+                action_result: dict[str, Any] | None = None
+                if content.strip():
+                    action_result = await invoke_object_write_action(
+                        platform=platform,
+                        base_id=base_id,
+                        object_code=target_object.object_code,
+                        content=content,
+                        labels={
+                            "dc_status": processing_status.value,
+                            "dc_failure_reason": enrich_result.exception_info,
+                            "dc_failure_count": document.failure_count
+                            + int(enrich_result.status is DocumentEnrichStatus.FAILED),
+                            "dc_last_organized_at": datetime.now(UTC).isoformat(),
+                        },
+                        file_description=f"{document.term_name}富化文档",
+                        source_path=document.file_path,
+                    )
+                await platform.save_or_update_object_files(
+                    base_id,
+                    object_files=[
+                        _build_object_file_status(
+                            session_id=session_id,
+                            document=document,
+                            object_scope=target_object,
+                            status=processing_status,
+                            ext_content={
+                                "enrichStatus": enrich_result.status.value,
+                                "error": enrich_result.exception_info,
+                                "actionResult": action_result,
+                            },
+                        )
+                    ],
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Document %s failed: %s", operation, document.term_id)
+            if operation == "discovery":
                 platform.append_document_session_report(
                     session_id=session_id,
                     operation=operation,
                     term_id=document.term_id,
                     file_path=document.file_path,
-                    status="completed",
+                    status="failed",
+                    error=str(exc),
                 )
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Document %s failed: %s", operation, document.term_id)
-            platform.append_document_session_report(
-                session_id=session_id,
-                operation=operation,
-                term_id=document.term_id,
-                file_path=document.file_path,
-                status="failed",
-                error=str(exc),
-            )
+            else:
+                try:
+                    target_object = (enrich_scope_by_code or {}).get(
+                        document.term_type_code
+                    )
+                    if target_object is None:
+                        raise KeyError(
+                            f"term_type_code is not in object_codes: "
+                            f"{document.term_type_code}"
+                        )
+                    await platform.save_or_update_object_files(
+                        base_id,
+                        object_files=[
+                            _build_object_file_status(
+                                session_id=session_id,
+                                document=document,
+                                object_scope=target_object,
+                                status=DocumentProcessingStatus.ORGANIZATION_RETRY,
+                                ext_content={"error": str(exc)},
+                            )
+                        ],
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "Failed to persist enrichment failure status: %s",
+                        document.term_id,
+                    )
+
+
+def _processing_status_for_enrich_result(
+    status: DocumentEnrichStatus,
+) -> DocumentProcessingStatus:
+    return {
+        DocumentEnrichStatus.SUCCESS: DocumentProcessingStatus.COMPLETED,
+        DocumentEnrichStatus.FAILED: DocumentProcessingStatus.ORGANIZATION_RETRY,
+        DocumentEnrichStatus.SKIPPED: DocumentProcessingStatus.PENDING_ORGANIZATION,
+    }[status]
+
+
+def _build_object_file_status(
+    *,
+    session_id: str,
+    document: DocumentObjectItem,
+    object_scope: DocumentEnrichObjectScope,
+    status: DocumentProcessingStatus,
+    ext_content: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "sessionId": session_id,
+        "objectName": object_scope.object_name,
+        "objectCode": object_scope.object_code,
+        "fileName": PurePosixPath(document.file_path).name,
+        "version": "1",
+        "statusCd": status.value,
+        "extContent": json.dumps(ext_content or {}, ensure_ascii=False, default=str),
+    }
+
+
+def _resolve_document_object_scope(
+    *, platform: Any, base_id: str, object_code: str
+) -> DocumentEnrichObjectScope:
+    """根据术语类型编码查询本体对象的实际编码和名称。"""
+    detail = platform.get_object_detail(base_id, object_code)
+    if detail is None:
+        raise KeyError(f"object not found: {object_code}")
+    resolved_code = str(
+        detail.get("objectCode") or detail.get("object_code") or object_code
+    )
+    object_name = str(detail.get("objectName") or detail.get("object_name") or "")
+    if not object_name:
+        raise KeyError(f"object name not found: {object_code}")
+    return DocumentEnrichObjectScope(
+        objectCode=resolved_code,
+        objectName=object_name,
+    )
 
 
 def _current_result_file_storage() -> Any:
@@ -811,6 +1002,8 @@ def build_metadata_search_payload(
     *,
     request: QueryDocumentObjectsRequest,
     candidate_file_paths: tuple[str, ...],
+    kb_resource_ids: tuple[str, ...] | None = None,
+    object_directories: tuple[str, ...] = (),
     now: datetime,
 ) -> dict[str, Any]:
     """构造文档库 ``metadataSearch`` 的 Agent DSL 请求体。
@@ -818,12 +1011,15 @@ def build_metadata_search_payload(
     Args:
         request: 文档对象查询条件和分页参数。
         candidate_file_paths: 由关系出入差值计算得到的候选文件路径。
+        kb_resource_ids: 对象绑定与请求范围求交后的有效知识库资源 ID。
+        object_directories: 对象详情绑定的知识库目录，作为 filePath 前缀过滤。
         now: 计算更新时间截止点的当前时间，显式传入以便测试。
 
     Returns:
         下游请求体，条件语义为 ``(filePath IN paths OR dc_status IN statuses)
-        AND updateAt < now - organizationIntervalSeconds``；知识库资源 ID 写入
-        knCodeList，page_index/page_size 映射为 pageNum/pageSize。
+        AND filePath PREFIX object_directories
+        AND updatedAt < now - organizationIntervalSeconds``；知识库资源 ID 写入
+        resourceIdList，page_index/page_size 映射为 pageNum/pageSize。
     """
     or_conditions: list[dict[str, Any]] = []
     if candidate_file_paths:
@@ -847,17 +1043,67 @@ def build_metadata_search_payload(
     and_conditions: list[dict[str, Any]] = []
     if or_conditions:
         and_conditions.append({"or": or_conditions})
+    if object_directories:
+        and_conditions.append(
+            {
+                "or": [
+                    {"prefix": {"fieldName": "filePath", "value": directory}}
+                    for directory in object_directories
+                ]
+            }
+        )
     if request.organization_interval_seconds is not None:
         cutoff = now - timedelta(seconds=request.organization_interval_seconds)
         and_conditions.append(
             {"lt": {"fieldName": "updatedAt", "value": cutoff.isoformat()}}
         )
     return {
-        "resourceIdList": list(request.kb_resource_ids),
+        "resourceIdList": list(
+            request.kb_resource_ids if kb_resource_ids is None else kb_resource_ids
+        ),
         "where": {"and": and_conditions},
         "pageNum": request.page_index,
         "pageSize": request.page_size,
     }
+
+
+def resolve_object_knowledge_scope(
+    *,
+    platform: Any,
+    base_id: str,
+    object_codes: tuple[str, ...],
+    allowed_kb_resource_ids: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """解析对象绑定知识库和目录，并限制在调用方指定的知识库范围内。"""
+    allowed = set(allowed_kb_resource_ids)
+    resource_ids: list[str] = []
+    directories: list[str] = []
+    has_binding = False
+    for object_code in object_codes:
+        detail = platform.get_object_detail(base_id, object_code)
+        if detail is None:
+            raise KeyError(f"object not found: {object_code}")
+        ext = detail.get("ext_property") or detail.get("extProperty") or {}
+        if not isinstance(ext, Mapping):
+            continue
+        resource_id = str(
+            ext.get("kb_resource_id") or ext.get("kbResourceId") or ""
+        ).strip()
+        if not resource_id:
+            continue
+        has_binding = True
+        if allowed and resource_id not in allowed:
+            continue
+        if resource_id not in resource_ids:
+            resource_ids.append(resource_id)
+        directory = _normalize_directory(
+            str(ext.get("kb_directory") or ext.get("kbDirectory") or "")
+        )
+        if directory and directory not in directories:
+            directories.append(directory)
+    if not has_binding:
+        raise ValueError("no knowledge-base binding found for objectCodes")
+    return tuple(resource_ids), tuple(directories)
 
 
 async def _call_platform_todo(platform: Any, method_name: str, **kwargs: Any) -> Any:
@@ -908,7 +1154,7 @@ async def resolve_document_objects_by_file_paths(
     """按知识库与文件路径回查文档术语，并执行二次边界校验。
 
     Args:
-        platform: 提供 search_terms 的 Platform。
+        platform: 提供 search_terms_by_labels 的 Platform。
         base_id: 本体库/系统空间标识。
         kb_resource_ids: 调用方允许访问的门户知识库资源 ID。
         file_paths_by_kb_id: metadataSearch 返回的内部 kb_id 到文件路径集合映射。
@@ -923,25 +1169,26 @@ async def resolve_document_objects_by_file_paths(
         file_paths = tuple(dict.fromkeys(path for path in raw_file_paths if path))
         if not kb_id or not file_paths:
             continue
-        result = platform.search_terms(
+        result = platform.search_terms_by_labels(
             base_id,
             label_filters=[
                 {"field_code": "kb_file_path", "filter_value": file_path}
                 for file_path in file_paths
             ],
             label_condition="or",
-            ext_attrs={"kb_id": kb_id},
-            top_k=200,
-            offset=0,
+            top_k=1000,
         )
         allowed_paths = set(file_paths)
-        rows.extend(
-            row
-            for row in _term_result_items(result)
-            if _term_metadata(row).get("kb_id") == kb_id
-            and _term_metadata(row).get("kb_resource_id") in allowed_kb_resource_ids
-            and _term_metadata(row).get("kb_file_path") in allowed_paths
-        )
+        for row in _term_result_items(result):
+            metadata = _term_metadata(row)
+            result_kb_id = str(metadata.get("kb_id") or "")
+            if result_kb_id != str(kb_id):
+                continue
+            if str(metadata.get("kb_resource_id") or "") not in allowed_kb_resource_ids:
+                continue
+            if str(metadata.get("kb_file_path") or "") not in allowed_paths:
+                continue
+            rows.append(row)
     return rows
 
 
@@ -1051,7 +1298,7 @@ def _to_item(row: dict[str, Any]) -> DocumentObjectItem:
         termId=str(row.get("term_id") or row.get("termId") or ""),
         termName=str(row.get("term_name") or row.get("termName") or ""),
         termCode=str(row.get("term_code") or row.get("termCode") or ""),
-        termTypeCode=str(row.get("term_type_code") or row.get("termTypeCode") or ""),
+        termTypeCode=str(row.get("term_type") or row.get("term_type_code") or row.get("termTypeCode") or ""),
         filePath=str(
             metadata.get("kb_file_path")
             or metadata.get("file_path")
@@ -1061,7 +1308,15 @@ def _to_item(row: dict[str, Any]) -> DocumentObjectItem:
         kbResourceId=str(
             metadata.get("kb_resource_id") or metadata.get("kbResourceId") or ""
         ),
-        status=DocumentProcessingStatus(str(metadata.get("dc_status") or "")),
+        status=_parse_document_processing_status(metadata.get("dc_status")),
         failureReason=metadata.get("dc_failure_reason"),
         failureCount=metadata.get("dc_failure_count", 0),
     )
+
+
+def _parse_document_processing_status(value: Any) -> DocumentProcessingStatus | None:
+    """仅转换协议内定义的文档状态，未知或缺失状态返回空。"""
+    try:
+        return DocumentProcessingStatus(str(value or ""))
+    except ValueError:
+        return None

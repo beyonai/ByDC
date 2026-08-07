@@ -24,6 +24,7 @@ from datacloud_platform.services.kb_document_reader import (
 METADATA_SEARCH_PATH = "/byaiService/datasetController/knowledgeItems/metadataSearch"
 KNOWLEDGE_ITEMS_SEARCH_PATH = "/byaiService/datasetController/knowledgeItems/search"
 _TIMEOUT_SECONDS = 30.0
+_ERROR_RESPONSE_PREVIEW_CHARS = 4000
 PostJson = Callable[[str, dict[str, Any], dict[str, str]], object]
 
 
@@ -96,7 +97,7 @@ async def _post_by_discovery(
         )
     except ImportError as exc:
         raise DocumentLibraryError(
-            "metadataSearch service discovery dependencies are unavailable"
+            f"service discovery dependencies are unavailable: path={path}"
         ) from exc
 
     redis_client = create_async_redis_client()
@@ -115,40 +116,70 @@ async def _post_by_discovery(
             try:
                 response_payload: Any = response.json()
             except ValueError as exc:
+                response_text = response.text
+                if not response.is_success:
+                    raise DocumentLibraryError(
+                        _format_http_error(
+                            path=path,
+                            status_code=response.status_code,
+                            response_payload=response_text,
+                        )
+                    ) from exc
                 raise DocumentLibraryError(
-                    "metadataSearch response must be JSON"
+                    f"response must be JSON: path={path} body={response_text[:_ERROR_RESPONSE_PREVIEW_CHARS]}"
                 ) from exc
             if not response.is_success:
                 raise DocumentLibraryError(
-                    f"metadataSearch returned HTTP {response.status_code}"
+                    _format_http_error(
+                        path=path,
+                        status_code=response.status_code,
+                        response_payload=response_payload,
+                    )
                 )
             return response_payload
     except httpx.HTTPError as exc:
-        raise DocumentLibraryError(f"metadataSearch HTTP error: {exc}") from exc
+        raise DocumentLibraryError(f"HTTP error calling path={path}: {exc}") from exc
     finally:
         await discovery_client.close()
         await redis_client.aclose()
 
 
+def _format_http_error(*, path: str, status_code: int, response_payload: Any) -> str:
+    if isinstance(response_payload, str):
+        detail = response_payload
+    else:
+        detail = json.dumps(response_payload, ensure_ascii=False, default=str)
+    detail = detail[:_ERROR_RESPONSE_PREVIEW_CHARS]
+    return f"request failed: path={path} HTTP {status_code} response={detail}"
+
+
 def _extract_page(payload: Any) -> MetadataSearchPage:
     if not isinstance(payload, dict):
         raise DocumentLibraryError("metadataSearch response must be an object")
-    if str(payload.get("resultCode", "")) != "0":
+    if "resultCode" in payload:
+        result_code = str(payload.get("resultCode", ""))
         result_object = payload.get("resultObject")
+        result_message = payload.get("resultMsg")
+        succeeded = result_code in {"0", "200"}
+    else:
+        result_code = str(payload.get("code", ""))
+        result_object = payload.get("data")
+        result_message = payload.get("msg")
+        succeeded = result_code in {"0", "200"} and payload.get("success") is not False
+    if not succeeded:
         error_details = result_object if isinstance(result_object, dict) else {}
-        message = str(payload.get("resultMsg") or "metadataSearch failed")
+        message = str(result_message or "metadataSearch failed")
         if error_details:
             message = (
                 f"{message}: "
                 f"{json.dumps(error_details, ensure_ascii=False, sort_keys=True)}"
             )
         raise DocumentLibraryError(message)
-    result_object = payload.get("resultObject")
     if not isinstance(result_object, dict):
-        raise DocumentLibraryError("metadataSearch resultObject must be an object")
+        raise DocumentLibraryError("metadataSearch data must be an object")
     rows = result_object.get("data")
     if not isinstance(rows, list):
-        raise DocumentLibraryError("metadataSearch resultObject.data must be an array")
+        raise DocumentLibraryError("metadataSearch data.data must be an array")
     return MetadataSearchPage(
         data=tuple(row for row in rows if isinstance(row, dict)),
         total=int(result_object.get("total") or 0),
