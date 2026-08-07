@@ -766,7 +766,7 @@ class _NoopTermBackend:
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
-        term_type_code: str | None = None,
+        term_type_codes: list[str] | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
@@ -777,7 +777,7 @@ class _NoopTermBackend:
             direction,
             depth,
             keyword,
-            term_type_code,
+            term_type_codes,
             page_index,
             page_size,
         )

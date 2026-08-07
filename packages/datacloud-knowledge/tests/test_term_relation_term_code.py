@@ -323,6 +323,78 @@ class TestQueryTermRelationsTermCode:
         assert "term.term_name" in term_sql[0]
         assert "term.term_code" in term_sql[0]
 
+    def test_in_filter_applied_on_neighbor_type(self) -> None:
+        """term_type_codes 列表 → SQL IN 过滤，count 与主查询共用同一条件。"""
+        fake = _FakeSession(
+            relation_rows=[("rel-1", "t1", "t2", "引用", "ASSOC", "1:N", None, None)],
+            term_rows=[("t1", "概念一", "TC-001"), ("t2", "概念二", "TC-002")],
+        )
+        result = _build_term_reader(fake).query_term_relations(
+            term_id="t1",
+            direction="outgoing",
+            term_type_codes=["Concept", "Object"],
+            page_index=1,
+            page_size=20,
+        )
+
+        assert result["totalCount"] == 1
+        assert len(fake.statements) == 3  # count + 主查询 + term 批量，无 N+1
+        count_sql, main_sql, _term_sql = _compiled(fake)
+        assert "JOIN term AS" in count_sql
+        assert "JOIN term AS" in main_sql
+        assert "term_type_code IN ('Concept', 'Object')" in count_sql
+        assert "term_type_code IN ('Concept', 'Object')" in main_sql
+
+    def test_empty_or_none_list_no_join(self) -> None:
+        """空列表 / None → 零 JOIN，行为与不传一致。"""
+        for codes in (None, []):
+            fake = _FakeSession(
+                relation_rows=[("rel-1", "t1", "t2", "引用", "ASSOC", "1:N", None, None)],
+                term_rows=[("t1", "概念一", "TC-001"), ("t2", "概念二", "TC-002")],
+            )
+            _build_term_reader(fake).query_term_relations(
+                term_id="t1",
+                direction="both",
+                term_type_codes=codes,
+                page_index=1,
+                page_size=20,
+            )
+            sqls = _compiled(fake)
+            assert len(sqls) == 3
+            assert all("JOIN term AS" not in s for s in sqls)
+
+    def test_blank_elements_dropped_before_join(self) -> None:
+        """含空串/空白元素：清洗后为空 → 零 JOIN（防御性兜底）。"""
+        fake = _FakeSession(
+            relation_rows=[("rel-1", "t1", "t2", "引用", "ASSOC", "1:N", None, None)],
+            term_rows=[("t1", "概念一", "TC-001"), ("t2", "概念二", "TC-002")],
+        )
+        _build_term_reader(fake).query_term_relations(
+            term_id="t1",
+            direction="both",
+            term_type_codes=["", "  "],
+            page_index=1,
+            page_size=20,
+        )
+        sqls = _compiled(fake)
+        assert all("JOIN term AS" not in s for s in sqls)
+
+    def test_both_direction_in_filter_on_both_ends(self) -> None:
+        """both 方向：source/target 双 alias 各带一个 IN 条件。"""
+        fake = _FakeSession(
+            relation_rows=[("rel-1", "t1", "t2", "引用", "ASSOC", "1:N", None, None)],
+            term_rows=[("t1", "概念一", "TC-001"), ("t2", "概念二", "TC-002")],
+        )
+        _build_term_reader(fake).query_term_relations(
+            term_id="t1",
+            direction="both",
+            term_type_codes=["Concept"],
+            page_index=1,
+            page_size=20,
+        )
+        main_sql = _compiled(fake)[1]
+        assert main_sql.count("term_type_code IN ('Concept')") == 2
+
 
 class TestListTermRelationsRegression:
     """list_term_relations（term/termRelation）：helper 改名/改结构后 name 仍正确。"""

@@ -170,11 +170,14 @@ class TermBackend(Protocol):
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
-        term_type_code: str | None = None,
+        term_type_codes: list[str] | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
-        """查询术语一跳关系（含 keyword + term_type_code 过滤 + 分页）。
+        """查询术语一跳关系（含 keyword + term_type_codes IN 过滤 + 分页）。
+
+        term_type_codes: 邻居术语类型白名单，任一匹配即保留（SQL IN 过滤）；
+            None / 空列表不过滤。
 
         对应: POST /api/v1/rpc/term/getRelations
         """

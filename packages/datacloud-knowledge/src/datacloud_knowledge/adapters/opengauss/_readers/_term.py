@@ -4507,7 +4507,7 @@ class _TermReader(_ReaderBase):
         direction: str = "both",
         depth: int = 1,
         keyword: str | None = None,
-        term_type_code: str | None = None,
+        term_type_codes: list[str] | None = None,
         page_index: int = 1,
         page_size: int = 20,
     ) -> dict[str, Any]:
@@ -4519,14 +4519,16 @@ class _TermReader(_ReaderBase):
             direction: "outgoing", "incoming", or "both" (default).
             depth: Recursion depth (1 = direct only).
             keyword: Optional keyword, searches relation_name (ILIKE).
-            term_type_code: Optional term_type_code filter on the *neighbor* term
-                (the endpoint opposite to the given term_id).  Applied at the SQL
-                layer via JOIN on the ``term`` table:
+            term_type_codes: Optional list of term_type_code filters on the
+                *neighbor* term (the endpoint opposite to the given term_id).
+                Any matching type keeps the relation (SQL IN).  Applied at the
+                SQL layer via JOIN on the ``term`` table:
                 - outgoing → filter target term type
                 - incoming → filter source term type
-                - both     → (source==term_id AND target.type==ttc)
-                             OR (target==term_id AND source.type==ttc)
-                When omitted, behaves exactly as before (no JOIN, no filter).
+                - both     → (source==term_id AND target.type IN ttc)
+                             OR (target==term_id AND source.type IN ttc)
+                None / empty list behaves exactly as before (no JOIN, no filter);
+                elements are stripped and blank strings dropped.
             page_index: 1-based page number (default 1).
             page_size: Items per page (default 20, max 100).
 
@@ -4558,22 +4560,23 @@ class _TermReader(_ReaderBase):
                 filters.append(text("term_relation.relation_name ILIKE :kw"))
                 params["kw"] = f"%{keyword.strip()}%"
 
-            # SQL 层 JOIN term 表按"邻居端" term_type_code 过滤（禁止 Python 层过滤）。
-            # 未传 term_type_code 时保持零 JOIN，行为与改造前完全一致。
+            # SQL 层 JOIN term 表按"邻居端" term_type_codes IN 过滤（禁止 Python 层过滤）。
+            # 未传 / 空列表 / 全空串时保持零 JOIN，行为与改造前完全一致。
             joins: list[tuple[Any, Any]] = []
-            if term_type_code:
+            neighbor_type_codes = [c.strip() for c in (term_type_codes or []) if c and c.strip()]
+            if neighbor_type_codes:
                 if direction == "outgoing":
                     neighbor_term = aliased(Term)
                     joins.append(
                         (neighbor_term, neighbor_term.term_id == TermRelation.target_term_id)
                     )
-                    filters.append(neighbor_term.term_type_code == term_type_code)
+                    filters.append(neighbor_term.term_type_code.in_(neighbor_type_codes))
                 elif direction == "incoming":
                     neighbor_term = aliased(Term)
                     joins.append(
                         (neighbor_term, neighbor_term.term_id == TermRelation.source_term_id)
                     )
-                    filters.append(neighbor_term.term_type_code == term_type_code)
+                    filters.append(neighbor_term.term_type_code.in_(neighbor_type_codes))
                 else:
                     target_alias = aliased(Term)
                     source_alias = aliased(Term)
@@ -4587,11 +4590,11 @@ class _TermReader(_ReaderBase):
                         or_(
                             and_(
                                 TermRelation.source_term_id == term_id,
-                                target_alias.term_type_code == term_type_code,
+                                target_alias.term_type_code.in_(neighbor_type_codes),
                             ),
                             and_(
                                 TermRelation.target_term_id == term_id,
-                                source_alias.term_type_code == term_type_code,
+                                source_alias.term_type_code.in_(neighbor_type_codes),
                             ),
                         )
                     )

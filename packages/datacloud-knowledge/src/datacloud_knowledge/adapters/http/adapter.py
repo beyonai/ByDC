@@ -873,7 +873,7 @@ class HttpTermAdapter:
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
-        term_type_code: str | None = None,
+        term_type_codes: list[str] | None = None,
     ) -> dict[str, Any]:
         """HTTP API 不支持术语关系图谱查询。"""
         raise NotImplementedError("query_term_relations not implemented in HTTP adapter")

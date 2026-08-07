@@ -682,7 +682,7 @@ class TermReader(Protocol):
         relation_category: str | None = None,
         direction: str = "both",
         depth: int = 1,
-        term_type_code: str | None = None,
+        term_type_codes: list[str] | None = None,
     ) -> dict[str, Any]: ...
 
 

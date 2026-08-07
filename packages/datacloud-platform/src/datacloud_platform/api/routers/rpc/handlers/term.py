@@ -316,7 +316,12 @@ def _term_delete(
 def _term_get_relations(
     platform: DatacloudPlatform, params: dict[str, Any], _req: Request
 ) -> Any:
-    """#6 — 术语一跳关系。"""
+    """#6 — 术语一跳关系。
+
+    入参:
+    - term_type_codes: list[str] | None — 邻居术语类型白名单（任一匹配即保留，
+      SQL IN 过滤）。非 list 报 400；空列表 / 全空串视为不过滤。
+    """
     kwargs: dict[str, Any] = {
         "term_id": params.get("id", ""),
         "direction": params.get("direction", "both"),
@@ -328,8 +333,13 @@ def _term_get_relations(
         kwargs["relation_category"] = params["relation_category"]
     if params.get("keyword"):
         kwargs["keyword"] = params["keyword"]
-    if params.get("term_type_code"):
-        kwargs["term_type_code"] = params["term_type_code"]
+    raw_type_codes = params.get("term_type_codes")
+    if raw_type_codes is not None:
+        if not isinstance(raw_type_codes, list):
+            raise ValueError("term_type_codes must be a list")
+        type_codes = [str(c).strip() for c in raw_type_codes if str(c).strip()]
+        if type_codes:
+            kwargs["term_type_codes"] = type_codes
     return ok(data=platform.query_term_relations(_base(params), **kwargs))
 
 
