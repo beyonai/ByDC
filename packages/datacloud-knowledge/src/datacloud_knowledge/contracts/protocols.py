@@ -920,6 +920,24 @@ class TermWriter(Protocol):
         """
         ...
 
+    def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
+        """更新 term_tags.co_occurrence（计数版伙伴集合，JSONB 原地合并）。
+
+        独立新写路径（D-7）：**禁止经 update_term**——其 ext_attrs 分支把
+        ext_attrs 拼入 desc_summary（OpenGauss 无独立 ext_attrs 列的遗留怪癖）、
+        term_tags 整列替换。本方法单条 UPDATE 原子执行，无读改写竞态。
+
+        语义（首选 (b) 原地拼接，Spec §8）：
+        - 已存在伙伴 key 计数累加（patch 中该 key 的 count 累加，非 || 覆盖）
+        - 新伙伴 key 插入
+        - Top-50 固定上限：合并后按 count 降序取前 50（自然衰减近似）
+
+        Args:
+            term_id: 归属 term_id。
+            patch: ``{partner_term_id: count}`` 增量。
+        """
+        ...
+
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
         """读取 term_name 记录上的 search_scope JSONB 字段。
 

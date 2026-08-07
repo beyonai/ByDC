@@ -1132,6 +1132,12 @@ class HttpTermAdapter:
         """HTTP API 不支持分词词典读取。"""
         raise NotImplementedError("HTTP 后端不支持 list_vocabulary，分词词典仅 OpenGauss 支持")
 
+    def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
+        """HTTP API 不支持 co_occurrence 原地拼接（无对应端点）。"""
+        raise NotImplementedError(
+            "HTTP 后端不支持 update_term_co_occurrence，共现存储仅 OpenGauss 支持"
+        )
+
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
         """HTTP API 不支持 name_id 级 search_scope 查询。"""
         raise NotImplementedError("HTTP 后端不支持 get_name_search_scope，请使用 OpenGauss 后端")

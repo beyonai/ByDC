@@ -785,6 +785,11 @@ class _RpcComboPlatform(ObjectInstanceDiscoveryMixin):
     ) -> None:
         return None
 
+    def update_term_co_occurrence(
+        self, base_id: str, *, term_id: str, patch: dict[str, int]
+    ) -> None:
+        return None
+
 
 def _rpc_client(platform: Any) -> TestClient:
     app = FastAPI()
@@ -927,6 +932,11 @@ class _RpcAnchorPlatform(ObjectInstanceDiscoveryMixin):
 
     async def save_or_update_object_files(
         self, base_id: str, *, object_files: list[dict[str, Any]]
+    ) -> None:
+        return None
+
+    def update_term_co_occurrence(
+        self, base_id: str, *, term_id: str, patch: dict[str, int]
     ) -> None:
         return None
 
@@ -2287,3 +2297,122 @@ class TestAdjudication:
         alias = next(c for c in platform.calls if c[0] == "create_term_name")
         assert alias[1]["name"]["nameText"] == "苹果公司"
         assert all(c[0] != "create_term_relation" for c in platform.calls)
+
+
+# ============================================================================
+# T11 共现存储：term_tags.co_occurrence Top-50 计数，同文档实例两两 +1
+# ============================================================================
+
+
+class TestDocumentCoOccurrence:
+    @pytest.fixture(autouse=True)
+    def _reset_cache(self) -> Any:
+        discovery_module.invalidate_vocabulary_cache()
+        yield
+        discovery_module.invalidate_vocabulary_cache()
+
+    @staticmethod
+    def _co_calls(platform: _FakePlatform) -> list[tuple[str, dict[str, int]]]:
+        return [
+            (c[1]["term_id"], c[1]["patch"])
+            for c in platform.calls
+            if c[0] == "update_term_co_occurrence"
+        ]
+
+    def test_pairs_all_document_instances(self) -> None:
+        """同文档实例两两 +1：C(n,2) 双向写入。"""
+        platform = _FakePlatform()
+        platform._update_document_co_occurrence(BASE_ID, ["t1", "t2", "t3"])
+        calls = self._co_calls(platform)
+        assert len(calls) == 6
+        pairs = {(term_id, next(iter(patch))) for term_id, patch in calls}
+        assert pairs == {
+            ("t1", "t2"),
+            ("t1", "t3"),
+            ("t2", "t1"),
+            ("t2", "t3"),
+            ("t3", "t1"),
+            ("t3", "t2"),
+        }
+        assert all(patch == {partner: 1} for _, patch in calls for partner in patch)
+
+    def test_dedupes_term_ids(self) -> None:
+        """重复 term_id 去重后再配对。"""
+        platform = _FakePlatform()
+        platform._update_document_co_occurrence(BASE_ID, ["t1", "t1", "t2"])
+        calls = self._co_calls(platform)
+        assert len(calls) == 2  # t1-t2 双向
+        pairs = {(term_id, next(iter(patch))) for term_id, patch in calls}
+        assert pairs == {("t1", "t2"), ("t2", "t1")}
+
+    @pytest.mark.asyncio
+    async def test_synonym_alias_targets_included(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """同义确认的别名 mention 计入 canonical 伙伴集（alias_targets 收集）。"""
+        platform = _FakePlatform()
+        alias_targets: list[str] = []
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same": true, "canonical": "t1"}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        hits = await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
+            source_term_id="term-input",
+            session_id="s1",
+            alias_targets=alias_targets,
+        )
+        assert hits == []
+        assert alias_targets == ["t1"]
+
+    @pytest.mark.asyncio
+    async def test_full_flow_writes_co_occurrence(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """主流程 discover 成功后：已有 + 新建实例两两共现落库，不经过 update_term。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        platform.vocab_words = ["张三"]
+        platform.term_search_results = {
+            "total": 1,
+            "items": [_term_row("t-existing", "张三")],
+        }
+        raw = (
+            '[{"term_name": "张三", "object_code": "by_opportunity"},'
+            ' {"term_name": "新客户A", "object_code": "by_opportunity"}]'
+        )
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage(raw)
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform,
+            "get_term_type",
+            lambda base_id, *, library_id, type_code: {"type_name": "商机"},
+        )
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-1"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+            session_id="session-1",
+        )
+        assert [h.instance_id for h in result.items] == ["t-existing", "term-new-1"]
+        calls = self._co_calls(platform)
+        pairs = {(term_id, next(iter(patch))) for term_id, patch in calls}
+        assert pairs == {("t-existing", "term-new-1"), ("term-new-1", "t-existing")}
+        # 共现更新不经过 update_term（新写路径断言）
+        assert all(c[0] != "update_term" for c in platform.calls)

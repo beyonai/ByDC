@@ -662,6 +662,19 @@ class TermBackendMixin(DataCloudDataBackendBase):
         with create_writer() as writer:
             writer.batch_create_vocabulary(words=list(words))
 
+    def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
+        """更新 term_tags.co_occurrence（Top-50 计数伙伴集合），T11 新写路径。
+
+        **禁止经 update_term**（其 ext_attrs 拼入 desc_summary 的遗留怪癖）：
+        经 knowledge 侧独立 SQL 写路径转发。
+
+        Args:
+            term_id: 归属 term_id。
+            patch: ``{partner_term_id: count}`` 增量。
+        """
+        with create_writer() as writer:
+            writer.update_term_co_occurrence(term_id=term_id, patch=patch)
+
 
 # ── 模块级辅助函数 ──────────────────────────────────────────────────────────────
 

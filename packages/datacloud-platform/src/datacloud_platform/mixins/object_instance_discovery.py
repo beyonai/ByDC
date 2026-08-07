@@ -209,6 +209,7 @@ class ObjectInstanceDiscoveryMixin:
             )
         # T10 同步裁决：仅与库冲突候选（同名多候选→歧义、子串重叠→同义）；
         # 同义 → 写 TermName 别名不建实例；歧义 → 独立新实例；无冲突 → 直通不调裁决
+        alias_targets: list[str] = []
         items.extend(
             await self._adjudicate_candidates(
                 base_id=base_id,
@@ -216,7 +217,12 @@ class ObjectInstanceDiscoveryMixin:
                 synonym=anchor.synonym,
                 source_term_id=instance_id,
                 session_id=session_id,
+                alias_targets=alias_targets,
             )
+        )
+        # T11 共现存储：同文档实例两两 +1（含同义归并 canonical 伙伴集，Spec §8）
+        self._update_document_co_occurrence(
+            base_id, [h.instance_id for h in items] + alias_targets
         )
         return ObjectInstanceDiscoveryResult(items=items)
 
@@ -445,6 +451,7 @@ class ObjectInstanceDiscoveryMixin:
         synonym: list[dict[str, Any]],
         source_term_id: str,
         session_id: str,
+        alias_targets: list[str] | None = None,
     ) -> list[ObjectInstanceDiscoveryHit]:
         """T10 同步裁决（Spec §7）。
 
@@ -465,6 +472,8 @@ class ObjectInstanceDiscoveryMixin:
             synonym: 同义候选列表（子串重叠）。
             source_term_id: 输入实例 term_id（新实例提及关系源）。
             session_id: 会话 ID（透传）。
+            alias_targets: 可选 out 参数——归并的 canonical term_id 收集
+                （T11 共现：别名 mention 计入 canonical 伙伴集，Spec §8）。
 
         Returns:
             新实例发现结果项（别名归并不产出 hit）。
@@ -482,6 +491,8 @@ class ObjectInstanceDiscoveryMixin:
                     self._write_alias(
                         base_id=base_id, term_id=canonical, name_text=mention
                     )
+                    if alias_targets is not None:
+                        alias_targets.append(canonical)
             else:
                 hits.append(
                     await self._create_new_instance_flow(
@@ -508,6 +519,8 @@ class ObjectInstanceDiscoveryMixin:
                     self._write_alias(
                         base_id=base_id, term_id=canonical, name_text=mention
                     )
+                    if alias_targets is not None:
+                        alias_targets.append(canonical)
             else:
                 hits.append(
                     await self._create_new_instance_flow(
@@ -701,6 +714,29 @@ class ObjectInstanceDiscoveryMixin:
         if not common:
             return None
         return "共现伙伴交集: " + ", ".join(sorted(common)[:20])
+
+    def _update_document_co_occurrence(
+        self: _ObjectInstanceDiscoveryPlatform,
+        base_id: str,
+        term_ids: list[str],
+    ) -> None:
+        """T11 共现存储：同文档实例两两 +1（Spec §8，触发点=每次 discover 成功后）。
+
+        - 去重后两两配对，双向写 ``term_tags.co_occurrence``（``{partner: 1}``）
+        - 经 ``update_term_co_occurrence`` 新写路径（JSONB 原地合并 + Top-50，
+          计数累加）；**不经过 update_term**（ext_attrs 怪癖）
+        - 与方案 (a) 衔接：AUTO_DISCOVERED 直写实例的 co_occurrence 同样在此
+          编排层完成，不依赖 action 管道
+
+        Args:
+            base_id: 本体库/系统空间标识。
+            term_ids: 同文档实例 term_id 列表（含同义归并 canonical，可重复）。
+        """
+        unique = list(dict.fromkeys(t for t in term_ids if t))
+        for i, left in enumerate(unique):
+            for right in unique[i + 1 :]:
+                self.update_term_co_occurrence(base_id, term_id=left, patch={right: 1})
+                self.update_term_co_occurrence(base_id, term_id=right, patch={left: 1})
 
     def _discover_existing_object_instances(
         self: Any,
