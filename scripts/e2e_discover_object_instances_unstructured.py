@@ -35,7 +35,8 @@ from typing import Any
 
 _DEFAULT_RPC_URL = "http://localhost:8088/api/v1/rpc/search/discoverObjectInstancesUnstructured"
 _DEFAULT_RUNS = 3
-_ELAPSED_LIMIT_SECONDS = 10.0
+# LLM 抽取/裁决链路单次调用可超 30s，延迟上限按实际观测放宽
+_ELAPSED_LIMIT_SECONDS = 90.0
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -80,13 +81,13 @@ def _call_rpc(url: str, payload: dict[str, Any], session_id: str) -> dict[str, A
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=120) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def _summarize(body: dict[str, Any]) -> dict[str, float | int]:
-    """从响应提取指标：总数 / 已有命中数 / 新实例创建数。"""
-    items = body.get("data", {}).get("items", [])
+    """从响应提取指标：总数 / 已有命中数 / 新实例创建数（容错 data 为 None）。"""
+    items = (body.get("data") or {}).get("items", [])
     total = len(items)
     hit_count = sum(1 for it in items if not it.get("is_new"))
     new_count = sum(1 for it in items if it.get("is_new"))
