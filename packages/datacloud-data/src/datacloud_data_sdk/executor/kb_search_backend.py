@@ -1010,7 +1010,11 @@ class HttpKnowledgeSearchBackend:
 
     @staticmethod
     def _get_beyond_token_header() -> dict[str, str]:
-        """Return Beyond-Token header from the current InvocationContext, or empty dict."""
+        """Return Beyond-Token header from the current InvocationContext, or empty dict.
+
+        兜底：context 无 token 时回退到 BEYOND_TOKEN 环境变量（平台 RPC 路径
+        context 未注入 token，与 kb_document_reader._build_headers 行为对齐）。
+        """
         try:
             from datacloud_data_sdk.context import get_current_context  # type: ignore[import]
 
@@ -1019,6 +1023,9 @@ class HttpKnowledgeSearchBackend:
                 return {"Beyond-Token": token}
         except Exception:  # noqa: BLE001
             pass
+        token = os.getenv("BEYOND_TOKEN", "")
+        if token:
+            return {"Beyond-Token": token}
         return {}
 
     @staticmethod
