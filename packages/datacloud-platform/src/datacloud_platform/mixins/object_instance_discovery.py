@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import re
+from collections import Counter
 from dataclasses import asdict, dataclass
 from functools import partial
 from typing import Any, Protocol
@@ -758,21 +759,32 @@ class ObjectInstanceDiscoveryMixin:
     ) -> None:
         """共现存储：同文档实例两两 +1（触发点=每次 discover 成功后）。
 
-        - 去重后两两配对，双向写 ``term_tags.co_occurrence``（``{partner: 1}``）
-        - 经 ``update_term_co_occurrence`` 新写路径（JSONB 原地合并 + Top-50，
-          计数累加）；**不经过 update_term**（ext_attrs 怪癖）
-        - 与方案 (a) 衔接：AUTO_DISCOVERED 直写实例的 co_occurrence 同样在此
-          编排层完成，不依赖 action 管道
+        - 本地聚合：同一 term 不与自身配对；重复 term_id 按出现次数累加计数
+          （canonical 同义归并多现 → 更强共现信号），结果
+          ``{term_id: {partner_term_id: count}}``
+        - 对每个 term **一次** ``update_term_co_occurrence``（一次 patch 携带
+          全部伙伴计数）——将 O(C(n,2)×2) 次写降为 O(n) 次写（每 term 一个
+          DB 事务，消除逐对读改写放大）
+        - Top-50 裁剪由 ``update_term_co_occurrence`` 实现内完成（不变）
+        - **不经过 update_term**（ext_attrs 怪癖），维持独立新写路径约束
 
         Args:
             base_id: 本体库/系统空间标识。
             term_ids: 同文档实例 term_id 列表（含同义归并 canonical，可重复）。
         """
-        unique = list(dict.fromkeys(t for t in term_ids if t))
-        for i, left in enumerate(unique):
-            for right in unique[i + 1 :]:
-                self.update_term_co_occurrence(base_id, term_id=left, patch={right: 1})
-                self.update_term_co_occurrence(base_id, term_id=right, patch={left: 1})
+        # 去空 + 统计出现次数（可重复 term_ids 计多次）
+        counts = Counter(t for t in term_ids if t)
+        unique = list(counts.items())
+        aggregated: dict[str, dict[str, int]] = {}
+        for i, (left, left_count) in enumerate(unique):
+            partners = aggregated.setdefault(left, {})
+            for right, right_count in unique[i + 1 :]:
+                weight = left_count * right_count
+                partners[right] = weight
+                aggregated.setdefault(right, {})[left] = weight
+        for term_id, partners in aggregated.items():
+            if partners:
+                self.update_term_co_occurrence(base_id, term_id=term_id, patch=partners)
 
     def _discover_existing_object_instances(
         self: Any,
@@ -822,12 +834,15 @@ class ObjectInstanceDiscoveryMixin:
                 anchored_names.append(name)
         batch: dict[str, Any] = {}
         if anchored_names:
-            batch = self.search_terms_batch(
-                base_id,
-                keywords=anchored_names,
-                query_type="exact",
-                top_k=_ANCHOR_SEARCH_TOP_K,
-            ) or {}
+            batch = (
+                self.search_terms_batch(
+                    base_id,
+                    keywords=anchored_names,
+                    query_type="exact",
+                    top_k=_ANCHOR_SEARCH_TOP_K,
+                )
+                or {}
+            )
 
         for mention in mentions:
             name = str(mention.get("term_name") or "").strip()

@@ -468,7 +468,12 @@ class TestAnchorExistingDiscovery:
         }
         result = platform._discover_existing_object_instances(
             BASE_ID,
-            mentions=[_mention("张三"), _mention("张三"), _mention("李四"), _mention("王五")],
+            mentions=[
+                _mention("张三"),
+                _mention("张三"),
+                _mention("李四"),
+                _mention("王五"),
+            ],
             object_codes=["by_opportunity"],
         )
         # 重复 mention 各自产出已有实例候选（与逐词语义一致）
@@ -2633,31 +2638,62 @@ class TestDocumentCoOccurrence:
             if c[0] == "update_term_co_occurrence"
         ]
 
-    def test_pairs_all_document_instances(self) -> None:
-        """同文档实例两两 +1：C(n,2) 双向写入。"""
+    def test_aggregates_all_document_instances(self) -> None:
+        """同文档实例两两 +1：C(n,2) 配对本地聚合后每 term 一次批量写。
+
+        3 term → 3 次调用（而非旧的 6 次逐对双向写）；每 patch 携带全部伙伴。
+        """
         platform = _FakePlatform()
         platform._update_document_co_occurrence(BASE_ID, ["t1", "t2", "t3"])
         calls = self._co_calls(platform)
-        assert len(calls) == 6
-        pairs = {(term_id, next(iter(patch))) for term_id, patch in calls}
-        assert pairs == {
-            ("t1", "t2"),
-            ("t1", "t3"),
-            ("t2", "t1"),
-            ("t2", "t3"),
-            ("t3", "t1"),
-            ("t3", "t2"),
+        assert len(calls) == 3
+        by_term = dict(calls)
+        assert by_term == {
+            "t1": {"t2": 1, "t3": 1},
+            "t2": {"t1": 1, "t3": 1},
+            "t3": {"t1": 1, "t2": 1},
         }
-        assert all(patch == {partner: 1} for _, patch in calls for partner in patch)
 
-    def test_dedupes_term_ids(self) -> None:
-        """重复 term_id 去重后再配对。"""
+    def test_duplicate_term_ids_count_multiple(self) -> None:
+        """重复 term_id 不配对自身、计数按出现次数累加（[t1,t1,t2] → t1-t2 各 +2）。"""
         platform = _FakePlatform()
         platform._update_document_co_occurrence(BASE_ID, ["t1", "t1", "t2"])
         calls = self._co_calls(platform)
-        assert len(calls) == 2  # t1-t2 双向
-        pairs = {(term_id, next(iter(patch))) for term_id, patch in calls}
-        assert pairs == {("t1", "t2"), ("t2", "t1")}
+        assert len(calls) == 2
+        by_term = dict(calls)
+        assert by_term == {"t1": {"t2": 2}, "t2": {"t1": 2}}
+
+    def test_single_term_no_writes(self) -> None:
+        """单 term（或全相同 term）无有效配对 → 不产生任何写调用。"""
+        platform = _FakePlatform()
+        platform._update_document_co_occurrence(BASE_ID, ["t1"])
+        assert self._co_calls(platform) == []
+        platform._update_document_co_occurrence(BASE_ID, ["t1", "t1"])
+        assert self._co_calls(platform) == []
+
+    def test_fifteen_terms_one_write_per_term(self) -> None:
+        """15 term 两两聚合后只调 15 次（每 term 一次批量 patch），而非 C(15,2)×2=210 次。"""
+        terms = [f"t{i}" for i in range(1, 16)]
+        platform = _FakePlatform()
+        platform._update_document_co_occurrence(BASE_ID, terms)
+        calls = self._co_calls(platform)
+        assert len(calls) == 15
+        by_term = dict(calls)
+        assert set(by_term) == set(terms)
+        for term_id, patch in by_term.items():
+            assert len(patch) == 14  # 每 term 携带全部 14 个伙伴
+            assert term_id not in patch  # 不与自身配对
+            assert set(patch) == set(terms) - {term_id}
+            assert all(count == 1 for count in patch.values())
+
+    def test_patch_multi_key_passthrough_top50_compatible(self) -> None:
+        """patch 多 key 一次传递：Top-50 裁剪语义由 update_term_co_occurrence 实现内完成。"""
+        platform = _FakePlatform()
+        platform._update_document_co_occurrence(BASE_ID, ["t1", "t2", "t3", "t4"])
+        calls = self._co_calls(platform)
+        by_term = dict(calls)
+        assert by_term["t1"] == {"t2": 1, "t3": 1, "t4": 1}
+        assert by_term["t4"] == {"t1": 1, "t2": 1, "t3": 1}
 
     @pytest.mark.asyncio
     async def test_synonym_alias_targets_included(
@@ -2724,7 +2760,10 @@ class TestDocumentCoOccurrence:
         )
         assert [h.instance_id for h in result.items] == ["t-existing", "term-new-1"]
         calls = self._co_calls(platform)
-        pairs = {(term_id, next(iter(patch))) for term_id, patch in calls}
-        assert pairs == {("t-existing", "term-new-1"), ("term-new-1", "t-existing")}
+        by_term = dict(calls)
+        assert by_term == {
+            "t-existing": {"term-new-1": 1},
+            "term-new-1": {"t-existing": 1},
+        }
         # 共现更新不经过 update_term（新写路径断言）
         assert all(c[0] != "update_term" for c in platform.calls)
