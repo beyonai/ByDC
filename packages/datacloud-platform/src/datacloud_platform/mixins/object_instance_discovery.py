@@ -134,6 +134,7 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     ) -> Any: ...
     def list_vocabulary(self, base_id: str) -> list[str]: ...
     def search_terms(self, base_id: str, **kwargs: Any) -> Any: ...
+    def search_terms_exact(self, base_id: str, **kwargs: Any) -> Any: ...
     def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]: ...
     def get_term_type(
         self, base_id: str, *, library_id: str, type_code: str
@@ -929,7 +930,7 @@ class ObjectInstanceDiscoveryMixin:
 
         流程：
         1. 类型枚举 = ``object_codes`` 经 ``get_term_type`` 取中文名（library 域限定，
-           缺行回退原始 code + 日志）
+           缺行回退 term 表对象术语行 term_name，仍无回退原始 code + 日志）
         2. 长文 16K 截断单次（不 chunk）
         3. ``build_llm`` + ``stream_invoke_with_thinking``（temp=0 由环境默认）一票抽取
         4. 严格 JSON 解析 + ``<think>`` 剥离 + 非法 JSON 重试（≤3 次退避）
@@ -1002,14 +1003,19 @@ class ObjectInstanceDiscoveryMixin:
         return mentions
 
     def _build_type_enumeration(
-        self: _ObjectInstanceDiscoveryPlatform,
+        self: Any,
         base_id: str,
         object_codes: list[str],
     ) -> list[dict[str, str]]:
         """类型枚举：object_codes 经 get_term_type 取中文名（library 域限定）。
 
-        缺行（无 TermType 行 / 读取失败返回 None）→ 回退原始 code + 日志，
-        供抽取 prompt 枚举与自动发现直写 type_name 回退展示使用。
+        回退链：
+        1. ``get_term_type``（term_type 表）命中 → 用 type_name；
+        2. 缺行 → 按 term_code 精确查 term 表对象行（``search_terms_exact``，
+           term_type_code="object"，即 ``_sync_entity_terms`` 自动同步的
+           term_code=对象 code / term_name=中文名 行）取 term_name——
+           对象行中文名比 term_type 缺省更准（如 "医疗文书" vs Concept）；
+        3. 仍无 → 回退原始 code + 日志。
 
         Args:
             base_id: 本体库/系统空间标识（即 library 域）。
@@ -1020,8 +1026,9 @@ class ObjectInstanceDiscoveryMixin:
         """
         entries: list[dict[str, str]] = []
         for code in object_codes:
+            code_str = str(code)
             type_row = self.get_term_type(
-                base_id, library_id=base_id, type_code=str(code)
+                base_id, library_id=base_id, type_code=code_str
             )
             name = str(
                 (type_row or {}).get("type_name")
@@ -1029,14 +1036,60 @@ class ObjectInstanceDiscoveryMixin:
                 or ""
             ).strip()
             if not name:
-                name = str(code)
+                name = self._object_term_name(base_id, code_str)
+            if not name:
+                name = code_str
                 logger.warning(
-                    "get_term_type 缺行，类型枚举回退原始 code: base_id=%s type_code=%s",
+                    "get_term_type 缺行且无对象术语行，类型枚举回退原始 code: "
+                    "base_id=%s type_code=%s",
                     base_id,
-                    code,
+                    code_str,
                 )
-            entries.append({"code": str(code), "name": name})
+            entries.append({"code": code_str, "name": name})
         return entries
+
+    def _object_term_name(self: Any, base_id: str, code: str) -> str:
+        """按 term_code 精确查 term 表对象行取中文名（term_type_code='object'）。
+
+        新对象（ontologyBuild 创建）无裸 code 的 term_type 行，但
+        ``_sync_entity_terms`` 会同步 term_code=对象 code 的对象术语行，
+        term_name 即中文名——比回退原始 code 更准。
+
+        Args:
+            base_id: 本体库/系统空间标识（即 library 域）。
+            code: 对象类型编码。
+
+        Returns:
+            对象行 term_name；无匹配或查询异常 → 空串（调用方回退原始 code）。
+        """
+        try:
+            result = self.search_terms_exact(
+                base_id,
+                term_type_code="object",
+                keyword=code,
+                limit=1,
+            )
+        except Exception:
+            logger.warning(
+                "search_terms_exact 查询对象术语行失败，回退原始 code: "
+                "base_id=%s type_code=%s",
+                base_id,
+                code,
+                exc_info=True,
+            )
+            return ""
+        rows = _search_result_items(result)
+        if not rows:
+            return ""
+        name = _row_term_name(rows[0])
+        if name:
+            logger.info(
+                "类型枚举按对象术语行回退中文名: base_id=%s type_code=%s term_name=%s",
+                base_id,
+                code,
+                name,
+            )
+        return name
 
     async def _invoke_extract_llm(self: Any, messages: list[dict[str, str]]) -> Any:
         """调用 LLM（build_llm + stream_invoke_with_thinking，document_enrich 模式）。

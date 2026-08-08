@@ -47,6 +47,7 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         self.object_files: list[list[dict[str, Any]]] = []
         self.vocab_words: list[str] = []
         self.term_search_results: dict[str, Any] = {"data": [], "totalCount": 0}
+        self.term_exact_results: dict[str, Any] = {"data": [], "totalCount": 0}
         self.name_rows: list[dict[str, Any]] = []
 
     async def get_document_content_by_term_id(
@@ -73,6 +74,10 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
     def search_terms(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("search_terms", {"base_id": base_id, **kwargs}))
         return self.term_search_results
+
+    def search_terms_exact(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("search_terms_exact", {"base_id": base_id, **kwargs}))
+        return self.term_exact_results
 
     def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         self.calls.append(("list_term_names", {"base_id": base_id, **kwargs}))
@@ -1413,6 +1418,54 @@ class TestDiscoverNewObjectInstances:
         )
         system = next(m for m in captured["messages"] if m["role"] == "system")
         assert "by_opportunity=by_opportunity" in system["content"]
+
+    @pytest.mark.asyncio
+    async def test_type_enumeration_falls_back_to_object_term_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_term_type 缺行 → 按 term_code 查对象术语行（term_type_code='object'）取中文名。"""
+        platform = _FakePlatform()
+        captured: dict[str, Any] = {}
+        exact_calls: list[dict[str, Any]] = []
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            captured["messages"] = messages
+            return _AiMessage("[]")
+
+        def fake_search_terms_exact(base_id: str, **kwargs: Any) -> dict[str, Any]:
+            exact_calls.append({"base_id": base_id, **kwargs})
+            return {
+                "data": [
+                    {
+                        "term_code": "p_MedicalRecord_e2e_2ded9c",
+                        "term_name": "医疗文书",
+                        "term_type_code": "object",
+                    }
+                ],
+                "totalCount": 1,
+            }
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform, "get_term_type", lambda base_id, *, library_id, type_code: None
+        )
+        monkeypatch.setattr(platform, "search_terms_exact", fake_search_terms_exact)
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["p_MedicalRecord_e2e_2ded9c"]
+        )
+        system = next(m for m in captured["messages"] if m["role"] == "system")
+        assert "p_MedicalRecord_e2e_2ded9c=医疗文书" in system["content"]
+        assert exact_calls == [
+            {
+                "base_id": BASE_ID,
+                "term_type_code": "object",
+                "keyword": "p_MedicalRecord_e2e_2ded9c",
+                "limit": 1,
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_truncates_long_content_to_16k(
