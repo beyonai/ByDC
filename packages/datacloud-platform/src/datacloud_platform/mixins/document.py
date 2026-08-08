@@ -1872,7 +1872,9 @@ async def resolve_document_objects_by_file_paths(
     if not all_kb_ids or not all_paths:
         return []
     n_groups = len(all_kb_ids)
-    top_k = min(1000 * n_groups, 10000)  # 每 kb 名义配额保持 1000，全局上限 10000
+    top_k = min(
+        1000 * n_groups, 10000
+    )  # 每 kb 名义配额保持 1000，全局上限 10000
     if 1000 * n_groups > 10000:
         logger.warning(
             "resolve_document_objects_by_file_paths: %d 个 kb 组，top_k 钳制到 10000",
@@ -1880,12 +1882,15 @@ async def resolve_document_objects_by_file_paths(
         )
     result = platform.search_terms_by_labels(
         base_id,
-        kb_ids=all_kb_ids,  # 新参数三件套；不传 label_filters（依赖跳过语义）
-        kb_resource_ids=list(kb_resource_ids) or None,  # 本函数内空已提前 return，此处恒非空
-        kb_file_paths=list(all_paths),
+        # 迁移：三参数 → filters 三元组（三个维度恒非空）；
+        # 不传 label_filters（依赖跳过语义）
+        filters=[
+            {"field": "kb_id", "op": "in", "values": list(all_kb_ids)},
+            {"field": "kb_resource_id", "op": "in", "values": list(kb_resource_ids)},
+            {"field": "kb_file_path", "op": "in", "values": list(all_paths)},
+        ],
         top_k=top_k,
     )
-    allowed_paths = set(all_paths)
     for row in _term_result_items(result):
         metadata = _term_metadata(row)
         # 0) 防御：kb_resource_id 白名单（SQL 已下推，保留作防御校验）
@@ -1895,7 +1900,10 @@ async def resolve_document_objects_by_file_paths(
         result_kb_id = str(metadata.get("kb_id") or "")
         if result_kb_id not in file_paths_by_kb_id:
             continue
-        if str(metadata.get("kb_file_path") or "") not in file_paths_by_kb_id[result_kb_id]:
+        if (
+            str(metadata.get("kb_file_path") or "")
+            not in file_paths_by_kb_id[result_kb_id]
+        ):
             continue
         rows.append(row)
     return rows

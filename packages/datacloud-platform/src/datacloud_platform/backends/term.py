@@ -91,16 +91,15 @@ class TermBackend(Protocol):
         label_filters: list[dict[str, Any]] | None = None,
         label_condition: str = "or",
         term_type_codes: list[str] | None = None,
-        kb_ids: list[str] | None = None,
-        kb_resource_ids: list[str] | None = None,
-        kb_file_paths: list[str] | None = None,
+        filters: list[dict[str, Any]] | None = None,
         top_k: int = 200,
     ) -> list[dict[str, Any]]:
         """纯标签过滤术语，不依赖关键词或文本候选集。
 
-        B1 结构化 kwargs 扩展：label_filters 可选（None/[] = 跳过维度）；
-        新增 kb_ids / kb_resource_ids / kb_file_paths 三个 IN 维度，与
-        term_type_codes 全 AND 组合（None=忽略，[]=全滤）。
+        filters 通用过滤通道（field 白名单化，全 AND）：label_filters 可选
+        （None/[] = 跳过维度）；filters 元素结构 = FilterSpec（field/op/values），
+        与 term_type_codes 全 AND 组合（None=忽略，[]=全滤）。B1 三参数
+        （kb_ids / kb_resource_ids / kb_file_paths）已收编进 filters。
         """
         ...
 

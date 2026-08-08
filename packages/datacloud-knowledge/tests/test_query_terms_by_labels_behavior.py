@@ -1,14 +1,20 @@
-"""query_terms_by_labels 底层行为验收。
+"""query_terms_by_labels 底层行为验收（filters 形态）。
 
-覆盖 B1 结构化 kwargs 扩展的核心行为契约：
-  label_filters 空语义：None/[] → 跳过维度（行为变更，原为全滤 return []）
-  空列表全滤 / None 忽略（kb 三键 + term_type_codes）
+覆盖 filters 通用过滤通道的核心行为契约：
+  label_filters 空语义回归：None/[]/全部条目无效 → 跳过维度（不 return []）
+  filters 空值契约：None=忽略 / [] =全滤（不执行含 IN () 的 SQL）/
+       元素 in+values=[] =全滤 / eq+values=[] =契约错误（抛 ValueError）/
+       term_type_codes=[] =全滤延续
   全维度空 → return []（不执行无 WHERE 查询）
-  多维度全 AND 组合 + label OR 组与三新参共存（片段顺序固定）
+  组合规则：label 组 → term_type_codes → filters 元素（按传入序）固定顺序、
+       全 AND、重复 field 元素各自独立 AND（交集正确）
 
-基建：sqlite 内存库 + 真实 SQL（sqlite 3.38+ 支持 ->> 运算符，与
-test_enumerate_object_instances 同模式）；SQLAlchemy before_cursor_execute
-事件捕获生成的 SQL 文本用于形状断言。
+三参数用例改造为 filters 形态（无静默保留）；
+T1/T3 保留回归（调用形态调整为四参数）。
+
+基建：sqlite 内存库 + 真实 SQL（sqlite 3.38+ 支持 ->> 运算符）；SQLAlchemy
+before_cursor_execute 事件捕获生成的 SQL 文本用于形状断言。
+sqlite 将命名参数转 qmark（?），断言用正则兼容（OpenGauss 命名参数 / sqlite qmark）。
 
 种子数据（8 行）:
   t1  T1  ext={kb_id:k1, kb_resource_id:r1} tags={kb_file_path:/a/p1.md}
@@ -141,7 +147,7 @@ def _ids(items: list[dict[str, Any]]) -> set[str]:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# label_filters 空语义：None/[] → 跳过维度（不再 return []）
+# label_filters 空语义回归：None/[] → 跳过维度（不 return []）
 # ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -165,11 +171,11 @@ def test_t1_label_filters_none_skips_dimension(
 def test_t1_label_filters_empty_list_skips_dimension(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """label_filters=[] + kb_ids=["k1"] → 按 kb_id 过滤，非空（不再 return []）。"""
+    """label_filters=[] + filters kb_id → 按 kb_id 过滤，非空（不再 return []）。"""
     reader, statements = qreader
     result = reader.query_terms_by_labels(
         label_filters=[],
-        kb_ids=["k1"],
+        filters=[{"field": "kb_id", "op": "in", "values": ["k1"]}],
     )
     assert _ids(result) == {"t1", "t2", "t7"}
     sql = statements[-1]
@@ -187,24 +193,24 @@ def test_t1_all_invalid_label_entries_skip_dimension(
             {"field_code": "", "filter_value": "x"},
             {"field_code": "kb_file_path", "filter_value": None},
         ],
-        kb_ids=["k1"],
+        filters=[{"field": "kb_id", "op": "in", "values": ["k1"]}],
     )
     assert _ids(result) == {"t1", "t2", "t7"}
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 空列表全滤 / None 忽略（kb 三键 + term_type_codes）
+# filters 空值契约
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_t2_kb_ids_empty_means_full_filter(
+def test_t2_filters_empty_list_full_filter(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """kb_ids=[]（其余正常）→ 返回 []，且不生成 IN () 片段（无 SQLAlchemy 语法异常）。"""
+    """filters=[]（其余正常）→ 返回 []，且不执行任何 SQL（无 IN () 片段）。"""
     reader, statements = qreader
     result = reader.query_terms_by_labels(
-        kb_ids=[],
-        kb_file_paths=["/a/p1.md"],
+        filters=[],
+        label_filters=[{"field_code": "kb_file_path", "filter_value": "/a/p1.md"}],
     )
     assert result == []
     # 不得出现 IN () 空括号
@@ -213,49 +219,41 @@ def test_t2_kb_ids_empty_means_full_filter(
     assert not statements
 
 
-def test_t2_kb_ids_none_ignored(
+def test_t2_filters_none_ignored(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """kb_ids=None → 按其他维度过滤，SQL 不含 kb_id 片段。"""
+    """filters=None → 忽略 filters 维度，按其他维度过滤，SQL 无 filters 片段。"""
     reader, statements = qreader
     result = reader.query_terms_by_labels(
-        kb_ids=None,
-        kb_file_paths=["/a/p1.md"],
+        filters=None,
+        # 其他维度生效：filters=None 时按 label 通道过滤
+        label_filters=[{"field_code": "kb_file_path", "filter_value": "/a/p1.md"}],
     )
     assert _ids(result) == {"t1", "t7", "t8"}
     sql = statements[-1]
-    assert "ext_attrs->>'kb_id'" not in sql
-    assert "term_tags->>'kb_file_path' IN" in sql
+    assert "_flt_" not in sql
+    assert "term_tags->>'kb_file_path' =" in sql
 
 
-def test_t2_kb_resource_ids_empty_full_filter(
+def test_t2_element_in_empty_values_full_filter(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """kb_resource_ids=[] → 全滤 []。"""
-    reader, _ = qreader
+    """元素 op="in" 且 values=[] → 该维度生效但集合为空 → 全滤 []。"""
+    reader, statements = qreader
     result = reader.query_terms_by_labels(
-        kb_resource_ids=[],
-        kb_ids=["k1"],
+        filters=[
+            {"field": "kb_resource_id", "op": "in", "values": []},
+        ],
+        label_filters=[{"field_code": "kb_file_path", "filter_value": "/a/p1.md"}],
     )
     assert result == []
-
-
-def test_t2_kb_file_paths_empty_full_filter(
-    qreader: tuple[PostgresTermReader, list[str]],
-) -> None:
-    """kb_file_paths=[] → 全滤 []。"""
-    reader, _ = qreader
-    result = reader.query_terms_by_labels(
-        kb_file_paths=[],
-        kb_ids=["k1"],
-    )
-    assert result == []
+    assert not any("IN ()" in sql for sql in statements)
 
 
 def test_t2_term_type_codes_empty_full_filter_regression(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """term_type_codes=[] → []（现状语义回归锁定）。"""
+    """term_type_codes=[] → []（延续全滤契约）。"""
     reader, _ = qreader
     result = reader.query_terms_by_labels(
         label_filters=[{"field_code": "kb_file_path", "filter_value": "/a/p1.md"}],
@@ -264,22 +262,53 @@ def test_t2_term_type_codes_empty_full_filter_regression(
     assert result == []
 
 
-def test_t2_single_dimension_kb_resource_ids(
+def test_t2_element_eq_empty_values_raises_value_error(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """单维度：kb_resource_ids=["r2"] → 仅返回 ext_attrs.kb_resource_id ∈ {r2} 的行。"""
+    """元素 op="eq" 且 values=[] → 契约错误抛 ValueError（4.4，不被兜底吞掉）。"""
+    reader, statements = qreader
+    with pytest.raises(ValueError):
+        reader.query_terms_by_labels(
+            filters=[{"field": "kb_id", "op": "eq", "values": []}],
+            label_filters=[{"field_code": "kb_file_path", "filter_value": "/a/p1.md"}],
+        )
+    # 契约错误在 try 外抛 → 无任何 SQL 执行
+    assert not statements
+
+
+def test_t2_single_dimension_kb_resource_ids_via_filters(
+    qreader: tuple[PostgresTermReader, list[str]],
+) -> None:
+    """单维度：filters kb_resource_id=["r2"] → 仅返回 ext_attrs.kb_resource_id ∈ {r2} 的行。"""
     reader, _ = qreader
-    result = reader.query_terms_by_labels(kb_resource_ids=["r2"])
+    result = reader.query_terms_by_labels(
+        filters=[{"field": "kb_resource_id", "op": "in", "values": ["r2"]}],
+    )
     assert _ids(result) == {"t3", "t4"}
 
 
-def test_t2_single_dimension_kb_file_paths(
+def test_t2_single_dimension_kb_file_paths_via_filters(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """单维度：kb_file_paths=["/a/p1.md"] → 仅返回 term_tags.kb_file_path 命中行。"""
+    """单维度：filters kb_file_path=["/a/p1.md"] → 仅返回 term_tags.kb_file_path 命中行。"""
     reader, _ = qreader
-    result = reader.query_terms_by_labels(kb_file_paths=["/a/p1.md"])
+    result = reader.query_terms_by_labels(
+        filters=[{"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]}],
+    )
     assert _ids(result) == {"t1", "t7", "t8"}
+
+
+def test_t2_eq_single_value_matches(
+    qreader: tuple[PostgresTermReader, list[str]],
+) -> None:
+    """元素 op="eq" 恰 1 值 → 单值等值过滤（等价于 in 单元素）。"""
+    reader, statements = qreader
+    result = reader.query_terms_by_labels(
+        filters=[{"field": "kb_id", "op": "eq", "values": ["k1"]}],
+    )
+    assert _ids(result) == {"t1", "t2", "t7"}
+    sql = statements[-1]
+    assert re.search(r"ext_attrs->>'kb_id' = (?:_flt_0_0|\?)", sql)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -290,58 +319,78 @@ def test_t2_single_dimension_kb_file_paths(
 def test_t3_all_dimensions_none_returns_empty_without_query(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """五维度全 None → []，且不执行任何 SQL（execute 未被调用）。"""
+    """四参数全 None（label/term_type/filters 均未生效）→ []，且不执行任何 SQL。"""
     reader, statements = qreader
     result = reader.query_terms_by_labels(
         label_filters=None,
         term_type_codes=None,
-        kb_ids=None,
-        kb_resource_ids=None,
-        kb_file_paths=None,
+        filters=None,
     )
     assert result == []
     assert statements == []
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 组合规则：多维度全 AND
+# 组合规则：label 组 → term_type_codes → filters 元素（按传入序）全 AND
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_t4_four_dimensions_and_combined(
+def test_t4_filters_elements_and_combined_in_order(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """四维同传 → SQL 含 4 个片段且 AND 连接；结果行同时满足四维。"""
+    """filters 三元素（kb_id, kb_file_path, term_type_code）+ term_type_codes 同传
+    → SQL 片段顺序 = term_type_codes → 三元素按传入序，全 AND；结果行同时满足。"""
     reader, statements = qreader
     result = reader.query_terms_by_labels(
-        kb_ids=["k1", "k2"],
-        kb_resource_ids=["r1"],
-        kb_file_paths=["/a/p1.md"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1", "k2"]},
+            {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+            {"field": "term_type_code", "op": "in", "values": ["T1"]},
+        ],
         term_type_codes=["T1"],
     )
-    # k1 且 r1 且 /a/p1.md 且 T1 → t1；t7 是 T3 被 type 排除
+    # kb ∈ {k1,k2} 且 path=/a/p1.md 且 T1 → t1；t7 是 T3 被 type 排除
     assert _ids(result) == {"t1"}
 
     sql = statements[-1]
     assert "ext_attrs->>'kb_id' IN" in sql
-    assert "ext_attrs->>'kb_resource_id' IN" in sql
     assert "term_tags->>'kb_file_path' IN" in sql
     assert "term_type_code IN" in sql
-    # 4 个片段以 AND 连接，顺序固定：label 组 → term_type → kb_id → kb_resource_id → kb_file_path
+    # 片段顺序：独立参数 term_type_codes 在前 → filters 三元素按传入序
     idx_tt = sql.index("term_type_code IN")
     idx_kbid = sql.index("kb_id' IN")
-    idx_kbrid = sql.index("kb_resource_id' IN")
     idx_kbp = sql.index("kb_file_path' IN")
-    assert idx_tt < idx_kbid < idx_kbrid < idx_kbp
-    assert "AND" in sql
-    # LIMIT 在全部过滤之后（方言无关：OpenGauss 命名参数 / sqlite qmark）
+    assert idx_tt < idx_kbid < idx_kbp
+    # filters 元素占位符 _flt_{idx}_{n} 命名（OpenGauss 命名参数）或 qmark（sqlite）
+    assert re.search(r"_flt_0_0", sql) or sql.count("?") >= 4
+    # LIMIT 在全部过滤之后（方言无关）
     assert re.search(r"LIMIT\s+(?::_lbl_limit|\?)\s*$", sql)
 
 
-def test_t4_label_or_group_coexists_with_kb_dims(
+def test_t4_repeated_field_elements_independent_and(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """label 生效时与三新参共存 → (label OR 组) AND kb_id IN ...，片段顺序固定。"""
+    """重复 field（两个 kb_id 元素）→ 各自独立 AND，交集正确（不合并不去重）。"""
+    reader, statements = qreader
+    result = reader.query_terms_by_labels(
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1", "k2"]},
+            {"field": "kb_id", "op": "eq", "values": ["k1"]},
+        ],
+    )
+    # kb ∈ {k1,k2} 且 kb == k1 → {t1, t2, t7}
+    assert _ids(result) == {"t1", "t2", "t7"}
+    sql = statements[-1]
+    # 两个独立 kb_id 片段，各自占位符（_flt_0_* 与 _flt_1_0）无悬空
+    assert sql.count("kb_id' IN") == 1
+    assert re.search(r"kb_id' IN", sql)
+    assert re.search(r"ext_attrs->>'kb_id' = (?:_flt_1_0|\?)", sql)
+
+
+def test_t4_label_or_group_coexists_with_filters(
+    qreader: tuple[PostgresTermReader, list[str]],
+) -> None:
+    """label 生效时与 filters 共存 → (label OR 组) AND filters 元素，片段顺序固定。"""
     reader, statements = qreader
     result = reader.query_terms_by_labels(
         label_filters=[
@@ -349,31 +398,32 @@ def test_t4_label_or_group_coexists_with_kb_dims(
             {"field_code": "kb_file_path", "filter_value": "/b/p3.md"},
         ],
         label_condition="or",
-        kb_ids=["k1"],
-        kb_resource_ids=["r1"],
-        term_type_codes=["T1"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1"]},
+            {"field": "term_type_code", "op": "in", "values": ["T1"]},
+        ],
     )
-    # label OR 命中 p1/p3 → {t1,t3,t7,t8}；AND kb_id=k1 → {t1,t7}；AND r1 → {t1}；AND T1 → {t1}
+    # label OR 命中 p1/p3 → {t1,t3,t7,t8}；AND kb_id=k1 → {t1,t7}；AND T1 → {t1}
     assert _ids(result) == {"t1"}
 
     sql = statements[-1]
-    # label OR 组带括号且在最前（方言无关：OpenGauss 命名参数 / sqlite qmark）
+    # label OR 组带括号且在最前（方言无关）
     assert re.search(
         r"WHERE \(t\.term_tags->>'kb_file_path' = (?::_lbl_0|\?) "
         r"OR t\.term_tags->>'kb_file_path' = (?::_lbl_1|\?)\)",
         sql,
     )
+    # 片段顺序：label 组 → filters 元素（按传入序：kb_id 在前，term_type_code 在后）
     idx_label = sql.index("WHERE (")
-    idx_tt = sql.index("term_type_code IN")
     idx_kbid = sql.index("kb_id' IN")
-    idx_kbrid = sql.index("kb_resource_id' IN")
-    assert idx_label < idx_tt < idx_kbid < idx_kbrid
+    idx_tt = sql.index("term_type_code IN")
+    assert idx_label < idx_kbid < idx_tt
 
 
-def test_t4_label_and_chain_with_kb_dims(
+def test_t4_label_and_chain_with_filters(
     qreader: tuple[PostgresTermReader, list[str]],
 ) -> None:
-    """label_condition="and" 时 label 组为 AND 链，与 kb 维度全 AND。"""
+    """label_condition="and" 时 label 组为 AND 链，与 filters 元素全 AND。"""
     reader, statements = qreader
     result = reader.query_terms_by_labels(
         label_filters=[
@@ -381,7 +431,7 @@ def test_t4_label_and_chain_with_kb_dims(
             {"field_code": "kb_file_path", "filter_value": "/b/p3.md"},
         ],
         label_condition="and",
-        kb_ids=["k1"],
+        filters=[{"field": "kb_id", "op": "in", "values": ["k1"]}],
     )
     # label AND 链：同一行不可能两个 path 同时命中 → 空
     assert result == []

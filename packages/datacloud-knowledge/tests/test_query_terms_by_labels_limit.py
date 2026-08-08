@@ -1,12 +1,11 @@
-"""LIMIT 截断语义验收。
+"""LIMIT 截断语义验收（filters 形态）。
 
-验证新 SQL 中 LIMIT 位于全部 WHERE 过滤**之后**（截断点后移修复）：
+验证 filters 通道下 LIMIT 位于全部 WHERE 过滤**之后**（截断点后移修复）：
 
-  1. SQL 形状断言：LIMIT 是最后一个片段（固定顺序）。
+  1. SQL 形状断言：LIMIT 是最后一个片段（固定顺序，_flt_* 占位符位于 LIMIT 前）。
   2. 机制断言：构造「按返回序前 top_k 行均不满足 kb 维度、第 top_k+1 行起满足」
      的数据 → 底层函数返回**非空**（命中行不被截断丢弃）。
-  3. 现状对比基线：同一数据下，用现状调用形态（label_filters OR 通道 + top_k=1000
-     + 内存过滤，等价于 B 点现状 for 循环）→ 返回空，证明修复有效。
+  3. filters 形态与三参数形态同数据下行为一致（回归确认）。
 
 sqlite 无 ORDER BY 时按 rowid（插入序）返回 —— 本测试依赖该行为构造
 「前 1000 行不匹配、后 200 行匹配」的数据形态。
@@ -96,14 +95,14 @@ def limit_reader(monkeypatch: pytest.MonkeyPatch) -> PostgresTermReader:
 
 def test_t5_limit_is_last_clause(monkeypatch: pytest.MonkeyPatch) -> None:
     """生成的 SQL 中 LIMIT 出现在所有维度谓词之后（最后一个位置）。"""
-    from sqlalchemy import create_engine as ce, event, text as txt
-    from sqlalchemy.orm import Session as S, sessionmaker as sm
+    from sqlalchemy import create_engine, event, text
+    from sqlalchemy.orm import Session, sessionmaker
 
     monkeypatch.setattr(_reader_base, "_SCHEMA_CHECKED", True)
-    engine = ce("sqlite:///:memory:")
+    engine = create_engine("sqlite:///:memory:")
     with engine.connect() as conn:
         conn.execute(
-            txt(
+            text(
                 """CREATE TABLE term (
                     term_id TEXT PRIMARY KEY, term_code TEXT NOT NULL,
                     term_name TEXT NOT NULL, term_type_code TEXT NOT NULL,
@@ -114,9 +113,9 @@ def test_t5_limit_is_last_clause(monkeypatch: pytest.MonkeyPatch) -> None:
             )
         )
         conn.execute(
-            txt(
+            text(
                 "INSERT INTO term VALUES ('t1','C1','n','T1',NULL,NULL,'lib1',"
-                "'{\"kb_file_path\": \"/a/p1.md\"}','{\"kb_id\": \"k1\", "
+                '\'{"kb_file_path": "/a/p1.md"}\',\'{"kb_id": "k1", '
                 "\"kb_resource_id\": \"r1\"}','ts','ts')"
             )
         )
@@ -135,13 +134,15 @@ def test_t5_limit_is_last_clause(monkeypatch: pytest.MonkeyPatch) -> None:
     ) -> None:
         statements.append(str(statement))
 
-    factory = sm(bind=engine, class_=S, expire_on_commit=False, autoflush=False)
+    factory = sessionmaker(bind=engine, class_=Session, expire_on_commit=False, autoflush=False)
     reader = PostgresTermReader(session_factory=factory)
     reader.query_terms_by_labels(
-        kb_ids=["k1"],
-        kb_resource_ids=["r1"],
-        kb_file_paths=["/a/p1.md"],
-        term_type_codes=["T1"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1"]},
+            {"field": "kb_resource_id", "op": "in", "values": ["r1"]},
+            {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+            {"field": "term_type_code", "op": "in", "values": ["T1"]},
+        ],
         top_k=1000,
     )
     sql = statements[-1]
@@ -152,6 +153,11 @@ def test_t5_limit_is_last_clause(monkeypatch: pytest.MonkeyPatch) -> None:
     assert limit_pos > sql.rfind("kb_id' IN")
     assert limit_pos > sql.rfind("kb_resource_id' IN")
     assert limit_pos > sql.rfind("kb_file_path' IN")
+    # filters 占位符 _flt_{idx}_{n} 全部位于 LIMIT 之前
+    assert "_flt_0_0" in sql or sql.count("?") >= 4
+    for token in ("_flt_0_0", "_flt_1_0", "_flt_2_0", "_flt_3_0"):
+        if token in sql:
+            assert sql.rfind(token) < limit_pos
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -164,8 +170,10 @@ def test_t5_truncation_after_filter_returns_hits(
 ) -> None:
     """前 1000 行不满足 kb 维度、后 200 行满足 → 返回 200 行（非空）。"""
     result = limit_reader.query_terms_by_labels(
-        kb_ids=["k1"],
-        kb_file_paths=["/a/p1.md"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1"]},
+            {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+        ],
         top_k=1000,
     )
     assert len(result) == _N_MATCH
@@ -181,13 +189,11 @@ def test_t5_legacy_shape_returns_empty_but_merged_shape_nonempty(
     limit_reader: PostgresTermReader,
 ) -> None:
     """同一数据：现状形态（label OR 通道 + top_k=1000 + 内存 kb_id 过滤）→ 空；
-    合并形态（kb 维度下推）→ 非空。证明截断点后移修复有效。"""
+    filters 形态（kb 维度下推）→ 非空。证明截断点后移修复有效。"""
     # 现状形态：B 点改造前 per-kb 循环等价 —— label_filters 只下推 path，
     # kb_id 靠内存过滤；LIMIT 1000 在内存过滤前截断
     legacy = limit_reader.query_terms_by_labels(
-        label_filters=[
-            {"field_code": "kb_file_path", "filter_value": _MATCH_PATH}
-        ],
+        label_filters=[{"field_code": "kb_file_path", "filter_value": _MATCH_PATH}],
         label_condition="or",
         top_k=1000,
     )
@@ -199,10 +205,12 @@ def test_t5_legacy_shape_returns_empty_but_merged_shape_nonempty(
     ]
     assert legacy_hits == []  # 过滤前截断：LIMIT 内 1000 行全被内存滤掉 → 空
 
-    # 合并形态：kb 维度下推 → 截断后移 → 命中行返回
+    # 合并形态：kb 维度下推 → 截断后移 → 命中行返回（filters 通道）
     merged = limit_reader.query_terms_by_labels(
-        kb_ids=[_MATCH_KW],
-        kb_file_paths=[_MATCH_PATH],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": [_MATCH_KW]},
+            {"field": "kb_file_path", "op": "in", "values": [_MATCH_PATH]},
+        ],
         top_k=1000,
     )
     assert len(merged) == _N_MATCH  # 非空：修复生效

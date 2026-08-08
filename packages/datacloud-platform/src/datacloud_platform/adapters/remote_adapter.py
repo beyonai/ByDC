@@ -1866,13 +1866,11 @@ class RemoteTermBackend:
         label_filters: list[dict[str, Any]] | None = None,
         label_condition: str = "or",
         term_type_codes: list[str] | None = None,
-        kb_ids: list[str] | None = None,
-        kb_resource_ids: list[str] | None = None,
-        kb_file_paths: list[str] | None = None,
+        filters: list[dict[str, Any]] | None = None,
         top_k: int = 200,
     ) -> list[dict[str, Any]]:
         """Remote pure-label term search — not yet implemented."""
-        _ = label_condition, term_type_codes, kb_ids, kb_resource_ids, kb_file_paths, top_k
+        _ = label_condition, term_type_codes, filters, top_k
         logger.debug("Remote term: search_terms_by_labels not yet implemented")
         return []
 

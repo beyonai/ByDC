@@ -141,12 +141,12 @@ def test_t9_c_point_call_shape_and_output_unchanged() -> None:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# T9-3 [P1] 透传链 mixins/term.py 回归（**kwargs 透传含新参数）
+# T9-3 [P1] 透传链 mixins/term.py 回归（**kwargs 透传含 filters）
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_t9_mixin_term_passthrough_with_new_params() -> None:
-    """TermMixin.search_terms_by_labels 将新参数原样透传到 backend。"""
+def test_t9_mixin_term_passthrough_with_filters() -> None:
+    """TermMixin.search_terms_by_labels 将 filters 原样透传到 backend。"""
 
     class _RecordingBackend:
         def __init__(self) -> None:
@@ -167,52 +167,84 @@ def test_t9_mixin_term_passthrough_with_new_params() -> None:
     result = p.search_terms_by_labels(
         "base-1",
         label_filters=None,
-        kb_ids=["k1"],
-        kb_resource_ids=["r1"],
-        kb_file_paths=["/a/p1.md"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1"]},
+            {"field": "kb_resource_id", "op": "in", "values": ["r1"]},
+            {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+        ],
         top_k=3000,
     )
     assert result == []
     assert p._backend.calls == [
         {
             "label_filters": None,
-            "kb_ids": ["k1"],
-            "kb_resource_ids": ["r1"],
-            "kb_file_paths": ["/a/p1.md"],
+            "filters": [
+                {"field": "kb_id", "op": "in", "values": ["k1"]},
+                {"field": "kb_resource_id", "op": "in", "values": ["r1"]},
+                {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+            ],
             "top_k": 3000,
         }
     ]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# T9-4 [P1] remote / none 占位回归（签名接受新参数，行为仍 []）
+# T9-4 [P1] remote / none 占位回归（签名接受 filters，行为仍 []）
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-def test_t9_remote_placeholder_returns_empty_with_new_params() -> None:
+def test_t9_remote_placeholder_returns_empty_with_filters() -> None:
     backend = RemoteTermBackend.__new__(RemoteTermBackend)  # type: ignore[call-arg]
     result = backend.search_terms_by_labels(  # type: ignore[attr-defined]
         label_filters=None,
-        kb_ids=["k1"],
-        kb_resource_ids=["r1"],
-        kb_file_paths=["/a/p1.md"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1"]},
+            {"field": "kb_resource_id", "op": "in", "values": ["r1"]},
+            {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+        ],
         term_type_codes=["T1"],
         top_k=3000,
     )
     assert result == []
 
 
-def test_t9_none_placeholder_returns_empty_with_new_params() -> None:
+def test_t9_none_placeholder_returns_empty_with_filters() -> None:
     backend = _NoopTermBackend.__new__(_NoopTermBackend)  # type: ignore[call-arg]
     result = backend.search_terms_by_labels(  # type: ignore[attr-defined]
         label_filters=None,
-        kb_ids=["k1"],
-        kb_resource_ids=["r1"],
-        kb_file_paths=["/a/p1.md"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1"]},
+            {"field": "kb_resource_id", "op": "in", "values": ["r1"]},
+            {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+        ],
         term_type_codes=["T1"],
         top_k=3000,
     )
     assert result == []
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 三参数已从签名删除（inspect 反射）
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_t9_three_param_removed_from_platform_signatures() -> None:
+    """platform 侧 search_terms_by_labels 签名无三参数（反射确认不存在）。"""
+    import inspect
+
+    from datacloud_platform.adapters.data_adapter._term import TermBackendMixin
+    from datacloud_platform.backends.term import TermBackend
+
+    for func in (
+        TermBackendMixin.search_terms_by_labels,
+        TermBackend.search_terms_by_labels,
+    ):
+        sig = inspect.signature(func)
+        for removed in ("kb_ids", "kb_resource_ids", "kb_file_paths"):
+            assert removed not in sig.parameters, (
+                f"{func.__qualname__} 三参数 {removed} 未删除"
+            )
+        assert "filters" in sig.parameters
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -234,14 +266,16 @@ class _ExplodingSession:
 def test_t9_db_unreachable_returns_empty_not_raise(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """底层函数在 DB 不可达时返回 [] 不抛异常（label 空 + 新参数路径）。"""
+    """底层函数在 DB 不可达时返回 [] 不抛异常（filters 路径）。"""
     monkeypatch.setattr(_reader_base, "_SCHEMA_CHECKED", True)
     reader = PostgresTermReader(session_factory=lambda: _ExplodingSession())  # type: ignore[arg-type]
     result = reader.query_terms_by_labels(
         label_filters=None,
-        kb_ids=["k1"],
-        kb_resource_ids=["r1"],
-        kb_file_paths=["/a/p1.md"],
+        filters=[
+            {"field": "kb_id", "op": "in", "values": ["k1"]},
+            {"field": "kb_resource_id", "op": "in", "values": ["r1"]},
+            {"field": "kb_file_path", "op": "in", "values": ["/a/p1.md"]},
+        ],
         top_k=3000,
     )
     assert result == []
