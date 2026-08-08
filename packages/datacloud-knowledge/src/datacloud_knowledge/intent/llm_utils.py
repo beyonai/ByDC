@@ -279,13 +279,26 @@ def extract_json_from_text(text: str | list[Any]) -> dict[str, Any] | None:
     return None
 
 
-def build_llm() -> Any:
+def build_llm(
+    *,
+    thinking: bool | None = None,
+    temperature: float | None = None,
+) -> Any:
     """构建 LLM 实例（懒导入 langchain，不增加硬依赖）。
 
     按优先级读取环境变量：DATACLOUD_LLM → OPENAI 兜底。
     通过 DATACLOUD_LLM_MODEL_PROVIDER 指定协议（openai 默认，或 anthropic）。
     请使用此变量指定协议，不要在 DATACLOUD_LLM_MODEL 中使用前缀写法。
     支持 MODEL_KWARGS（JSON 字符串）透传额外参数。
+
+    Args:
+        thinking: 思考链开关。True → extra_body.thinking.type="enabled"；
+            False → "disabled"；None（默认）→ 不附加该键，保持现状。
+        temperature: 显式覆盖环境温度值；None（默认）→ 取
+            DATACLOUD_LLM_TEMPERATURE（缺省 0.0）。
+
+    显式参数优先于环境变量：传入时覆盖环境温度值与 MODEL_KWARGS 中
+    对应键（extra_body 按键合并，保留其他键）。
     """
     from langchain.chat_models import init_chat_model
 
@@ -295,7 +308,7 @@ def build_llm() -> Any:
         model = os.getenv(f"{env_prefix}_MODEL", "")
         if api_key and model:
             provider = os.getenv(f"{env_prefix}_MODEL_PROVIDER", "openai").strip().lower()
-            temperature = float(os.getenv(f"{env_prefix}_TEMPERATURE", "0.0"))
+            env_temperature = float(os.getenv(f"{env_prefix}_TEMPERATURE", "0.0"))
             # 读取可选的 MODEL_KWARGS（JSON 字符串）
             model_kwargs: dict[str, Any] = {}
             raw_kwargs = os.getenv(f"{env_prefix}_MODEL_KWARGS", "")
@@ -310,9 +323,15 @@ def build_llm() -> Any:
                 model=model,
                 model_provider=provider,
                 api_key=api_key,
-                temperature=temperature,
+                temperature=env_temperature,
                 **model_kwargs,
             )
+            if temperature is not None:
+                kwargs["temperature"] = temperature
+            if thinking is not None:
+                extra_body = dict(kwargs.get("extra_body") or {})
+                extra_body["thinking"] = {"type": "enabled" if thinking else "disabled"}
+                kwargs["extra_body"] = extra_body
             if api_base:
                 kwargs["base_url"] = api_base
             return init_chat_model(**kwargs)
@@ -320,10 +339,17 @@ def build_llm() -> Any:
     api_key = os.getenv("OPENAI_API_KEY", "")
     base_url = os.getenv("OPENAI_BASE_URL", "")
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    return init_chat_model(
-        model=model,
-        model_provider="openai",
-        api_key=api_key,
-        base_url=base_url,
-        temperature=0.0,
-    )
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "model_provider": "openai",
+        "api_key": api_key,
+        "base_url": base_url,
+        "temperature": 0.0,
+    }
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    if thinking is not None:
+        extra_body = dict(kwargs.get("extra_body") or {})
+        extra_body["thinking"] = {"type": "enabled" if thinking else "disabled"}
+        kwargs["extra_body"] = extra_body
+    return init_chat_model(**kwargs)
