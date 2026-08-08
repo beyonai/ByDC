@@ -9,9 +9,9 @@ POST /api/v1/rpc/search/discoverObjectInstancesUnstructured
 action 写入知识库文件）、登记文件状态，并与输入实例建立「提及」关系（单向
 源→目标，幂等）。
 
-> **本版状态**：已有实例发现 / 新实例 LLM 抽取为 TODO 占位，调用即返回
-> `501 not_implemented`。新实例创建 / 文件登记 / 提及关系为已实现能力
-> （以单元测试验收，待发现逻辑接入后由编排串联）。
+> **本版状态**：③ 已有实例发现（AC 锚定：词典快路 + 反查兜底）与 ④ 新实例
+> LLM 抽取（B 模式，temp=0）已落地，501 not_implemented 占位语义移除。
+> ⑤⑥⑦⑧（创建 / 文件登记 / 提及关系）与 T10 同步裁决、T11 共现存储已接入主流程。
 
 ---
 
@@ -54,12 +54,14 @@ action 写入知识库文件）、登记文件状态，并与输入实例建立�
   │
   ├─ ① 参数校验（instance_id 非空、object_codes 非空）
   ├─ ② 定位知识库文件并读取全文（get_document_content_by_term_id）
-  ├─ ③ 已有实例发现（TODO 占位 → 501）
-  ├─ ④ 新实例发现 / LLM 抽取（TODO 占位 → 501）
-  ├─ ⑤ 新实例创建（write_<object_code> action，services/object_action.py）
+  ├─ ③ 已有实例发现（AC 锚定：词典快路命中 + search_terms 精确 + list_term_names 别名反查 + 反查兜底，T7）
+  ├─ ④ 新实例发现 / LLM 抽取（B 模式：object_codes 枚举 TermType 中文名、temp=0、16K 截断、JSON 重试，T8）
+  ├─ T10 同步裁决（仅与库冲突候选：同义 → TermName 别名；歧义 → 独立新实例）
+  ├─ ⑤ 新实例创建（write_<object_code> action；AUTO_DISCOVERED 走直写通道）
   ├─ ⑥ term_id 强校验（write 响应缺 term_id → 500，不延迟不 pending）
   ├─ ⑦ 文件登记（save_or_update_object_files，statusCd=待整理）
   ├─ ⑧ 「提及」关系（源=输入实例 → 目标=发现实例，单向幂等）
+  ├─ T11 共现存储（同文档实例两两 +1，term_tags.co_occurrence Top-50）
   └─ ⑨ 返回 {items: [已有..., 新...]}，每项含 is_new 标记
 ```
 
@@ -117,7 +119,7 @@ action 写入知识库文件）、登记文件状态，并与输入实例建立�
 | `kb_resource_id` | string \| null | 知识库资源 ID。 |
 | `kb_id` | string \| null | 知识库 ID。 |
 | `is_new` | boolean | `true`=本次新创建，`false`=库中已有。 |
-| `evidence` | string \| null | 原文证据片段；本版恒为 `null`（TODO）。 |
+| `evidence` | string \| null | 原文证据片段；已有实例=mention 原文片段，新实例=`null`。 |
 | `relation_name` | string | 已建立/将建立的关系名，恒为「提及」。 |
 
 ---
@@ -130,7 +132,6 @@ action 写入知识库文件）、登记文件状态，并与输入实例建立�
 | 403 | `permission_denied` | execution / term backend 无权限 |
 | 404 | `not_found` | 输入 term 不存在 |
 | 500 | `internal_error` | 读文件失败；write 响应缺 `term_id`（强校验）；其他任何异常 |
-| 501 | `not_implemented` | ③ 已有实例发现 / ④ 新实例发现 TODO 占位（本版） |
 
 ---
 
@@ -148,13 +149,18 @@ curl -s http://localhost:8088/api/v1/rpc/search/discoverObjectInstancesUnstructu
   }'
 ```
 
-本版预期响应（③ 占位短路）：
+正常响应示例（③④ 已落地）：
 
 ```json
 {
-  "code": 501,
+  "code": 200,
   "success": true,
-  "message": "existing instance discovery is not implemented",
-  "data": null
+  "message": "ok",
+  "data": {
+    "items": []
+  }
 }
 ```
+
+> `data.items` 结构见上方 Response Body；已有实例在前、新实例在后。501
+> not_implemented 占位语义已移除，正常输入不再短路。
