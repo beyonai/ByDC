@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import typing
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -44,16 +45,58 @@ class LoaderSnapshot:
     source: str = "runtime"
 
 
+# 版本指纹涉及的实体表（object_fields 为派生表，随 objects 保存更新，不追踪）。
+# 任一表 MAX(version) 变化 → 缓存失效重建。
+_ENTITY_FINGERPRINT_TABLES: tuple[str, ...] = (
+    "objects",
+    "views",
+    "actions",
+    "relations",
+    "datasources",
+    "scenes",
+    "bases",
+)
+
+# 快照缓存上限：dict + 简单 LRU 淘汰（超限弹出最久未访问）
+_MAX_CACHED_SNAPSHOTS = 64
+
+
+def _snapshot_cache_key(
+    base_id: str,
+    object_codes: list[str] | None,
+    view_codes: list[str] | None,
+) -> tuple[str, tuple[str, ...]]:
+    """归一缓存键：base_id + 排序去重的 object/view codes 指纹。"""
+    codes = tuple(sorted(set(object_codes or []))) + tuple(
+        sorted(set(view_codes or []))
+    )
+    return (base_id, codes)
+
+
+@dataclass
+class _LoaderCacheEntry:
+    """loader 快照缓存条目：快照 + 构建时版本指纹（供命中校验）。"""
+
+    snapshot: LoaderSnapshot
+    fingerprint: str
+
+
 class LoaderRuntimeManager:
     """On-demand loader manager for OntologyLoader snapshots per base_id.
 
     Builds loaders via :class:`DatacloudPlatform`. Supports scoped loading
     via ``object_codes`` / ``view_codes`` parameters.
+
+    ``get_loader`` 结果带快照缓存：命中时校验 7 张实体表版本指纹，
+    任一变化 → 重建缓存；指纹查询失败 → 保守不缓存。
     """
 
     def __init__(self, *, platform: DatacloudPlatform, settings: Settings) -> None:
         self._platform = platform
         self._settings = settings
+        self._snapshot_cache: OrderedDict[
+            tuple[str, tuple[str, ...]], _LoaderCacheEntry
+        ] = OrderedDict()
 
     def get_loader(
         self,
@@ -68,10 +111,69 @@ class LoaderRuntimeManager:
         :meth:`SceneLoaderMixin.load_ontology_from_codes` is used instead of
         the full-ontology build path.
 
+        快照缓存：命中缓存时校验版本指纹（7 张实体表 storage_version 拼接），
+        与构建时指纹一致 → 直接返回缓存快照（含虚拟动作已注入的完整快照）；
+        任一变化 → 重建。指纹查询失败 → 不信任缓存也不写缓存（保守直建）。
+
         Raises:
             KeyError: If *base_id* is not registered in the platform.
             PermissionError: If execution is disabled for the base.
         """
+        cache_key = _snapshot_cache_key(base_id, object_codes, view_codes)
+        fingerprint = self._current_fingerprint(base_id)
+        entry = self._snapshot_cache.get(cache_key)
+        if entry is not None and fingerprint is not None and entry.fingerprint == fingerprint:
+            self._snapshot_cache.move_to_end(cache_key)
+            logger.info(
+                "loader snapshot cache hit: base_id=%s key=%s", base_id, cache_key
+            )
+            return entry.snapshot
+
+        snapshot = self._build_snapshot(
+            base_id, object_codes=object_codes, view_codes=view_codes
+        )
+        if fingerprint is not None:
+            self._snapshot_cache[cache_key] = _LoaderCacheEntry(
+                snapshot=snapshot, fingerprint=fingerprint
+            )
+            self._snapshot_cache.move_to_end(cache_key)
+            while len(self._snapshot_cache) > _MAX_CACHED_SNAPSHOTS:
+                self._snapshot_cache.popitem(last=False)
+        logger.info(
+            "loader snapshot built and cached: base_id=%s key=%s",
+            base_id,
+            cache_key,
+        )
+        return snapshot
+
+    def _current_fingerprint(self, base_id: str) -> str | None:
+        """版本指纹：7 张实体表 storage_version 拼接（base_id 范围）。
+
+        任一表 MAX(version) 变化 → 指纹串变化 → 缓存失效。查询异常 → None
+        （调用方保守处理：不命中缓存、不写缓存）。
+        """
+        try:
+            backend = self._platform._ontology_for(base_id)
+            store = backend._entity_store.sub_store(base_id)  # type: ignore[attr-defined]
+            return "|".join(
+                f"{t}:{store.storage_version(t)}" for t in _ENTITY_FINGERPRINT_TABLES
+            )
+        except Exception:
+            logger.warning(
+                "loader 版本指纹查询失败，本次不缓存快照: base_id=%s",
+                base_id,
+                exc_info=True,
+            )
+            return None
+
+    def _build_snapshot(
+        self,
+        base_id: str,
+        *,
+        object_codes: list[str] | None = None,
+        view_codes: list[str] | None = None,
+    ) -> LoaderSnapshot:
+        """构建 loader 快照（scoped 或全量），含虚拟动作注入与运行期服务配置。"""
         if object_codes is not None or view_codes is not None:
             loader = self._platform.load_ontology_from_codes(
                 base_id,

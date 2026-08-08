@@ -28,6 +28,9 @@ from datacloud_platform.api.mcp_handler import (
     create_mcp_session_manager,
     set_loader_runtime_ref,
 )
+from datacloud_platform.services.object_action import (
+    set_loader_runtime_ref as set_object_action_loader_runtime_ref,
+)
 from datacloud_platform.api.routers.download_routes import router as download_router
 from datacloud_platform.api.routers.import_routes import create_import_routes
 from datacloud_platform.api.routers.ontology_build_routes import (
@@ -78,6 +81,7 @@ def create_app(
         runtime = LoaderRuntimeManager(platform=platform, settings=settings)
         app.state.loader_runtime = runtime
         set_loader_runtime_ref(lambda: runtime)
+        set_object_action_loader_runtime_ref(lambda: runtime)
         logger.info("LoaderRuntimeManager initialized and stored in app.state")
         try:
             yield

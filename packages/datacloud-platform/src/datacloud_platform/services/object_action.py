@@ -14,6 +14,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 CONTENT_PREVIEW_CHARS = 800
 
+# LoaderRuntimeManager 全局引用（server lifespan 经 set_loader_runtime_ref 注入）。
+# invoke_object_action 优先走 runtime 按需加载（scoped + 快照缓存），
+# 未注册/不可用时回退 _load_ontology_cached 原路径。
+_loader_runtime_ref: Any = None
+
+
+def set_loader_runtime_ref(ref: Any) -> None:
+    """注册 LoaderRuntimeManager 引用（由 server lifespan 注入）。"""
+    global _loader_runtime_ref
+    _loader_runtime_ref = ref
+
+
+def _get_loader_runtime() -> Any:
+    ref = _loader_runtime_ref
+    return ref() if callable(ref) else ref
+
 
 async def invoke_object_write_action(
     *,
@@ -55,11 +71,22 @@ async def invoke_object_action(
     action_code: str,
     arguments: dict[str, Any],
 ) -> dict[str, Any]:
-    """Invoke an object action using the same loader pipeline as kb.invokeAction."""
-    loader = platform._load_ontology_cached(base_id)  # noqa: SLF001
-    if isinstance(loader, OntologyLoader):
-        loader.configure(platform=platform)
-    platform.inject_virtual_actions(base_id, loader)
+    """Invoke an object action using the same loader pipeline as kb.invokeAction.
+
+    按需加载：优先经 LoaderRuntimeManager.get_loader(base_id,
+    object_codes=[object_code]) 获取 scoped 快照（只构建目标对象 + 虚拟动作
+    已注入 + 快照缓存命中直接复用）；runtime 未注册/不可用 → 回退
+    ``_load_ontology_cached`` 全量加载原路径。
+    """
+    runtime = _get_loader_runtime()
+    if runtime is not None:
+        snapshot = runtime.get_loader(base_id, object_codes=[object_code])
+        loader = snapshot.loader
+    else:
+        loader = platform._load_ontology_cached(base_id)  # noqa: SLF001
+        if isinstance(loader, OntologyLoader):
+            loader.configure(platform=platform)
+        platform.inject_virtual_actions(base_id, loader)
 
     get_object = getattr(loader, "get_object", None)
     transport = "loader_object" if callable(get_object) else "platform_execute_action"
