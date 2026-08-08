@@ -94,8 +94,25 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         return list(self.name_rows)
 
     def list_term_relations(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        """分页感知的假实现：按 page_index/page_size 切片并返回分页元信息。
+
+        对齐真实 reader（opengauss _relation.list_term_relations）的响应结构：
+        ``{data, pageIndex, pageSize, totalCount, totalPages}``，page_size 上限 100。
+        """
         self.calls.append(("list_term_relations", {"base_id": base_id, **kwargs}))
-        return {"data": list(self.relations)}
+        page_index = int(kwargs.get("page_index", 1))
+        page_size = min(int(kwargs.get("page_size", 20)), 100)
+        total = len(self.relations)
+        start = (page_index - 1) * page_size
+        batch = list(self.relations[start : start + page_size])
+        total_pages = (total + page_size - 1) // page_size if total else 0
+        return {
+            "data": batch,
+            "pageIndex": page_index,
+            "pageSize": page_size,
+            "totalCount": total,
+            "totalPages": total_pages,
+        }
 
     def create_term_relation(
         self, base_id: str, *, relation: dict[str, Any]
@@ -744,6 +761,78 @@ class TestEstablishMentionRelation:
         ]
         relation_calls = [c for c in platform.calls if c[0] == "create_term_relation"]
         assert len(relation_calls) == 1
+
+    # ── 分页拉全：list_term_relations 默认 page_size=20 只查首页 ──────────────
+
+    @staticmethod
+    def _mention_rows(count: int, target: str = "") -> list[dict[str, Any]]:
+        """构造 count 条源=term-input 的「提及」关系行（目标可自定义末条）。"""
+        rows = [
+            {
+                "relation_name": "提及",
+                "source_term_id": "term-input",
+                "target_term_id": f"term-other-{i}",
+            }
+            for i in range(count)
+        ]
+        if target:
+            rows[-1] = {
+                "relation_name": "提及",
+                "source_term_id": "term-input",
+                "target_term_id": target,
+            }
+        return rows
+
+    def test_target_beyond_first_page_skips_create(self) -> None:
+        """>20 条提及关系、目标落在第 2 页：分页拉全后命中，不重复创建。"""
+        platform = _FakePlatform()
+        platform.relations = self._mention_rows(25, target="term-new-1")
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is False
+        assert platform.created_relations == []
+
+    def test_pagination_pulls_all_pages(self) -> None:
+        """断言分页拉全：page_size=100 拉满、page_index 递增直到末尾。"""
+        platform = _FakePlatform()
+        platform.relations = self._mention_rows(125)
+        platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-missing",
+        )
+        list_calls = [c for c in platform.calls if c[0] == "list_term_relations"]
+        assert [c[1].get("page_index") for c in list_calls] == [1, 2]
+        assert all(c[1].get("page_size") == 100 for c in list_calls)
+
+    def test_different_target_across_pages_still_creates(self) -> None:
+        """120 条提及均指向其他目标：新目标照建且仅一次。"""
+        platform = _FakePlatform()
+        platform.relations = self._mention_rows(120)
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is True
+        create_calls = [c for c in platform.calls if c[0] == "create_term_relation"]
+        assert len(create_calls) == 1
+        assert create_calls[0][1]["relation"]["targetTermId"] == "term-new-1"
+
+    def test_empty_relations_single_page(self) -> None:
+        """空关系集只查一页即停（无多余分页请求）。"""
+        platform = _FakePlatform()
+        created = platform._establish_mention_relation(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            target_term_id="term-new-1",
+        )
+        assert created is True
+        list_calls = [c for c in platform.calls if c[0] == "list_term_relations"]
+        assert [c[1].get("page_index") for c in list_calls] == [1]
 
 
 # ============================================================================

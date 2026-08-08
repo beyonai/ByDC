@@ -1128,9 +1128,10 @@ class ObjectInstanceDiscoveryMixin:
     ) -> bool:
         """建立「提及」关系（源→目标，单向、幂等）。
 
-        先按源实例 + 关键词「提及」查重；已存在同源同目标的提及关系则跳过，
-        否则创建 camelCase 三字段关系。方向固定为 源=输入实例 → 目标=发现实例，
-        不建反向。
+        按源实例 + 关键词「提及」全量查重（分页拉全，规避 list_term_relations
+        默认 page_size=20 只查首页导致的漏判）；已存在同源同目标的提及关系则
+        跳过，否则创建 camelCase 三字段关系。方向固定为 源=输入实例 → 目标=
+        发现实例，不建反向。
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -1143,10 +1144,13 @@ class ObjectInstanceDiscoveryMixin:
         Raises:
             list/create 失败时原样上抛（无降级）。
         """
-        page = self.list_term_relations(
-            base_id, source_term_id=source_term_id, keyword="提及"
+        rows = _iter_relation_rows(
+            self,
+            base_id=base_id,
+            source_term_id=source_term_id,
+            keyword="提及",
         )
-        for row in _relation_items(page):
+        for row in rows:
             relation_name = str(
                 row.get("relation_name") or row.get("relationName") or ""
             )
@@ -1233,6 +1237,51 @@ def _relation_items(page: dict[str, Any]) -> list[dict[str, Any]]:
     """从 list_term_relations 响应中提取关系记录行（兼容 data/items/records）。"""
     rows = page.get("data") or page.get("items") or page.get("records") or []
     return [row for row in rows if isinstance(row, dict)]
+
+
+# 分页拉全单页上限：对齐 opengauss reader list_term_relations 的 page_size 上限 100
+_RELATION_PAGE_SIZE = 100
+
+
+def _iter_relation_rows(
+    platform: _ObjectInstanceDiscoveryPlatform,
+    *,
+    base_id: str,
+    **filters: Any,
+) -> list[dict[str, Any]]:
+    """分页拉全 list_term_relations 全部行（幂等查重的正确前提）。
+
+    list_term_relations 默认 page_size=20 只返回首页；源实例提及关系超过
+    一页后，仅查首页会漏判已存在关系 → 重复创建同一条提及关系。此处以
+    page_size=100 循环翻页直到末尾。
+
+    终止条件（双保险）：
+    1. 当前页行数 < page_size（已到最后一页，reader 对不满页不补行）；
+    2. 响应含 totalCount 且累计行数已达到总量（精确提前退出，避免空翻页）。
+
+    Args:
+        platform: 提供 ``list_term_relations(base_id, **filters)`` 的平台对象。
+        base_id: 本体库/系统空间标识。
+        **filters: 透传给 list_term_relations 的过滤条件（如 source_term_id）。
+
+    Returns:
+        全部页合并后的关系行列表（顺序即后端返回顺序）。
+    """
+    rows: list[dict[str, Any]] = []
+    page_index = 1
+    while True:
+        page = platform.list_term_relations(
+            base_id, page_index=page_index, page_size=_RELATION_PAGE_SIZE, **filters
+        )
+        batch = _relation_items(page)
+        rows.extend(batch)
+        if len(batch) < _RELATION_PAGE_SIZE:
+            break
+        total_count = page.get("totalCount")
+        if isinstance(total_count, int) and len(rows) >= total_count:
+            break
+        page_index += 1
+    return rows
 
 
 def _search_result_items(result: Any) -> list[dict[str, Any]]:
