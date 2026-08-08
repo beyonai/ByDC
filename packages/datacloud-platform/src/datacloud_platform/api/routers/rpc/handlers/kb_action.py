@@ -257,7 +257,17 @@ async def _search_knowledge_fragments(
 def _required_session_id(request: Request) -> str:
     session_id = request.headers.get("X-Session-Id", "").strip()
     if not session_id:
-        raise ValueError("X-Session-Id header is required")
+        raise ValueError("Request header 'X-Session-Id' is required")
+    return session_id
+
+
+def _validate_document_async_headers(request: Request) -> str:
+    """Validate request context before a document task is queued."""
+    session_id = _required_session_id(request)
+    if not request.headers.get("beyond-token", "").strip():
+        raise ValueError("Request header 'beyond-token' is required")
+    if not request.headers.get("X-User-Code", "").strip():
+        raise ValueError("Request header 'X-User-Code' is required")
     return session_id
 
 
@@ -265,7 +275,7 @@ async def _discover_document_objects_async(
     platform: DatacloudPlatform, params: dict[str, Any], request: Request
 ) -> Any:
     """Accept a background document entity-discovery task."""
-    session_id = _required_session_id(request)
+    session_id = _validate_document_async_headers(request)
     base_id = str(
         params.pop("base_id", None) or params.pop("baseId", None) or DEFAULT_BASE_ID
     )
@@ -286,7 +296,7 @@ async def _enrich_document_objects_async(
     platform: DatacloudPlatform, params: dict[str, Any], request: Request
 ) -> Any:
     """Accept a background document enrichment task."""
-    session_id = _required_session_id(request)
+    session_id = _validate_document_async_headers(request)
     base_id = str(
         params.pop("base_id", None) or params.pop("baseId", None) or DEFAULT_BASE_ID
     )
