@@ -38,7 +38,7 @@ class ObjectInstanceItem:
 
     ``out_degree``/``in_degree`` 仅在请求包含 degree filter（触发 JOIN）时
     为真实**范围度数**（对端在 object_codes ∪ kb_resource_ids 并集内才计数，
-    T-65）；无 degree filter 时不做 JOIN，恒为 0。
+    ）；无 degree filter 时不做 JOIN，恒为 0。
     """
 
     term_id: str
@@ -63,14 +63,14 @@ class SortSpec:
 
     与 FilterSpec 请求元素同构：单一 key（by）+ params 参数字典。
     ``by`` 目前仅支持 ``"similarity"``（语义相似度排序，EmbeddingService
-    形态 T-51 落地）；新排序依据 = 扩展 Literal + _SORT_REGISTRY 条目（T-51），
+    形态落地）；新排序依据 = 扩展 Literal + _SORT_REGISTRY 条目，
     本层仅定形状，不做任何排序逻辑。
     """
 
     by: Literal["similarity"]
     """排序依据。目前仅 "similarity"。"""
     params: dict[str, Any] = field(default_factory=dict)
-    """类型专属参数字典（如 embedding 查询所需参数，T-51 定义）。"""
+    """类型专属参数字典（如 embedding 查询所需参数）。"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

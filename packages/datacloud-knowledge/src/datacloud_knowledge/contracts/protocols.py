@@ -567,7 +567,7 @@ class TermReader(Protocol):
             sort: 排序规格 = {"by": "similarity", "params": {...}}（与 filters
                   同构：单一 key + params）。目前仅 "similarity"；未知 by → ValueError。
                   None = 默认排序（term_id ASC 稳定序）。本层仅签名，实际排序
-                  （EmbeddingService 形态）T-51 落地。
+                  （EmbeddingService 形态）落地。
             page: 页码（>=1，1-based）。
             page_size: 每页条数（>=1）。
 

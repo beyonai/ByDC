@@ -1,9 +1,9 @@
-"""T-45: enumerate_object_instances — 已知小图集成测试 + 注册表校验。
+"""enumerate_object_instances — 已知小图集成测试 + 注册表校验。
 
 使用 sqlite 内存库执行生成的 SQL（sqlite 3.38+ 支持 ``->>`` 运算符），
 验证度数语义 / 条件过滤 / 范围过滤 / 分页 / 动态排序 / 注册表校验。
 
-度数语义（T-65，**范围统计**）：out_degree/in_degree 只统计对端 term
+度数语义（**范围统计**）：out_degree/in_degree 只统计对端 term
 （out → target_term_id / in → source_term_id）落在
 ``object_codes ∪ kb_resource_ids`` **并集**范围内的实例级 BUSINESS 边；
 对端维度之间是 OR（任一命中即计），与主查询 WHERE 的 AND 交集语义不同。
@@ -234,7 +234,7 @@ def test_self_loop_counts_in_out_each_once(known_graph_reader: PostgresTermReade
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 4b. 范围统计度数语义（T-65）：对端在 object_codes ∪ kb_resource_ids 并集内才计数
+# 4b. 范围统计度数语义：对端在 object_codes ∪ kb_resource_ids 并集内才计数
 # ═════════════════════════════════════════════════════════════════════════════
 
 
@@ -667,7 +667,7 @@ def test_http_adapter_forwards_filters() -> None:
 
 
 def test_http_adapter_forwards_sort_payload() -> None:
-    """T-50：http adapter 远程转发，sort dict 原值透传（同一对象），响应解析不变。"""
+    """http adapter 远程转发，sort dict 原值透传（同一对象），响应解析不变。"""
     from datacloud_knowledge.adapters.http.adapter import HttpTermAdapter
 
     adapter = HttpTermAdapter(base_url="http://remote.test", pid="p1")
@@ -708,7 +708,7 @@ def test_http_adapter_forwards_sort_payload() -> None:
 
 
 def test_http_adapter_omits_sort_when_none() -> None:
-    """T-50：sort=None（默认）→ payload 省略 "sort" key，远端走默认排序。"""
+    """sort=None（默认）→ payload 省略 "sort" key，远端走默认排序。"""
     from datacloud_knowledge.adapters.http.adapter import HttpTermAdapter
 
     adapter = HttpTermAdapter(base_url="http://remote.test", pid="p1")

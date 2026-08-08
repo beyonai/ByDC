@@ -1,4 +1,4 @@
-"""T-51: enumerate_object_instances similarity 排序 — _SORT_REGISTRY + 核心 SQL + 已知小图行为。
+"""enumerate_object_instances similarity 排序 — _SORT_REGISTRY + 核心 SQL + 已知小图行为。
 
 三层覆盖（verify gate 对应）：
 

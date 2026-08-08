@@ -107,7 +107,7 @@ def _degree_metric_expr(metric: str) -> str:
     """degree metric 白名单 → SQL 度量表达式（防注入：白名单映射，绝不拼接输入）。
 
     度数语义（钉死）：只统计实例级边（两端 id 均非空）+ BUSINESS 类别；
-    自环（source=target）进出各计一次；**范围统计**（T-65）：对端 term 必须
+    自环（source=target）进出各计一次；**范围统计**：对端 term 必须
     落在 object_codes ∪ kb_resource_ids 并集内（EXISTS 截断邻域，见
     _degree_opposite_range）。
     双 JOIN 计数用 COUNT(DISTINCT relation_id) 防止 out/in 交叉膨胀。
@@ -136,7 +136,7 @@ def _degree_opposite_range(
     object_codes: list[str],
     kb_resource_ids: list[str],
 ) -> str:
-    """对端范围判定 EXISTS 子查询 — 度数范围统计（T-65）并集语义。
+    """对端范围判定 EXISTS 子查询 — 度数范围统计并集语义。
 
     对端 term（out → ``target_term_id`` / in → ``source_term_id``）满足
     object_codes 或 kb_resource_ids **任一**维度（OR）即视为在范围内；某维
@@ -680,7 +680,7 @@ class _TermReader(_ReaderBase):
         Args:
             terms: 待解析的字段中文名/别名列表。
             scope_code: 视图或对象 code（如 "scene_enterprise_analysis"）。
-            library_id: 预留参数，v1 不使用。
+            library_id: 预留参数，当前未使用。
             resolve_values: 是否对 value_terms 追加值级别消歧。
             value_terms: 待值消歧的过滤值列表（如企业名、地区名等）。
 
@@ -2703,7 +2703,7 @@ class _TermReader(_ReaderBase):
         排序框架：sort 按 ``_SORT_REGISTRY`` 查表（by 走 dict key）；similarity
         为注册表首个（且目前唯一）排序类型（Embedding 向量或 BM25 降级）。
 
-        度数语义（T-65，**范围统计**）：out_degree/in_degree 只统计对端 term
+        度数语义（**范围统计**）：out_degree/in_degree 只统计对端 term
         （out → target_term_id / in → source_term_id）落在
         ``object_codes ∪ kb_resource_ids`` **并集**范围内的实例级 BUSINESS 边；
         对端维度之间 OR（任一命中即计），主查询 WHERE 范围维度之间仍 AND。
@@ -2713,7 +2713,7 @@ class _TermReader(_ReaderBase):
         Args:
             object_codes: 对象类型编码范围（尊重输入不校验）。与 kb_resource_ids 为 AND。
             kb_resource_ids: 知识库资源 ID 范围（``ext_attrs->>'kb_resource_id'``）。
-            filters: 条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]，v1 只 AND。
+            filters: 条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]，多条件按 AND 组合。
             sort: 排序规格 = {"by": <注册表 key>, "params": {...}}，None = 默认序。
                   similarity 在候选集内重排（不截断），Embedding 失败静默降级 BM25；
                   query 空串退化 term_id ASC。显式 sort 优先于 degree filter 隐式排序。
