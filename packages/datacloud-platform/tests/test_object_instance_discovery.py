@@ -1,7 +1,8 @@
 """测试 discoverObjectInstancesUnstructured — 非结构化对象实例发现接口。
 
 演进：模型默认值、参数校验、管道异常上抛（不降级）；词典锚定（快路命中 + 反查兜底）
-与 LLM 抽取（优先类型枚举 + 允许自动发现）已落地替换占位；RPC 错误码 / X-Session-Id 校验全套；
+与 LLM 抽取（优先类型枚举 + 允许自动发现）已落地替换占位；RPC 错误码映射全套；
+会话 ID 改由全局请求上下文提供（middleware 注入 InvocationContext），不依赖 X-Session-Id 请求头；
 501 not_implemented 语义已收口移除（回归断言同步删除）。
 """
 
@@ -14,6 +15,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from datacloud_data_sdk.context import InvocationContext
 from datacloud_platform.api.routers.rpc.router import create_rpc_router
 from datacloud_platform.mixins import ObjectInstanceDiscoveryMixin
 from datacloud_platform.mixins import object_instance_discovery as discovery_module
@@ -267,7 +269,6 @@ class TestDiscoverParameterValidation:
                 BASE_ID,
                 instance_id="",
                 object_codes=["by_opportunity"],
-                session_id="session-1",
             )
 
     @pytest.mark.asyncio
@@ -278,7 +279,6 @@ class TestDiscoverParameterValidation:
                 BASE_ID,
                 instance_id="term-input",
                 object_codes=[],
-                session_id="session-1",
             )
 
 
@@ -296,7 +296,6 @@ class TestDiscoverPipelineErrors:
                 BASE_ID,
                 instance_id="missing",
                 object_codes=["by_opportunity"],
-                session_id="session-1",
             )
 
     @pytest.mark.asyncio
@@ -309,7 +308,6 @@ class TestDiscoverPipelineErrors:
                 BASE_ID,
                 instance_id="term-input",
                 object_codes=["by_opportunity"],
-                session_id="session-1",
             )
 
 
@@ -528,7 +526,6 @@ class TestCreateDiscoveredInstance:
             base_id=BASE_ID,
             object_code="by_opportunity",
             term_name="张三",
-            session_id="session-1",
         )
         assert term_id == "term-new-1"
         assert captured["base_id"] == BASE_ID
@@ -557,7 +554,6 @@ class TestCreateDiscoveredInstance:
                 base_id=BASE_ID,
                 object_code="by_opportunity",
                 term_name="张三",
-                session_id="session-1",
             )
 
     @pytest.mark.asyncio
@@ -576,7 +572,6 @@ class TestCreateDiscoveredInstance:
             base_id=BASE_ID,
             object_code="by_opportunity",
             term_name="张三",
-            session_id="session-1",
         )
         assert term_id == "term-strict"
 
@@ -590,16 +585,17 @@ class TestRegisterObjectFile:
     @pytest.mark.asyncio
     async def test_registers_file_with_session_and_strict_term_id(self) -> None:
         platform = _FakePlatform()
-        await platform._register_object_file(
-            base_id=BASE_ID,
-            object_code="by_opportunity",
-            term_name="张三",
-            term_id="term-new-1",
-            session_id="session-1",
-            action_result={
-                "records": [{"termId": "term-new-1", "fileName": "张三.md"}]
-            },
-        )
+        # 会话 ID 由全局请求上下文提供（middleware 注入 InvocationContext）
+        with InvocationContext(session_id="session-1"):
+            await platform._register_object_file(
+                base_id=BASE_ID,
+                object_code="by_opportunity",
+                term_name="张三",
+                term_id="term-new-1",
+                action_result={
+                    "records": [{"termId": "term-new-1", "fileName": "张三.md"}]
+                },
+            )
         assert len(platform.object_files) == 1
         entry = platform.object_files[0][0]
         assert entry["sessionId"] == "session-1"
@@ -616,7 +612,6 @@ class TestRegisterObjectFile:
             object_code="by_opportunity",
             term_name="张三",
             term_id="term-new-1",
-            session_id="session-1",
             action_result={"records": [{"fileName": "张三.md"}]},
         )
         entry = platform.object_files[0][0]
@@ -727,7 +722,7 @@ class TestPlatformWiring:
 
 
 # ============================================================================
-# RPC handler（X-Session-Id 校验 + 错误码映射；501 语义已移除）
+# RPC handler（会话 ID 由全局请求上下文提供；错误码映射；501 语义已移除）
 # ============================================================================
 
 
@@ -743,7 +738,6 @@ class _RpcFakePlatform:
         *,
         instance_id: str,
         object_codes: list[str],
-        session_id: str,
     ) -> ObjectInstanceDiscoveryResult:
         if self.behavior == "ok":
             return ObjectInstanceDiscoveryResult(items=[])
@@ -814,7 +808,8 @@ class TestDiscoverRpc:
         assert body["success"] is True
         assert body["data"]["items"] == []
 
-    def test_missing_session_id_returns_400(self) -> None:
+    def test_without_session_header_succeeds(self) -> None:
+        """无 X-Session-Id 请求头也返回 200：handler 不再校验，全局上下文为空串。"""
         client = _rpc_client(_RpcFakePlatform("ok"))
         resp = client.post(
             "/api/v1/rpc/search/discoverObjectInstancesUnstructured",
@@ -827,8 +822,9 @@ class TestDiscoverRpc:
             },
         )
         body = resp.json()
-        assert body["code"] == 400
-        assert "X-Session-Id" in body["message"]
+        assert body["code"] == 200
+        assert body["success"] is True
+        assert body["data"]["items"] == []
 
 
 # ============================================================================
@@ -1058,7 +1054,6 @@ class TestDiscoverOrchestration:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         # 已有在前、新在后
         assert [h.instance_id for h in result.items] == [
@@ -1122,7 +1117,6 @@ class TestDiscoverOrchestration:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         assert [h.instance_id for h in result.items] == ["term-new-1"]
         assert result.items[0].is_new is True
@@ -1174,7 +1168,6 @@ class TestDiscoverOrchestration:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         assert result.items == []
         # 归并：别名写回主 term（termId=canonical、nameText=mention）
@@ -1223,7 +1216,6 @@ class TestDiscoverOrchestration:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         assert result.items == []
         alias_call = next(c for c in platform.calls if c[0] == "create_term_name")
@@ -1722,7 +1714,6 @@ class TestDiscoverFullFlowWithExtraction:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         # 已有在前、新在后
         assert [h.instance_id for h in result.items] == ["t-existing", "term-new-1"]
@@ -1772,7 +1763,6 @@ class TestDiscoverFullFlowWithExtraction:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         assert [h.instance_name for h in result.items] == ["新客户A", "新客户B"]
         assert all(h.is_new for h in result.items)
@@ -1839,7 +1829,6 @@ class TestAutoDiscoveredCreateChannel:
                 "evidence": "X",
                 "raw_type": "未知业务对象",
             },
-            session_id="session-1",
         )
         assert not action_calls  # 跳过 action 管道（方案 (a)）
         assert len(written) == 1
@@ -1897,13 +1886,11 @@ class TestAutoDiscoveredCreateChannel:
             base_id=BASE_ID,
             source_term_id="term-input",
             candidate=candidate,
-            session_id="session-1",
         )
         await platform._create_new_instance_flow(
             base_id=BASE_ID,
             source_term_id="term-input",
             candidate={**candidate, "term_name": "新品类Y"},
-            session_id="session-1",
         )
         assert ensured == [
             ("AUTO_DISCOVERED", "自动发现类型"),
@@ -1940,7 +1927,6 @@ class TestAutoDiscoveredCreateChannel:
                 "object_code": "by_opportunity",
                 "evidence": "e",
             },
-            session_id="session-1",
         )
         assert hit.instance_id == "term-new-1"
         assert hit.object_code == "by_opportunity"
@@ -1995,7 +1981,6 @@ class TestAutoDiscoveredCreateChannel:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         assert [h.instance_name for h in result.items] == ["新品类X"]
         hit = result.items[0]
@@ -2045,7 +2030,6 @@ class TestAdjudication:
             ambiguity=[],
             synonym=[],
             source_term_id="term-input",
-            session_id="session-1",
         )
         assert hits == []
         assert not called
@@ -2066,7 +2050,6 @@ class TestAdjudication:
             ambiguity=[],
             synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
             source_term_id="term-input",
-            session_id="session-1",
         )
         assert hits == []
         alias = next(c for c in platform.calls if c[0] == "create_term_name")
@@ -2108,7 +2091,6 @@ class TestAdjudication:
                 }
             ],
             source_term_id="term-input",
-            session_id="session-1",
         )
         assert len(hits) == 1
         assert hits[0].instance_id == "term-adj-1"
@@ -2156,7 +2138,6 @@ class TestAdjudication:
             ],
             synonym=[],
             source_term_id="term-input",
-            session_id="session-1",
         )
         assert len(hits) == 1
         assert hits[0].object_code == "AUTO_DISCOVERED"
@@ -2182,7 +2163,6 @@ class TestAdjudication:
             ambiguity=[],
             synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
             source_term_id="term-input",
-            session_id="session-1",
         )
         user = next(m for m in captured["messages"] if m["role"] == "user")
         assert "共现" not in user["content"]
@@ -2208,7 +2188,6 @@ class TestAdjudication:
             ambiguity=[],
             synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
             source_term_id="term-input",
-            session_id="session-1",
         )
         assert hits == []
         assert len(calls) == 2
@@ -2244,7 +2223,6 @@ class TestAdjudication:
                 }
             ],
             source_term_id="term-input",
-            session_id="session-1",
         )
         assert len(hits) == 1
         assert hits[0].instance_id == "term-adj-3"
@@ -2292,7 +2270,6 @@ class TestAdjudication:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         assert result.items == []
         alias = next(c for c in platform.calls if c[0] == "create_term_name")
@@ -2363,7 +2340,6 @@ class TestDocumentCoOccurrence:
             ambiguity=[],
             synonym=[{"mention": "苹果公司", "term": _term_row("t1", "苹果")}],
             source_term_id="term-input",
-            session_id="s1",
             alias_targets=alias_targets,
         )
         assert hits == []
@@ -2409,7 +2385,6 @@ class TestDocumentCoOccurrence:
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
-            session_id="session-1",
         )
         assert [h.instance_id for h in result.items] == ["t-existing", "term-new-1"]
         calls = self._co_calls(platform)

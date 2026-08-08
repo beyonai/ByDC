@@ -20,6 +20,7 @@ from functools import partial
 from typing import Any, Protocol
 
 from anyio import to_thread
+from datacloud_data_sdk.context import get_current_context
 from datacloud_knowledge.intent.llm_utils import (
     build_llm,
     stream_invoke_with_thinking,
@@ -46,6 +47,19 @@ from datacloud_platform.services.object_action import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _current_session_id() -> str:
+    """从全局请求上下文获取会话 ID（由 server middleware 注入 InvocationContext）。
+
+    无请求上下文（后台任务/单测直调）时返回空串，不抛异常。
+    """
+    try:
+        # str() 显式收窄：跨包边界（datacloud-data 未纳入 mypy 解析）时为 Any
+        return str(get_current_context().session_id)
+    except Exception:
+        return ""
+
 
 _PENDING_LABELS: dict[str, Any] = {
     "dc_status": "待整理",
@@ -155,7 +169,6 @@ class ObjectInstanceDiscoveryMixin:
         *,
         instance_id: str,
         object_codes: list[str],
-        session_id: str,
     ) -> ObjectInstanceDiscoveryResult:
         """从输入实例的知识库文件中发现对象实例。
 
@@ -163,7 +176,6 @@ class ObjectInstanceDiscoveryMixin:
             base_id: 本体库/系统空间标识。
             instance_id: 输入实例的 term_id。
             object_codes: 非结构化对象类型编码列表（已有实例匹配范围 + 新实例候选类型）。
-            session_id: 会话 ID，用于文件登记条目的 sessionId 字段。
 
         Returns:
             发现结果信封；已有实例在前、新实例在后，每项含 is_new 标记。
@@ -205,7 +217,6 @@ class ObjectInstanceDiscoveryMixin:
                     base_id=base_id,
                     source_term_id=instance_id,
                     candidate=candidate,
-                    session_id=session_id,
                 )
             )
         # 同步裁决：仅与库冲突候选（同名多候选→歧义、子串重叠→同义）；
@@ -217,7 +228,6 @@ class ObjectInstanceDiscoveryMixin:
                 ambiguity=anchor.ambiguity,
                 synonym=anchor.synonym,
                 source_term_id=instance_id,
-                session_id=session_id,
                 alias_targets=alias_targets,
             )
         )
@@ -254,7 +264,6 @@ class ObjectInstanceDiscoveryMixin:
         base_id: str,
         source_term_id: str,
         candidate: dict[str, Any],
-        session_id: str,
     ) -> ObjectInstanceDiscoveryHit:
         """新实例创建链路：创建 → 强校验 → 登记 → 提及关系。
 
@@ -262,7 +271,6 @@ class ObjectInstanceDiscoveryMixin:
             base_id: 本体库/系统空间标识。
             source_term_id: 输入实例 term_id（提及关系源）。
             candidate: 新实例候选 ``{"term_name", "object_code", "evidence"}``。
-            session_id: 会话 ID（透传文件登记）。
 
         Returns:
             新实例发现结果项（is_new=True，relation_name="提及"）。
@@ -282,7 +290,6 @@ class ObjectInstanceDiscoveryMixin:
             base_id=base_id,
             object_code=object_code,
             term_name=term_name,
-            session_id=session_id,
             raw_type=str(candidate["raw_type"])
             if candidate.get("raw_type") is not None
             else None,
@@ -292,7 +299,6 @@ class ObjectInstanceDiscoveryMixin:
             object_code=object_code,
             term_name=term_name,
             term_id=term_id,
-            session_id=session_id,
             action_result={"records": [{"term_id": term_id}]},
         )
         self._establish_mention_relation(
@@ -318,7 +324,6 @@ class ObjectInstanceDiscoveryMixin:
         base_id: str,
         object_code: str,
         term_name: str,
-        session_id: str,
         raw_type: str | None = None,
     ) -> str:
         """新实例创建 + term_id 强校验。
@@ -335,7 +340,6 @@ class ObjectInstanceDiscoveryMixin:
             base_id: 本体库/系统空间标识。
             object_code: 新实例对象类型编码。
             term_name: 新实例名称。
-            session_id: 会话 ID（本方法不使用，保留签名以透传后续登记）。
             raw_type: LLM 原始类型名（仅 AUTO_DISCOVERED 分支使用）。
 
         Returns:
@@ -451,7 +455,6 @@ class ObjectInstanceDiscoveryMixin:
         ambiguity: list[dict[str, Any]],
         synonym: list[dict[str, Any]],
         source_term_id: str,
-        session_id: str,
         alias_targets: list[str] | None = None,
     ) -> list[ObjectInstanceDiscoveryHit]:
         """冲突候选同步裁决：同名多候选判歧义、子串重叠判同义。
@@ -472,7 +475,6 @@ class ObjectInstanceDiscoveryMixin:
             ambiguity: 歧义候选列表（同名多候选）。
             synonym: 同义候选列表（子串重叠）。
             source_term_id: 输入实例 term_id（新实例提及关系源）。
-            session_id: 会话 ID（透传）。
             alias_targets: 可选 out 参数——归并的 canonical term_id 收集
                 （共现：别名 mention 计入 canonical 伙伴集）。
 
@@ -505,7 +507,6 @@ class ObjectInstanceDiscoveryMixin:
                             "evidence": candidate.get("evidence"),
                             "raw_type": candidate.get("raw_type"),
                         },
-                        session_id=session_id,
                     )
                 )
         for candidate in ambiguity:
@@ -533,7 +534,6 @@ class ObjectInstanceDiscoveryMixin:
                             "evidence": candidate.get("evidence"),
                             "raw_type": candidate.get("raw_type"),
                         },
-                        session_id=session_id,
                     )
                 )
         return hits
@@ -1032,7 +1032,6 @@ class ObjectInstanceDiscoveryMixin:
         object_code: str,
         term_name: str,
         term_id: str,
-        session_id: str,
         action_result: dict[str, Any],
     ) -> None:
         """文件登记：复用 document.py 的 ``_build_object_file_status`` 模式。
@@ -1046,7 +1045,6 @@ class ObjectInstanceDiscoveryMixin:
             object_code: 新实例对象类型编码。
             term_name: 新实例名称。
             term_id: 强校验后的 term_id（write action 响应）。
-            session_id: 会话 ID（透传为登记条目 sessionId）。
             action_result: write action 归一化响应（提供 fileName/termId）。
         """
         term_name = term_name.strip()
@@ -1064,7 +1062,7 @@ class ObjectInstanceDiscoveryMixin:
             objectName=term_name,
         )
         object_file = _build_object_file_status(
-            session_id=session_id,
+            session_id=_current_session_id(),
             document=document,
             object_scope=object_scope,
             status=DocumentProcessingStatus.PENDING_ORGANIZATION,
