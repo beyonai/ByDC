@@ -693,7 +693,13 @@ class ObjectInstanceDiscoveryMixin:
             if not term_id:
                 continue
             detail = self.get_term_detail(base_id, library_id=base_id, term_id=term_id)
-            tags = (detail or {}).get("term_tags") or {}
+            if detail is None:
+                continue
+            # 兼容 dict（mock/适配器）与 TermDetail dataclass（真实后端）
+            if isinstance(detail, dict):
+                tags = detail.get("term_tags") or {}
+            else:
+                tags = getattr(detail, "term_tags", None) or {}
             co = tags.get("co_occurrence") or {}
             if isinstance(co, dict):
                 partner_sets.append(
