@@ -231,10 +231,20 @@ class ObjectInstanceDiscoveryMixin:
                 alias_targets=alias_targets,
             )
         )
-        # 共现存储：同文档实例两两 +1（含同义归并 canonical 伙伴集）
+        # 共现存储：同文档实例两两 +1（含同义归并 canonical 伙伴集）；
+        # 使用过滤前全量 items——AUTO_DISCOVERED 兜底实例仍参与共现（词表飞轮）
         self._update_document_co_occurrence(
             base_id, [h.instance_id for h in items] + alias_targets
         )
+        # 返回结果过滤（业务语义）：
+        # 1) AUTO_DISCOVERED 兜底类型实例仍入库（词表飞轮/共现用），但不作为发现结果返回；
+        # 2) 输入实例自身不返回（如 object_codes 含 Document 时 LLM 抽出文档名锚定回输入实例）。
+        items = [
+            hit
+            for hit in items
+            if hit.object_code != _AUTO_DISCOVERED_CODE
+            and hit.instance_id != instance_id
+        ]
         return ObjectInstanceDiscoveryResult(items=items)
 
     def _vocabulary_words(

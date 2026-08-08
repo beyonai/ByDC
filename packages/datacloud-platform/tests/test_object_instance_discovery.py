@@ -1982,11 +1982,8 @@ class TestAutoDiscoveredCreateChannel:
             instance_id="term-input",
             object_codes=["by_opportunity"],
         )
-        assert [h.instance_name for h in result.items] == ["新品类X"]
-        hit = result.items[0]
-        assert hit.instance_id == "term-ad-1"
-        assert hit.object_code == "AUTO_DISCOVERED"
-        assert hit.is_new is True
+        # AUTO_DISCOVERED 兜底类型实例不入发现结果（仍入库：词表飞轮/共现用）
+        assert result.items == []
         assert len(created_terms) == 1
         assert created_terms[0]["ext_attrs"]["raw_type"] == "未知业务对象"
         assert created_terms[0]["labels"]["dc_status"] == "待整理"
@@ -1999,6 +1996,121 @@ class TestAutoDiscoveredCreateChannel:
                 "relationCategory": "BUSINESS",
             }
         ]
+
+    @pytest.mark.asyncio
+    async def test_full_flow_filters_auto_discovered_out_of_result(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """主流程：AUTO_DISCOVERED 兜底实例仍入库（词表飞轮/共现用），但不作为发现结果返回。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+
+        async def fake_new_instances(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+        monkeypatch.setattr(
+            platform, "_discover_new_object_instances", fake_new_instances
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: discovery_module._AnchorResult(
+                existing=[_term_row("t-existing", "张三")],
+                ambiguity=[],
+                synonym=[],
+                unanchored=[
+                    {
+                        "term_name": "新品类X",
+                        "object_code": "AUTO_DISCOVERED",
+                        "raw_type": "未知业务对象",
+                        "evidence": None,
+                    }
+                ],
+            ),
+        )
+        created_terms: list[dict[str, Any]] = []
+        monkeypatch.setattr(
+            platform,
+            "create_term",
+            lambda base_id, *, term: (
+                created_terms.append(term),
+                {
+                    "created": 1,
+                    "updated": 0,
+                    "skipped": 0,
+                    "term_ids": ["term-ad-1"],
+                    "errors": [],
+                },
+            )[1],
+        )
+        monkeypatch.setattr(
+            platform,
+            "create_term_knowledge",
+            lambda base_id, *, knowledge: {"knowledgeId": "k1"},
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+        )
+        # 发现结果不含 AUTO_DISCOVERED 兜底实例（正常实例照常返回）
+        assert [h.instance_id for h in result.items] == ["t-existing"]
+        # 但仍入库：直写创建（词表飞轮）+ 提及关系
+        assert len(created_terms) == 1
+        assert created_terms[0]["term_type_code"] == "AUTO_DISCOVERED"
+        assert created_terms[0]["ext_attrs"]["raw_type"] == "未知业务对象"
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "term-ad-1",
+                "relationName": "提及",
+                "relationCategory": "BUSINESS",
+            }
+        ]
+        # 共现仍计入 AUTO_DISCOVERED 实例（过滤只影响返回，不影响入库副作用）
+        co_ids = {
+            c[1]["term_id"]
+            for c in platform.calls
+            if c[0] == "update_term_co_occurrence"
+        }
+        assert "term-ad-1" in co_ids
+        assert "t-existing" in co_ids
+
+    @pytest.mark.asyncio
+    async def test_full_flow_filters_source_instance_itself(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """主流程：锚定回输入实例自身（instance_id == 输入 term）的条目不作为发现结果返回。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+
+        async def fake_new_instances(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+        monkeypatch.setattr(
+            platform, "_discover_new_object_instances", fake_new_instances
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: discovery_module._AnchorResult(
+                existing=[
+                    # 输入实例自身（如 object_codes 含 Document 时 LLM 抽出文档名锚定回输入）
+                    _term_row("term-input", "业务本体", "Document"),
+                    _term_row("t-existing", "张三"),
+                ],
+                ambiguity=[],
+                synonym=[],
+                unanchored=[],
+            ),
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity", "Document"],
+        )
+        # 输入实例自身被过滤，其余正常返回
+        assert [h.instance_id for h in result.items] == ["t-existing"]
 
 
 # ============================================================================
