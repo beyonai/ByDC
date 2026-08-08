@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -3238,17 +3238,52 @@ class _TermReader(_ReaderBase):
 
         return ranked, scores
 
+    @staticmethod
+    def _json_col_to_dict(value: Any) -> dict[str, Any]:
+        """jsonb 列 → dict 的防御性转换。
+
+        psycopg 驱动对 OpenGauss jsonb 列返回 dict；sqlite（测试/其他驱动）
+        对 TEXT 列返回 str。统一转换为 dict，避免 ``dict(str)`` 抛 ValueError
+        导致整条查询静默回退 ``[]``。生产 OpenGauss 路径行为不变。
+        """
+        if not value:
+            return {}
+        if isinstance(value, Mapping):
+            return dict(value)
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (ValueError, TypeError):
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
     def query_terms_by_labels(
         self,
         *,
-        label_filters: list[LabelFilter],
+        label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "or",
         term_type_codes: list[str] | None = None,
+        kb_ids: list[str] | None = None,
+        kb_resource_ids: list[str] | None = None,
+        kb_file_paths: list[str] | None = None,
         top_k: int = 200,
     ) -> list[TermItem]:
         """纯标签过滤检索 — 不需要关键词。
 
-        SQL: WHERE term_tags->>'key' = 'value' [OR/AND ...] [+ term_type_code IN (...)]
+        SQL: WHERE <label 组> AND term_type_code IN (...) AND
+                  ext_attrs->>'kb_id' IN (...) AND
+                  ext_attrs->>'kb_resource_id' IN (...) AND
+                  term_tags->>'kb_file_path' IN (...)
+              LIMIT :_lbl_limit
+
+        空值契约（§2.2 两级）：
+          - label_filters: None / []（或全部条目无效）→ 跳过该维度（B1 行为变更）；
+          - term_type_codes / kb_ids / kb_resource_ids / kb_file_paths:
+              None = 忽略，[] = 全滤（return []，禁止生成 IN ()）；
+          - 所有维度均未生效 → return []（防无过滤全表 LIMIT 查询）。
+
+        LIMIT 截断发生在全部 WHERE 过滤之后（截断点后移，修复「过滤前截断」）。
         不做 BM25/jieba/vector 子查询，直接 label_filter 作为 WHERE 条件。
         """
         canonical_types: list[str] | None = None
@@ -3257,9 +3292,12 @@ class _TermReader(_ReaderBase):
 
         try:
             with self._get_session() as session:
+                where_parts: list[str] = []
+                params: dict[str, Any] = {}
+
+                # label 组（§3.2 跳过规则：None/[]/全部条目无效 → 不生成片段）
                 label_parts: list[str] = []
-                label_params: dict[str, Any] = {}
-                for i, lf in enumerate(label_filters):
+                for i, lf in enumerate(label_filters or []):
                     if isinstance(lf, dict):
                         key = str(lf.get("field_code", ""))
                         fv = lf.get("filter_value")
@@ -3269,42 +3307,64 @@ class _TermReader(_ReaderBase):
                     if key and fv is not None:
                         pname = f"_lbl_{i}"
                         label_parts.append(f"t.term_tags->>'{key}' = :{pname}")
-                        label_params[pname] = str(fv)
+                        params[pname] = str(fv)
+                if label_parts:
+                    where_parts.append(
+                        " AND ".join(label_parts)
+                        if label_condition == "and"
+                        else f"({' OR '.join(label_parts)})"
+                    )
 
-                if not label_parts:
-                    return []
-
-                where = (
-                    " AND ".join(label_parts)
-                    if label_condition == "and"
-                    else f"({' OR '.join(label_parts)})"
-                )
-
-                term_type_where = ""
-                if canonical_types is not None:
+                # term_type_codes（None=忽略，[]=全滤）—— 值经 _normalize_type_code 归一化
+                if term_type_codes is not None:
                     if not canonical_types:
                         return []
-                    placeholders = ", ".join(f":_lbl_tt_{i}" for i in range(len(canonical_types)))
-                    term_type_where = f"AND t.term_type_code IN ({placeholders})"
+                    placeholders = ", ".join(
+                        f":_lbl_tt_{i}" for i in range(len(canonical_types))
+                    )
+                    where_parts.append(f"t.term_type_code IN ({placeholders})")
                     for i, tc in enumerate(canonical_types):
-                        label_params[f"_lbl_tt_{i}"] = tc
+                        params[f"_lbl_tt_{i}"] = tc
+
+                # kb 三键（None=忽略，[]=全滤；原始字符串 ID，不做归一化）
+                # 片段固定顺序 §3.1：kb_id → kb_resource_id → kb_file_path
+                for dim, prefix, column in (
+                    (kb_ids, "_kbid_", "t.ext_attrs->>'kb_id'"),
+                    (kb_resource_ids, "_kbrid_", "t.ext_attrs->>'kb_resource_id'"),
+                    (kb_file_paths, "_kbp_", "t.term_tags->>'kb_file_path'"),
+                ):
+                    if dim is not None:
+                        if not dim:
+                            return []
+                        placeholders = ", ".join(
+                            f":{prefix}{i}" for i in range(len(dim))
+                        )
+                        where_parts.append(f"{column} IN ({placeholders})")
+                        for i, v in enumerate(dim):
+                            params[f"{prefix}{i}"] = str(v)
+
+                # 全维度空守卫（§4.2）：无任何 WHERE 片段 → 直接 return []，不执行无过滤查询
+                if not where_parts:
+                    return []
+
+                where = " AND ".join(where_parts)
 
                 sql = f"""
                     SELECT t.term_id, t.term_code, t.term_name, t.term_type_code,
                            t.library_id, t.term_tags, t.ext_attrs, t.desc_summary,
                            t.created_time, t.updated_time
                     FROM term t
-                    WHERE {where} {term_type_where}
+                    WHERE {where}
                     LIMIT :_lbl_limit
                 """
-                label_params["_lbl_limit"] = top_k
+                params["_lbl_limit"] = top_k
 
-                rows = session.execute(text(sql), label_params).all()
+                rows = session.execute(text(sql), params).all()
 
                 results: list[dict[str, Any]] = []
                 for r in rows:
-                    tt = dict(r[5]) if r[5] else {}
-                    ea = dict(r[6]) if r[6] else {}
+                    tt = self._json_col_to_dict(r[5])
+                    ea = self._json_col_to_dict(r[6])
                     results.append(
                         {
                             "term_id": str(r[0]),

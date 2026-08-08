@@ -512,9 +512,12 @@ class TermReader(Protocol):
     def query_terms_by_labels(
         self,
         *,
-        label_filters: list[LabelFilter],
+        label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "or",
         term_type_codes: list[str] | None = None,
+        kb_ids: list[str] | None = None,
+        kb_resource_ids: list[str] | None = None,
+        kb_file_paths: list[str] | None = None,
         top_k: int = 200,
     ) -> list[TermItem]:
         """按标签过滤术语，不需要关键词。"""
