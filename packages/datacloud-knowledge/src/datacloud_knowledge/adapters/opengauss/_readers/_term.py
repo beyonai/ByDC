@@ -2518,11 +2518,34 @@ class _TermReader(_ReaderBase):
                         term_type_codes=canonical_types,
                     )
 
+                # ── Phase 3.5: Exact batch (UNION ALL) ──────────────
+                # query_type="exact"：term_name.name_text / term.term_code
+                # 精确命中即结果（无 RRF 需要），per-kw 直接分发。
+                exact_by_kw: dict[int, list[tuple[str, str, str, str, str]]] = {}
+                if effective_type == "exact":
+                    exact_by_kw = self._exact_batch_union(
+                        session,
+                        keywords_map=dict(active),
+                        top_k=top_k + offset,
+                        term_type_codes=canonical_types,
+                    )
+
                 # ── Phase 4: Per-keyword RRF fuse ────────────────
                 all_candidate_ids: set[str] = set()
                 kw_score_maps: dict[int, dict[str, float]] = {}
 
                 for i, _kw in active:
+                    # exact 分支：精确命中直接作为结果，跳过 RRF 融合
+                    if effective_type == "exact":
+                        hits = exact_by_kw.get(i, [])
+                        if not hits:
+                            results[i] = QueryResult(total=0, items=[])
+                            continue
+                        candidate_ids = {c[0] for c in hits}
+                        all_candidate_ids.update(candidate_ids)
+                        kw_score_maps[i] = dict.fromkeys(candidate_ids, 1.0)
+                        continue
+
                     ranked_lists: list[list[tuple[str, str, str, str, str]]] = []
                     if i in bm25_by_kw:
                         ranked_lists.append(bm25_by_kw[i])
@@ -2891,6 +2914,77 @@ class _TermReader(_ReaderBase):
         return EnumeratedObjectInstances(items=items, total=total)
 
     # ── Batch SQL helpers ─────────────────────────────────────────────
+
+    @staticmethod
+    def _exact_batch_union(
+        session: Any,
+        *,
+        keywords_map: dict[int, str],
+        top_k: int,
+        term_type_codes: list[str] | None = None,
+    ) -> dict[int, list[tuple[str, str, str, str, str]]]:
+        """Run exact-match search for multiple keywords via UNION ALL.
+
+        每 kw 一段，``term_name.name_text = kw OR term.term_code = kw`` 精确
+        匹配（term_name 表参与 JOIN，别名行同样命中；kw 先 strip 与单条
+        ``query_terms(exact)`` 语义一致；不 ilike、不 BM25、不 jieba）。
+        ``term_type_codes`` 作为 IN 过滤推入每段 SQL。
+
+        Returns ``{kw_idx: [(term_id, term_name, name_id, term_type_code, term_code)]}``。
+        """
+        # Build term_type_codes IN clause
+        term_type_where = ""
+        if term_type_codes is not None:
+            if not term_type_codes:
+                return {}
+            placeholders = ", ".join(f":_exact_tt_{i}" for i in range(len(term_type_codes)))
+            term_type_where = f"AND t.term_type_code IN ({placeholders})"
+
+        subqueries: list[str] = []
+        params: dict[str, Any] = {}
+        if term_type_codes is not None:
+            for i, tc in enumerate(term_type_codes):
+                params[f"_exact_tt_{i}"] = tc
+        for idx, kw in keywords_map.items():
+            k = kw.strip()
+            if not k:
+                continue
+            # 每段用 FROM (子查询) 包裹 LIMIT：OpenGauss 与 sqlite 双兼容
+            # （sqlite 不支持 "(SELECT .. LIMIT n) UNION ALL (..)" 或
+            #  "SELECT .. LIMIT n UNION ALL .." 两种写法）。
+            subqueries.append(
+                f"SELECT kw_label, term_id, name_text, name_id, "
+                f"term_type_code, term_code "
+                f"FROM ("
+                f"SELECT CAST(:kw_{idx} AS text) AS kw_label, "
+                f"tn.term_id, tn.name_text, tn.name_id, t.term_type_code, "
+                f"t.term_code "
+                f"FROM term_name tn "
+                f"JOIN term t ON t.term_id = tn.term_id "
+                f"WHERE (tn.name_text = :ex_{idx} OR t.term_code = :ec_{idx}) "
+                f"{term_type_where} "
+                f"ORDER BY t.updated_time DESC "
+                f"LIMIT {int(top_k)}"
+                f")"
+            )
+            params[f"kw_{idx}"] = f"kw_{idx}"
+            params[f"ex_{idx}"] = k
+            params[f"ec_{idx}"] = k
+
+        if not subqueries:
+            return {}
+
+        sql = text(" UNION ALL ".join(subqueries))
+        rows = session.execute(sql, params).fetchall()
+
+        grouped: dict[int, list[tuple[str, str, str, str, str]]] = {}
+        for row in rows:
+            kw_label, term_id, term_name, name_id, tt, tc = row
+            kw_idx = int(kw_label.split("_", 1)[1])
+            grouped.setdefault(kw_idx, []).append(
+                (str(term_id), str(term_name), str(name_id), str(tt), str(tc or ""))
+            )
+        return grouped
 
     @staticmethod
     def _bm25_batch_union(
