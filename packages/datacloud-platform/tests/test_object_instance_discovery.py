@@ -1673,7 +1673,11 @@ class TestDiscoverNewObjectInstances:
     async def test_uses_build_llm_singleton_pattern(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """LLM 经 build_llm()（temp=0 由环境默认）+ stream_invoke_with_thinking。"""
+        """LLM 经 build_llm(thinking=False, temperature=0.0) + stream_invoke_with_thinking。
+
+        发现链路显式禁用思考链并固定零温度（抽取/裁决均为结构化 JSON 输出，
+        无需思考链；temp=0 对齐 spec D-1 确定性要求）。
+        """
         platform = _FakePlatform()
         built: list[Any] = []
         invoked: list[Any] = []
@@ -1688,7 +1692,7 @@ class TestDiscoverNewObjectInstances:
         monkeypatch.setattr(
             discovery_module,
             "build_llm",
-            lambda: (built.append(_FakeLlm()), _FakeLlm())[1],
+            lambda **kwargs: (built.append((_FakeLlm(), kwargs)), _FakeLlm())[1],
         )
         monkeypatch.setattr(
             discovery_module,
@@ -1709,6 +1713,7 @@ class TestDiscoverNewObjectInstances:
         )
         assert mentions == []
         assert len(built) == 1
+        assert built[0][1] == {"thinking": False, "temperature": 0.0}
         assert len(invoked) == 1
         assert invoked[0][2] is None  # on_event=None（无流式回调）
 

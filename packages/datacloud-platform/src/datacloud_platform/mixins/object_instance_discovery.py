@@ -1418,7 +1418,9 @@ def _truncate_content(content: str, max_chars: int) -> str:
 def _extract_llm_sync(messages: list[dict[str, str]]) -> Any:
     """同步调用 LLM 抽取（移出事件循环线程执行）。
 
-    ``build_llm`` 默认 temp=0（环境变量 DATACLOUD_LLM_TEMPERATURE 默认 0.0），
+    显式传参：thinking=False（抽取输出严格 JSON 结构化数组，无需思考链，
+    禁用可显著缩短响应时间）；temperature=0.0（固定零温度保证结果确定性，
+    对齐 spec D-1，避免环境温度漂移影响抽取质量）。
     ``stream_invoke_with_thinking`` 在无回调时等价 ``invoke``（返回累积 AIMessage）。
 
     Args:
@@ -1427,7 +1429,7 @@ def _extract_llm_sync(messages: list[dict[str, str]]) -> Any:
     Returns:
         累积 AIMessage（含 content）。
     """
-    llm = build_llm()
+    llm = build_llm(thinking=False, temperature=0.0)
     return stream_invoke_with_thinking(llm, messages, on_event=None)
 
 
@@ -1511,8 +1513,19 @@ def _normalize_extracted_mentions(
 
 
 def _judge_llm_sync(messages: list[dict[str, str]]) -> Any:
-    """同步调用裁决 LLM（移出事件循环线程执行，temp=0 环境默认）。"""
-    llm = build_llm()
+    """同步调用裁决 LLM（移出事件循环线程执行）。
+
+    显式传参：thinking=False（裁决为单次判定，输出严格 JSON 对象，
+    禁用思考链保持快速响应）；temperature=0.0（一票判定需确定性，
+    固定零温度避免环境温度漂移引入不一致）。
+
+    Args:
+        messages: prompt 消息列表。
+
+    Returns:
+        累积 AIMessage（含 content）。
+    """
+    llm = build_llm(thinking=False, temperature=0.0)
     return stream_invoke_with_thinking(llm, messages, on_event=None)
 
 
