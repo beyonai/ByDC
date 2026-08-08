@@ -1500,6 +1500,57 @@ class TestDiscoverNewObjectInstances:
         ]
 
     @pytest.mark.asyncio
+    async def test_type_enumeration_object_row_preferred_over_placeholder_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """get_term_type 命中但 type_name 是英文 code 占位（import 自动建行）
+        → 视为失真，回退对象术语行中文名（对象行比 term_type 占位更准）。"""
+        platform = _FakePlatform()
+        captured: dict[str, Any] = {}
+        exact_calls: list[dict[str, Any]] = []
+
+        async def fake_invoke(messages: list[dict[str, str]]) -> Any:
+            captured["messages"] = messages
+            return _AiMessage("[]")
+
+        def fake_search_terms_exact(base_id: str, **kwargs: Any) -> dict[str, Any]:
+            exact_calls.append({"base_id": base_id, **kwargs})
+            return {
+                "data": [
+                    {
+                        "term_code": "Concept",
+                        "term_name": "概念",
+                        "term_type_code": "object",
+                    }
+                ],
+                "totalCount": 1,
+            }
+
+        monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
+        monkeypatch.setattr(
+            platform,
+            "get_term_type",
+            lambda base_id, *, library_id, type_code: {"type_name": "Concept"},
+        )
+        monkeypatch.setattr(platform, "search_terms_exact", fake_search_terms_exact)
+        monkeypatch.setattr(
+            platform, "batch_create_vocabulary", lambda base_id, *, words: None
+        )
+        await platform._discover_new_object_instances(
+            BASE_ID, content="正文", object_codes=["Concept"]
+        )
+        system = next(m for m in captured["messages"] if m["role"] == "system")
+        assert "Concept=概念" in system["content"]
+        assert exact_calls == [
+            {
+                "base_id": BASE_ID,
+                "term_type_code": "object",
+                "keyword": "Concept",
+                "limit": 1,
+            }
+        ]
+
+    @pytest.mark.asyncio
     async def test_truncates_long_content_to_16k(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

@@ -959,11 +959,13 @@ class ObjectInstanceDiscoveryMixin:
         """类型枚举：object_codes 经 get_term_type 取中文名（library 域限定）。
 
         回退链：
-        1. ``get_term_type``（term_type 表）命中 → 用 type_name；
-        2. 缺行 → 按 term_code 精确查 term 表对象行（``search_terms_exact``，
+        1. ``get_term_type``（term_type 表）命中且 type_name 可信 → 用 type_name；
+           type_name 为空或与 type_code 相同（import 自动建行的英文 code 占位，
+           非真实中文名）→ 视为失真，不采用；
+        2. 失真/缺行 → 按 term_code 精确查 term 表对象行（``search_terms_exact``，
            term_type_code="object"，即 ``_sync_entity_terms`` 自动同步的
            term_code=对象 code / term_name=中文名 行）取 term_name——
-           对象行中文名比 term_type 缺省更准（如 "医疗文书" vs Concept）；
+           对象行中文名比 term_type 占位更准（如 "医疗文书" vs Concept）；
         3. 仍无 → 回退原始 code + 日志。
 
         Args:
@@ -984,7 +986,9 @@ class ObjectInstanceDiscoveryMixin:
                 or (type_row or {}).get("typeName")
                 or ""
             ).strip()
-            if not name:
+            if not name or name == code_str:
+                # type_name 为空，或为英文 code 占位（import 自动建行）→ 失真，
+                # 回退对象术语行中文名（对象行比 term_type 占位更准）
                 name = self._object_term_name(base_id, code_str)
             if not name:
                 name = code_str
