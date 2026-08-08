@@ -383,13 +383,20 @@ class _TermWriter(_WriterBase):
         )
 
     def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
-        """更新 term_tags.co_occurrence（计数版伙伴集合，JSONB 原地合并，T11）。
+        """更新 term_tags.co_occurrence（计数版伙伴集合，T11）。
 
         独立新写路径（D-7，Spec §8）：
-        - 已存在伙伴 key 计数累加（UNION ALL + SUM，非 ``||`` 覆盖）
-        - 新伙伴 key 插入
+        - 已存在伙伴 key 计数累加、新伙伴 key 插入
         - Top-50 固定上限：合并后按 count 降序取前 50（自然衰减近似）
-        - 单条 UPDATE 原子执行（PostgreSQL 行级原子，无读改写竞态）
+        - 读改写 + SELECT ... FOR UPDATE 行级锁（Spec 备选方案）
+
+        **待验证点 1 取舍**（T11）：首选 (b) 原地拼接 ``jsonb_object_agg`` /
+        ``jsonb || jsonb`` 在 OpenGauss 2.x **不存在**（实测
+        ``jsonb_object_agg(text, numeric) does not exist``、``operator does
+        not exist: jsonb || jsonb``），故采用备选读改写 + FOR UPDATE：
+        - SELECT term_tags FOR UPDATE 锁行（行级原子，无并发读改写竞态）
+        - Python 合并（计数累加 + Top-50 裁剪）
+        - UPDATE 整体写回（保留 term_tags 其他 key，如 kb 元数据）
 
         **禁止经 update_term**：其 ext_attrs 分支把 ext_attrs 拼入
         desc_summary（"OpenGauss 无独立 ext_attrs 列"的遗留怪癖）、term_tags
@@ -401,21 +408,29 @@ class _TermWriter(_WriterBase):
         """
         if not patch:
             return
+        row = self.session.execute(
+            text("SELECT term_tags FROM term WHERE term_id = :term_id FOR UPDATE"),
+            {"term_id": term_id},
+        ).fetchone()
+        tags = dict(row[0]) if row is not None and row[0] else {}
+        if not isinstance(tags, dict):
+            tags = {}
+        co = tags.get("co_occurrence")
+        if not isinstance(co, dict):
+            co = {}
+        merged: dict[str, int] = {}
+        for key, value in co.items():
+            try:
+                merged[str(key)] = int(value)
+            except (TypeError, ValueError):
+                continue
+        for key, value in patch.items():
+            merged[str(key)] = merged.get(str(key), 0) + int(value)
+        top50 = dict(sorted(merged.items(), key=lambda item: (-item[1], item[0]))[:50])
+        tags["co_occurrence"] = top50
         self.session.execute(
-            text(
-                "UPDATE term SET term_tags = ("
-                "  SELECT jsonb_object_agg(t.key, t.value) FROM ("
-                "    SELECT key, value FROM ("
-                "      SELECT key, SUM((value::text)::bigint) AS value FROM ("
-                "        SELECT key, value FROM jsonb_each(COALESCE(term_tags, '{}'::jsonb))"
-                "        UNION ALL"
-                "        SELECT key, value FROM jsonb_each(CAST(:patch AS jsonb))"
-                "      ) pairs GROUP BY key"
-                "    ) summed ORDER BY value DESC, key LIMIT 50"
-                "  ) t"
-                ") WHERE term_id = :term_id"
-            ),
-            {"term_id": term_id, "patch": json.dumps(patch)},
+            text("UPDATE term SET term_tags = :tags WHERE term_id = :term_id"),
+            {"term_id": term_id, "tags": json.dumps(tags, ensure_ascii=False)},
         )
 
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
