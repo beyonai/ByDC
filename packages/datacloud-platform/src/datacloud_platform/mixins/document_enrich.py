@@ -17,7 +17,7 @@ from datacloud_knowledge.intent.llm_utils import (
     build_llm,
     stream_invoke_with_thinking,
 )
-from yaml import YAMLError, safe_load
+from yaml import YAMLError, safe_dump, safe_load
 
 from datacloud_platform.backends.document_library import DocumentLibraryError
 from datacloud_platform.models.document import (
@@ -137,8 +137,7 @@ _SYSTEM_PROMPT = """\
    原文或补充素材标签，不得自行生成 term_id。
 9. 关系区块每行的唯一合法格式是
    `(关系名称)[对象类型/对象实例](term_id)`；关系名称和目标对象类型必须符合
-   对象定义列出的允许关系，目标实例必须在正文中被引用，不得增加、反向、
-   修改 term_id 或添加项目符号。
+   对象定义列出的允许关系，不得增加、反向、修改 term_id 或添加项目符号。
 10. 原文是事实基线，只使用原文和补充素材中可验证的信息，不编造事实、
    数值、属性或关系；没有依据时宁可不补充。
 11. `[对象类型/对象实例](term_id)` 是素材来源标签，也是正文引用已知实例时
@@ -202,6 +201,13 @@ class _Evidence:
 class _NormalizedEnrichedOutput:
     content: str
     relations: tuple[DocumentEnrichRelation, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _EntityReference:
+    term_id: str
+    object_code: str | None
+    object_code_is_ambiguous: bool = False
 
 
 class DocumentEnrichMixin:
@@ -447,9 +453,10 @@ class DocumentEnrichMixin:
                 object_code=normalized_object_code,
                 object_names=object_names,
             )
-            reference_term_ids = _build_reference_term_ids(
+            entity_references = _build_entity_references(
                 target_label=original_label,
                 target_term_id=normalized_term_id,
+                target_object_code=normalized_object_code,
                 instance_relations=relations.items,
                 fragments=fragments.items,
                 object_names=object_names,
@@ -463,7 +470,7 @@ class DocumentEnrichMixin:
                 document_template=document_template,
                 property_codes=property_codes,
                 allowed_relation_types=allowed_relation_types,
-                reference_term_ids=reference_term_ids,
+                entity_references=entity_references,
                 uses_generic_template=uses_generic_template,
                 document_template_guidance=(raw_document_template or document_template),
             )
@@ -526,7 +533,7 @@ class DocumentEnrichMixin:
                 property_codes=property_codes,
                 document_template=document_template,
                 allowed_relation_types=allowed_relation_types,
-                reference_term_ids=reference_term_ids,
+                entity_references=entity_references,
             )
             _log_enrich_stage(
                 stage=current_stage,
@@ -907,14 +914,7 @@ def _fragment_label(
     object_names: Mapping[str, str],
 ) -> str:
     metadata = fragment.metadata
-    object_code = str(
-        fragment.object_code
-        or metadata.get("termTypeCode")
-        or metadata.get("term_type_code")
-        or metadata.get("objectCode")
-        or metadata.get("object_code")
-        or ""
-    )
+    object_code = _fragment_object_code(fragment) or ""
     object_name = str(
         metadata.get("objectName")
         or metadata.get("object_name")
@@ -942,6 +942,19 @@ def _fragment_label(
 
 def _entity_reference(object_name: str, instance_name: str, term_id: str) -> str:
     return f"[{object_name}/{instance_name}]({term_id})"
+
+
+def _fragment_object_code(fragment: DocumentFragmentItem) -> str | None:
+    metadata = fragment.metadata
+    object_code = str(
+        fragment.object_code
+        or metadata.get("termTypeCode")
+        or metadata.get("term_type_code")
+        or metadata.get("objectCode")
+        or metadata.get("object_code")
+        or ""
+    ).strip()
+    return object_code or None
 
 
 def _bounded_evidence(evidence: Sequence[_Evidence], max_chars: int) -> list[_Evidence]:
@@ -1168,18 +1181,22 @@ def _build_allowed_relation_types(
     return tuple(allowed_relations)
 
 
-def _build_reference_term_ids(
+def _build_entity_references(
     *,
     target_label: str,
     target_term_id: str,
+    target_object_code: str,
     instance_relations: Sequence[RelatedDocumentRelationItem],
     fragments: Sequence[DocumentFragmentItem],
     object_names: Mapping[str, str],
-) -> dict[str, str]:
-    references: dict[str, str] = {}
+) -> dict[str, _EntityReference]:
+    references: dict[str, _EntityReference] = {}
     target_match = _MARKDOWN_ENTITY_LINK_PATTERN.fullmatch(target_label)
     if target_match is not None:
-        references[target_match.group("label")] = target_term_id
+        references[target_match.group("label")] = _EntityReference(
+            term_id=target_term_id,
+            object_code=target_object_code or None,
+        )
 
     for relation in instance_relations:
         for term in (relation.source, relation.target):
@@ -1187,10 +1204,11 @@ def _build_reference_term_ids(
                 term.term_type_code,
                 term.term_type_code or "未知对象",
             )
-            _add_reference_term_id(
+            _add_entity_reference(
                 references,
                 label=f"{object_name}/{term.term_name or term.term_id}",
                 term_id=term.term_id,
+                object_code=term.term_type_code or None,
             )
 
     for fragment in fragments:
@@ -1205,31 +1223,66 @@ def _build_reference_term_ids(
         label = _fragment_label(fragment, {}, object_names)
         match = _MARKDOWN_ENTITY_LINK_PATTERN.fullmatch(label)
         if match is not None:
-            _add_reference_term_id(
+            _add_entity_reference(
                 references,
                 label=match.group("label"),
                 term_id=term_id,
+                object_code=_fragment_object_code(fragment),
             )
-    return {label: value for label, value in references.items() if value}
+    return {
+        label: reference for label, reference in references.items() if reference.term_id
+    }
 
 
-def _add_reference_term_id(
-    references: dict[str, str],
+def _add_entity_reference(
+    references: dict[str, _EntityReference],
     *,
     label: str,
     term_id: str,
+    object_code: str | None,
 ) -> None:
     existing = references.get(label)
-    if existing is not None and existing != term_id:
+    normalized_object_code = object_code.strip() if object_code else None
+    if existing is None:
+        references[label] = _EntityReference(
+            term_id=term_id,
+            object_code=normalized_object_code,
+        )
+        return
+    if existing.term_id != term_id:
         logger.warning(
             "Ambiguous document entity reference ignored: label=%s term_ids=%s,%s",
             label,
-            existing,
+            existing.term_id,
             term_id,
         )
-        references[label] = ""
+        references[label] = _EntityReference(term_id="", object_code=None)
         return
-    references[label] = term_id
+    if existing.object_code_is_ambiguous:
+        return
+    if (
+        existing.object_code is not None
+        and normalized_object_code is not None
+        and existing.object_code != normalized_object_code
+    ):
+        logger.warning(
+            "Ambiguous document entity object code ignored: label=%s "
+            "object_codes=%s,%s",
+            label,
+            existing.object_code,
+            normalized_object_code,
+        )
+        references[label] = _EntityReference(
+            term_id=term_id,
+            object_code=None,
+            object_code_is_ambiguous=True,
+        )
+        return
+    if existing.object_code is None and normalized_object_code is not None:
+        references[label] = _EntityReference(
+            term_id=term_id,
+            object_code=normalized_object_code,
+        )
 
 
 def _build_messages(
@@ -1239,7 +1292,7 @@ def _build_messages(
     document_template: str,
     property_codes: Sequence[str],
     allowed_relation_types: Sequence[tuple[str, str]],
-    reference_term_ids: Mapping[str, str],
+    entity_references: Mapping[str, _EntityReference],
     uses_generic_template: bool,
     document_template_guidance: str,
 ) -> list[dict[str, str]]:
@@ -1256,7 +1309,8 @@ def _build_messages(
     )
     known_references = (
         "\n".join(
-            f"- [{label}]({term_id})" for label, term_id in reference_term_ids.items()
+            f"- [{label}]({reference.term_id})"
+            for label, reference in entity_references.items()
         )
         or "- 无"
     )
@@ -1285,7 +1339,7 @@ def _build_messages(
             "禁止省略括号内的 term_id，禁止虚构或修改 term_id：\n"
             f"{known_references}\n\n"
             "关系行格式严格为 `(关系名称)[对象类型/对象实例](term_id)`。"
-            "关系区块只填写正文能够明确表达的业务关系，关系名称必须根据正文语义"
+            "关系区块只填写素材能够明确表达的业务关系，关系名称必须根据素材语义"
             "从下列允许类型中选择：\n"
             f"{allowed_relations}\n\n"
             "## 对象定义中的完整 template（生成约束）\n"
@@ -1324,7 +1378,7 @@ def _normalize_enriched_output(
     property_codes: Sequence[str],
     document_template: str,
     allowed_relation_types: Sequence[tuple[str, str]],
-    reference_term_ids: Mapping[str, str],
+    entity_references: Mapping[str, _EntityReference],
 ) -> _NormalizedEnrichedOutput:
     front_matter_match = _FRONT_MATTER_PATTERN.fullmatch(content)
     if front_matter_match is None:
@@ -1335,15 +1389,10 @@ def _normalize_enriched_output(
     parsed_yaml: object = safe_load(yaml_text)
     if not isinstance(parsed_yaml, Mapping):
         raise ValueError("YAML front matter must be a mapping")
-    actual_keys = {str(key) for key in parsed_yaml}
-    expected_keys = set(property_codes)
-    if actual_keys != expected_keys:
-        missing = sorted(expected_keys - actual_keys)
-        unexpected = sorted(actual_keys - expected_keys)
-        raise ValueError(
-            "YAML front matter keys do not match object properties: "
-            f"missing={missing}, unexpected={unexpected}"
-        )
+    normalized_yaml_text = _normalize_yaml_front_matter(
+        parsed_yaml,
+        property_codes=property_codes,
+    )
 
     relation_match = _RELATION_SECTION_PATTERN.fullmatch(document_content)
     if relation_match is None:
@@ -1354,8 +1403,7 @@ def _normalize_enriched_output(
     if _RELATION_BOUNDARY in body:
         raise ValueError("LLM output contains multiple relation blocks")
 
-    body = _normalize_body_entity_references(body, reference_term_ids)
-    body_reference_labels = _body_entity_reference_labels(body)
+    body = _normalize_body_entity_references(body, entity_references)
     raw_relation_lines = relation_match.group("relations").strip()
     generated_relation_lines = (
         tuple(line.strip() for line in raw_relation_lines.splitlines())
@@ -1365,11 +1413,8 @@ def _normalize_enriched_output(
     actual_relation_lines = _normalize_relation_lines(
         generated_relation_lines,
         allowed_relation_types=allowed_relation_types,
-        reference_term_ids=reference_term_ids,
-        body_reference_labels=body_reference_labels,
+        entity_references=entity_references,
     )
-    if len(set(actual_relation_lines)) != len(actual_relation_lines):
-        raise ValueError("LLM output contains duplicate relation lines")
 
     if re.search(r"\{\{[^{}\n]+\}\}", body):
         raise ValueError("LLM output contains unreplaced template placeholders")
@@ -1385,6 +1430,12 @@ def _normalize_enriched_output(
     explicit_relations = tuple(
         DocumentEnrichRelation(
             relationName=match.group("relation_name"),
+            targetObjectCode=entity_references[
+                (
+                    f"{match.group('target_object_type')}/"
+                    f"{match.group('target_instance_name')}"
+                )
+            ].object_code,
             targetObjectType=match.group("target_object_type"),
             targetInstanceName=match.group("target_instance_name"),
             targetTermId=match.group("target_term_id"),
@@ -1393,86 +1444,127 @@ def _normalize_enriched_output(
         if (match := _RELATION_LINE_PATTERN.fullmatch(line)) is not None
     )
     relations = _deduplicate_relations(
-        (*explicit_relations, *_extract_body_mention_relations(body))
+        (
+            *explicit_relations,
+            *_extract_body_mention_relations(body, entity_references),
+        )
     )
     return _NormalizedEnrichedOutput(
-        content=f"---\n{yaml_text}\n---\n\n{body}",
+        content=f"---\n{normalized_yaml_text}\n---\n\n{body}",
         relations=relations,
     )
+
+
+def _normalize_yaml_front_matter(
+    parsed_yaml: Mapping[object, object],
+    *,
+    property_codes: Sequence[str],
+) -> str:
+    expected_keys = set(property_codes)
+    actual_keys = {str(key) for key in parsed_yaml}
+    missing = sorted(expected_keys - actual_keys)
+    unexpected = sorted(actual_keys - expected_keys)
+    if missing or unexpected:
+        logger.warning(
+            "Normalized LLM YAML front matter keys: missing=%s unexpected=%s",
+            missing,
+            unexpected,
+        )
+    normalized = {
+        property_code: parsed_yaml.get(property_code)
+        for property_code in property_codes
+    }
+    return str(
+        safe_dump(
+            normalized,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+    ).strip()
 
 
 def _normalize_relation_lines(
     relation_lines: Sequence[str],
     *,
     allowed_relation_types: Sequence[tuple[str, str]],
-    reference_term_ids: Mapping[str, str],
-    body_reference_labels: set[str],
+    entity_references: Mapping[str, _EntityReference],
 ) -> tuple[str, ...]:
-    normalized: list[str] = []
+    normalized: dict[str, None] = {}
     for line in relation_lines:
         match = _RELATION_LINE_PATTERN.fullmatch(line)
         if match is None:
-            raise ValueError(
-                "LLM output relation must use `(关系名称)[对象类型/对象实例](term_id)`"
+            logger.warning(
+                "Ignored malformed LLM relation line: line=%r expected_format=%s",
+                line,
+                "(关系名称)[对象类型/对象实例](term_id)",
             )
+            continue
         relation_type = (
             match.group("relation_name"),
             match.group("target_object_type"),
         )
         if relation_type not in allowed_relation_types:
-            raise ValueError(f"LLM output contains unknown outgoing relation: {line}")
+            logger.warning("Ignored unknown LLM outgoing relation: line=%r", line)
+            continue
         label = (
             f"{match.group('target_object_type')}/{match.group('target_instance_name')}"
         )
-        if label not in body_reference_labels:
-            raise ValueError(
-                f"LLM output relation target is not referenced in body: {label}"
+        reference = entity_references.get(label)
+        if reference is None:
+            logger.warning(
+                "Ignored LLM relation with unknown target: line=%r label=%r",
+                line,
+                label,
             )
-        term_id = reference_term_ids.get(label)
-        if term_id is None:
-            raise ValueError(f"LLM output relation target is unknown: {label}")
-        normalized.append(f"({match.group('relation_name')})[{label}]({term_id})")
+            continue
+        normalized[
+            f"({match.group('relation_name')})[{label}]({reference.term_id})"
+        ] = None
     return tuple(normalized)
 
 
 def _normalize_body_entity_references(
     body: str,
-    reference_term_ids: Mapping[str, str],
+    entity_references: Mapping[str, _EntityReference],
 ) -> str:
     def replace_reference(match: re.Match[str]) -> str:
         label = match.group("label")
-        term_id = reference_term_ids.get(label)
-        if term_id is None:
-            raise ValueError(f"LLM output contains unknown entity reference: {label}")
-        return f"[{label}]({term_id})"
+        reference = entity_references.get(label)
+        if reference is None:
+            logger.warning(
+                "Preserved unknown LLM entity reference without extracting relation: "
+                "reference=%r",
+                match.group(0),
+            )
+            return match.group(0)
+        return f"[{label}]({reference.term_id})"
 
     normalized = _MARKDOWN_ENTITY_LINK_PATTERN.sub(replace_reference, body)
     normalized = _LEGACY_ENTITY_REFERENCE_PATTERN.sub(replace_reference, normalized)
     return _BARE_ENTITY_REFERENCE_PATTERN.sub(replace_reference, normalized)
 
 
-def _body_entity_reference_labels(body: str) -> set[str]:
-    return {
-        match.group("label") for match in _MARKDOWN_ENTITY_LINK_PATTERN.finditer(body)
-    }
-
-
 def _extract_body_mention_relations(
     body: str,
+    entity_references: Mapping[str, _EntityReference],
 ) -> tuple[DocumentEnrichRelation, ...]:
     relations: list[DocumentEnrichRelation] = []
     for match in _MARKDOWN_ENTITY_LINK_PATTERN.finditer(body):
-        target_object_type, separator, target_instance_name = match.group(
-            "label"
-        ).partition("/")
+        label = match.group("label")
+        reference = entity_references.get(label)
+        if reference is None or match.group("term_id") != reference.term_id:
+            continue
+        target_object_type, separator, target_instance_name = label.partition("/")
         if not separator:
             continue
         relations.append(
             DocumentEnrichRelation(
                 relationName=_MENTION_RELATION_NAME,
+                targetObjectCode=reference.object_code,
                 targetObjectType=target_object_type,
                 targetInstanceName=target_instance_name,
-                targetTermId=match.group("term_id"),
+                targetTermId=reference.term_id,
             )
         )
     return tuple(relations)

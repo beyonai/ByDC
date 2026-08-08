@@ -136,10 +136,20 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         fail_generation: bool = False,
         use_generic_template: bool = False,
         invalid_output: bool = False,
+        invalid_yaml_keys: bool = False,
+        relation_target_not_in_body: bool = False,
+        invalid_relation_lines: bool = False,
+        unknown_body_reference: bool = False,
+        missing_reference_object_code: bool = False,
     ) -> None:
         self.fail_generation = fail_generation
         self.use_generic_template = use_generic_template
         self.invalid_output = invalid_output
+        self.invalid_yaml_keys = invalid_yaml_keys
+        self.relation_target_not_in_body = relation_target_not_in_body
+        self.invalid_relation_lines = invalid_relation_lines
+        self.unknown_body_reference = unknown_body_reference
+        self.missing_reference_object_code = missing_reference_object_code
         self.messages: list[dict[str, str]] = []
         self.loaded_term_ids: list[str] = []
         self.requested_object_codes: list[str] = []
@@ -259,6 +269,22 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                     filePath="/customers/acme.md",
                     chunkText="当前文档的语义命中也暂时保留。",
                     score=0.8,
+                ),
+                *(
+                    (
+                        DocumentFragmentItem(
+                            termId="term-without-object-code",
+                            termName="编码缺失实例",
+                            objectCode="",
+                            knCode="kb-1",
+                            filePath="/research/missing-code.md",
+                            chunkText="该片段没有返回对象编码。",
+                            score=0.75,
+                            metadata={"objectName": "研究对象"},
+                        ),
+                    )
+                    if missing_reference_object_code
+                    else ()
                 ),
             )
         )
@@ -387,17 +413,44 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                 "(协作)[合作伙伴/Alpha 合作伙伴]\n"
                 "<!--- relation --->"
             )
+        yaml_content = (
+            "relations:\n  supports: []"
+            if self.invalid_yaml_keys
+            else 'renewal_date: "2027-01-01"'
+        )
+        body_relation_content = (
+            "客户增长计划由 Alpha 合作伙伴扩展渠道。"
+            if self.relation_target_not_in_body
+            else (
+                "客户增长计划通过 "
+                "[合作伙伴/Alpha 合作伙伴](错误-id) 扩展渠道，"
+                "并由 [合作伙伴/Alpha 合作伙伴](term-partner-a) 联合交付。"
+            )
+        )
+        if self.unknown_body_reference:
+            body_relation_content += "\n\n接口说明见 [API/REST](https://example.com)。"
+        if self.missing_reference_object_code:
+            body_relation_content += (
+                "\n\n补充参考 [研究对象/编码缺失实例](term-without-object-code)。"
+            )
+        relation_content = "(协作)[合作伙伴/Alpha 合作伙伴]"
+        if self.invalid_relation_lines:
+            relation_content = (
+                "(协作)[合作伙伴/Alpha 合作伙伴]\n"
+                "(协作)[合作伙伴/Alpha 合作伙伴](错误-id)\n"
+                "(未知关系)[合作伙伴/Alpha 合作伙伴](term-partner-a)\n"
+                "这不是合法关系"
+            )
         return (
             "---\n"
-            'renewal_date: "2027-01-01"\n'
+            f"{yaml_content}\n"
             "---\n"
             "# 客户增长计划\n\n"
             "## 增长目标\n\n提升客户续约表现。\n\n"
             "## 执行策略\n\n"
-            "客户增长计划通过 [合作伙伴/Alpha 合作伙伴](错误-id) 扩展渠道，"
-            "并由 [合作伙伴/Alpha 合作伙伴](term-partner-a) 联合交付。\n\n"
+            f"{body_relation_content}\n\n"
             "<!--- relation --->\n"
-            "(协作)[合作伙伴/Alpha 合作伙伴]\n"
+            f"{relation_content}\n"
             "<!--- relation --->"
         )
 
@@ -430,10 +483,12 @@ async def test_enrich_uses_labelled_bounded_evidence_and_relation_fallback(
     assert "(协作)" not in result.enriched_content
     assert len(result.relations) == 2
     assert result.relations[0].relation_name == "协作"
+    assert result.relations[0].target_object_code == "partner"
     assert result.relations[0].target_object_type == "合作伙伴"
     assert result.relations[0].target_instance_name == "Alpha 合作伙伴"
     assert result.relations[0].target_term_id == "term-partner-a"
     assert result.relations[1].relation_name == "提及"
+    assert result.relations[1].target_object_code == "partner"
     assert result.relations[1].target_object_type == "合作伙伴"
     assert result.relations[1].target_instance_name == "Alpha 合作伙伴"
     assert result.relations[1].target_term_id == "term-partner-a"
@@ -568,6 +623,122 @@ async def test_enrich_uses_generic_template_when_object_template_is_missing() ->
         "## 通用文档格式模板（对象定义未提供 template）"
         in (platform.messages[1]["content"])
     )
+
+
+@pytest.mark.asyncio
+async def test_enrich_normalizes_missing_and_unexpected_yaml_keys() -> None:
+    platform = FakeDocumentEnrichPlatform(invalid_yaml_keys=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert result.enriched_content.startswith("---\nrenewal_date: null\n---")
+    assert "relations:" not in result.enriched_content
+
+
+@pytest.mark.asyncio
+async def test_enrich_accepts_relation_target_not_referenced_in_body() -> None:
+    platform = FakeDocumentEnrichPlatform(relation_target_not_in_body=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert len(result.relations) == 1
+    assert result.relations[0].relation_name == "协作"
+    assert result.relations[0].target_term_id == "term-partner-a"
+
+
+@pytest.mark.asyncio
+async def test_enrich_ignores_invalid_and_duplicate_relation_lines(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.WARNING,
+        logger="datacloud_platform.mixins.document_enrich",
+    )
+    platform = FakeDocumentEnrichPlatform(invalid_relation_lines=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert [
+        (relation.relation_name, relation.target_term_id)
+        for relation in result.relations
+    ] == [
+        ("协作", "term-partner-a"),
+        ("提及", "term-partner-a"),
+    ]
+    assert any(
+        "Ignored unknown LLM outgoing relation" in record.getMessage()
+        for record in caplog.records
+    )
+    assert any(
+        "Ignored malformed LLM relation line" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_enrich_preserves_unknown_body_reference_without_extracting_relation(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.WARNING,
+        logger="datacloud_platform.mixins.document_enrich",
+    )
+    platform = FakeDocumentEnrichPlatform(unknown_body_reference=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert "[API/REST](https://example.com)" in result.enriched_content
+    assert all(relation.target_instance_name != "REST" for relation in result.relations)
+    assert any(
+        "Preserved unknown LLM entity reference" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_enrich_returns_none_when_reference_object_code_is_unavailable() -> None:
+    platform = FakeDocumentEnrichPlatform(missing_reference_object_code=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    relation = next(
+        item
+        for item in result.relations
+        if item.target_term_id == "term-without-object-code"
+    )
+    assert relation.relation_name == "提及"
+    assert relation.target_object_code is None
+    assert relation.model_dump(by_alias=True)["targetObjectCode"] is None
 
 
 @pytest.mark.asyncio
