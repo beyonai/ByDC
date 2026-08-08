@@ -1105,6 +1105,10 @@ class ObjectInstanceDiscoveryMixin:
                 "sourceTermId": source_term_id,
                 "targetTermId": target_term_id,
                 "relationName": "提及",
+                # relationCategory 必填非空：opengauss 兼容模式下空字符串
+                # 被转为 NULL，违反 term_relation.relation_category NOT NULL；
+                # 提及属业务关系，按库中既有约定（ONTOLOGY/BUSINESS）取 BUSINESS。
+                "relationCategory": "BUSINESS",
             },
         )
         return True

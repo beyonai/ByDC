@@ -661,6 +661,7 @@ class TestEstablishMentionRelation:
                 "sourceTermId": "term-input",
                 "targetTermId": "term-new-1",
                 "relationName": "提及",
+                "relationCategory": "BUSINESS",
             }
         ]
 
@@ -705,6 +706,7 @@ class TestEstablishMentionRelation:
                 "sourceTermId": "term-input",
                 "targetTermId": "term-new-1",
                 "relationName": "提及",
+                "relationCategory": "BUSINESS",
             }
         ]
         relation_calls = [c for c in platform.calls if c[0] == "create_term_relation"]
@@ -1082,6 +1084,7 @@ class TestDiscoverOrchestration:
                 "sourceTermId": "term-input",
                 "targetTermId": "term-new-1",
                 "relationName": "提及",
+                "relationCategory": "BUSINESS",
             }
         ]
 
@@ -2008,6 +2011,7 @@ class TestAutoDiscoveredCreateChannel:
                 "sourceTermId": "term-input",
                 "targetTermId": "term-ad-1",
                 "relationName": "提及",
+                "relationCategory": "BUSINESS",
             }
         ]
 
