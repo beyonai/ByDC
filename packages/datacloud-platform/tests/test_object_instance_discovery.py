@@ -2173,6 +2173,88 @@ class TestAdjudication:
         assert discovery_module._cached_vocabulary is None
 
     @pytest.mark.asyncio
+    async def test_synonym_same_writes_alias_idempotent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """同义裁决重复归并同一别名（重复发现同一文档）：第二次写前查重命中 → 跳过，不抛错。"""
+        platform = _FakePlatform()
+        alias_writes: list[dict[str, Any]] = []
+
+        # 模拟真实后端：create_term_name 成功后，查重可读到该行
+        def fake_create_term_name(
+            base_id: str, *, name: dict[str, Any]
+        ) -> dict[str, Any]:
+            platform.name_rows.append(
+                {
+                    "name_id": "n-1",
+                    "term_id": name["termId"],
+                    "name_text": name["nameText"],
+                    "search_scope": {},
+                }
+            )
+            alias_writes.append(name)
+            return {"nameId": "n-1"}
+
+        monkeypatch.setattr(platform, "create_term_name", fake_create_term_name)
+
+        async def fake_judge(messages: list[dict[str, str]]) -> Any:
+            return _AiMessage('{"same": true, "canonical": "t1"}')
+
+        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        candidate = {"mention": "苹果公司", "term": _term_row("t1", "苹果")}
+        await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[candidate],
+            source_term_id="term-input",
+        )
+        await platform._adjudicate_candidates(
+            base_id=BASE_ID,
+            ambiguity=[],
+            synonym=[candidate],
+            source_term_id="term-input",
+        )
+        # 第二次写前查重命中 → create_term_name 仅写入一次
+        assert len(alias_writes) == 1
+
+    def test_write_alias_skips_when_name_already_exists(self) -> None:
+        """_write_alias 幂等：库中已有同 (term_id, name_text, 空 scope) 行 → 跳过写入。"""
+        platform = _FakePlatform()
+        platform.name_rows = [
+            {
+                "name_id": "n-1",
+                "term_id": "t1",
+                "name_text": "苹果公司",
+                "search_scope": {},
+            }
+        ]
+        platform._write_alias(base_id=BASE_ID, term_id="t1", name_text="苹果公司")
+        assert all(c[0] != "create_term_name" for c in platform.calls)
+
+    def test_write_alias_does_not_skip_different_name_or_scope(self) -> None:
+        """_write_alias 查重精确：不同 name 或带非空 scope 的已有行不拦截本次写入（约束三元组不一致）。"""
+        platform = _FakePlatform()
+        platform.name_rows = [
+            # 不同 name 不拦截
+            {
+                "name_id": "n-1",
+                "term_id": "t1",
+                "name_text": "苹果",
+                "search_scope": {},
+            },
+            # 同 name 但带非空 scope 不拦截（不会撞 uq_term_name_scope）
+            {
+                "name_id": "n-2",
+                "term_id": "t1",
+                "name_text": "苹果公司",
+                "search_scope": {"scope": "view"},
+            },
+        ]
+        platform._write_alias(base_id=BASE_ID, term_id="t1", name_text="苹果公司")
+        alias_calls = [c for c in platform.calls if c[0] == "create_term_name"]
+        assert len(alias_calls) == 1
+
+    @pytest.mark.asyncio
     async def test_synonym_not_same_creates_new_instance(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

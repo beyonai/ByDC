@@ -669,9 +669,26 @@ class ObjectInstanceDiscoveryMixin:
     ) -> None:
         """同义/歧义归并落库：create_term_name 写别名 + 缓存失效。
 
+        幂等（业务语义）：重复发现同一文档时同义裁决可能再次归并同一别名，
+        ``_base_create_term_name`` 无查重直接 INSERT，会撞 ``uq_term_name_scope``
+        唯一约束（(term_id, name_text, search_scope)）→ 整个发现任务 500。
+        写前按 (term_id, name_text) 精确查重：``list_term_names`` 的 name_text
+        参数为 ilike 模糊匹配，精确判定须在 Python 侧完成；仅对空 search_scope
+        行去重（与本方法写入的 ``searchScope: {}`` 三元组一致），已存在 → 跳过。
         别名经触发器 ``trg_term_name_vocab`` 自动投影进词典 → 下次锚定可命中。
         search_scope 通用作用域（user 级留空）。
         """
+        existing = self.list_term_names(base_id, term_id=term_id)
+        if any(
+            str(row.get("name_text")) == name_text and not row.get("search_scope")
+            for row in existing
+        ):
+            logger.debug(
+                "同义别名已存在，跳过写入: term_id=%s name_text=%s",
+                term_id,
+                name_text,
+            )
+            return
         self.create_term_name(
             base_id,
             name={
