@@ -1,4 +1,4 @@
-"""测试 term_vocabulary 读取侧协议（T6）。
+"""测试 term_vocabulary 读取侧协议。
 
 覆盖：
 - ``PostgresTermReader.list_vocabulary()`` 全量读取 term_vocabulary 表

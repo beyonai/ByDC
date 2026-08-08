@@ -1,7 +1,7 @@
-"""T11 共现存储：term_tags.co_occurrence 新写路径（读改写 + FOR UPDATE + Top-50）。
+"""共现存储：term_tags.co_occurrence 新写路径（读改写 + FOR UPDATE + Top-50）。
 
 无 DB 集成测试基建，用假 session 拦截 SQL 文本与参数，验证：
-- **待验证点 1 取舍**（T11）：首选 (b) 原地拼接 jsonb_object_agg / jsonb || jsonb
+- **实现取舍**：首选原地拼接 jsonb_object_agg / jsonb || jsonb
   在 OpenGauss 2.x 不存在（实测确认），采用 Spec 备选读改写 + SELECT ... FOR UPDATE：
   - 读：SELECT term_tags ... FOR UPDATE（行级锁）
   - 合并：已存在 key 计数累加、新 key 插入（Python 侧）

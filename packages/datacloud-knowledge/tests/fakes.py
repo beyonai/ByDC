@@ -55,7 +55,7 @@ class FakeTermReader:
         return self
 
     def set_vocabulary(self, *words: str) -> FakeTermReader:
-        """预置 term_vocabulary 词表（T6 list_vocabulary 测试供给）。
+        """预置 term_vocabulary 词表（list_vocabulary 测试供给）。
 
         Args:
             *words: 词表词汇（可变参数）。

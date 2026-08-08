@@ -3,11 +3,11 @@
 解析 base_id / instance_id / object_codes → 构造 RPC 调用
 （POST /api/v1/rpc/search/discoverObjectInstancesUnstructured）→ 逐次记录指标并汇总。
 
-本版（T6~T12 落地后）：501 占位语义已移除；③ AC 锚定（T7）+ ④ LLM 抽取（T8）
-已接入主流程。响应 items 中：已有实例（is_new=false，evidence=mention 原文片段）
+本版：501 占位语义已移除；词典锚定（快路命中 + 反查兜底）+ LLM 抽取（优先类型枚举
++ 允许自动发现）已接入主流程。响应 items 中：已有实例（is_new=false，evidence=mention 原文片段）
 在前、新实例（is_new=true）在后。
 
-指标口径（T12 验收）：
+指标口径：
 - temp=0 不可复现 → 默认多次运行（--runs，默认 3），输出均值±方差，不以单次为凭
 - 金标泄漏隔离：输入实例 KB 文件须为全新未入库文本（录入时保证），
   不得用已入库实例的 KB 文件既抽取又比对
@@ -40,7 +40,7 @@ _ELAPSED_LIMIT_SECONDS = 10.0
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="非结构化对象实例发现接口 e2e（③④ 已落地，正向断言 + 指标汇总）",
+        description="非结构化对象实例发现接口 e2e（正向断言 + 指标汇总）",
     )
     parser.add_argument(
         "--url",

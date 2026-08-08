@@ -301,7 +301,7 @@ class TermBackend(Protocol):
         ...
 
     def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
-        """更新 term_tags.co_occurrence（Top-50 计数伙伴集合），T11 新写路径。
+        """更新 term_tags.co_occurrence（Top-50 计数伙伴集合），独立新写路径。
 
         独立 SQL 写路径——**禁止经 update_term**（其 ext_attrs 拼入
         desc_summary 的遗留怪癖、term_tags 整列替换）。

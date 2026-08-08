@@ -1,7 +1,7 @@
 """_VocabularyReader — term_vocabulary read-side Mixin.
 
 与写入侧 ``_writers/_term.py::batch_create_vocabulary`` 对称的读取通道
-（spec R-4：term_vocabulary 单表为唯一词典数据源，本任务只读）。
+（term_vocabulary 单表为唯一词典数据源，本任务只读）。
 """
 
 from __future__ import annotations

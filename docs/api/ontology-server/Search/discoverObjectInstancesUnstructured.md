@@ -9,9 +9,10 @@ POST /api/v1/rpc/search/discoverObjectInstancesUnstructured
 action 写入知识库文件）、登记文件状态，并与输入实例建立「提及」关系（单向
 源→目标，幂等）。
 
-> **本版状态**：③ 已有实例发现（AC 锚定：词典快路 + 反查兜底）与 ④ 新实例
-> LLM 抽取（B 模式，temp=0）已落地，501 not_implemented 占位语义移除。
-> ⑤⑥⑦⑧（创建 / 文件登记 / 提及关系）与 T10 同步裁决、T11 共现存储已接入主流程。
+> **本版状态**：已有实例发现（词典锚定：词典快路命中 + search_terms 精确 +
+> list_term_names 别名反查 + 反查兜底）与新实例 LLM 抽取（temp=0）已落地，
+> 501 not_implemented 占位语义移除。同步裁决（同名多候选判歧义、子串重叠判同义）、
+> 共现存储与新实例创建 / 文件登记 / 提及关系全链路已接入主流程。
 
 ---
 
@@ -52,17 +53,17 @@ action 写入知识库文件）、登记文件状态，并与输入实例建立�
 ```
 输入实例（instance_id）
   │
-  ├─ ① 参数校验（instance_id 非空、object_codes 非空）
-  ├─ ② 定位知识库文件并读取全文（get_document_content_by_term_id）
-  ├─ ③ 已有实例发现（AC 锚定：词典快路命中 + search_terms 精确 + list_term_names 别名反查 + 反查兜底，T7）
-  ├─ ④ 新实例发现 / LLM 抽取（B 模式：object_codes 枚举 TermType 中文名、temp=0、16K 截断、JSON 重试，T8）
-  ├─ T10 同步裁决（仅与库冲突候选：同义 → TermName 别名；歧义 → 独立新实例）
-  ├─ ⑤ 新实例创建（write_<object_code> action；AUTO_DISCOVERED 走直写通道）
-  ├─ ⑥ term_id 强校验（write 响应缺 term_id → 500，不延迟不 pending）
-  ├─ ⑦ 文件登记（save_or_update_object_files，statusCd=待整理）
-  ├─ ⑧ 「提及」关系（源=输入实例 → 目标=发现实例，单向幂等）
-  ├─ T11 共现存储（同文档实例两两 +1，term_tags.co_occurrence Top-50）
-  └─ ⑨ 返回 {items: [已有..., 新...]}，每项含 is_new 标记
+  ├─ 1. 参数校验（instance_id 非空、object_codes 非空）
+  ├─ 2. 定位知识库文件并读取全文（get_document_content_by_term_id）
+  ├─ 3. 已有实例发现（词典锚定：词典快路命中 + search_terms 精确 + list_term_names 别名反查 + 反查兜底）
+  ├─ 4. 新实例发现 / LLM 抽取（object_codes 枚举 TermType 中文名、temp=0、16K 截断、JSON 重试）
+  ├─ 5. 同步裁决（仅与库冲突候选：同义 → TermName 别名；歧义 → 独立新实例）
+  ├─ 6. 新实例创建（write_<object_code> action；AUTO_DISCOVERED 走直写通道）
+  ├─ 7. term_id 强校验（write 响应缺 term_id → 500，不延迟不 pending）
+  ├─ 8. 文件登记（save_or_update_object_files，statusCd=待整理）
+  ├─ 9. 「提及」关系（源=输入实例 → 目标=发现实例，单向幂等）
+  ├─ 10. 共现存储（同文档实例两两 +1，term_tags.co_occurrence Top-50）
+  └─ 11. 返回 {items: [已有..., 新...]}，每项含 is_new 标记
 ```
 
 全程同步、无降级：任何异常直接上抛，由 RPC 层统一映射为错误码。
@@ -149,7 +150,7 @@ curl -s http://localhost:8088/api/v1/rpc/search/discoverObjectInstancesUnstructu
   }'
 ```
 
-正常响应示例（③④ 已落地）：
+正常响应示例：
 
 ```json
 {

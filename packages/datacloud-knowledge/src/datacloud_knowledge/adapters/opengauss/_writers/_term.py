@@ -383,14 +383,14 @@ class _TermWriter(_WriterBase):
         )
 
     def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
-        """更新 term_tags.co_occurrence（计数版伙伴集合，T11）。
+        """更新 term_tags.co_occurrence（计数版伙伴集合）。
 
-        独立新写路径（D-7，Spec §8）：
+        独立新写路径：
         - 已存在伙伴 key 计数累加、新伙伴 key 插入
         - Top-50 固定上限：合并后按 count 降序取前 50（自然衰减近似）
         - 读改写 + SELECT ... FOR UPDATE 行级锁（Spec 备选方案）
 
-        **待验证点 1 取舍**（T11）：首选 (b) 原地拼接 ``jsonb_object_agg`` /
+        **实现取舍**：首选原地拼接 ``jsonb_object_agg`` /
         ``jsonb || jsonb`` 在 OpenGauss 2.x **不存在**（实测
         ``jsonb_object_agg(text, numeric) does not exist``、``operator does
         not exist: jsonb || jsonb``），故采用备选读改写 + FOR UPDATE：

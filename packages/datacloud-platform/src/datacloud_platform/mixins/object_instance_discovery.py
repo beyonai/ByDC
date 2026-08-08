@@ -1,9 +1,10 @@
 """非结构化对象实例发现编排（ObjectInstanceDiscoveryMixin）。
 
-流程：① 参数校验 → ② 输入实例定位并读取知识库文件（get_document_content_by_term_id）
-→ ④ LLM 抽取（B 模式，T8）→ ③ AC 锚定（词典快路 + 反查兜底，T7）→ 冲突候选
-待裁决（T10）→ ⑤ 新实例创建（write action / AUTO_DISCOVERED 直写）→ ⑥ term_id
-强校验 → ⑦ 文件登记 → ⑧ 「提及」关系（源→目标，单向幂等）→ ⑨ 返回结果。
+流程：参数校验 → 输入实例定位并读取知识库文件（get_document_content_by_term_id）
+→ LLM 抽取（优先类型列表 + 允许自动发现新类型）→ 词典锚定（快路命中 + 反查兜底）
+→ 冲突候选裁决（同名多候选判歧义、子串重叠判同义）→ 新实例创建（write action /
+自动发现直写）→ term_id 强校验 → 文件登记 → 「提及」关系（源→目标，单向幂等）
+→ 返回结果。
 
 无降级：任何异常直接上抛，由 RPC 层统一映射为错误码。
 """
@@ -52,17 +53,18 @@ _PENDING_LABELS: dict[str, Any] = {
     "dc_failure_count": 0,
 }
 
-# ③ 锚定反查单次检索条数上限（词面相等/子串重叠判定所需的候选窗口）
+# 锚定反查单次检索条数上限（词面相等/子串重叠判定所需的候选窗口）
 _ANCHOR_SEARCH_TOP_K = 50
 
-# ④ B 模式抽取（Spec §6）
+# LLM 抽取参数：长文截断上限与 JSON 重试退避
 _MAX_EXTRACT_CHARS = (
     16_000  # 长文截断单次上限（document_enrich _MAX_ORIGINAL_CHARS 同值）
 )
 _MAX_JSON_RETRIES = 3  # 非法 JSON 重试次数（≤3 次退避）
 _JSON_RETRY_BACKOFF_SECONDS = 0.5  # 重试退避基数（attempt * 基数）
 _AUTO_DISCOVERED_CODE = "AUTO_DISCOVERED"  # LLM 自动发现类型（禁用 "UNKNOWN"）
-_AUTO_DISCOVERED_TYPE_NAME = "自动发现类型"  # TermType 预置行 type_name（T9）
+# 抽取类型不在调用方枚举内时使用的兜底类型（原始类型名保留在 ext_attrs.raw_type）
+_AUTO_DISCOVERED_TYPE_NAME = "自动发现类型"
 
 _LEADING_THINKING_PATTERN = re.compile(
     r"\A\s*(?:<(?:think|thinking|analysis)>.*?</(?:think|thinking|analysis)>\s*)+",
@@ -72,13 +74,13 @@ _LEADING_THINKING_PATTERN = re.compile(
 
 @dataclass(frozen=True)
 class _AnchorResult:
-    """③ 锚定结果分发（Spec §5.1）。
+    """词典锚定结果分发（快路命中 + 反查兜底后的四桶归类）。
 
     Attributes:
         existing: 唯一词面相等命中 → 已有实例候选行（is_new=False，含 evidence）。
-        ambiguity: 词面相等命中 ≥2 term → 同名多候选（T10 歧义裁决）。
-        synonym: 与已有 term 子串重叠（非相等）→ 同义候选（T10 同义裁决）。
-        unanchored: 未锚定 mention 原样返回（走 ⑤ 新实例创建）。
+        ambiguity: 词面相等命中 ≥2 term → 同名多候选（进歧义裁决）。
+        synonym: 与已有 term 子串重叠（非相等）→ 同义候选（进同义裁决）。
+        unanchored: 未锚定 mention 原样返回（走新实例创建）。
     """
 
     existing: list[dict[str, Any]]
@@ -87,9 +89,9 @@ class _AnchorResult:
     unanchored: list[dict[str, Any]]
 
 
-# ── 词典缓存单例（R-5）────────────────────────────────────────────────────────
+# ── 词典缓存单例────────────────────────────────────────────────────────
 # 归属：编排侧（本模块）模块级单例，读取经 ``list_vocabulary`` 协议；
-# 缓存只做「候选判定」，不做「最终锚定」——真命中必须经反查拿 term_id（T7）。
+# 缓存只做「候选判定」，不做「最终锚定」——真命中必须经反查拿 term_id。
 # 缓存旧（增删词未刷新）最多损失快路（多走一次 DB 查询），不产生错误锚定。
 _cached_vocabulary: frozenset[str] | None = None
 
@@ -170,7 +172,7 @@ class ObjectInstanceDiscoveryMixin:
             ValueError: 入参非法（instance_id 为空 / object_codes 缺失）。
             KeyError: 输入实例不存在。
         """
-        # ① 参数校验
+        # 参数校验
         if not instance_id.strip():
             raise ValueError("instance_id is required")
         if not object_codes:
@@ -178,22 +180,22 @@ class ObjectInstanceDiscoveryMixin:
         if not all(str(code).strip() for code in object_codes):
             raise ValueError("object_codes must not contain blank values")
 
-        # ② 输入实例定位 + 读文件（异常原样上抛，无降级）
+        # 输入实例定位 + 读文件（异常原样上抛，无降级）
         document = await self.get_document_content_by_term_id(
             base_id, term_id=instance_id
         )
 
-        # ④ LLM 抽取（B 模式，T8）→ mention 列表（实现编排 ④→③，对外顺序不变）
+        # LLM 抽取 → mention 列表（实现编排 抽取→锚定，对外顺序不变）
         mentions = await self._discover_new_object_instances(
             base_id, content=document.content, object_codes=object_codes
         )
 
-        # ③ AC 锚定（词典快路 + 反查兜底，T7）→ 结果分发
+        # 词典锚定（快路命中 + 反查兜底）→ 结果分发
         anchor = self._discover_existing_object_instances(
             base_id, mentions=mentions, object_codes=object_codes
         )
 
-        # ⑤⑥⑦⑧ 串联：已有在前、新在后；未锚定逐项 创建 → 强校验 → 登记 → 提及关系
+        # 全链路串联：已有在前、新在后；未锚定逐项 创建 → 强校验 → 登记 → 提及关系
         items: list[ObjectInstanceDiscoveryHit] = [
             _build_existing_hit(row) for row in anchor.existing
         ]
@@ -206,7 +208,7 @@ class ObjectInstanceDiscoveryMixin:
                     session_id=session_id,
                 )
             )
-        # T10 同步裁决：仅与库冲突候选（同名多候选→歧义、子串重叠→同义）；
+        # 同步裁决：仅与库冲突候选（同名多候选→歧义、子串重叠→同义）；
         # 同义 → 写 TermName 别名不建实例；歧义 → 独立新实例；无冲突 → 直通不调裁决
         alias_targets: list[str] = []
         items.extend(
@@ -219,7 +221,7 @@ class ObjectInstanceDiscoveryMixin:
                 alias_targets=alias_targets,
             )
         )
-        # T11 共现存储：同文档实例两两 +1（含同义归并 canonical 伙伴集，Spec §8）
+        # 共现存储：同文档实例两两 +1（含同义归并 canonical 伙伴集）
         self._update_document_co_occurrence(
             base_id, [h.instance_id for h in items] + alias_targets
         )
@@ -228,7 +230,7 @@ class ObjectInstanceDiscoveryMixin:
     def _vocabulary_words(
         self: _ObjectInstanceDiscoveryPlatform, base_id: str
     ) -> frozenset[str]:
-        """惰性加载词典缓存（单例，R-5）。
+        """惰性加载词典缓存（单例）。
 
         全量 term_vocabulary → frozenset，O(1) 命中判定。只做候选判定，
         不做最终锚定（真命中必须经反查拿 term_id）。失效经
@@ -254,7 +256,7 @@ class ObjectInstanceDiscoveryMixin:
         candidate: dict[str, Any],
         session_id: str,
     ) -> ObjectInstanceDiscoveryHit:
-        """⑤⑥⑦⑧ 新实例创建链路：创建 → 强校验 → 登记 → 提及关系。
+        """新实例创建链路：创建 → 强校验 → 登记 → 提及关系。
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -319,9 +321,9 @@ class ObjectInstanceDiscoveryMixin:
         session_id: str,
         raw_type: str | None = None,
     ) -> str:
-        """⑤⑥ 新实例创建 + term_id 强校验。
+        """新实例创建 + term_id 强校验。
 
-        两条通道（Spec §3.1）：
+        两条通道：
 
         - 常规类型：经 ``invoke_object_write_action``（services/object_action.py）
           写入知识库文件（write_<object_code> action），对响应做 term_id 强校验。
@@ -366,7 +368,7 @@ class ObjectInstanceDiscoveryMixin:
             source_path=source_path,
         )
         term_id = _extract_written_term_id(result)
-        # ⑤ 新实例落库 → 词表已更新 → 飞轮实时（下次 discover 重载词典）
+        # 新实例落库 → 词表已更新 → 飞轮实时（下次 discover 重载词典）
         invalidate_vocabulary_cache()
         return term_id
 
@@ -379,7 +381,7 @@ class ObjectInstanceDiscoveryMixin:
     ) -> str:
         """方案 (a) 兜底直写：AUTO_DISCOVERED 类型实例直接入库。
 
-        背景（Spec §3.1）：⑤ 现走 ``invoke_object_write_action`` →
+        背景：常规类型现走 ``invoke_object_write_action`` →
         ``loader.get_object(object_code)`` 对无 ontology 对象的类型抛
         ``ObjectNotFoundError``（未映射 → 500）。AUTO_DISCOVERED 无 ontology
         对象 → 改走 ``create_term``（TermBackend → insert_term）直建 term +
@@ -452,9 +454,9 @@ class ObjectInstanceDiscoveryMixin:
         session_id: str,
         alias_targets: list[str] | None = None,
     ) -> list[ObjectInstanceDiscoveryHit]:
-        """T10 同步裁决（Spec §7）。
+        """冲突候选同步裁决：同名多候选判歧义、子串重叠判同义。
 
-        候选范围严格收窄（Spec §7.1）：
+        候选范围严格收窄：
         - 同名多候选（词面相等 ≥2 term）→ 歧义判断
         - 子串重叠（非相等）→ 同义判断
         - 干净命中 / 新实例间两两 → **不裁决**
@@ -463,7 +465,7 @@ class ObjectInstanceDiscoveryMixin:
         - ``same=true`` / ``same_entity=true`` → ``create_term_name`` 归并别名
           到主 term（触发器自动进词典，随后缓存失效）；**不建新实例**
         - ``false`` → 独立新实例（复用 ``_create_new_instance_flow``；类型规则
-          D-3：mention 自带可定类型 → 该类型，确定不了 → AUTO_DISCOVERED）
+          类型规则：mention 自带可定类型 → 该类型，确定不了 → AUTO_DISCOVERED）
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -472,7 +474,7 @@ class ObjectInstanceDiscoveryMixin:
             source_term_id: 输入实例 term_id（新实例提及关系源）。
             session_id: 会话 ID（透传）。
             alias_targets: 可选 out 参数——归并的 canonical term_id 收集
-                （T11 共现：别名 mention 计入 canonical 伙伴集，Spec §8）。
+                （共现：别名 mention 计入 canonical 伙伴集）。
 
         Returns:
             新实例发现结果项（别名归并不产出 hit）。
@@ -542,10 +544,10 @@ class ObjectInstanceDiscoveryMixin:
         *,
         candidate: dict[str, Any],
     ) -> dict[str, Any]:
-        """同义裁决（judge_synonym 形态，Spec §7.2）。
+        """同义裁决（judge_synonym 形态）。
 
         实体A=mention（含 evidence 上下文）、实体B=已有 term；生产增强：
-        防御式读取 term 侧 co_occurrence 伙伴集（T11 未就绪 → 空 → 不带段）。
+        防御式读取 term 侧 co_occurrence 伙伴集（共现未写入 → 空 → 不带段）。
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -574,7 +576,7 @@ class ObjectInstanceDiscoveryMixin:
         *,
         candidate: dict[str, Any],
     ) -> dict[str, Any]:
-        """歧义裁决（judge_ambiguity 形态，Spec §7.2）。
+        """歧义裁决（judge_ambiguity 形态）。
 
         同词面不同 term 各自上下文（term_name + 类型 + 文件），防御式附
         co_occurrence 伙伴集交集。
@@ -655,9 +657,9 @@ class ObjectInstanceDiscoveryMixin:
         term_id: str,
         name_text: str,
     ) -> None:
-        """同义/歧义归并落库：create_term_name 写别名 + 缓存失效（D-5，Spec §7.3）。
+        """同义/歧义归并落库：create_term_name 写别名 + 缓存失效。
 
-        别名经触发器 ``trg_term_name_vocab`` 自动投影进词典 → 下次 ③ 锚定可命中。
+        别名经触发器 ``trg_term_name_vocab`` 自动投影进词典 → 下次锚定可命中。
         search_scope 通用作用域（user 级留空）。
         """
         self.create_term_name(
@@ -675,10 +677,10 @@ class ObjectInstanceDiscoveryMixin:
         base_id: str,
         term_ids: list[str],
     ) -> str | None:
-        """防御式读取：term_tags.co_occurrence 伙伴集交集（D-7 语境信号）。
+        """防御式读取：term_tags.co_occurrence 伙伴集交集（裁决语境信号）。
 
         经 ``get_term_detail`` 读各 term 的 ``term_tags.co_occurrence``
-        （``{partner_term_id: count}``）；求伙伴集交集。T11 未就绪时伙伴集
+        （``{partner_term_id: count}``）；求伙伴集交集。共现未写入时伙伴集
         为空 → 返回 None → prompt 不带共现段，不阻塞。
 
         Args:
@@ -725,7 +727,7 @@ class ObjectInstanceDiscoveryMixin:
         base_id: str,
         term_ids: list[str],
     ) -> None:
-        """T11 共现存储：同文档实例两两 +1（Spec §8，触发点=每次 discover 成功后）。
+        """共现存储：同文档实例两两 +1（触发点=每次 discover 成功后）。
 
         - 去重后两两配对，双向写 ``term_tags.co_occurrence``（``{partner: 1}``）
         - 经 ``update_term_co_occurrence`` 新写路径（JSONB 原地合并 + Top-50，
@@ -750,21 +752,21 @@ class ObjectInstanceDiscoveryMixin:
         mentions: list[dict[str, Any]],
         object_codes: list[str],
     ) -> _AnchorResult:
-        """③ 已有实例发现（AC 文本锚定，Spec §5.1）。
+        """已有实例发现（词典锚定：快路命中 + 反查兜底）。
 
-        对 ④ 产出的 mention 列表做 词典快路命中 → 反查兜底拿 term_id →
+        对抽取产出的 mention 列表做 词典快路命中 → 反查兜底拿 term_id →
         结果分发：
 
         - 唯一词面相等命中 1 term → ``existing``（is_new=False，evidence=mention）
-        - 词面相等命中 ≥2 term → ``ambiguity``（同名多候选，T10 歧义裁决）
-        - 与已有 term 子串重叠（非相等）→ ``synonym``（同义候选，T10 裁决）
-        - 无命中 / 缓存命中但反查落空 → ``unanchored``（走 ⑤ 新实例创建）
+        - 词面相等命中 ≥2 term → ``ambiguity``（同名多候选，进歧义裁决）
+        - 与已有 term 子串重叠（非相等）→ ``synonym``（同义候选，进同义裁决）
+        - 无命中 / 缓存命中但反查落空 → ``unanchored``（走新实例创建）
 
         ``object_codes`` 保留以维持签名稳定（v3 锚定不做类型过滤，命中即已有实例）。
 
         Args:
             base_id: 本体库/系统空间标识。
-            mentions: ④ 产出的 mention 列表 ``[{term_name, object_code, evidence, raw_type}]``。
+            mentions: 抽取产出的 mention 列表 ``[{term_name, object_code, evidence, raw_type}]``。
             object_codes: 非结构化对象类型编码列表（本版仅透传，不参与过滤）。
 
         Returns:
@@ -841,10 +843,10 @@ class ObjectInstanceDiscoveryMixin:
     ) -> tuple[list[dict[str, Any]], bool]:
         """按 mention 反查 term（拿 term_id 才算真命中）。
 
-        三级兜底（R-1）：
-        ① ``search_terms`` 精确匹配（term_name / term_code，别名经 TermName 自动参与）
-        ② 无命中 → ``search_terms`` BM25 全文兜底（JOIN term_name）
-        ③ 仍无命中 → ``list_term_names(name_text=mention)`` ilike 别名反查
+        三级兜底：
+        1. ``search_terms`` 精确匹配（term_name / term_code，别名经 TermName 自动参与）
+        2. 无命中 → ``search_terms`` BM25 全文兜底（JOIN term_name）
+        3. 仍无命中 → ``list_term_names(name_text=mention)`` ilike 别名反查
            → term_ids 反查 term 详情
 
         Args:
@@ -884,7 +886,7 @@ class ObjectInstanceDiscoveryMixin:
         detail_rows = _search_result_items(by_ids)
         if not detail_rows:
             return [], False
-        # ilike 路径：name_text 完全相等 = 词面命中（别名反查路径 R-1）；
+        # ilike 路径：name_text 完全相等 = 词面命中（别名反查路径）；
         # 仅部分匹配（ilike %mention%）→ 模糊，需调用方做子串/相等判定。
         surface_exact = any(str(r.get("name_text") or "") == name for r in name_rows)
         return detail_rows, surface_exact
@@ -896,7 +898,7 @@ class ObjectInstanceDiscoveryMixin:
         content: str,
         object_codes: list[str],
     ) -> list[dict[str, Any]]:
-        """④ 新实例发现（B 模式 LLM 抽取，Spec §6）。
+        """新实例发现（LLM 抽取：优先类型枚举 + 允许自动发现新类型）。
 
         流程：
         1. 类型枚举 = ``object_codes`` 经 ``get_term_type`` 取中文名（library 域限定，
@@ -906,7 +908,7 @@ class ObjectInstanceDiscoveryMixin:
         4. 严格 JSON 解析 + ``<think>`` 剥离 + 非法 JSON 重试（≤3 次退避）
         5. 类型归一：``object_code ∈ object_codes`` → 该 code；∉ → ``AUTO_DISCOVERED``
            （禁用 "UNKNOWN"），LLM 原始类型名存 ``raw_type``
-        6. D-2 回填：抽到就填 ``batch_create_vocabulary``（幂等去重，无门槛）
+        6. 词表回填：抽到就填 ``batch_create_vocabulary``（幂等去重，无门槛）
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -954,7 +956,7 @@ class ObjectInstanceDiscoveryMixin:
                 f"{last_error}"
             )
 
-        # D-2 回填：抽到就填（幂等去重），无 confidence/频次门槛
+        # 词表回填：抽到就填（幂等去重），无 confidence/频次门槛
         words = [
             str(m["term_name"]).strip()
             for m in mentions
@@ -962,7 +964,7 @@ class ObjectInstanceDiscoveryMixin:
         ]
         if words:
             self.batch_create_vocabulary(base_id, words=words)
-            # D-2 回填 → 词表已更新 → 飞轮实时（下次 ③ 快路命中回填词）
+            # 词表回填 → 词表已更新 → 飞轮实时（下次快路命中回填词）
             invalidate_vocabulary_cache()
         logger.info(
             "discover extraction: base_id=%s mentions=%d backfill_words=%d",
@@ -980,7 +982,7 @@ class ObjectInstanceDiscoveryMixin:
         """类型枚举：object_codes 经 get_term_type 取中文名（library 域限定）。
 
         缺行（无 TermType 行 / 读取失败返回 None）→ 回退原始 code + 日志，
-        供 ④ prompt 枚举与 T9 直写 type_name 回退展示使用。
+        供抽取 prompt 枚举与自动发现直写 type_name 回退展示使用。
 
         Args:
             base_id: 本体库/系统空间标识（即 library 域）。
@@ -1033,7 +1035,7 @@ class ObjectInstanceDiscoveryMixin:
         session_id: str,
         action_result: dict[str, Any],
     ) -> None:
-        """⑦ 文件登记：复用 document.py 的 ``_build_object_file_status`` 模式。
+        """文件登记：复用 document.py 的 ``_build_object_file_status`` 模式。
 
         登记条目含 sessionId / objectName / objectCode / fileName / filePath /
         version / statusCd（待整理）/ extContent{kb_resource_id, kb_id,
@@ -1078,7 +1080,7 @@ class ObjectInstanceDiscoveryMixin:
         source_term_id: str,
         target_term_id: str,
     ) -> bool:
-        """⑧ 建立「提及」关系（源→目标，单向、幂等）。
+        """建立「提及」关系（源→目标，单向、幂等）。
 
         先按源实例 + 关键词「提及」查重；已存在同源同目标的提及关系则跳过，
         否则创建 camelCase 三字段关系。方向固定为 源=输入实例 → 目标=发现实例，
@@ -1121,7 +1123,7 @@ class ObjectInstanceDiscoveryMixin:
 
 
 def _extract_written_term_id(action_result: dict[str, Any]) -> str:
-    """⑥ term_id 强校验：从 write action 响应中提取 records[0] 的 term_id。
+    """term_id 强校验：从 write action 响应中提取 records[0] 的 term_id。
 
     响应先经 ``unwrap_action_result`` 归一化为 ``{records, total, meta}``；
     取 ``records[0].term_id / termId``，缺失或为空则抛错（不延迟、不做 pending）。
@@ -1153,9 +1155,9 @@ def _extract_written_term_id(action_result: dict[str, Any]) -> str:
 
 
 def _extract_imported_term_id(result: dict[str, Any]) -> str:
-    """⑥ term_id 强校验：从 create_term/import_terms 响应中提取 term_ids[0]。
+    """term_id 强校验：从 create_term/import_terms 响应中提取 term_ids[0]。
 
-    方案 (a) 直写通道（AUTO_DISCOVERED，T9）的强校验等价物：
+    自动发现直写通道（AUTO_DISCOVERED）的强校验等价物：
     ``create_term`` 返回 ``{created, updated, skipped, term_ids, errors}``，
     取 ``term_ids[0]``，缺失或为空则抛错（与 action 管道同样不延迟、不做 pending）。
 
@@ -1279,13 +1281,13 @@ def _build_existing_hit(row: dict[str, Any]) -> ObjectInstanceDiscoveryHit:
     )
 
 
-# ── ④ B 模式抽取辅助（T8，Spec §6）──────────────────────────────────────────
+# ── LLM 抽取辅助──────────────────────────────────────────
 
 
 def _build_extract_prompt(
     type_entries: list[dict[str, str]], content: str
 ) -> list[dict[str, str]]:
-    """构造 ④ 抽取 prompt（B 模式）。
+    """构造抽取 prompt。
 
     system 承载：优先类型枚举（object_code=类型中文名）、AUTO_DISCOVERED
     归一规则、严格 JSON 输出 schema；user 直接承载截断后的文档正文
@@ -1319,7 +1321,7 @@ def _build_extract_prompt(
 
 
 def _truncate_content(content: str, max_chars: int) -> str:
-    """长文截断单次（Spec §6.1，不 chunk）。
+    """长文截断单次（不 chunk）。
 
     超限时取前 ``max_chars`` 字符并以省略号收尾，标识截断位置。
 
@@ -1391,7 +1393,7 @@ def _parse_mentions_json(text: str) -> list[dict[str, Any]] | None:
 def _normalize_extracted_mentions(
     parsed: list[Any], object_codes: list[str]
 ) -> list[dict[str, Any]]:
-    """类型归一 + 字段净化（Spec §6.1）。
+    """类型归一 + 字段净化。
 
     - ``object_code ∈ object_codes`` → 保留该 code
     - ``object_code ∉ object_codes`` → ``AUTO_DISCOVERED``（禁用 "UNKNOWN"），
@@ -1427,7 +1429,7 @@ def _normalize_extracted_mentions(
     return normalized
 
 
-# ── T10 同步裁决辅助（Spec §7）───────────────────────────────────────────────
+# ── 同步裁决辅助───────────────────────────────────────────────
 
 
 def _judge_llm_sync(messages: list[dict[str, str]]) -> Any:
@@ -1462,13 +1464,13 @@ def _build_synonym_prompt(
     term_row: dict[str, Any],
     partner_overlap: str | None,
 ) -> list[dict[str, str]]:
-    """同义裁决 prompt（judge_synonym 形态，Spec §7.2）。
+    """同义裁决 prompt（judge_synonym 形态）。
 
     Args:
         mention: 候选 mention（实体A）。
         mention_context: mention 在文档中的原文片段（evidence，可为空）。
         term_row: 已有 term 行（实体B）。
-        partner_overlap: 共现伙伴交集段（T11 信号，可为 None）。
+        partner_overlap: 共现伙伴交集段（可为 None）。
 
     Returns:
         system + user 消息列表。
@@ -1501,7 +1503,7 @@ def _build_ambiguity_prompt(
     term_contexts: list[str],
     partner_overlap: str | None,
 ) -> list[dict[str, str]]:
-    """歧义裁决 prompt（judge_ambiguity 形态，Spec §7.2）。
+    """歧义裁决 prompt（judge_ambiguity 形态）。
 
     Args:
         mention: 同词面 mention。
@@ -1534,10 +1536,10 @@ def _build_ambiguity_prompt(
 
 
 def _mention_object_code(candidate: dict[str, Any]) -> str:
-    """裁决后新实例类型规则（D-3）：能定类型用该类型，定不了 → AUTO_DISCOVERED。
+    """裁决后新实例类型规则：能定类型用该类型，定不了 → AUTO_DISCOVERED。
 
     Args:
-        candidate: 冲突候选（含 ④ 抽取的 object_code）。
+        candidate: 冲突候选（含抽取产出的 object_code）。
 
     Returns:
         新实例 object_code（缺失/空 → AUTO_DISCOVERED）。

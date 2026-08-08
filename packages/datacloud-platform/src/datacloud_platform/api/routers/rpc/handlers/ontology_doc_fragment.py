@@ -195,8 +195,8 @@ def _get_object_instance_build_task(
 ) -> Any:
     """Task table status query is no longer supported.
 
-    T12：显式返回 501（废弃接口语义保留），不依赖 _EXCEPTION_MAP 的
-    NotImplementedError → 501 隐式映射（该映射已随 ③④ 落地移除）。
+    显式返回 501（废弃接口语义保留），不依赖 _EXCEPTION_MAP 的
+    NotImplementedError → 501 隐式映射（该映射已随锚定/抽取落地移除）。
     """
     return ok(
         code=501,

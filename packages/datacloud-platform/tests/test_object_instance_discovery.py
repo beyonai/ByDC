@@ -1,8 +1,8 @@
 """测试 discoverObjectInstancesUnstructured — 非结构化对象实例发现接口。
 
-T1~T12 演进：模型默认值、①参数校验、②管道异常上抛（不降级）；③ AC 锚定（T7）
-与 ④ LLM 抽取（T8）已落地替换占位；RPC 错误码 / X-Session-Id 校验全套；
-501 not_implemented 语义在 T12 收口移除（回归断言同步删除）。
+演进：模型默认值、参数校验、管道异常上抛（不降级）；词典锚定（快路命中 + 反查兜底）
+与 LLM 抽取（优先类型枚举 + 允许自动发现）已落地替换占位；RPC 错误码 / X-Session-Id 校验全套；
+501 not_implemented 语义已收口移除（回归断言同步删除）。
 """
 
 from __future__ import annotations
@@ -100,7 +100,7 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         )
         self.object_files.append(object_files)
 
-    # ── T8/T9/T10/T11 协议能力（默认实现；测试用 monkeypatch 覆盖具体行为）──
+    # ── 抽取/直写/裁决/共现协议能力（默认实现；测试用 monkeypatch 覆盖具体行为）──
 
     def get_term_type(
         self, base_id: str, *, library_id: str, type_code: str
@@ -254,7 +254,7 @@ class TestObjectInstanceDiscoveryHitModel:
 
 
 # ============================================================================
-# ① 参数校验
+# 参数校验
 # ============================================================================
 
 
@@ -283,7 +283,7 @@ class TestDiscoverParameterValidation:
 
 
 # ============================================================================
-# ② 管道异常上抛（无降级）
+# 管道异常上抛（无降级）
 # ============================================================================
 
 
@@ -314,7 +314,7 @@ class TestDiscoverPipelineErrors:
 
 
 # ============================================================================
-# T7 ③ AC 锚定：词典快路 + 反查兜底 + 结果分发
+# 词典锚定：快路命中 + 反查兜底 + 结果分发
 # ============================================================================
 
 
@@ -471,7 +471,7 @@ class TestAnchorExistingDiscovery:
 
 
 # ============================================================================
-# ⑤ 新实例创建 + ⑥ term_id 强校验
+# 新实例创建 + term_id 强校验
 # ============================================================================
 
 
@@ -582,7 +582,7 @@ class TestCreateDiscoveredInstance:
 
 
 # ============================================================================
-# ⑦ 文件登记
+# 文件登记
 # ============================================================================
 
 
@@ -625,7 +625,7 @@ class TestRegisterObjectFile:
 
 
 # ============================================================================
-# ⑧ 「提及」关系（源→目标，单向幂等）
+# 「提及」关系（源→目标，单向幂等）
 # ============================================================================
 
 
@@ -757,7 +757,7 @@ class _RpcFakePlatform:
 
 
 class _RpcComboPlatform(ObjectInstanceDiscoveryMixin):
-    """组合平台：走真实 mixin 主流程（① 校验），供 RPC 层测试。"""
+    """组合平台：走真实 mixin 主流程（参数校验），供 RPC 层测试。"""
 
     def __init__(self, behavior: str = "ok") -> None:
         self.behavior = behavior
@@ -796,7 +796,7 @@ def _rpc_client(platform: Any) -> TestClient:
 
 class TestDiscoverRpc:
     def test_normal_input_returns_200(self) -> None:
-        """T12：501 语义已移除，正常输入不再短路（走 platform 返回结果）。"""
+        """501 语义已移除，正常输入不再短路（走 platform 返回结果）。"""
         client = _rpc_client(_RpcFakePlatform("ok"))
         resp = client.post(
             "/api/v1/rpc/search/discoverObjectInstancesUnstructured",
@@ -832,7 +832,7 @@ class TestDiscoverRpc:
 
 
 # ============================================================================
-# RPC 级错误码映射（T4 全套：404/400/403/500）
+# RPC 级错误码映射（404/400/403/500）
 # ============================================================================
 
 
@@ -874,7 +874,7 @@ class TestDiscoverRpcErrorMapping:
         assert body["code"] == 500
 
     def test_missing_object_codes_returns_400(self) -> None:
-        """RPC 路径走真实 mixin ① 校验：空 object_codes → ValueError → 400。"""
+        """RPC 路径走真实 mixin 参数校验：空 object_codes → ValueError → 400。"""
         platform = _RpcComboPlatform()
         client = _rpc_client(platform)
         resp = client.post(
@@ -894,7 +894,7 @@ class TestDiscoverRpcErrorMapping:
 
 
 # ============================================================================
-# T7 RPC 级：输入实例含已有实例 mention → items 已有在前（is_new=False）
+# 锚定 RPC 级：输入实例含已有实例 mention → items 已有在前（is_new=False）
 # ============================================================================
 
 
@@ -996,7 +996,7 @@ class TestDiscoverRpcAnchor:
 
 
 # ============================================================================
-# T4 串联：mock ③④ 占位方法后验证 ⑤⑥⑦⑧ 全链路
+# 串联：mock 锚定/抽取占位方法后验证 创建→强校验→登记→提及 全链路
 # ============================================================================
 
 
@@ -1233,7 +1233,7 @@ class TestDiscoverOrchestration:
 
 
 # ============================================================================
-# T6 词典缓存单例：惰性加载一次 / invalidate 后重载 / 新词生效
+# 词典缓存单例：惰性加载一次 / invalidate 后重载 / 新词生效
 # ============================================================================
 
 
@@ -1269,14 +1269,14 @@ class TestVocabularyCache:
         platform = _FakePlatform()
         platform.vocab_words = ["苹果"]
         assert platform._vocabulary_words(BASE_ID) == frozenset({"苹果"})
-        # 词典新增词（模拟 D-2 回填 / ⑤ 创建后触发器投影）
+        # 词典新增词（模拟词表回填 / 创建后触发器投影）
         platform.vocab_words = ["苹果", "华为"]
         discovery_module.invalidate_vocabulary_cache()
         assert platform._vocabulary_words(BASE_ID) == frozenset({"苹果", "华为"})
 
 
 # ============================================================================
-# T6 适配器同步：remote / none 不抛 NotImplementedError，data_adapter 代理转发
+# 适配器同步：remote / none 不抛 NotImplementedError，data_adapter 代理转发
 # ============================================================================
 
 
@@ -1343,7 +1343,7 @@ class TestVocabularyAdapterSync:
 
 
 # ============================================================================
-# T8 ④ B 模式 LLM 抽取：类型枚举 / 16K 截断 / JSON 重试 / AUTO_DISCOVERED / 回填
+# LLM 抽取：类型枚举 / 16K 截断 / JSON 重试 / AUTO_DISCOVERED / 词表回填
 # ============================================================================
 
 
@@ -1669,7 +1669,7 @@ class TestDiscoverNewObjectInstances:
 
 
 # ============================================================================
-# T8 集成：真实 ④ 抽取 + ③ 锚定 + ⑤ 创建 全链路
+# 集成：真实抽取 + 锚定 + 创建 全链路
 # ============================================================================
 
 
@@ -1784,7 +1784,7 @@ class TestDiscoverFullFlowWithExtraction:
 
 
 # ============================================================================
-# T9 AUTO_DISCOVERED 创建通道：方案 (a) 兜底直写 + TermType 预置行
+# AUTO_DISCOVERED 创建通道：兜底直写 + TermType 预置行
 # ============================================================================
 
 
@@ -1914,7 +1914,7 @@ class TestAutoDiscoveredCreateChannel:
     async def test_non_auto_discovered_keeps_action_pipeline(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """非 AUTO_DISCOVERED 项仍走 action 管道（⑤ 回归不破坏）。"""
+        """非 AUTO_DISCOVERED 项仍走 action 管道（创建回归不破坏）。"""
         platform = _FakePlatform()
         created_terms: list[dict[str, Any]] = []
         monkeypatch.setattr(
@@ -2017,7 +2017,7 @@ class TestAutoDiscoveredCreateChannel:
 
 
 # ============================================================================
-# T10 同步裁决：同名多候选（歧义）/ 子串重叠（同义），temp=0 带上下文一票
+# 同步裁决：同名多候选（歧义）/ 子串重叠（同义），temp=0 带上下文一票
 # ============================================================================
 
 
@@ -2168,7 +2168,7 @@ class TestAdjudication:
     async def test_co_occurrence_signal_defensive_when_empty(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """term_tags 无 co_occurrence（T11 未就绪）→ prompt 不带共现段，不阻塞。"""
+        """term_tags 无 co_occurrence（共现未写入）→ prompt 不带共现段，不阻塞。"""
         platform = _FakePlatform()
         captured: dict[str, Any] = {}
 
@@ -2256,7 +2256,7 @@ class TestAdjudication:
         """主流程：synonym 候选 → 裁决 same=true → 别名落库，无新实例。"""
         platform = _FakePlatform()
         platform.document = _make_document()
-        # 词典含 mention 词（④ 回填后词典即含该词）→ 快路命中 → 反查 → 子串重叠 → synonym 候选
+        # 词典含 mention 词（回填后词典即含该词）→ 快路命中 → 反查 → 子串重叠 → synonym 候选
         platform.vocab_words = ["苹果", "苹果公司"]
 
         def fake_search(base_id: str, **kwargs: Any) -> dict[str, Any]:
@@ -2301,7 +2301,7 @@ class TestAdjudication:
 
 
 # ============================================================================
-# T11 共现存储：term_tags.co_occurrence Top-50 计数，同文档实例两两 +1
+# 共现存储：term_tags.co_occurrence Top-50 计数，同文档实例两两 +1
 # ============================================================================
 
 
