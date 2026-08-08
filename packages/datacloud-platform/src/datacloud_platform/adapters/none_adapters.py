@@ -679,6 +679,20 @@ class _NoopTermBackend:
         """Return empty search result."""
         return {"data": [], "totalCount": 0}
 
+    def search_terms_exact(
+        self,
+        *,
+        term_type_code: str,
+        keyword: str | None = None,
+        tags: list[dict[str, Any]] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        order_by: str = "relevance",
+    ) -> Any:
+        """Return empty exact search result."""
+        _ = term_type_code, keyword, tags, limit, offset, order_by
+        return {"data": [], "totalCount": 0}
+
     def search_terms_batch(
         self,
         *,

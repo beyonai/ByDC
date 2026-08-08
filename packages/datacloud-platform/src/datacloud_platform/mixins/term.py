@@ -32,6 +32,15 @@ class TermMixin(TermSyncHandler):
     ) -> dict[str, Any]:
         return self._term_for(base_id).search_terms(**kwargs)
 
+    def search_terms_exact(self: _HasTermBackend, base_id: str, **kwargs: Any) -> Any:
+        """按术语类型精确检索术语列表（原子查询，无 BM25 兜底）。
+
+        委托 TermBackend.search_terms_exact——仅 term_name/term_code 精确
+        匹配且强制 term_type_code 过滤（如 ``"object"`` 定位对象术语行）。
+        无匹配返回 total=0 空结果，降级编排由调用方负责。
+        """
+        return self._term_for(base_id).search_terms_exact(**kwargs)
+
     def search_terms_batch(
         self: _HasTermBackend, base_id: str, **kwargs: Any
     ) -> dict[str, Any]:

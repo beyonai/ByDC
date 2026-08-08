@@ -20,6 +20,7 @@ from datacloud_knowledge.contracts.term_provider_types import (
     TermCreate,
     TermUpdate,
 )
+from datacloud_knowledge.contracts.types import SearchTermsResult, TagFilter
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,44 @@ class TermBackendMixin(DataCloudDataBackendBase):
             query_vector=effective_vector,
             top_k=top_k,
             offset=offset,
+        )
+
+    def search_terms_exact(
+        self,
+        *,
+        term_type_code: str,
+        keyword: str | None = None,
+        tags: Sequence[TagFilter] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        order_by: str = "relevance",
+    ) -> SearchTermsResult:
+        """按术语类型精确检索术语列表（原子查询，无 BM25 兜底）。
+
+        委托 knowledge reader.search_terms_exact——仅 term_name/term_code
+        精确匹配（term_code 命中即可定位对象术语行），强制 term_type_code
+        过滤（如 ``"object"`` 匹配对象行）。无匹配返回 total=0 空结果，
+        降级编排由调用方负责。
+
+        Args:
+            term_type_code: 术语类型编码（支持驼峰简写映射，如 OBJ→object）。
+            keyword: 可选关键词（精确匹配 term_name/term_code）。
+            tags: 可选标签过滤条件列表。
+            limit: 返回条数（1..200）。
+            offset: 分页偏移（>=0）。
+            order_by: 排序方式（relevance/updated_time/created_time/term_name）。
+
+        Returns:
+            SearchTermsResult，无精确匹配时 total=0、items=[]。
+        """
+        reader = create_reader()
+        return reader.search_terms_exact(
+            term_type_code=term_type_code,
+            keyword=keyword,
+            tags=tags,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
         )
 
     def search_terms_batch(

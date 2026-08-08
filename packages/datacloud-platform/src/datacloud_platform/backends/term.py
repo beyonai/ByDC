@@ -43,6 +43,25 @@ class TermBackend(Protocol):
         """
         ...
 
+    def search_terms_exact(
+        self,
+        *,
+        term_type_code: str,
+        keyword: str | None = None,
+        tags: list[dict[str, Any]] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        order_by: str = "relevance",
+    ) -> Any:
+        """按术语类型精确检索术语列表（原子查询，无 BM25 兜底）。
+
+        仅执行精确匹配（term_name == keyword 或 term_code == keyword），
+        强制 term_type_code 过滤。无匹配时返回空结果，由调用方决定降级。
+
+        对应: reader.search_terms_exact（opengauss/_readers/_term.py）
+        """
+        ...
+
     def search_terms_batch(
         self,
         *,

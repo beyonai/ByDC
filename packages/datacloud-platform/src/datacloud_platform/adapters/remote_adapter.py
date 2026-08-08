@@ -1827,6 +1827,21 @@ class RemoteTermBackend:
         logger.debug("Remote term: search_terms not yet implemented")
         return {"data": [], "totalCount": 0}
 
+    def search_terms_exact(
+        self,
+        *,
+        term_type_code: str,
+        keyword: str | None = None,
+        tags: list[dict[str, Any]] | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        order_by: str = "relevance",
+    ) -> Any:
+        """Remote exact term search — not yet implemented."""
+        _ = term_type_code, keyword, tags, limit, offset, order_by
+        logger.debug("Remote term: search_terms_exact not yet implemented")
+        return {"data": [], "totalCount": 0}
+
     def search_terms_batch(
         self,
         *,
