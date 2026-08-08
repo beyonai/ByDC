@@ -134,6 +134,7 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     ) -> Any: ...
     def list_vocabulary(self, base_id: str) -> list[str]: ...
     def search_terms(self, base_id: str, **kwargs: Any) -> Any: ...
+    def search_terms_batch(self, base_id: str, **kwargs: Any) -> dict[str, Any]: ...
     def search_terms_exact(self, base_id: str, **kwargs: Any) -> Any: ...
     def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]: ...
     def get_term_type(
@@ -780,15 +781,20 @@ class ObjectInstanceDiscoveryMixin:
         mentions: list[dict[str, Any]],
         object_codes: list[str],
     ) -> _AnchorResult:
-        """已有实例发现（词典锚定：快路命中 + 反查兜底）。
+        """已有实例发现（词典锚定：快路命中 + 批量精确反查）。
 
-        对抽取产出的 mention 列表做 词典快路命中 → 反查兜底拿 term_id →
-        结果分发：
+        对抽取产出的 mention 列表做 词典快路命中 → 一次性批量精确反查拿
+        term_id → 结果分发：
 
         - 唯一词面相等命中 1 term → ``existing``（is_new=False，evidence=mention）
         - 词面相等命中 ≥2 term → ``ambiguity``（同名多候选，进歧义裁决）
-        - 与已有 term 子串重叠（非相等）→ ``synonym``（同义候选，进同义裁决）
-        - 无命中 / 缓存命中但反查落空 → ``unanchored``（走新实例创建）
+        - 精确反查落空（缓存旧/孤儿词/仅有别名或子串重叠）→ ``unanchored``
+          （走新实例创建）
+
+        v3 语义（用户拍板）：**命中词表后必须精确找到 term 才算命中**——
+        全部 mentions 一次性 ``search_terms_batch(query_type="exact")``（一次
+        往返替代原逐词最多 4 次串行查询）；精确找不到 → 当未命中，不做
+        BM25/ilike 混合检索兜底（synonym 桶恒空，不再产出同义候选）。
 
         ``object_codes`` 保留以维持签名稳定（v3 锚定不做类型过滤，命中即已有实例）。
 
@@ -798,7 +804,7 @@ class ObjectInstanceDiscoveryMixin:
             object_codes: 非结构化对象类型编码列表（本版仅透传，不参与过滤）。
 
         Returns:
-            锚定结果分发（_AnchorResult 四桶）。
+            锚定结果分发（_AnchorResult 四桶；synonym 恒空）。
         """
         vocabulary = self._vocabulary_words(base_id)
         existing: list[dict[str, Any]] = []
@@ -806,118 +812,61 @@ class ObjectInstanceDiscoveryMixin:
         synonym: list[dict[str, Any]] = []
         unanchored: list[dict[str, Any]] = []
 
+        # 收集词表命中的 mention 词面（去重保序），一次性精确批量反查
+        anchored_names: list[str] = []
+        seen_names: set[str] = set()
+        for mention in mentions:
+            name = str(mention.get("term_name") or "").strip()
+            if name and name in vocabulary and name not in seen_names:
+                seen_names.add(name)
+                anchored_names.append(name)
+        batch: dict[str, Any] = {}
+        if anchored_names:
+            batch = self.search_terms_batch(
+                base_id,
+                keywords=anchored_names,
+                query_type="exact",
+                top_k=_ANCHOR_SEARCH_TOP_K,
+            ) or {}
+
         for mention in mentions:
             name = str(mention.get("term_name") or "").strip()
             if not name:
                 logger.debug("跳过空 mention: %s", mention)
                 continue
-            # 快路：词典缓存命中判定（O(1)）
+            # 快路：词典缓存命中判定（O(1)）；未命中 → 新实例创建
             if name not in vocabulary:
                 unanchored.append(mention)
                 continue
-            # 反查兜底：按 mention 拿 term_id 才算真命中
-            rows, surface_exact = self._reverse_lookup_terms(base_id, name)
+            # 批量精确反查：精确找到 term 才算真命中（term_name/term_code/别名
+            # 均参与 exact 匹配，命中行全部视为词面相等）
+            rows = _search_result_items(batch.get(name))
             if not rows:
-                # 缓存旧（词已删/改名/孤儿词）→ 按未锚定处理，不报错、不建实例
-                logger.info("词典命中但反查落空（缓存旧或孤儿词）: %s", name)
+                # 缓存旧（词已删/改名/孤儿词）或仅别名/子串重叠 → 按未锚定处理，
+                # 不报错、不建实例、不做模糊兜底
+                logger.info("词典命中但精确反查落空（缓存旧或孤儿词）: %s", name)
                 unanchored.append(mention)
                 continue
-            # 分发（词面相等判定）
-            if surface_exact:
-                # 精确路径（term_name / term_code / TermName 别名）→ 全部词面相等命中
-                surface = rows
-            else:
-                # BM25 / ilike 部分匹配路径 → 仅 term_name 词面相等者才算
-                surface = [row for row in rows if _row_term_name(row) == name]
-            if len(surface) == 1:
-                hit_row = _term_row_to_hit_row(surface[0])
+            if len(rows) == 1:
+                hit_row = _term_row_to_hit_row(rows[0])
                 hit_row["evidence"] = name
                 existing.append(hit_row)
-            elif len(surface) >= 2:
+            else:
                 ambiguity.append(
                     {
                         "mention": name,
-                        "terms": surface,
+                        "terms": rows,
                         "object_code": mention.get("object_code"),
                         "raw_type": mention.get("raw_type"),
                         "evidence": mention.get("evidence"),
                     }
                 )
-            else:
-                overlap = [
-                    row for row in rows if _substring_overlap(name, _row_term_name(row))
-                ]
-                if overlap:
-                    synonym.append(
-                        {
-                            "mention": name,
-                            "term": _term_row_to_hit_row(overlap[0]),
-                            "object_code": mention.get("object_code"),
-                            "raw_type": mention.get("raw_type"),
-                            "evidence": mention.get("evidence"),
-                        }
-                    )
-                else:
-                    unanchored.append(mention)
         return _AnchorResult(
             existing=existing,
             ambiguity=ambiguity,
             synonym=synonym,
             unanchored=unanchored,
         )
-
-    def _reverse_lookup_terms(
-        self: _ObjectInstanceDiscoveryPlatform, base_id: str, name: str
-    ) -> tuple[list[dict[str, Any]], bool]:
-        """按 mention 反查 term（拿 term_id 才算真命中）。
-
-        三级兜底：
-        1. ``search_terms`` 精确匹配（term_name / term_code，别名经 TermName 自动参与）
-        2. 无命中 → ``search_terms`` BM25 全文兜底（JOIN term_name）
-        3. 仍无命中 → ``list_term_names(name_text=mention)`` ilike 别名反查
-           → term_ids 反查 term 详情
-
-        Args:
-            base_id: 本体库/系统空间标识。
-            name: mention 文本。
-
-        Returns:
-            ``(rows, surface_exact)``：
-            - rows: 匹配 term 行列表（空列表 = 未锚定）。
-            - surface_exact: True=全部行按词面精确命中（term_name/term_code/别名
-              完全相等，别名反查路径亦属词面命中）；False=仅模糊/部分匹配
-              （BM25 / ilike），需调用方按 term_name 词面相等再判定。
-        """
-        exact = self.search_terms(
-            base_id, term_name=name, query_type="exact", top_k=_ANCHOR_SEARCH_TOP_K
-        )
-        rows = _search_result_items(exact)
-        if rows:
-            return rows, True
-
-        fuzzy = self.search_terms(
-            base_id, keyword=name, query_type="fulltext", top_k=_ANCHOR_SEARCH_TOP_K
-        )
-        rows = _search_result_items(fuzzy)
-        if rows:
-            return rows, False
-
-        name_rows = self.list_term_names(base_id, name_text=name)
-        if not name_rows:
-            return [], False
-        term_ids = sorted({str(r["term_id"]) for r in name_rows if r.get("term_id")})
-        if not term_ids:
-            return [], False
-        by_ids = self.search_terms(
-            base_id, term_ids=term_ids, top_k=_ANCHOR_SEARCH_TOP_K
-        )
-        detail_rows = _search_result_items(by_ids)
-        if not detail_rows:
-            return [], False
-        # ilike 路径：name_text 完全相等 = 词面命中（别名反查路径）；
-        # 仅部分匹配（ilike %mention%）→ 模糊，需调用方做子串/相等判定。
-        surface_exact = any(str(r.get("name_text") or "") == name for r in name_rows)
-        return detail_rows, surface_exact
 
     async def _discover_new_object_instances(
         self: Any,
@@ -1300,11 +1249,6 @@ def _search_result_items(result: Any) -> list[dict[str, Any]]:
 def _row_term_name(row: dict[str, Any]) -> str:
     """取术语行的标准名称（兼容 camelCase / snake_case）。"""
     return str(row.get("term_name") or row.get("termName") or "").strip()
-
-
-def _substring_overlap(left: str, right: str) -> bool:
-    """词面互为子串（非相等）——同义裁决候选触发条件。"""
-    return left != right and (left in right or right in left)
 
 
 def _term_row_to_hit_row(row: dict[str, Any]) -> dict[str, Any]:

@@ -49,6 +49,7 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         self.term_search_results: dict[str, Any] = {"data": [], "totalCount": 0}
         self.term_exact_results: dict[str, Any] = {"data": [], "totalCount": 0}
         self.name_rows: list[dict[str, Any]] = []
+        self.term_batch_results: dict[str, dict[str, Any]] = {}
 
     async def get_document_content_by_term_id(
         self, base_id: str, *, term_id: str
@@ -74,6 +75,15 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
     def search_terms(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("search_terms", {"base_id": base_id, **kwargs}))
         return self.term_search_results
+
+    def search_terms_batch(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        """批量精确检索：显式配置 term_batch_results 时按其分发；
+        否则默认每个 keyword 返回 term_search_results（单词场景简化）。"""
+        self.calls.append(("search_terms_batch", {"base_id": base_id, **kwargs}))
+        if self.term_batch_results:
+            return dict(self.term_batch_results)
+        keywords = kwargs.get("keywords") or []
+        return {kw: dict(self.term_search_results) for kw in keywords}
 
     def search_terms_exact(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
         self.calls.append(("search_terms_exact", {"base_id": base_id, **kwargs}))
@@ -382,25 +392,21 @@ class TestAnchorExistingDiscovery:
         assert [t["term_id"] for t in result.ambiguity[0]["terms"]] == ["t1", "t2"]
         assert result.unanchored == []
 
-    def test_substring_overlap_produces_synonym_candidates(self) -> None:
-        """mention 与已有 term 子串重叠（非相等）→ 同义候选队列。"""
+    def test_exact_miss_with_substring_overlap_is_unanchored(self) -> None:
+        """精确反查落空（即使与已有 term 子串重叠）→ 未锚定走新实例创建。
+
+        v3 语义（用户拍板）：命中词表后必须精确找到 term 才算命中；
+        精确找不到 → 当未命中，**不做 BM25/ilike 混合检索兜底**（synonym 桶恒空）。
+        """
         platform = _FakePlatform()
         platform.vocab_words = ["苹果公司", "苹果"]
-
-        def _search(base_id: str, **kwargs: Any) -> dict[str, Any]:
-            if kwargs.get("query_type") == "exact":
-                return {"total": 0, "items": []}
-            return {"total": 1, "items": [_term_row("t1", "苹果")]}
-
-        platform.search_terms = _search  # type: ignore[method-assign]
+        platform.term_search_results = {"total": 0, "items": []}
         result = platform._discover_existing_object_instances(
             BASE_ID, mentions=[_mention("苹果公司")], object_codes=["by_opportunity"]
         )
         assert result.existing == []
-        assert len(result.synonym) == 1
-        assert result.synonym[0]["mention"] == "苹果公司"
-        assert result.synonym[0]["term"]["term_name"] == "苹果"
-        assert result.unanchored == []
+        assert result.synonym == []
+        assert result.unanchored == [_mention("苹果公司")]
 
     def test_no_hit_produces_unanchored(self) -> None:
         """mention 不在词典 → 未锚定（走新实例创建），不产出已有 hit。"""
@@ -426,35 +432,57 @@ class TestAnchorExistingDiscovery:
         assert result.existing == []
         assert result.unanchored == [_mention("孤儿词")]
 
-    def test_alias_reverse_lookup_via_list_term_names(self) -> None:
-        """别名反查路径：search 落空 → list_term_names(ilike) → term_ids 反查拿 term 详情。"""
+    def test_exact_miss_with_alias_only_is_unanchored(self) -> None:
+        """仅别名（TermName）存在而 term_name 精确查不到 → 未锚定走新实例创建。
+
+        v3 语义：删除 ilike 别名反查兜底（list_term_names 不再参与锚定），
+        精确找不到即未命中。
+        """
         platform = _FakePlatform()
         platform.vocab_words = ["苹果公司"]
         platform.term_search_results = {"total": 0, "items": []}
         platform.name_rows = [
             {"name_id": "n1", "term_id": "t9", "name_text": "苹果公司"}
         ]
-        # 第三次调用 search_terms（term_ids 反查）返回 term 详情
-        called: list[dict[str, Any]] = []
-
-        original_search = platform.search_terms
-
-        def _search(base_id: str, **kwargs: Any) -> dict[str, Any]:
-            called.append(kwargs)
-            if kwargs.get("term_ids"):
-                return {"total": 1, "items": [_term_row("t9", "Apple Inc.")]}
-            return {"total": 0, "items": []}
-
-        platform.search_terms = _search  # type: ignore[method-assign]
         result = platform._discover_existing_object_instances(
             BASE_ID, mentions=[_mention("苹果公司")], object_codes=["by_opportunity"]
         )
-        assert original_search is not None
-        assert len(result.existing) == 1
-        assert result.existing[0]["term_id"] == "t9"
-        assert result.existing[0]["evidence"] == "苹果公司"
-        # exact → fulltext → term_ids 反查，共三次
-        assert len(called) == 3
+        assert result.existing == []
+        assert result.unanchored == [_mention("苹果公司")]
+        # 锚定只走一次批量精确查询，不再触发 list_term_names / 逐词 search_terms
+        assert not any(c[0] == "list_term_names" for c in platform.calls)
+        assert not any(c[0] == "search_terms" for c in platform.calls)
+
+    def test_batch_exact_single_query_all_mentions(self) -> None:
+        """全部 mentions 一次性 search_terms_batch(exact)，不逐词串行反查。
+
+        命中词表去重保序进 keywords；未命中词表的不参与查询；不再调用
+        search_terms / list_term_names 模糊兜底路径。
+        """
+        platform = _FakePlatform()
+        platform.vocab_words = ["张三", "李四"]
+        platform.term_search_results = {"total": 0, "items": []}
+        platform.term_batch_results = {
+            "张三": {"total": 1, "items": [_term_row("t1", "张三")]},
+            "李四": {"total": 1, "items": [_term_row("t2", "李四")]},
+        }
+        result = platform._discover_existing_object_instances(
+            BASE_ID,
+            mentions=[_mention("张三"), _mention("张三"), _mention("李四"), _mention("王五")],
+            object_codes=["by_opportunity"],
+        )
+        # 重复 mention 各自产出已有实例候选（与逐词语义一致）
+        assert [r["term_id"] for r in result.existing] == ["t1", "t1", "t2"]
+        assert result.unanchored == [_mention("王五")]
+
+        batch_calls = [c for c in platform.calls if c[0] == "search_terms_batch"]
+        assert len(batch_calls) == 1
+        kwargs = batch_calls[0][1]
+        assert kwargs["keywords"] == ["张三", "李四"]  # 去重保序，未命中词不查询
+        assert kwargs["query_type"] == "exact"
+        # 模糊兜底路径（逐词 search_terms / ilike list_term_names）不再触发
+        assert not any(c[0] == "search_terms" for c in platform.calls)
+        assert not any(c[0] == "list_term_names" for c in platform.calls)
 
     def test_blank_mention_is_skipped(self) -> None:
         platform = _FakePlatform()
@@ -918,6 +946,10 @@ class _RpcAnchorPlatform(ObjectInstanceDiscoveryMixin):
 
     def search_terms(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
         return self.term_search_results
+
+    def search_terms_batch(self, base_id: str, **kwargs: Any) -> dict[str, Any]:
+        keywords = kwargs.get("keywords") or []
+        return {kw: dict(self.term_search_results) for kw in keywords}
 
     def list_term_names(self, base_id: str, **kwargs: Any) -> list[dict[str, Any]]:
         return list(self.name_rows)
@@ -2480,22 +2512,19 @@ class TestAdjudication:
         assert hits[0].instance_id == "term-adj-3"
 
     @pytest.mark.asyncio
-    async def test_full_flow_adjudicates_synonym_candidate(
+    async def test_full_flow_exact_miss_creates_new_instance(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """主流程：synonym 候选 → 裁决 same=true → 别名落库，无新实例。"""
+        """主流程：精确反查落空（即使子串重叠）→ unanchored → 创建新实例。
+
+        v3 语义：不做 BM25 兜底产生同义候选，词表旧/子串重叠一律走新实例创建，
+        不写别名（create_term_name 不再触发）。
+        """
         platform = _FakePlatform()
         platform.document = _make_document()
-        # 词典含 mention 词（回填后词典即含该词）→ 快路命中 → 反查 → 子串重叠 → synonym 候选
+        # 词典含 mention 词（回填后词典即含该词）→ 快路命中 → 精确反查落空
         platform.vocab_words = ["苹果", "苹果公司"]
-
-        def fake_search(base_id: str, **kwargs: Any) -> dict[str, Any]:
-            # 精确查询（term_name=苹果公司）无命中；BM25 兜底返回子串相关行"苹果"
-            if kwargs.get("query_type") == "fulltext":
-                return {"total": 1, "items": [_term_row("t1", "苹果")]}
-            return {"total": 0, "items": []}
-
-        monkeypatch.setattr(platform, "search_terms", fake_search)
+        platform.term_search_results = {"total": 0, "items": []}
         raw = (
             '[{"term_name": "苹果公司", "object_code": "by_opportunity",'
             ' "evidence": "苹果公司"}]'
@@ -2503,6 +2532,9 @@ class TestAdjudication:
 
         async def fake_invoke(messages: list[dict[str, str]]) -> Any:
             return _AiMessage(raw)
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-1"}], "total": 1, "meta": {}}
 
         monkeypatch.setattr(platform, "_invoke_extract_llm", fake_invoke)
         monkeypatch.setattr(
@@ -2513,20 +2545,21 @@ class TestAdjudication:
         monkeypatch.setattr(
             platform, "batch_create_vocabulary", lambda base_id, *, words: None
         )
-
-        async def fake_judge(messages: list[dict[str, str]]) -> Any:
-            return _AiMessage('{"same": true, "canonical": "t1"}')
-
-        monkeypatch.setattr(platform, "_invoke_judge_llm", fake_judge)
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
         result = await platform.discover_object_instances_unstructured(
             BASE_ID,
             instance_id="term-input",
             object_codes=["by_opportunity"],
         )
-        assert result.items == []
-        alias = next(c for c in platform.calls if c[0] == "create_term_name")
-        assert alias[1]["name"]["nameText"] == "苹果公司"
-        assert all(c[0] != "create_term_relation" for c in platform.calls)
+        assert [h.instance_id for h in result.items] == ["term-new-1"]
+        assert result.items[0].is_new is True
+        # 无同义候选 → 不写别名、不调同义裁决
+        assert not any(c[0] == "create_term_name" for c in platform.calls)
+        assert not any(c[0] == "_invoke_judge_llm" for c in platform.calls)
+        # 新实例创建 → 提及关系（源→目标）
+        assert any(c[0] == "create_term_relation" for c in platform.calls)
 
 
 # ============================================================================
