@@ -1,8 +1,8 @@
 """测试 discoverObjectInstancesUnstructured — 非结构化对象实例发现接口。
 
-T1 骨架范围：模型默认值、①参数校验、②管道异常上抛（不降级）、③④ TODO 占位
-（NotImplementedError）、平台接线可达性、RPC 501 / X-Session-Id 校验。
-后续 T2/T3/T4 在同类扩展。
+T1~T12 演进：模型默认值、①参数校验、②管道异常上抛（不降级）；③ AC 锚定（T7）
+与 ④ LLM 抽取（T8）已落地替换占位；RPC 错误码 / X-Session-Id 校验全套；
+501 not_implemented 语义在 T12 收口移除（回归断言同步删除）。
 """
 
 from __future__ import annotations
@@ -311,11 +311,6 @@ class TestDiscoverPipelineErrors:
                 object_codes=["by_opportunity"],
                 session_id="session-1",
             )
-
-
-# ============================================================================
-# ③④ 占位（T7/T8 已替换，仅保留 RPC 501 映射回归——T12 收口）
-# ============================================================================
 
 
 # ============================================================================
@@ -730,14 +725,14 @@ class TestPlatformWiring:
 
 
 # ============================================================================
-# RPC handler（T1：501 短路 + X-Session-Id 校验）
+# RPC handler（X-Session-Id 校验 + 错误码映射；501 语义已移除）
 # ============================================================================
 
 
 class _RpcFakePlatform:
     """RPC 级假平台：按 behavior 抛出对应异常。"""
 
-    def __init__(self, behavior: str = "not_implemented") -> None:
+    def __init__(self, behavior: str = "ok") -> None:
         self.behavior = behavior
 
     async def discover_object_instances_unstructured(
@@ -748,8 +743,8 @@ class _RpcFakePlatform:
         object_codes: list[str],
         session_id: str,
     ) -> ObjectInstanceDiscoveryResult:
-        if self.behavior == "not_implemented":
-            raise NotImplementedError("existing instance discovery is not implemented")
+        if self.behavior == "ok":
+            return ObjectInstanceDiscoveryResult(items=[])
         if self.behavior == "not_found":
             raise KeyError(f"term not found: {instance_id}")
         if self.behavior == "invalid_params":
@@ -760,9 +755,9 @@ class _RpcFakePlatform:
 
 
 class _RpcComboPlatform(ObjectInstanceDiscoveryMixin):
-    """组合平台：走真实 mixin 主流程（① 校验 + ③④ 占位短路），供 RPC 层测试。"""
+    """组合平台：走真实 mixin 主流程（① 校验），供 RPC 层测试。"""
 
-    def __init__(self, behavior: str = "not_implemented") -> None:
+    def __init__(self, behavior: str = "ok") -> None:
         self.behavior = behavior
 
     async def get_document_content_by_term_id(
@@ -798,8 +793,9 @@ def _rpc_client(platform: Any) -> TestClient:
 
 
 class TestDiscoverRpc:
-    def test_normal_input_returns_501_not_implemented(self) -> None:
-        client = _rpc_client(_RpcFakePlatform("not_implemented"))
+    def test_normal_input_returns_200(self) -> None:
+        """T12：501 语义已移除，正常输入不再短路（走 platform 返回结果）。"""
+        client = _rpc_client(_RpcFakePlatform("ok"))
         resp = client.post(
             "/api/v1/rpc/search/discoverObjectInstancesUnstructured",
             json={
@@ -812,11 +808,12 @@ class TestDiscoverRpc:
             headers={"X-Session-Id": "session-1"},
         )
         body = resp.json()
-        assert body["code"] == 501
-        assert "not implemented" in body["message"]
+        assert body["code"] == 200
+        assert body["success"] is True
+        assert body["data"]["items"] == []
 
     def test_missing_session_id_returns_400(self) -> None:
-        client = _rpc_client(_RpcFakePlatform("not_implemented"))
+        client = _rpc_client(_RpcFakePlatform("ok"))
         resp = client.post(
             "/api/v1/rpc/search/discoverObjectInstancesUnstructured",
             json={

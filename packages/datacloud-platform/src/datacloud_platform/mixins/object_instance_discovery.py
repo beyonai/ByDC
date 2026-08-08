@@ -169,7 +169,6 @@ class ObjectInstanceDiscoveryMixin:
         Raises:
             ValueError: 入参非法（instance_id 为空 / object_codes 缺失）。
             KeyError: 输入实例不存在。
-            NotImplementedError: ④ 发现逻辑 TODO 占位（T8 替换）。
         """
         # ① 参数校验
         if not instance_id.strip():

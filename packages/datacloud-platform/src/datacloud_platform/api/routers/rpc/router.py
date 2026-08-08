@@ -44,7 +44,7 @@ _EXCEPTION_MAP: dict[type[Exception], tuple[int, str]] = {
     KeyError: (HTTP_404, "not_found"),
     ValueError: (HTTP_400, "invalid_params"),
     PermissionError: (HTTP_403, "permission_denied"),
-    NotImplementedError: (HTTP_501, "not_implemented"),
+    # T12：501 not_implemented 语义移除（③④ 已由 T7/T8 落地，占位不再触发）
 }
 
 
