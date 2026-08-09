@@ -1,6 +1,6 @@
-"""T-46: enumerateObjectInstances RPC handler + platform 链路透传测试。
+"""enumerateObjectInstances RPC handler + platform 链路透传测试。
 
-覆盖验收点（对齐 T-46 Acceptance Criteria）：
+覆盖验收点：
 1. handler fake 注入（duck-typed fake platform）：
    - page/pageSize 钳制 >=1（0/负数 → 1）
    - filters 数组原样透传（fake 捕获收到的 filters，含嵌套 params）
@@ -14,7 +14,7 @@
 4. TermMixin → TermBackend 委托链路（conftest platform fixture + FakeTermBackend）
 5. none_adapters _NoopTermBackend stub（sync，返回空列表）
 
-T-55 增量（fake 注入验收，依赖 T-54）：
+sort 透传增量（fake 注入验收）：
 6. sort 原值锚点：fake 收到调用方传入的同一 sort 对象（is 锚点），handler
    不原地改写（不解析、不加默认键）
 7. 非法 sort（未知 by / params 非 dict / query 非 str）→ knowledge 层
@@ -22,7 +22,7 @@ T-55 增量（fake 注入验收，依赖 T-54）：
 8. 信封 9 字段无 score：TestClient 全链路 JSON 断言 items 恰好 9 键
    （含 out_degree/in_degree，无 score）；sort 全链路原值透传锚点
 9. 缺 query → 400 映射：fake 抛 ValueError（模拟 knowledge 校验拒绝）→
-   RPC 层 400 invalid_params。注意：knowledge 层 T-51 对缺 query 实际是
+   RPC 层 400 invalid_params。注意：knowledge 层对缺 query 实际是
    退化语义（validate 放行，term_id ASC）——本用例验证的是 RPC 映射契约
    （knowledge 层任何 ValueError → 400），不宣称 knowledge 必拒缺 query
 10. 范围全缺省（含 sort 有值）→ 空信封不报错（sort 不代替范围）
@@ -239,7 +239,7 @@ class TestHandler:
     async def test_absent_scope_with_filters_returns_empty_envelope(self) -> None:
         """范围全缺省（filters 有值）→ 不报错；fake 返回空页 → 信封 items=[] total=0。
 
-        空语义本体在 knowledge 层（T-45 已测：全空 → 空结果）；handler 只
+        空语义本体在 knowledge 层（已测：全空 → 空结果）；handler 只
         保证参数透传 + 信封组装，此测试验证链路不炸且信封诚实。
         """
         fake = RecordingFakePlatform()
@@ -656,14 +656,14 @@ class TestNoopStub:
 
 
 # ============================================================================
-# T-55：sort 原值锚点（handler fake 注入）
+# sort 原值锚点（handler fake 注入）
 # ============================================================================
 
 
 class TestSortOriginalValueAnchor:
     """sort 原值锚点（handler fake 注入）。
 
-    T-55 验收：sort 规格以「原值」透传——fake 收到的是调用方传入的同一
+    sort 规格以「原值」透传——fake 收到的是调用方传入的同一
     dict 对象（透传不复制），且 handler 不原地改写（不解析、不加默认键）。
     与 filters 的透传约定同构（handler 只透传不解析，校验在 knowledge 层）。
     """
@@ -705,7 +705,7 @@ class TestSortOriginalValueAnchor:
 
 
 # ============================================================================
-# T-55：非法 sort → ValueError → 400 invalid_params（TestClient 全链路）
+# 非法 sort → ValueError → 400 invalid_params（TestClient 全链路）
 # ============================================================================
 
 
@@ -805,7 +805,7 @@ class TestInvalidSort400:
 
         RPC 映射契约测试：fake 模拟 knowledge 层因缺 query 抛 ValueError，
         验证 _EXCEPTION_MAP（ValueError → 400 invalid_params）照常生效且
-        handler 不吞异常。注意：knowledge 层 T-51 对缺 query 实际是退化
+        handler 不吞异常。注意：knowledge 层对缺 query 实际是退化
         语义（validate 放行 → term_id ASC）——本用例只钉 RPC 映射机制，
         不宣称 knowledge 必拒缺 query。
         """
@@ -834,7 +834,7 @@ class TestInvalidSort400:
 
 
 # ============================================================================
-# T-55：信封 9 字段无 score（TestClient 全链路 JSON 断言）
+# 信封 9 字段无 score（TestClient 全链路 JSON 断言）
 # ============================================================================
 
 

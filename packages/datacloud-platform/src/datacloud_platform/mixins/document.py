@@ -1909,30 +1909,51 @@ async def resolve_document_objects_by_file_paths(
     """
     rows: list[dict[str, Any]] = []
     allowed_kb_resource_ids = set(kb_resource_ids)
-    for kb_id, raw_file_paths in file_paths_by_kb_id.items():
-        file_paths = tuple(dict.fromkeys(path for path in raw_file_paths if path))
-        if not kb_id or not file_paths:
-            continue
-        result = platform.search_terms_by_labels(
-            base_id,
-            label_filters=[
-                {"field_code": "kb_file_path", "filter_value": file_path}
-                for file_path in file_paths
-            ],
-            label_condition="or",
-            top_k=1000,
+    # kb_resource_ids 白名单空 → 全滤（现状防御，防「空 → 全放」回归）
+    if not kb_resource_ids:
+        return []
+    # 合并所有 kb 组为单次调用（N 次 SQL → 1 次）
+    all_kb_ids = list(file_paths_by_kb_id.keys())
+    all_paths = tuple(
+        dict.fromkeys(p for ps in file_paths_by_kb_id.values() for p in ps if p)
+    )
+    if not all_kb_ids or not all_paths:
+        return []
+    n_groups = len(all_kb_ids)
+    top_k = min(
+        1000 * n_groups, 10000
+    )  # 每 kb 名义配额保持 1000，全局上限 10000
+    if 1000 * n_groups > 10000:
+        logger.warning(
+            "resolve_document_objects_by_file_paths: %d 个 kb 组，top_k 钳制到 10000",
+            n_groups,
         )
-        allowed_paths = set(file_paths)
-        for row in _term_result_items(result):
-            metadata = _term_metadata(row)
-            result_kb_id = str(metadata.get("kb_id") or "")
-            if result_kb_id != str(kb_id):
-                continue
-            if str(metadata.get("kb_resource_id") or "") not in allowed_kb_resource_ids:
-                continue
-            if str(metadata.get("kb_file_path") or "") not in allowed_paths:
-                continue
-            rows.append(row)
+    result = platform.search_terms_by_labels(
+        base_id,
+        # 迁移：三参数 → filters 三元组（三个维度恒非空）；
+        # 不传 label_filters（依赖跳过语义）
+        filters=[
+            {"field": "kb_id", "op": "in", "values": list(all_kb_ids)},
+            {"field": "kb_resource_id", "op": "in", "values": list(kb_resource_ids)},
+            {"field": "kb_file_path", "op": "in", "values": list(all_paths)},
+        ],
+        top_k=top_k,
+    )
+    for row in _term_result_items(result):
+        metadata = _term_metadata(row)
+        # 0) 防御：kb_resource_id 白名单（SQL 已下推，保留作防御校验）
+        if str(metadata.get("kb_resource_id") or "") not in allowed_kb_resource_ids:
+            continue
+        # 1) (kb_id, kb_file_path) 按组配对校验（决策 3：保留内存层）
+        result_kb_id = str(metadata.get("kb_id") or "")
+        if result_kb_id not in file_paths_by_kb_id:
+            continue
+        if (
+            str(metadata.get("kb_file_path") or "")
+            not in file_paths_by_kb_id[result_kb_id]
+        ):
+            continue
+        rows.append(row)
     return rows
 
 

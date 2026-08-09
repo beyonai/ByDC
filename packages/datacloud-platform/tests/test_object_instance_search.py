@@ -685,12 +685,12 @@ async def test_chunk_search_rejects_missing_kb_resource_id() -> None:
 
 
 # ============================================================================
-# T-40: _do_path2 多 KB chunk 搜索并发化
+# _do_path2 多 KB chunk 搜索并发化
 # ============================================================================
 
 
 class TestDoPath2ConcurrentSearch:
-    """T-40: _do_path2 内部多 KB chunk 搜索并发执行。
+    """_do_path2 内部多 KB chunk 搜索并发执行。
 
     验收点:
     1. 多 KB 并发：一个成功一个抛异常 → 成功结果正常返回、失败仅告警
@@ -856,7 +856,7 @@ class TestDoPath2ConcurrentSearch:
 
 
 # ============================================================================
-# T-42: 全局检索 KNOWLEDGE_BASE 白名单（非结构化实例排除结构化产物）
+# 全局检索 KNOWLEDGE_BASE 白名单（非结构化实例排除结构化产物）
 # ============================================================================
 
 
@@ -926,7 +926,7 @@ _SYSTEM_TERM_TYPES = {"prop", "object", "view", "relation", "ontology_action"}
 
 
 class TestGlobalSearchWhitelist:
-    """T-42: 全局检索（object_codes=None）只检索 KNOWLEDGE_BASE 类型实例。
+    """全局检索（object_codes=None）只检索 KNOWLEDGE_BASE 类型实例。
 
     验收锚点：
     - search_terms_batch 收到 term_type_codes == KNOWLEDGE_BASE 白名单

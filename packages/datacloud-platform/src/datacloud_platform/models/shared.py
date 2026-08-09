@@ -183,7 +183,7 @@ class ObjectInstanceListItem:
     排序可承诺稳定、total 诚实。
 
     file_name / kb_resource_id / kb_id 来自 term 的 ext_attrs，
-    枚举接口（knowledge 层 T-45）不返回这些字段时恒为 None。
+    枚举接口（knowledge 层）不返回这些字段时恒为 None。
     """
 
     instance_id: str

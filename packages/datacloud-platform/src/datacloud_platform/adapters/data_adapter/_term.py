@@ -259,21 +259,25 @@ class TermBackendMixin(DataCloudDataBackendBase):
     def search_terms_by_labels(
         self,
         *,
-        label_filters: list[LabelFilter],
+        label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "or",
         term_type_codes: list[str] | None = None,
+        filters: list[dict[str, Any]] | None = None,
         top_k: int = 200,
     ) -> list[dict[str, Any]]:
         """纯标签过滤检索 — 不需要关键词。
 
-        直接使用 reader.query_terms_by_labels() 做纯 WHERE term_tags->>'key' = 'value' 过滤。
+        直接使用 reader.query_terms_by_labels() 做纯 WHERE 过滤。
+        label_filters 为 None/[] 时跳过 _LF 构建（透传空，依赖 reader 跳过维度语义）；
+        filters 原样透传，不做任何空值改写（保持透明；结构契约由 reader 入口校验
+        抛 ValueError → 调用方早暴露）。
         返回 term dict 列表。
         """
         from datacloud_knowledge.contracts.term_provider_types import LabelFilter as _LF
 
         reader = create_reader()
         cfgs: list[Any] = []
-        for lf in label_filters:
+        for lf in label_filters or []:
             if isinstance(lf, dict):
                 cfgs.append(
                     _LF(
@@ -288,6 +292,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
             label_filters=cfgs,
             label_condition=label_condition,
             term_type_codes=term_type_codes,
+            filters=filters,
             top_k=top_k,
         )
         return [_term_item_to_dict(item) for item in items]

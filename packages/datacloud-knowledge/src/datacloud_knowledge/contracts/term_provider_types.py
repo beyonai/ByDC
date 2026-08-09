@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 字面量类型
@@ -38,7 +38,7 @@ class ObjectInstanceItem:
 
     ``out_degree``/``in_degree`` 仅在请求包含 degree filter（触发 JOIN）时
     为真实**范围度数**（对端在 object_codes ∪ kb_resource_ids 并集内才计数，
-    T-65）；无 degree filter 时不做 JOIN，恒为 0。
+    ）；无 degree filter 时不做 JOIN，恒为 0。
     """
 
     term_id: str
@@ -63,14 +63,14 @@ class SortSpec:
 
     与 FilterSpec 请求元素同构：单一 key（by）+ params 参数字典。
     ``by`` 目前仅支持 ``"similarity"``（语义相似度排序，EmbeddingService
-    形态 T-51 落地）；新排序依据 = 扩展 Literal + _SORT_REGISTRY 条目（T-51），
+    形态落地）；新排序依据 = 扩展 Literal + _SORT_REGISTRY 条目，
     本层仅定形状，不做任何排序逻辑。
     """
 
     by: Literal["similarity"]
     """排序依据。目前仅 "similarity"。"""
     params: dict[str, Any] = field(default_factory=dict)
-    """类型专属参数字典（如 embedding 查询所需参数，T-51 定义）。"""
+    """类型专属参数字典（如 embedding 查询所需参数）。"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -96,6 +96,29 @@ class LabelFilter:
     """范围过滤最小值。"""
     max_filter_value: int | float | None = None
     """范围过滤最大值。"""
+
+
+class FilterSpec(TypedDict, total=True):
+    """``query_terms_by_labels`` 通用过滤通道元素（结构契约）。
+
+    三键均必填（TypedDict ``total=True`` 语义）：缺任一键 → 契约错误
+    （调用方入口抛 ``ValueError``，不宽容跳过）。与 label_filters 的
+    「数据内容无效可跳过」定位不同——filters 是结构契约通道。
+
+    - ``field`` 必须 ∈ 白名单（knowledge 层 ``_FILTER_FIELD_MAP``：
+      ``kb_id`` / ``kb_resource_id`` / ``kb_file_path`` / ``term_type_code``），
+      不在白名单 → 契约错误；
+    - ``op`` 仅支持 ``"eq"``（单值等值，恰 1 值）/ ``"in"``（列表匹配，≥0 值）；
+    - ``values`` 空列表按 op 分派：``in`` + ``[]`` = 全滤 ``return []``；
+      ``eq`` + ``[]`` = 契约错误（eq 需恰 1 值）。
+    """
+
+    field: str
+    """过滤维度（白名单 field 名）。"""
+    op: Literal["eq", "in"]
+    """比较操作。eq = 精确等值（恰 1 个值）；in = 列表匹配（≥0 个值）。"""
+    values: list[str]
+    """匹配值列表。元素绑定前统一 ``str(v)`` 转换。"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +303,7 @@ class ImportResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 __all__ = [
+    "FilterSpec",
     "ImportResult",
     "LabelCondition",
     "LabelFilter",

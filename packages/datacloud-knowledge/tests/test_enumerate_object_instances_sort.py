@@ -1,12 +1,12 @@
-"""T-49：SortSpec 类型形状 + enumerate_object_instances 协议签名（sort 条件框架）。
+"""SortSpec 类型形状 + enumerate_object_instances 协议签名（sort 条件框架）。
 
 本层仅签名验收：
 - SortSpec 形状 {by: str, params: dict}（与 FilterSpec 请求元素同构），by 目前仅 "similarity"
 - TermReader 协议 / provider 入口签名新增 ``sort: dict[str, Any] | None = None``
 - 返回模型 ObjectInstanceItem 保持 6 字段，不加 score（verify gate 钉死）
-- 不改 total 语义、不建 _SORT_REGISTRY（T-51）、不启用 embedding 实际逻辑（T-51）
+- 不改 total 语义、不建 _SORT_REGISTRY、不启用 embedding 实际逻辑
 
-注意：本层只验形状与签名，不验 SQL 排序行为（T-51 EmbeddingService 落地）。
+注意：本层只验形状与签名，不验 SQL 排序行为（EmbeddingService 落地）。
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def test_sort_spec_is_frozen() -> None:
 
 
 def test_sort_spec_by_only_allows_similarity() -> None:
-    """by 目前仅 "similarity"（类型层面 Literal 约束，T-51 扩展时放宽）。"""
+    """by 目前仅 "similarity"（类型层面 Literal 约束，后续扩展时放宽）。"""
     hints = get_type_hints(SortSpec)
     assert "similarity" in str(hints["by"])
 

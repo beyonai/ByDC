@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -37,6 +37,9 @@ from datacloud_knowledge.contracts.term_provider_types import (
     QueryResult,
     QueryType,
     TermDetail,
+)
+from datacloud_knowledge.contracts.term_provider_types import (
+    FilterSpec as TermFilterSpec,  # query_terms_by_labels filters 通道元素（区别于本模块 enumerate 的 FilterSpec 注册表条目）
 )
 from datacloud_knowledge.contracts.term_provider_types import (
     TermItem as ProviderTermItem,
@@ -104,7 +107,7 @@ def _degree_metric_expr(metric: str) -> str:
     """degree metric 白名单 → SQL 度量表达式（防注入：白名单映射，绝不拼接输入）。
 
     度数语义（钉死）：只统计实例级边（两端 id 均非空）+ BUSINESS 类别；
-    自环（source=target）进出各计一次；**范围统计**（T-65）：对端 term 必须
+    自环（source=target）进出各计一次；**范围统计**：对端 term 必须
     落在 object_codes ∪ kb_resource_ids 并集内（EXISTS 截断邻域，见
     _degree_opposite_range）。
     双 JOIN 计数用 COUNT(DISTINCT relation_id) 防止 out/in 交叉膨胀。
@@ -133,7 +136,7 @@ def _degree_opposite_range(
     object_codes: list[str],
     kb_resource_ids: list[str],
 ) -> str:
-    """对端范围判定 EXISTS 子查询 — 度数范围统计（T-65）并集语义。
+    """对端范围判定 EXISTS 子查询 — 度数范围统计并集语义。
 
     对端 term（out → ``target_term_id`` / in → ``source_term_id``）满足
     object_codes 或 kb_resource_ids **任一**维度（OR）即视为在范围内；某维
@@ -677,7 +680,7 @@ class _TermReader(_ReaderBase):
         Args:
             terms: 待解析的字段中文名/别名列表。
             scope_code: 视图或对象 code（如 "scene_enterprise_analysis"）。
-            library_id: 预留参数，v1 不使用。
+            library_id: 预留参数，当前未使用。
             resolve_values: 是否对 value_terms 追加值级别消歧。
             value_terms: 待值消歧的过滤值列表（如企业名、地区名等）。
 
@@ -2700,7 +2703,7 @@ class _TermReader(_ReaderBase):
         排序框架：sort 按 ``_SORT_REGISTRY`` 查表（by 走 dict key）；similarity
         为注册表首个（且目前唯一）排序类型（Embedding 向量或 BM25 降级）。
 
-        度数语义（T-65，**范围统计**）：out_degree/in_degree 只统计对端 term
+        度数语义（**范围统计**）：out_degree/in_degree 只统计对端 term
         （out → target_term_id / in → source_term_id）落在
         ``object_codes ∪ kb_resource_ids`` **并集**范围内的实例级 BUSINESS 边；
         对端维度之间 OR（任一命中即计），主查询 WHERE 范围维度之间仍 AND。
@@ -2710,7 +2713,7 @@ class _TermReader(_ReaderBase):
         Args:
             object_codes: 对象类型编码范围（尊重输入不校验）。与 kb_resource_ids 为 AND。
             kb_resource_ids: 知识库资源 ID 范围（``ext_attrs->>'kb_resource_id'``）。
-            filters: 条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]，v1 只 AND。
+            filters: 条件数组 = [{"type": <注册表 key>, "params": {...}}, ...]，多条件按 AND 组合。
             sort: 排序规格 = {"by": <注册表 key>, "params": {...}}，None = 默认序。
                   similarity 在候选集内重排（不截断），Embedding 失败静默降级 BM25；
                   query 空串退化 term_id ASC。显式 sort 优先于 degree filter 隐式排序。
@@ -3238,28 +3241,84 @@ class _TermReader(_ReaderBase):
 
         return ranked, scores
 
+    @staticmethod
+    def _json_col_to_dict(value: Any) -> dict[str, Any]:
+        """jsonb 列 → dict 的防御性转换。
+
+        psycopg 驱动对 OpenGauss jsonb 列返回 dict；sqlite（测试/其他驱动）
+        对 TEXT 列返回 str。统一转换为 dict，避免 ``dict(str)`` 抛 ValueError
+        导致整条查询静默回退 ``[]``。生产 OpenGauss 路径行为不变。
+        """
+        if not value:
+            return {}
+        if isinstance(value, Mapping):
+            return dict(value)
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except (ValueError, TypeError):
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
     def query_terms_by_labels(
         self,
         *,
-        label_filters: list[LabelFilter],
+        label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "or",
         term_type_codes: list[str] | None = None,
+        filters: list[TermFilterSpec] | None = None,
         top_k: int = 200,
     ) -> list[TermItem]:
         """纯标签过滤检索 — 不需要关键词。
 
-        SQL: WHERE term_tags->>'key' = 'value' [OR/AND ...] [+ term_type_code IN (...)]
+        SQL: WHERE <label 组> AND term_type_code IN (...) AND
+                  <filters 元素 0> AND <filters 元素 1> ...
+              LIMIT :_lbl_limit
+
+        过滤通道：
+          - label_filters / label_condition: 兼容通道（OR/AND 组，A/C 点在用）；
+          - term_type_codes: 兼容通道（None=忽略，[]=全滤）；
+          - filters: 通用过滤通道（三参数收编于此），元素按传入顺序逐项展开，
+            全 AND 组合；field 走白名单映射表（_FILTER_FIELD_MAP），未知 field /
+            非法 op / 缺键 / eq 值数 ≠ 1 → 入口抛 ValueError。
+
+        空值契约：
+          - filters: None=忽略；[]=全滤（return []，禁止生成 IN ()）；
+            元素 in+values=[] → 全滤 return []；元素 eq+values=[] → 契约错误；
+          - 全维度空（无任何生效维度）→ return []（不执行无 WHERE 查询）。
+
+        LIMIT 截断发生在全部 WHERE 过滤之后（截断点后移，修复「过滤前截断」）。
         不做 BM25/jieba/vector 子查询，直接 label_filter 作为 WHERE 条件。
         """
+        # ── 结构契约校验（try/except 兜底之外）：filters 元素级校验 +
+        #    值归一化（term_type_code 维度与独立参数同函数同时机）。契约错误
+        #    直接抛 ValueError，不被「异常 → logger.exception + return []」吞掉。
+        normalized_filters: list[tuple[str, str, list[str]]] | None = None
+        if filters is not None:
+            normalized_filters = self._validate_filters(filters)
+
+        # ── 空值契约短路（SQL 组装前）
+        if filters is not None and not filters:
+            return []  # 4.2 filters=[] → 全滤
+        if normalized_filters:
+            for _field, op, values in normalized_filters:
+                if op == "in" and not values:
+                    return []  # 4.3 元素 in+values=[] → 全滤
+                # 4.4 eq+values=[] 已在 _validate_filters 抛 ValueError
+
         canonical_types: list[str] | None = None
         if term_type_codes is not None and term_type_codes:
             canonical_types = [self._normalize_type_code(t) for t in term_type_codes]
 
         try:
             with self._get_session() as session:
+                where_parts: list[str] = []
+                params: dict[str, Any] = {}
+
+                # label 组（跳过规则：None/[]/全部条目无效 → 不生成片段）
                 label_parts: list[str] = []
-                label_params: dict[str, Any] = {}
-                for i, lf in enumerate(label_filters):
+                for i, lf in enumerate(label_filters or []):
                     if isinstance(lf, dict):
                         key = str(lf.get("field_code", ""))
                         fv = lf.get("filter_value")
@@ -3269,42 +3328,60 @@ class _TermReader(_ReaderBase):
                     if key and fv is not None:
                         pname = f"_lbl_{i}"
                         label_parts.append(f"t.term_tags->>'{key}' = :{pname}")
-                        label_params[pname] = str(fv)
+                        params[pname] = str(fv)
+                if label_parts:
+                    where_parts.append(
+                        " AND ".join(label_parts)
+                        if label_condition == "and"
+                        else f"({' OR '.join(label_parts)})"
+                    )
 
-                if not label_parts:
-                    return []
-
-                where = (
-                    " AND ".join(label_parts)
-                    if label_condition == "and"
-                    else f"({' OR '.join(label_parts)})"
-                )
-
-                term_type_where = ""
-                if canonical_types is not None:
+                # term_type_codes（None=忽略，[]=全滤）—— 值经 _normalize_type_code 归一化
+                if term_type_codes is not None:
                     if not canonical_types:
                         return []
                     placeholders = ", ".join(f":_lbl_tt_{i}" for i in range(len(canonical_types)))
-                    term_type_where = f"AND t.term_type_code IN ({placeholders})"
+                    where_parts.append(f"t.term_type_code IN ({placeholders})")
                     for i, tc in enumerate(canonical_types):
-                        label_params[f"_lbl_tt_{i}"] = tc
+                        params[f"_lbl_tt_{i}"] = tc
+
+                # filters 元素（按调用方传入顺序逐元素展开，全 AND）。
+                # SQL 列表达式只从白名单映射表取值（禁止动态拼接）。
+                if normalized_filters:
+                    for idx, (field, op, values) in enumerate(normalized_filters):
+                        column = _FILTER_FIELD_MAP[field][0]
+                        if op == "eq":
+                            pname = f"_flt_{idx}_0"
+                            where_parts.append(f"{column} = :{pname}")
+                            params[pname] = str(values[0])
+                        else:  # "in"
+                            placeholders = ", ".join(f":_flt_{idx}_{n}" for n in range(len(values)))
+                            where_parts.append(f"{column} IN ({placeholders})")
+                            for n, v in enumerate(values):
+                                params[f"_flt_{idx}_{n}"] = str(v)
+
+                # 全维度空守卫：无任何 WHERE 片段 → 直接 return []，不执行无过滤查询
+                if not where_parts:
+                    return []
+
+                where = " AND ".join(where_parts)
 
                 sql = f"""
                     SELECT t.term_id, t.term_code, t.term_name, t.term_type_code,
                            t.library_id, t.term_tags, t.ext_attrs, t.desc_summary,
                            t.created_time, t.updated_time
                     FROM term t
-                    WHERE {where} {term_type_where}
+                    WHERE {where}
                     LIMIT :_lbl_limit
                 """
-                label_params["_lbl_limit"] = top_k
+                params["_lbl_limit"] = top_k
 
-                rows = session.execute(text(sql), label_params).all()
+                rows = session.execute(text(sql), params).all()
 
                 results: list[dict[str, Any]] = []
                 for r in rows:
-                    tt = dict(r[5]) if r[5] else {}
-                    ea = dict(r[6]) if r[6] else {}
+                    tt = self._json_col_to_dict(r[5])
+                    ea = self._json_col_to_dict(r[6])
                     results.append(
                         {
                             "term_id": str(r[0]),
@@ -3927,6 +4004,63 @@ class _TermReader(_ReaderBase):
             "PROP": "prop",
         }
         return mapping.get(raw, raw)
+
+    @staticmethod
+    def _validate_filters(
+        filters: list[TermFilterSpec],
+    ) -> list[tuple[str, str, list[str]]]:
+        """filters 结构契约校验 + term_type_code 值归一化。
+
+        在 SQL 组装之前、try/except 兜底之外调用 —— 契约错误直接抛 ValueError，
+        不被「异常 → logger.exception + return []」吞掉（编程错误早暴露）。
+
+        契约错误（抛 ValueError）：
+          - 元素非 dict / 缺 field / field 不在白名单 / 缺 op / op 非法 /
+            缺 values / values 非 list / eq 且 len(values) != 1（含 eq+[]）。
+
+        值语义（不抛错，返回供空值契约短路）：
+          - in + values=[] → 返回后由调用方全滤 return []。
+
+        返回规范化后的 (field, op, 归一化 values) 三元组列表；term_type_code
+        维度值经 _normalize_type_code 归一化（与独立参数同函数、同一时机——
+        组装前统一归一化）；kb 三键为原始字符串 ID，仅 str 绑定不归一化。
+        """
+        normalized: list[tuple[str, str, list[str]]] = []
+        for idx, flt in enumerate(filters):
+            if not isinstance(flt, Mapping):
+                # 结构契约错误统一抛 ValueError（RPC 映射 400），非法类型亦归入契约错误
+                raise ValueError(  # noqa: TRY004
+                    f"filters[{idx}] 必须是 dict（FilterSpec），收到: {type(flt).__name__}"
+                )
+            if "field" not in flt:
+                raise ValueError(f"filters[{idx}] 缺少 field 键（FilterSpec 三键必填）")
+            field = str(flt["field"])
+            if field not in _FILTER_FIELD_MAP:
+                raise ValueError(
+                    f"filters[{idx}] 未知 field: {field!r}（白名单: {sorted(_FILTER_FIELD_MAP)}）"
+                )
+            if "op" not in flt:
+                raise ValueError(f"filters[{idx}] 缺少 op 键（FilterSpec 三键必填）")
+            op = flt["op"]
+            if op not in ("eq", "in"):
+                raise ValueError(f"filters[{idx}] 非法 op: {op!r}（仅支持 'eq' / 'in'）")
+            if "values" not in flt:
+                raise ValueError(f"filters[{idx}] 缺少 values 键（FilterSpec 三键必填）")
+            values = flt["values"]
+            if not isinstance(values, (list, tuple)):
+                # 结构契约错误统一抛 ValueError（同字段类型错误归入契约）
+                raise ValueError(  # noqa: TRY004
+                    f"filters[{idx}] values 必须是 list，收到: {type(values).__name__}"
+                )
+            if op == "eq" and len(values) != 1:
+                raise ValueError(f"filters[{idx}] op=eq 需要恰 1 个值，收到 {len(values)} 个")
+            normalizer = _FILTER_FIELD_MAP[field][1]
+            if normalizer is not None:
+                values = [normalizer(str(v)) for v in values]
+            else:
+                values = [str(v) for v in values]
+            normalized.append((field, op, values))
+        return normalized
 
     @staticmethod
     def _build_filters(
@@ -4839,3 +4973,22 @@ class _TermReader(_ReaderBase):
         return {"data": data}
 
     # ── end of _TermReader ────────────────────────────────────────────
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# filters 通道白名单映射（query_terms_by_labels）
+#
+# key = FilterSpec["field"]；value = (SQL 列表达式, 值归一化器或 None)。
+# - SQL 列表达式**只**从本表取值（注入面控制：禁止任何动态拼接；
+#   新增维度 = 映射表 +1 行 + 协议 Literal 同步 + Spec 修订 + 验收测试）；
+# - term_type_code 维度值经 _TermReader._normalize_type_code 归一化（与独立
+#   参数 term_type_codes 同一函数、同一时机——组装前统一归一化）；
+# - kb 三键为原始字符串 ID，不归一化（None）。
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_FILTER_FIELD_MAP: dict[str, tuple[str, Callable[[str], str] | None]] = {
+    "kb_id": ("t.ext_attrs->>'kb_id'", None),
+    "kb_resource_id": ("t.ext_attrs->>'kb_resource_id'", None),
+    "kb_file_path": ("t.term_tags->>'kb_file_path'", None),
+    "term_type_code": ("t.term_type_code", _TermReader._normalize_type_code),
+}
