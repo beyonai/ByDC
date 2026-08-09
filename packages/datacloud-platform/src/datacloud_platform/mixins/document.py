@@ -28,6 +28,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import os
 import re
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
@@ -62,6 +63,21 @@ from datacloud_platform.models.document import (
 logger = logging.getLogger(__name__)
 # 内部分页固定使用较大的批量，先形成候选快照，再逐文档加锁处理。
 _DOCUMENT_PAGE_SIZE = 200
+_ORGANIZATION_INTERVAL_SECONDS_ENV = (
+    "DATACLOUD_DOCUMENT_ORGANIZATION_INTERVAL_SECONDS"
+)
+_RELATION_IN_OUT_DIFFERENCE_ENV = "DATACLOUD_DOCUMENT_RELATION_IN_OUT_DIFFERENCE"
+
+
+def _optional_int_environment(name: str) -> int | None:
+    """读取可选整数环境变量；未配置或空白时返回 ``None``。"""
+    value = os.getenv(name, "").strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(f"Environment variable {name} must be an integer") from exc
 # Redis 锁用于避免不同进程重复消费同一个知识库文档。
 _DOCUMENT_LOCK_TTL_SECONDS = 3600
 
@@ -156,10 +172,11 @@ class DocumentMixin:
     ) -> None:
         """异步富化等待整理或可自动重试的文档。
 
-        查询“待整理、整理失败-待重试”文档。更新时间间隔和关系出入差值由
-        ``_process_document_pages`` 的可选参数控制，当前入口未启用这两个限制。每个
-        文档持锁调用 ``enrich``，成功后通过对象 ``write_*`` 动作写回数据，并在处理
-        前后通过服务发现更新对象文件状态。
+        查询“待整理、整理失败-待重试”文档。更新时间间隔和关系出入差值分别从
+        ``DATACLOUD_DOCUMENT_ORGANIZATION_INTERVAL_SECONDS`` 和
+        ``DATACLOUD_DOCUMENT_RELATION_IN_OUT_DIFFERENCE`` 读取；未配置时不添加对应
+        限制。每个文档持锁调用 ``enrich``，成功后通过对象 ``write_*`` 动作写回数据，
+        并在处理前后通过服务发现更新对象文件状态。
 
         Args:
             base_id: 本体库/系统空间标识。
@@ -179,8 +196,12 @@ class DocumentMixin:
                 DocumentProcessingStatus.ORGANIZATION_RETRY,
             ),
             operation="enrichment",
-            # organization_interval_seconds=7200,
-            # relation_in_out_difference=10,
+            organization_interval_seconds=_optional_int_environment(
+                _ORGANIZATION_INTERVAL_SECONDS_ENV
+            ),
+            relation_in_out_difference=_optional_int_environment(
+                _RELATION_IN_OUT_DIFFERENCE_ENV
+            ),
         )
 
     @asynccontextmanager
@@ -292,6 +313,8 @@ class DocumentMixin:
                 platform=self,
                 base_id=base_id,
                 difference=request.relation_in_out_difference,
+                object_codes=request.object_codes,
+                kb_resource_ids=request.kb_resource_ids,
             )
             candidate_file_paths = await resolve_file_paths_by_term_ids(
                 platform=self,
@@ -1802,25 +1825,50 @@ def resolve_object_knowledge_scope(
     return tuple(resource_ids), tuple(directories)
 
 
-async def _call_platform_todo(platform: Any, method_name: str, **kwargs: Any) -> Any:
-    method = getattr(platform, method_name, None)
-    if not callable(method):
-        raise NotImplementedError(f"TODO: platform.{method_name} is not implemented")
-    result = method(**kwargs)
-    return await result if inspect.isawaitable(result) else result
-
-
 async def resolve_term_ids_by_relation_in_out_difference(
-    *, platform: Any, base_id: str, difference: int
+    *,
+    platform: Any,
+    base_id: str,
+    difference: int,
+    object_codes: tuple[str, ...],
+    kb_resource_ids: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """调用待实现能力，按有符号关系出入差值解析并去重术语 ID。"""
-    values = await _call_platform_todo(
-        platform,
-        "resolve_term_ids_by_relation_in_out_difference",
-        base_id=base_id,
-        difference=difference,
-    )
-    return tuple(dict.fromkeys(str(value) for value in values if value))
+    """通过对象实例枚举接口按 ``in_degree - out_degree`` 筛选术语 ID。"""
+    if not object_codes and not kb_resource_ids:
+        return ()
+
+    page = 1
+    page_size = 200
+    term_ids: list[str] = []
+    filters = [
+        {
+            "type": "degree",
+            "params": {
+                "metric": "out_minus_in",
+                "op": "lte",
+                "value": -difference,
+            },
+        }
+    ]
+    while True:
+        result = platform.enumerate_object_instances(
+            base_id,
+            object_codes=list(object_codes),
+            kb_resource_ids=list(kb_resource_ids),
+            filters=filters,
+            sort=None,
+            page=page,
+            page_size=page_size,
+        )
+        if inspect.isawaitable(result):
+            result = await result
+        term_ids.extend(
+            str(item.instance_id) for item in result.items if item.instance_id
+        )
+        if page * page_size >= result.total:
+            break
+        page += 1
+    return tuple(dict.fromkeys(term_ids))
 
 
 async def resolve_file_paths_by_term_ids(
