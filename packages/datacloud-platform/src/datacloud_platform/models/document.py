@@ -210,6 +210,7 @@ class SearchDocumentFragmentsRequest(_AliasedModel):
 
 class DocumentAsyncProcessingRequest(_AliasedModel):
     kb_resource_ids: tuple[str, ...] = Field(default=(), alias="kbResourceIds")
+    source_object_codes: tuple[str, ...] = Field(default=(), alias="sourceObjectCodes")
     object_codes: tuple[str, ...] = Field(alias="objectCodes", min_length=1)
     model_config_payload: dict[str, Any] | None = Field(
         default=None, alias="modelConfig"

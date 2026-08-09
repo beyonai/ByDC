@@ -759,13 +759,32 @@ async def _process_document_pages(
     """
     page_index = 1
     documents: list[DocumentObjectItem] = []
+    source_object_codes = request.object_codes
+    if operation == "discovery":
+        source_object_codes = request.source_object_codes
+        if not source_object_codes:
+            logger.info(
+                "Document %s batch started: base_id=%s session_id=%s total_documents=%s, source_object_codes is null",
+                operation,
+                base_id,
+                session_id,
+                0,
+            )
+            return
+        request = request.model_copy(
+            update={
+                "object_codes": tuple(
+                    dict.fromkeys((*request.object_codes, *source_object_codes))
+                )
+            }
+        )
     while True:
         page = await platform.query_document_objects(
             base_id,
             request=QueryDocumentObjectsRequest(
                 kbResourceIds=request.kb_resource_ids,
                 statuses=statuses,
-                objectCodes=request.object_codes,
+                objectCodes=source_object_codes,
                 organizationIntervalSeconds=organization_interval_seconds,
                 relationInOutDifference=relation_in_out_difference,
                 pageIndex=page_index,
