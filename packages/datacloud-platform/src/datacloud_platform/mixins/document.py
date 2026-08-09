@@ -63,9 +63,7 @@ from datacloud_platform.models.document import (
 logger = logging.getLogger(__name__)
 # 内部分页固定使用较大的批量，先形成候选快照，再逐文档加锁处理。
 _DOCUMENT_PAGE_SIZE = 200
-_ORGANIZATION_INTERVAL_SECONDS_ENV = (
-    "DATACLOUD_DOCUMENT_ORGANIZATION_INTERVAL_SECONDS"
-)
+_ORGANIZATION_INTERVAL_SECONDS_ENV = "DATACLOUD_DOCUMENT_ORGANIZATION_INTERVAL_SECONDS"
 _RELATION_IN_OUT_DIFFERENCE_ENV = "DATACLOUD_DOCUMENT_RELATION_IN_OUT_DIFFERENCE"
 
 
@@ -78,6 +76,8 @@ def _optional_int_environment(name: str) -> int | None:
         return int(value)
     except ValueError as exc:
         raise ValueError(f"Environment variable {name} must be an integer") from exc
+
+
 # Redis 锁用于避免不同进程重复消费同一个知识库文档。
 _DOCUMENT_LOCK_TTL_SECONDS = 3600
 
@@ -1920,9 +1920,7 @@ async def resolve_document_objects_by_file_paths(
     if not all_kb_ids or not all_paths:
         return []
     n_groups = len(all_kb_ids)
-    top_k = min(
-        1000 * n_groups, 10000
-    )  # 每 kb 名义配额保持 1000，全局上限 10000
+    top_k = min(1000 * n_groups, 10000)  # 每 kb 名义配额保持 1000，全局上限 10000
     if 1000 * n_groups > 10000:
         logger.warning(
             "resolve_document_objects_by_file_paths: %d 个 kb 组，top_k 钳制到 10000",
