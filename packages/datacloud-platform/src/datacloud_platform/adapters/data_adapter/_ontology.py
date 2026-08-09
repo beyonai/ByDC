@@ -24,6 +24,7 @@ from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
+from datacloud_platform.datasource_runtime import build_datasource_configs
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +342,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                     "relations": all_relations,
                     "actions": all_actions,
                     "dbsources": all_dbsources,
+                    "datasource_configs": build_datasource_configs(all_dbsources),
                 }
             )
             # Register the default SQLite datasource so DynamicTableExecutor can

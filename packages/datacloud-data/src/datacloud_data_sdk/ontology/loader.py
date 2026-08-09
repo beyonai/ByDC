@@ -422,6 +422,15 @@ class OntologyLoader:
             content: 本体内容字典
             format: 格式类型（json/yaml）
         """
+        from datacloud_data_sdk.sql_executor.config_loader import _dict_to_config
+
+        existing_configs = dict(self._config.datasource_configs)
+        registered_configs = {
+            alias: _dict_to_config(alias, config)
+            for alias, config in (content.get("datasource_configs", {}) or {}).items()
+            if isinstance(config, dict)
+        }
+
         raw_functions = content.get("functions", {}) or {}
         if isinstance(raw_functions, dict):
             for fn_code, fn_config in raw_functions.items():
@@ -479,11 +488,11 @@ class OntologyLoader:
             )
 
         extracted = self._extract_datasource_configs_from_objects()
-        if extracted:
-            self._config.datasource_configs = {
-                **self._config.datasource_configs,
-                **extracted,
-            }
+        self._config.datasource_configs = {
+            **extracted,
+            **registered_configs,
+            **existing_configs,
+        }
 
         for view in content.get("views", []):
             self._views[view["view_id"]] = view

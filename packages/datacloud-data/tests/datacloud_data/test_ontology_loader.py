@@ -244,6 +244,42 @@ def test_extract_datasource_configs_from_objects() -> None:
     assert configs["ds_crm"].jdbc_url == "jdbc:mysql://localhost:3306/crm"
 
 
+def test_registered_datasource_config_wins_over_object_reference() -> None:
+    """对象只保存 alias/schema，Base 登记的数据源提供真实企业连接。"""
+    loader = OntologyLoader()
+    loader.load_from_content(
+        {
+            "datasource_configs": {
+                "enterprise_postgresql": {
+                    "db_type": "POSTGRESQL",
+                    "jdbc_url": "jdbc:postgresql://db.example:5432/business",
+                    "user": "runtime-user",
+                    "password": "runtime-secret",
+                }
+            },
+            "objects": [
+                {
+                    "object_code": "w12345678_order",
+                    "object_name": "订单",
+                    "source_type": "DYNAMIC_TABLE",
+                    "table_name": "tenant_0123456789ab.w12345678_order",
+                    "source_config": {
+                        "alias": "enterprise_postgresql",
+                        "db_type": "POSTGRESQL",
+                        "schema": "tenant_0123456789ab",
+                    },
+                    "fields": [],
+                    "actions": [],
+                }
+            ],
+        }
+    )
+
+    config = loader._config.datasource_configs["enterprise_postgresql"]
+    assert config.jdbc_url == "jdbc:postgresql://db.example:5432/business"
+    assert config.user == "runtime-user"
+
+
 def test_load_from_content_parses_term_meta_in_fields_and_params() -> None:
     """termMeta 解析为 term_set、term_type、dataset_id。"""
     loader = OntologyLoader()

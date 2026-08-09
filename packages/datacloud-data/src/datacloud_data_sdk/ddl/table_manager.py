@@ -103,6 +103,20 @@ def drop_table(entity_code: str, _user_code: str = "") -> None:
     _execute_ddl(ddl, "删表")
 
 
+def table_exists(entity_code: str) -> bool:
+    """返回个人 SQLite 中是否存在指定动态表。"""
+    _ensure_db_dir()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (entity_code,),
+        ).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def get_existing_columns(entity_code: str) -> list[str]:
     """返回表的现有列名列表（不含 id），表不存在时返回空列表。
 

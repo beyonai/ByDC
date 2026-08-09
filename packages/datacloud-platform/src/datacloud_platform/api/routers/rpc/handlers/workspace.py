@@ -50,13 +50,19 @@ def _workspace_delete(
 
 
 def _workspace_batch_submit(
-    platform: DatacloudPlatform, params: dict[str, Any], _req: Request
+    platform: DatacloudPlatform, params: dict[str, Any], request: Request
 ) -> Any:
     return platform.workspace_batch_submit(
         user_code=params.get("user_code", ""),
         workspace_name=params.get("workspace_name", ""),
+        base_id=params.get("base_id", ""),
+        owner_type=params.get("owner_type", "personal"),
+        tenant_id=request.headers.get("X-Tenant-Id"),
         only=params.get("only") or None,
         confirm_drop_columns=params.get("confirm_drop_columns", False),
+        confirm_scope_conversion=params.get("confirm_scope_conversion", False),
+        confirm_drop_target_tables=params.get("confirm_drop_target_tables", False),
+        publish_id=params.get("publish_id"),
     )
 
 

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from datacloud_data_sdk.ontology.loader import OntologyLoader, resolve_view_object_ids
+from datacloud_platform.datasource_runtime import build_datasource_configs
 
 if TYPE_CHECKING:
     from datacloud_platform.backends.ontology import OntologyBackend, OntologyQueryable
@@ -252,6 +253,9 @@ class SceneLoaderMixin:
                 else ([], 0)
             )
             content: dict[str, Any] = {"objects": objs, "views": vws}
+            content["datasource_configs"] = build_datasource_configs(
+                store.list_all("datasources")
+            )
 
             # 加载涉及的 relations（source 或 target 在已加载对象中）
             all_codes: set[str] = loaded_codes | set(vw_codes)
@@ -439,7 +443,17 @@ def _build_content(
             views.append(view_data)
 
     functions: dict[str, dict[str, Any]] = getattr(loader, "_functions", None) or {}
-    return {"objects": objects, "views": views, "functions": functions}
+    loader_config = getattr(loader, "_config", None)
+    datasource_configs = {
+        alias: asdict(config)
+        for alias, config in getattr(loader_config, "datasource_configs", {}).items()
+    }
+    return {
+        "objects": objects,
+        "views": views,
+        "functions": functions,
+        "datasource_configs": datasource_configs,
+    }
 
 
 def _build_content_from_remote_scenes(
