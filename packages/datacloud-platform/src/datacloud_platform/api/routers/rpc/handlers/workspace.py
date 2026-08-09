@@ -52,12 +52,15 @@ def _workspace_delete(
 def _workspace_batch_submit(
     platform: DatacloudPlatform, params: dict[str, Any], request: Request
 ) -> Any:
+    tenant_id = request.headers.get("X-Tenant-Id")
+    if not tenant_id:
+        tenant_id = "dc_default_tenant"
     return platform.workspace_batch_submit(
         user_code=params.get("user_code", ""),
         workspace_name=params.get("workspace_name", ""),
         base_id=params.get("base_id", ""),
         owner_type=params.get("owner_type", "personal"),
-        tenant_id=request.headers.get("X-Tenant-Id"),
+        tenant_id=tenant_id,
         only=params.get("only") or None,
         confirm_drop_columns=params.get("confirm_drop_columns", False),
         confirm_scope_conversion=params.get("confirm_scope_conversion", False),
