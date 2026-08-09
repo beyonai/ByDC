@@ -29,5 +29,7 @@ class Relation(BaseModel):
     status: int = Field(default=0, alias="status")
     owner_type: str = Field(default="enterprise", alias="ownerType")
     user_code: str | None = Field(default=None, alias="userCode")
+    tenant_id: str | None = Field(default=None, alias="tenantId")
+    publish_id: str | None = Field(default=None, alias="publishId")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")

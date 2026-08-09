@@ -33,7 +33,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from datacloud_platform.adapters.byclaw_sync import hook_ctx
@@ -68,8 +68,16 @@ class WorkspaceDeleteRequest(BaseModel):
 class BatchSubmitRequest(BaseModel):
     workspace_name: str = Field(..., min_length=1, alias="workspace_name")
     base_id: str = Field(default="", alias="base_id")
+    owner_type: str = Field(default="personal", alias="owner_type")
     only: list[str] = Field(default_factory=list, alias="only")
     confirm_drop_columns: bool = Field(default=False, alias="confirm_drop_columns")
+    confirm_scope_conversion: bool = Field(
+        default=False, alias="confirm_scope_conversion"
+    )
+    confirm_drop_target_tables: bool = Field(
+        default=False, alias="confirm_drop_target_tables"
+    )
+    publish_id: str | None = Field(default=None, alias="publish_id")
 
 
 class WorkspaceObjectCollectRequest(BaseModel):
@@ -223,8 +231,13 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
                 user_code=_user_code,
                 workspace_name=body.workspace_name,
                 base_id=body.base_id,
+                owner_type=body.owner_type,
+                tenant_id=request.headers.get("X-Tenant-Id"),
                 only=body.only or None,
                 confirm_drop_columns=body.confirm_drop_columns,
+                confirm_scope_conversion=body.confirm_scope_conversion,
+                confirm_drop_target_tables=body.confirm_drop_target_tables,
+                publish_id=body.publish_id,
             )
         except Exception as exc:
             logger.exception("workspace/batch-submit 失败")
@@ -262,9 +275,13 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
                 fields=body.fields,
                 object_relations=body.object_relations,
             )
-        except Exception as exc:
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception:
             logger.exception("object/collect 失败")
-            return {"ok": False, "error": str(exc)}
+            raise
 
     @router.post("/object/delete")
     async def object_delete(

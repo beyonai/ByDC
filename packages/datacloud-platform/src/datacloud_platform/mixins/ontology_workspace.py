@@ -11,13 +11,25 @@ SDK Generator（代码生成） + TableManager（DDL）。
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
+from datacloud_platform.enterprise_datasource import datasource_from_environment
 from datacloud_platform.models.action import Action, ActionParam
 from datacloud_platform.models.object_type import ObjectType
 from datacloud_platform.models.property import Property, TermMeta
 from datacloud_platform.models.relation import Relation
 from datacloud_platform.models.view import View, ViewProperty
+from datacloud_platform.publishing import (
+    PublishConfigurationError,
+    PublishContext,
+    PublishTargetResolver,
+)
+from datacloud_platform.schema_manager import (
+    EnterpriseSqlSchemaManager,
+    PersonalSqliteSchemaManager,
+    SqlAlchemyEnterpriseExecutor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +184,7 @@ class OntologyWorkspaceMixin:
                 workspace_name,
                 entity_code,
             )
-            return {"ok": False, "error": f"保存对象信息失败: {entity_code}"}
+            raise
 
     def collect_view_to_workspace(
         self,
@@ -222,24 +234,14 @@ class OntologyWorkspaceMixin:
         base_id: str = "",
         only: list[str] | None = None,
         confirm_drop_columns: bool = False,
+        owner_type: str = "personal",
+        tenant_id: str | None = None,
+        confirm_scope_conversion: bool = False,
+        confirm_drop_target_tables: bool = False,
+        publish_id: str | None = None,
     ) -> dict[str, Any]:
-        """批量提交工作区中所有对象和视图，并生成 SDK 文件。
-
-        编排流程：
-        1. 预检：检测字段删除变更，未确认时返回 need_confirm
-        2. 对象：DDL（建表/增删列）→ ObjectType CRUD → 术语写入 → SDK 生成
-        3. 视图：View CRUD → Relation 创建
-
-        Args:
-            user_code: 用户标识。
-            workspace_name: 工作区名称。
-            base_id: 目标 Base ID；为空时退回第一个注册的 Base。
-            only: 可选，只提交指定的 entity_code 列表。
-            confirm_drop_columns: 确认删除字段（有删列变更时必须为 True）。
-        """
+        """按统一发布上下文批量提交工作区对象、Action、View 和 Relation。"""
         only_codes = only or []
-
-        # ── 1. 加载工作区状态 ──
         try:
             wfm = self._get_wfm(user_code, workspace_name)
             state = wfm.get_workspace_state()
@@ -247,13 +249,73 @@ class OntologyWorkspaceMixin:
             return {"ok": False, "error": str(exc)}
 
         resolved_base_id: str = base_id or self._default_base_id()  # type: ignore[attr-defined]
+        active_publication = wfm.load_active_publication()
+        try:
+            context = PublishTargetResolver().resolve(
+                owner_type=owner_type,
+                user_code=user_code,
+                tenant_id=tenant_id,
+                base_id=resolved_base_id,
+                publish_id=publish_id,
+                active_publication=active_publication,
+            )
+        except PublishConfigurationError as exc:
+            return {"ok": False, "code": exc.code, "error": str(exc)}
 
-        # ── 2. 预检：字段删除变更 ──
+        selected_objects = [
+            item["entity_code"]
+            for item in state.get("objects", [])
+            if not only_codes or item["entity_code"] in only_codes
+        ]
+        selected_views = [
+            item["view_code"]
+            for item in state.get("views", [])
+            if not only_codes or item["view_code"] in only_codes
+        ]
+        historical_personal_publication = bool(
+            not active_publication
+            and context.owner_type == "enterprise"
+            and any(
+                item.get("status") in {"submitted", "dirty"}
+                for item in state.get("objects", [])
+                if not only_codes or item["entity_code"] in only_codes
+            )
+        )
+        scope_conversion = historical_personal_publication or bool(
+            active_publication
+            and active_publication.get("owner_type") != context.owner_type
+        )
+        record: dict[str, Any] = {
+            **context.to_dict(),
+            "workspace_name": workspace_name,
+            "status": "planned",
+            "started_at": datetime.now(UTC).isoformat(),
+            "scope_conversion": scope_conversion,
+            "historical_personal_publication": historical_personal_publication,
+            "source_table_retained": scope_conversion,
+            "object_codes": selected_objects,
+            "view_codes": selected_views,
+            "operations": [],
+        }
+        wfm.save_publication(record)
+
+        if scope_conversion and not confirm_scope_conversion:
+            return {
+                "ok": False,
+                "need_confirm": True,
+                "publish_id": context.publish_id,
+                "code": "SCOPE_CONVERSION_CONFIRMATION_REQUIRED",
+                "message": "发布归属将发生转换；来源表保留，目标实例表将重新创建且不迁移数据",
+                "target": context.to_dict(),
+                "objects": selected_objects,
+            }
+
         pending_drops = self._precheck_column_drops(wfm, state, only_codes)
         if pending_drops and not confirm_drop_columns:
             return {
                 "ok": False,
                 "need_confirm": True,
+                "publish_id": context.publish_id,
                 "message": (
                     "以下对象存在字段删除变更，删除后数据不可恢复，"
                     "请确认后重试（传 confirm_drop_columns: true）"
@@ -264,32 +326,127 @@ class OntologyWorkspaceMixin:
                 ],
             }
 
-        # ── 3. 提交对象 ──
+        try:
+            schema_manager = self._schema_manager(context)
+            target_collisions = self._precheck_target_table_collisions(
+                schema_manager,
+                state,
+                only_codes,
+                scope_conversion=scope_conversion,
+            )
+        except Exception as exc:
+            logger.exception("batch_submit: 发布数据源预检失败")
+            record.update({"status": "failed", "error": str(exc)})
+            wfm.save_publication(record)
+            return {
+                "ok": False,
+                "publish_id": context.publish_id,
+                "code": "PUBLISH_DATASOURCE_UNAVAILABLE",
+                "error": str(exc),
+            }
+
+        if target_collisions and not confirm_drop_target_tables:
+            record["target_table_collisions"] = target_collisions
+            wfm.save_publication(record)
+            return {
+                "ok": False,
+                "need_confirm": True,
+                "publish_id": context.publish_id,
+                "code": "DROP_TARGET_TABLE_CONFIRMATION_REQUIRED",
+                "message": "目标端存在同名表；确认后将只删除目标表并重新创建空表",
+                "target_tables": target_collisions,
+            }
+
         submitted_objects, submitted_views, failed, sdk_files = (
             self._batch_submit_objects(
                 wfm,
                 state,
-                resolved_base_id,
                 only_codes,
                 confirm_drop_columns,
-                user_code,
+                confirm_drop_target_tables,
+                context,
+                schema_manager,
+                scope_conversion,
+                record,
             )
         )
 
-        # ── 4. 提交视图 ──
         view_submitted, view_failed = self._batch_submit_views(
-            wfm, state, resolved_base_id, only_codes, user_code
+            wfm, state, only_codes, context, record
         )
         submitted_views.extend(view_submitted)
         failed.extend(view_failed)
 
+        record.update(
+            {
+                "status": "succeeded" if not failed else "failed",
+                "finished_at": datetime.now(UTC).isoformat(),
+                "submitted_objects": submitted_objects,
+                "submitted_views": submitted_views,
+                "failed": failed,
+            }
+        )
+        wfm.save_publication(record)
+        if not failed:
+            wfm.activate_publication(record)
+
         return {
             "ok": len(failed) == 0,
+            "publish_id": context.publish_id,
+            "target": context.to_dict(),
             "submitted_objects": submitted_objects,
             "submitted_views": submitted_views,
             "failed": failed,
             "sdk_files": sdk_files,
         }
+
+    def _schema_manager(
+        self, context: PublishContext
+    ) -> PersonalSqliteSchemaManager | EnterpriseSqlSchemaManager:
+        if context.owner_type == "personal":
+            return PersonalSqliteSchemaManager()
+        datasource = self._upsert_enterprise_datasource(context)
+        executor = SqlAlchemyEnterpriseExecutor.from_datasource(context, datasource)
+        return EnterpriseSqlSchemaManager(context, executor)
+
+    def _upsert_enterprise_datasource(self, context: PublishContext) -> dict[str, Any]:
+        """Persist deployment DB credentials so Loader can resolve the object alias."""
+
+        backend = self._ontology_for(context.base_id)  # type: ignore[attr-defined]
+        backend.create_datasource(
+            context.base_id,
+            datasource_from_environment(context),
+        )
+        persisted: dict[str, Any] | None = backend.get_datasource_detail(
+            context.datasource_alias, base_id=context.base_id
+        )
+        if persisted is None:
+            raise RuntimeError(
+                f"企业 Datasource {context.datasource_alias} 写入后无法读取"
+            )
+        return persisted
+
+    @staticmethod
+    def _precheck_target_table_collisions(
+        schema_manager: PersonalSqliteSchemaManager | EnterpriseSqlSchemaManager,
+        state: dict[str, Any],
+        only_codes: list[str],
+        *,
+        scope_conversion: bool,
+    ) -> list[str]:
+        collisions: list[str] = []
+        for item in state.get("objects", []):
+            entity_code = item["entity_code"]
+            if only_codes and entity_code not in only_codes:
+                continue
+            needs_recreate = scope_conversion or item.get("status", "draft") in {
+                "draft",
+                "failed",
+            }
+            if needs_recreate and schema_manager.target_table_exists(entity_code):
+                schema = schema_manager.schema_name
+                collisions.append(f"{schema}.{entity_code}" if schema else entity_code)
+        return collisions
 
     # ── 内部：预检 ────────────────────────────────────────────────────────────
 
@@ -320,10 +477,13 @@ class OntologyWorkspaceMixin:
         self,
         wfm: Any,
         state: dict[str, Any],
-        base_id: str,
         only_codes: list[str],
         confirm_drop_columns: bool,
-        user_code: str,
+        confirm_drop_target_tables: bool,
+        context: PublishContext,
+        schema_manager: PersonalSqliteSchemaManager | EnterpriseSqlSchemaManager,
+        scope_conversion: bool,
+        publication_record: dict[str, Any],
     ) -> tuple[list[str], list[str], list[dict[str, Any]], dict[str, str]]:
         """提交对象：DDL → CRUD → 术语 → SDK → 状态更新。"""
         from datacloud_knowledge.ingestion.sdk_generator import generate_mapper_sdk
@@ -332,8 +492,8 @@ class OntologyWorkspaceMixin:
         failed: list[dict[str, Any]] = []
         sdk_files: dict[str, str] = {}
 
-        # 幂等写入 personal_sqlite datasource（所有 DYNAMIC_TABLE 对象公用）
-        self._ensure_personal_sqlite_datasource(base_id, user_code)
+        if context.owner_type == "personal":
+            self._ensure_personal_sqlite_datasource(context.base_id, context.user_code)
 
         for obj_summary in state.get("objects", []):
             entity_code: str = obj_summary["entity_code"]
@@ -365,11 +525,33 @@ class OntologyWorkspaceMixin:
                         *fields,
                     ]
 
-                if obj_status != "submitted":
-                    # DDL
-                    self._apply_ddl(
-                        entity_code, fields, obj_status, wfm, confirm_drop_columns
-                    )
+                if scope_conversion or obj_status != "submitted":
+                    if obj_status == "dirty" and not scope_conversion:
+                        schema_manager.apply_incremental(
+                            entity_code,
+                            wfm.diff_fields(entity_code, fields),
+                            confirm_drop_columns=confirm_drop_columns,
+                        )
+                        publication_record["operations"].append(
+                            {"type": "ALTER_TARGET_TABLE", "object_code": entity_code}
+                        )
+                    else:
+                        target_existed = schema_manager.target_table_exists(entity_code)
+                        schema_manager.create_or_recreate(
+                            entity_code,
+                            fields,
+                            recreate=True,
+                            confirm_drop_target_table=confirm_drop_target_tables,
+                        )
+                        publication_record["operations"].append(
+                            {
+                                "type": "DROP_AND_CREATE_TARGET_TABLE"
+                                if target_existed
+                                else "CREATE_TARGET_TABLE",
+                                "object_code": entity_code,
+                                "source_table_retained": scope_conversion,
+                            }
+                        )
 
                 # 加载 Action 元数据（构建 ObjectType 和写术语库都需要）
                 action_codes = wfm._list_action_codes(entity_code)  # noqa: SLF001
@@ -386,12 +568,12 @@ class OntologyWorkspaceMixin:
                     entity_name,
                     entity_desc,
                     entity_source,
-                    base_id,
+                    context.base_id,
                     fields,
                     table_name=table_name,
                     actions_meta=actions_meta,
                     term_sync=term_sync_cfg,
-                    user_code=user_code,
+                    publish_context=context,
                 )
 
                 # CRUD: 创建对象 + 加入场景
@@ -399,28 +581,25 @@ class OntologyWorkspaceMixin:
 
                 obj_dict = obj.model_dump(by_alias=True)
                 obj_payload = obj_camel_to_owl(obj_dict)
-                self.create_object_with_scene(base_id, obj_payload)  # type: ignore[attr-defined]
+                self.create_object_with_scene(context.base_id, obj_payload)  # type: ignore[attr-defined]
 
                 # 把 actions 写入 ontology_actions 独立表
-                _backend = self._ontology_for(base_id)  # type: ignore[attr-defined]
+                _backend = self._ontology_for(context.base_id)  # type: ignore[attr-defined]
                 for _action in obj.actions:
                     action_payload = _action.model_dump(by_alias=True)
-                    action_payload["ownerType"] = "personal"
-                    action_payload["owner_type"] = "personal"
-                    action_payload["userCode"] = user_code
-                    action_payload["user_code"] = user_code
-                    try:
-                        _backend.create_action(base_id, entity_code, action_payload)
-                    except Exception:
-                        logger.exception(
-                            "batch_submit: action %s/%s 写入独立表失败",
-                            entity_code,
-                            _action.action_code,
-                        )
+                    action_payload["ownerType"] = context.owner_type
+                    action_payload["owner_type"] = context.owner_type
+                    action_payload["userCode"] = (
+                        context.user_code if context.owner_type == "personal" else None
+                    )
+                    action_payload["user_code"] = action_payload["userCode"]
+                    action_payload["tenantId"] = context.tenant_id
+                    action_payload["publishId"] = context.publish_id
+                    _backend.create_action(context.base_id, entity_code, action_payload)
 
                 # 内联 term_values → 写术语库（含 field + action param 枚举）
                 self._write_inline_terms(
-                    base_id, entity_code, fields, actions=actions_meta
+                    context.base_id, entity_code, fields, actions=actions_meta
                 )
 
                 # SDK 生成
@@ -433,6 +612,9 @@ class OntologyWorkspaceMixin:
                 wfm.save_submitted_field_snapshot(entity_code, fields)
 
                 submitted.append(entity_code)
+                publication_record["operations"].append(
+                    {"type": "PUBLISH_OBJECT_METADATA", "object_code": entity_code}
+                )
                 logger.info("batch_submit: 对象 %s 提交成功", entity_code)
 
             except Exception:
@@ -493,7 +675,7 @@ class OntologyWorkspaceMixin:
         table_name: str | None = None,
         actions_meta: list[dict[str, Any]] | None = None,
         term_sync: dict[str, Any] | None = None,
-        user_code: str = "",
+        publish_context: PublishContext,
     ) -> ObjectType:
         """从工作区字段列表构建 ObjectType 模型。
 
@@ -554,8 +736,14 @@ class OntologyWorkspaceMixin:
                 belongObjectCode=entity_code,
                 actionDesc=a.get("action_desc", ""),
                 script=a.get("script"),
-                ownerType="personal",
-                userCode=user_code or None,
+                ownerType=publish_context.owner_type,
+                userCode=(
+                    publish_context.user_code
+                    if publish_context.owner_type == "personal"
+                    else None
+                ),
+                tenantId=publish_context.tenant_id,
+                publishId=publish_context.publish_id,
                 params=[
                     ActionParam(
                         paramCode=p.get("paramCode", p.get("param_code", "")),
@@ -576,23 +764,31 @@ class OntologyWorkspaceMixin:
         extra: dict[str, object] = {"term_sync": term_sync} if term_sync else {}
 
         # DYNAMIC_TABLE 对象必须携带 source_config，与旧版 OWL 生成路径保持一致。
-        # OWL 流程中 db_code 固定为 "personal_sqlite"，connector_type 为 "BYCLAW_SQL_EXECUTE"。
         # loader 从 source_config.alias 读取 datasource_alias，缺失会导致动作执行报错。
         if entity_source == "DYNAMIC_TABLE":
             extra["source_config"] = {
-                "alias": "personal_sqlite",
-                "db_type": "SQLITE",
+                "alias": publish_context.datasource_alias,
+                "db_type": publish_context.db_type,
                 "datasource_id": None,
-                "connector_type": "BYCLAW_SQL_EXECUTE",
+                "connector_type": publish_context.connector_type,
+                "schema": publish_context.schema_name,
             }
+        extra["ext_property"] = {
+            "tenant_id": publish_context.tenant_id,
+            "publish_id": publish_context.publish_id,
+        }
 
         return ObjectType(
             objectCode=entity_code,
             objectName=entity_name,
             objectDesc=entity_desc,
             objectSource=entity_source,
-            ownerType="personal",
-            userCode=user_code or None,
+            ownerType=publish_context.owner_type,
+            userCode=(
+                publish_context.user_code
+                if publish_context.owner_type == "personal"
+                else None
+            ),
             baseId=base_id,
             tableName=table_name,
             properties=properties,
@@ -665,13 +861,14 @@ class OntologyWorkspaceMixin:
         for type_code, type_name, term_values in entries:
             try:
                 term_backend.create_term_type(
+                    library_id=base_id,
                     term_type={
                         "typeCode": type_code,
                         "typeName": type_name,
                         "typeCategory": 2,  # DICT_TERM
                         "typeDesc": "",
                         "isBuiltin": False,
-                    }
+                    },
                 )
             except Exception:
                 logger.debug(
@@ -689,7 +886,8 @@ class OntologyWorkspaceMixin:
                             "termTypeCode": type_code,
                             "termName": value_name,
                             "termCode": value_code,
-                            "libraryCode": "PERSONAL_LIB",
+                            "datasetId": base_id,
+                            "libraryCode": base_id,
                             "domainCode": "PERSONAL_DOMAIN",
                         }
                     )
@@ -743,9 +941,9 @@ class OntologyWorkspaceMixin:
         self,
         wfm: Any,
         state: dict[str, Any],
-        base_id: str,
         only_codes: list[str],
-        user_code: str,
+        context: PublishContext,
+        publication_record: dict[str, Any],
     ) -> tuple[list[str], list[dict[str, Any]]]:
         """提交视图：View CRUD → Relation 创建。"""
         submitted: list[str] = []
@@ -766,8 +964,12 @@ class OntologyWorkspaceMixin:
                     viewName=vdef.get("view_name", view_code),
                     description=vdef.get("view_desc", ""),
                     objectCodes=vdef.get("object_codes", []),
-                    ownerType="personal",
-                    userCode=user_code or None,
+                    ownerType=context.owner_type,
+                    userCode=(
+                        context.user_code if context.owner_type == "personal" else None
+                    ),
+                    tenantId=context.tenant_id,
+                    publishId=context.publish_id,
                     properties=[
                         ViewProperty(
                             propertyCode=f.get("property_code", ""),
@@ -782,7 +984,7 @@ class OntologyWorkspaceMixin:
                 )
 
                 # CRUD: 创建视图 + 加入场景
-                self.create_view_with_scene(base_id, view)  # type: ignore[attr-defined]
+                self.create_view_with_scene(context.base_id, view)  # type: ignore[attr-defined]
 
                 # 创建对象间关系
                 for rel in vdef.get("object_relations", []):
@@ -795,16 +997,22 @@ class OntologyWorkspaceMixin:
                         relationCardinality=rel.get("relation_type", "MANY_TO_ONE"),
                         sourceObjectCode=rel.get("source_object_code", ""),
                         targetObjectCode=rel.get("target_object_code", ""),
-                        ownerType="personal",
-                        userCode=user_code or None,
+                        ownerType=context.owner_type,
+                        userCode=(
+                            context.user_code
+                            if context.owner_type == "personal"
+                            else None
+                        ),
+                        tenantId=context.tenant_id,
+                        publishId=context.publish_id,
                     )
-                    try:
-                        self.create_relation(base_id, relation)  # type: ignore[attr-defined]
-                    except Exception:
-                        logger.exception("创建视图关系失败: %s", rel)
+                    self.create_relation(context.base_id, relation)  # type: ignore[attr-defined]
 
                 wfm.update_view_status(view_code, "submitted")
                 submitted.append(view_code)
+                publication_record["operations"].append(
+                    {"type": "PUBLISH_VIEW_METADATA", "view_code": view_code}
+                )
                 logger.info("batch_submit: 视图 %s 提交成功", view_code)
 
             except Exception:

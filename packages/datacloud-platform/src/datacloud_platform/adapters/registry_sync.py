@@ -67,6 +67,15 @@ def _action_camel_to_owl(a: dict[str, Any]) -> dict[str, Any]:
     fn_refs = a.get("function_refs") or a.get("functionRefs")
     if fn_refs:
         result["function_refs"] = fn_refs
+    for snake_key, camel_key in (
+        ("owner_type", "ownerType"),
+        ("user_code", "userCode"),
+        ("tenant_id", "tenantId"),
+        ("publish_id", "publishId"),
+    ):
+        value = a.get(snake_key) or a.get(camel_key)
+        if value is not None:
+            result[snake_key] = value
     return result
 
 
@@ -225,6 +234,12 @@ def view_camel_to_registry(view_dict: dict[str, Any]) -> dict[str, Any]:
     _user = view_dict.get("userCode")
     if _user:
         ext_property["user_code"] = _user
+    _tenant = view_dict.get("tenantId")
+    if _tenant:
+        ext_property["tenant_id"] = _tenant
+    _publish_id = view_dict.get("publishId")
+    if _publish_id:
+        ext_property["publish_id"] = _publish_id
     if ext_property:
         result["ext_property"] = ext_property
     return result

@@ -21,11 +21,19 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import secrets
+import string
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_WORKSPACE_CODE_RE = re.compile(r"w[a-z0-9]{8,10}")
+_ENTITY_CODE_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
+_PUBLISH_ID_RE = re.compile(r"pub_[A-Za-z0-9_-]+")
+_ENTITY_CODE_VERSION = "v2"
 
 
 # ── 字段变更描述 ──────────────────────────────────────────────────────────────
@@ -101,6 +109,8 @@ class WorkspaceFileManager:
         if not ws_file.exists():
             state: dict[str, Any] = {
                 "workspace_name": self._workspace_name,
+                "workspace_code": self._generate_workspace_code(),
+                "entity_code_version": _ENTITY_CODE_VERSION,
                 "objects": {},
                 "views": {},
             }
@@ -114,7 +124,8 @@ class WorkspaceFileManager:
             changed = False
             for code in object_codes:
                 if code and code not in objs:
-                    objs[code] = {"status": "draft"}
+                    business_code = self._validate_and_get_business_code(code, raw)
+                    objs[code] = {"status": "draft", "business_code": business_code}
                     changed = True
             if changed:
                 self._save_workspace_raw(raw)
@@ -129,7 +140,68 @@ class WorkspaceFileManager:
 
     def _save_workspace_raw(self, state: dict[str, Any]) -> None:
         ws_file = self._root / "workspace.json"
-        ws_file.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._write_json_atomic(ws_file, state)
+
+    @staticmethod
+    def _write_json_atomic(path: Path, content: dict[str, Any]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_file = path.with_name(f".{path.name}.{secrets.token_hex(6)}.tmp")
+        temp_file.write_text(json.dumps(content, ensure_ascii=False, indent=2), encoding="utf-8")
+        temp_file.replace(path)
+
+    def _generate_workspace_code(self) -> str:
+        """生成全局唯一的短工作区编码。"""
+        known_codes: set[str] = set()
+        storage_root = _storage_root()
+        if storage_root.exists():
+            for ws_file in storage_root.glob("*/*/workspace.json"):
+                try:
+                    raw = json.loads(ws_file.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                code = raw.get("workspace_code")
+                if isinstance(code, str) and code:
+                    known_codes.add(code)
+
+        alphabet = string.ascii_lowercase + string.digits
+        for _ in range(64):
+            candidate = "w" + "".join(secrets.choice(alphabet) for _ in range(9))
+            if candidate not in known_codes:
+                return candidate
+        raise RuntimeError("无法生成唯一 workspace_code")
+
+    def _validate_and_get_business_code(
+        self,
+        entity_code: str,
+        workspace: dict[str, Any] | None = None,
+    ) -> str:
+        if not entity_code.isascii():
+            raise ValueError("entity_code 只能包含 ASCII 字符")
+        if len(entity_code) > 63:
+            raise ValueError("entity_code 长度不能超过 63 个字符")
+        if not _ENTITY_CODE_RE.fullmatch(entity_code):
+            raise ValueError("entity_code 必须以字母开头且只能包含字母、数字和下划线")
+
+        raw = workspace if workspace is not None else self._load_workspace_raw()
+        version = raw.get("entity_code_version")
+        if not version:
+            suffix = f"_{self._user_code}"
+            return entity_code[: -len(suffix)] if entity_code.endswith(suffix) else entity_code
+        if version != _ENTITY_CODE_VERSION:
+            raise ValueError(f"不支持的 entity_code_version: {version}")
+
+        workspace_code = str(raw.get("workspace_code", ""))
+        if not _WORKSPACE_CODE_RE.fullmatch(workspace_code):
+            raise ValueError("v2 工作区缺少合法的 workspace_code")
+        prefix = f"{workspace_code}_"
+        if not entity_code.startswith(prefix) or entity_code == prefix:
+            raise ValueError(f"v2 entity_code 必须以工作区编码 {prefix} 开头")
+        return entity_code[len(prefix) :]
+
+    def _require_workspace_object(self, entity_code: str) -> None:
+        self._validate_and_get_business_code(entity_code)
+        if self._load_definition(entity_code) is None:
+            raise ValueError(f"引用对象不存在于当前工作区: {entity_code}")
 
     def get_workspace_state(self) -> dict[str, Any]:
         """获取工作区完整状态（含对象和视图摘要列表）。"""
@@ -147,6 +219,7 @@ class WorkspaceFileManager:
             objects_out.append(
                 {
                     "entity_code": entity_code,
+                    "business_code": obj_st.get("business_code", ""),
                     "entity_name": defn.get("entity_name", ""),
                     "entity_desc": defn.get("entity_desc", ""),
                     "status": obj_st.get("status", "draft"),
@@ -174,6 +247,9 @@ class WorkspaceFileManager:
         return {
             "workspace_name": raw.get("workspace_name", self._workspace_name),
             "workspace_desc": raw.get("workspace_desc", ""),
+            "workspace_code": raw.get("workspace_code", ""),
+            "entity_code_version": raw.get("entity_code_version", ""),
+            "active_publication": self.load_active_publication(),
             "objects": objects_out,
             "views": views_out,
         }
@@ -188,7 +264,7 @@ class WorkspaceFileManager:
         raw = self._load_workspace_raw()
         objs: dict[str, Any] = raw.setdefault("objects", {})
         existing: dict[str, Any] = objs.get(entity_code, {})
-        entry: dict[str, Any] = {"status": status}
+        entry: dict[str, Any] = {**existing, "status": status}
         # 保留 resource_id：submitted 时写入，其他状态沿用旧值
         if resource_id:
             entry["resource_id"] = resource_id
@@ -228,6 +304,11 @@ class WorkspaceFileManager:
         table_name: str | None = None,
     ) -> dict[str, Any]:
         """合并写入对象的 definition.json 和 fields.json。"""
+        raw_ws = self._load_workspace_raw()
+        if not raw_ws:
+            raise FileNotFoundError(f"工作区 {self._workspace_name!r} 不存在，请先初始化")
+        business_code = self._validate_and_get_business_code(entity_code, raw_ws)
+
         obj_dir = self._root / "objects" / entity_code
         obj_dir.mkdir(parents=True, exist_ok=True)
         (obj_dir / "actions").mkdir(exist_ok=True)
@@ -259,7 +340,13 @@ class WorkspaceFileManager:
             merged_fields = self.load_fields(entity_code)
 
         # 如果对象已提交，检测字段变化并标记 dirty
-        raw_ws = self._load_workspace_raw()
+        objects: dict[str, Any] = raw_ws.setdefault("objects", {})
+        object_entry: dict[str, Any] = objects.setdefault(entity_code, {"status": "draft"})
+        existing_business_code = object_entry.get("business_code")
+        if existing_business_code and existing_business_code != business_code:
+            raise ValueError("对象 business_code 创建后不可修改")
+        object_entry["business_code"] = business_code
+        self._save_workspace_raw(raw_ws)
         obj_status = raw_ws.get("objects", {}).get(entity_code, {}).get("status", "draft")
         if obj_status == "submitted" and fields is not None:
             diff = self.diff_fields(entity_code, merged_fields)
@@ -394,6 +481,10 @@ class WorkspaceFileManager:
             action_type: "QUERY"（查询类，只读）或 "OPERATION"（操作类，写入/修改数据）
             object_references: 脚本依赖的其他对象编码列表，用于执行时按需注入 mapper
         """
+        self._require_workspace_object(entity_code)
+        for reference in object_references or []:
+            self._require_workspace_object(reference)
+
         actions_dir = self._root / "objects" / entity_code / "actions"
         actions_dir.mkdir(parents=True, exist_ok=True)
 
@@ -481,6 +572,12 @@ class WorkspaceFileManager:
         fields: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """合并写入视图定义，返回带 missing 的结果。"""
+        for object_code in object_codes or []:
+            self._require_workspace_object(object_code)
+        for relation in object_relations or []:
+            self._require_workspace_object(str(relation.get("source_object_code", "")))
+            self._require_workspace_object(str(relation.get("target_object_code", "")))
+
         views_dir = self._root / "views"
         views_dir.mkdir(exist_ok=True)
 
@@ -610,6 +707,36 @@ class WorkspaceFileManager:
         if not sdk_file.exists():
             return None
         return sdk_file.read_text(encoding="utf-8")
+
+    # ── publication files ───────────────────────────────────────────────────
+
+    def save_publication(self, record: dict[str, Any]) -> None:
+        """原子保存批次发布计划及步骤记录。"""
+        publish_id = str(record.get("publish_id", ""))
+        if not _PUBLISH_ID_RE.fullmatch(publish_id):
+            raise ValueError("publish_id 格式非法")
+        self._write_json_atomic(self._root / "publications" / f"{publish_id}.json", record)
+
+    def load_publication(self, publish_id: str) -> dict[str, Any] | None:
+        if not _PUBLISH_ID_RE.fullmatch(publish_id):
+            raise ValueError("publish_id 格式非法")
+        path = self._root / "publications" / f"{publish_id}.json"
+        if not path.exists():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+    def activate_publication(self, record: dict[str, Any]) -> None:
+        """在整个批次成功后原子切换工作区活动发布记录。"""
+        publish_id = str(record.get("publish_id", ""))
+        if not _PUBLISH_ID_RE.fullmatch(publish_id):
+            raise ValueError("publish_id 格式非法")
+        self._write_json_atomic(self._root / "publications" / "active.json", record)
+
+    def load_active_publication(self) -> dict[str, Any] | None:
+        path = self._root / "publications" / "active.json"
+        if not path.exists():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
 
     # ── list helpers ──────────────────────────────────────────────────────────
 
@@ -781,6 +908,8 @@ def list_user_workspaces(user_code: str) -> list[dict[str, Any]]:
             {
                 "workspace_name": raw.get("workspace_name", ws_dir.name),
                 "workspace_desc": raw.get("workspace_desc", ""),
+                "workspace_code": raw.get("workspace_code", ""),
+                "entity_code_version": raw.get("entity_code_version", ""),
                 "object_count": len(actual_object_codes),
                 "view_count": len(actual_view_codes),
                 "pending_count": pending_count,

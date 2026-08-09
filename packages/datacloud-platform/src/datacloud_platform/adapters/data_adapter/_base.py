@@ -138,7 +138,8 @@ def _normalize_entity(
                 result["source_config"] = sc
             if not sc.get("alias"):
                 sc["alias"] = _DEFAULT_DYNAMIC_DATASOURCE_ALIAS
-            if not sc.get("jdbc_url"):
+            db_type = str(sc.get("db_type", "SQLITE")).upper()
+            if not sc.get("jdbc_url") and db_type == "SQLITE":
                 mount = os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")
                 if mount:
                     sc["jdbc_url"] = (
@@ -269,6 +270,13 @@ def _normalize_entity(
     elif entity_type == "datasource":
         # Datasource model_dump keys (dbId, dbCode, dbType, dbParams) match read path expectations
         result = dict(data)
+
+    tenant_id = data.get("tenant_id") or data.get("tenantId")
+    publish_id = data.get("publish_id") or data.get("publishId")
+    if tenant_id is not None:
+        result["tenant_id"] = tenant_id
+    if publish_id is not None:
+        result["publish_id"] = publish_id
 
     return result
 

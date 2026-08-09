@@ -26,5 +26,7 @@ class View(BaseModel):
     properties: list[ViewProperty] = Field(default_factory=list, alias="properties")
     owner_type: str = Field(default="enterprise", alias="ownerType")
     user_code: str | None = Field(default=None, alias="userCode")
+    tenant_id: str | None = Field(default=None, alias="tenantId")
+    publish_id: str | None = Field(default=None, alias="publishId")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
