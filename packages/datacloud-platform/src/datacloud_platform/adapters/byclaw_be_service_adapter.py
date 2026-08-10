@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from datacloud_platform.backends.byclaw_be_service import ByClawBeServiceError
+from datacloud_platform.models.document import DocumentTaskStatus
 from datacloud_platform.redis_client import create_async_redis_client
 from datacloud_platform.services.kb_document_reader import (
     _build_discovered_url,
@@ -20,6 +21,7 @@ from datacloud_platform.services.kb_document_reader import (
 SAVE_OR_UPDATE_OBJECT_FILES_PATH = (
     "/byaiService/devloop/operation/saveOrUpdateObjectFiles"
 )
+UPDATE_TASK_STATUS_PATH = "/byaiService/devloop/operation/updateTaskStatus"
 _TIMEOUT_SECONDS = 30.0
 PostJson = Callable[[str, dict[str, Any], dict[str, str]], object]
 
@@ -43,11 +45,38 @@ class ServiceDiscoveryByClawBeServiceBackend:
             )
             raw = await response if inspect.isawaitable(response) else response
         else:
-            raw = await self._post_by_discovery(payload=payload, headers=headers)
+            raw = await self._post_by_discovery(
+                path=SAVE_OR_UPDATE_OBJECT_FILES_PATH,
+                operation="saveOrUpdateObjectFiles",
+                payload=payload,
+                headers=headers,
+            )
+        _validate_response(raw)
+
+    async def update_task_status(
+        self, *, session_id: str, task_status: DocumentTaskStatus
+    ) -> None:
+        payload = {"sessionId": session_id, "taskStatus": task_status.value}
+        headers = _build_headers()
+        if self.post_json is not None:
+            response = self.post_json(UPDATE_TASK_STATUS_PATH, payload, headers)
+            raw = await response if inspect.isawaitable(response) else response
+        else:
+            raw = await self._post_by_discovery(
+                path=UPDATE_TASK_STATUS_PATH,
+                operation="updateTaskStatus",
+                payload=payload,
+                headers=headers,
+            )
         _validate_response(raw)
 
     async def _post_by_discovery(
-        self, *, payload: dict[str, Any], headers: dict[str, str]
+        self,
+        *,
+        path: str,
+        operation: str,
+        payload: dict[str, Any],
+        headers: dict[str, str],
     ) -> Any:
         service_name = os.getenv("BE_DOMAINNAME", "ByaiService").strip()
         try:
@@ -66,7 +95,7 @@ class ServiceDiscoveryByClawBeServiceBackend:
                 raise ByClawBeServiceError(
                     f"No available instances for service: {service_name}"
                 )
-            url = _build_discovered_url(instance, SAVE_OR_UPDATE_OBJECT_FILES_PATH)
+            url = _build_discovered_url(instance, path)
             async with httpx.AsyncClient(
                 timeout=_TIMEOUT_SECONDS, headers=headers
             ) as client:
@@ -75,17 +104,15 @@ class ServiceDiscoveryByClawBeServiceBackend:
                     raw: Any = response.json()
                 except ValueError as exc:
                     raise ByClawBeServiceError(
-                        "saveOrUpdateObjectFiles response must be JSON"
+                        f"{operation} response must be JSON"
                     ) from exc
                 if not response.is_success:
                     raise ByClawBeServiceError(
-                        f"saveOrUpdateObjectFiles returned HTTP {response.status_code}: {raw}"
+                        f"{operation} returned HTTP {response.status_code}: {raw}"
                     )
                 return raw
         except httpx.HTTPError as exc:
-            raise ByClawBeServiceError(
-                f"saveOrUpdateObjectFiles HTTP error: {exc}"
-            ) from exc
+            raise ByClawBeServiceError(f"{operation} HTTP error: {exc}") from exc
         finally:
             await discovery_client.close()
             await redis_client.aclose()

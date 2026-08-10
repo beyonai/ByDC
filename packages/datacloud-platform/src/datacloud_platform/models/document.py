@@ -23,6 +23,14 @@ class DocumentProcessingStatus(StrEnum):
     COMPLETED = "已完成"
 
 
+class DocumentTaskStatus(StrEnum):
+    """Final status reported for a document discovery/enrichment batch."""
+
+    DONE = "done"
+    FAILED = "failed"
+    MIXED = "mixed"
+
+
 class DocumentEnrichStatus(StrEnum):
     """Outcome of one document-enrichment attempt."""
 

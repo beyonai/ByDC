@@ -50,6 +50,7 @@ from datacloud_platform.models.document import (
     DocumentObjectItem,
     DocumentObjectPage,
     DocumentProcessingStatus,
+    DocumentTaskStatus,
     MetadataSearchPage,
     Pagination,
     QueryDocumentObjectsRequest,
@@ -120,6 +121,9 @@ class _DocumentPlatform(Protocol):
     async def save_or_update_object_files(
         self, base_id: str, *, object_files: list[dict[str, Any]]
     ) -> Any: ...
+    async def update_task_status(
+        self, base_id: str, *, session_id: str, task_status: DocumentTaskStatus
+    ) -> Any: ...
 
 
 class DocumentMixin:
@@ -151,16 +155,31 @@ class DocumentMixin:
         Returns:
             无返回值。该方法用于后台任务，处理结果写入会话空间。
         """
-        await _process_document_pages(
-            self,
+        try:
+            task_status = await _process_document_pages(
+                self,
+                base_id=base_id,
+                session_id=session_id,
+                request=request,
+                statuses=(
+                    DocumentProcessingStatus.PENDING_DISCOVERY,
+                    DocumentProcessingStatus.DISCOVERY_RETRY,
+                ),
+                operation="discovery",
+            )
+        except Exception:  # noqa: BLE001
+            await _safe_update_document_task_status(
+                platform=self,
+                base_id=base_id,
+                session_id=session_id,
+                task_status=DocumentTaskStatus.FAILED,
+            )
+            raise
+        await _safe_update_document_task_status(
+            platform=self,
             base_id=base_id,
             session_id=session_id,
-            request=request,
-            statuses=(
-                DocumentProcessingStatus.PENDING_DISCOVERY,
-                DocumentProcessingStatus.DISCOVERY_RETRY,
-            ),
-            operation="discovery",
+            task_status=task_status,
         )
 
     async def process_document_enrichment(
@@ -186,22 +205,37 @@ class DocumentMixin:
         Returns:
             无返回值。富化内容及执行结果写入会话空间。
         """
-        await _process_document_pages(
-            self,
+        try:
+            task_status = await _process_document_pages(
+                self,
+                base_id=base_id,
+                session_id=session_id,
+                request=request,
+                statuses=(
+                    DocumentProcessingStatus.PENDING_ORGANIZATION,
+                    DocumentProcessingStatus.ORGANIZATION_RETRY,
+                ),
+                operation="enrichment",
+                organization_interval_seconds=_optional_int_environment(
+                    _ORGANIZATION_INTERVAL_SECONDS_ENV
+                ),
+                relation_in_out_difference=_optional_int_environment(
+                    _RELATION_IN_OUT_DIFFERENCE_ENV
+                ),
+            )
+        except Exception:  # noqa: BLE001
+            await _safe_update_document_task_status(
+                platform=self,
+                base_id=base_id,
+                session_id=session_id,
+                task_status=DocumentTaskStatus.FAILED,
+            )
+            raise
+        await _safe_update_document_task_status(
+            platform=self,
             base_id=base_id,
             session_id=session_id,
-            request=request,
-            statuses=(
-                DocumentProcessingStatus.PENDING_ORGANIZATION,
-                DocumentProcessingStatus.ORGANIZATION_RETRY,
-            ),
-            operation="enrichment",
-            organization_interval_seconds=_optional_int_environment(
-                _ORGANIZATION_INTERVAL_SECONDS_ENV
-            ),
-            relation_in_out_difference=_optional_int_environment(
-                _RELATION_IN_OUT_DIFFERENCE_ENV
-            ),
+            task_status=task_status,
         )
 
     @asynccontextmanager
@@ -734,7 +768,7 @@ async def _process_document_pages(
     operation: str,
     organization_interval_seconds: int | None = None,
     relation_in_out_difference: int | None = None,
-) -> None:
+) -> DocumentTaskStatus:
     """先拉取全部候选页，再按顺序逐文档处理。
 
     完成分页快照后，一次性加载本次处理需要的本体对象详情，避免在逐文档状态更新时
@@ -771,10 +805,10 @@ async def _process_document_pages(
                 session_id,
                 0,
             )
-            return
+            return DocumentTaskStatus.FAILED
         all_object_codes = tuple(
-                    dict.fromkeys((*request.object_codes, *source_object_codes))
-                )
+            dict.fromkeys((*request.object_codes, *source_object_codes))
+        )
     while True:
         page = await platform.query_document_objects(
             base_id,
@@ -818,6 +852,7 @@ async def _process_document_pages(
         )
         for object_code in scope_codes
     }
+    outcomes: list[DocumentTaskStatus] = []
     for current, document in enumerate(documents, start=1):
         logger.info(
             "Document %s processing started: current=%s total=%s term_id=%s "
@@ -830,14 +865,16 @@ async def _process_document_pages(
             document.file_path,
             document.term_type_code,
         )
-        await _process_one_document(
-            platform,
-            base_id=base_id,
-            session_id=session_id,
-            request=request,
-            document=document,
-            operation=operation,
-            object_scope_by_code=object_scope_by_code,
+        outcomes.append(
+            await _process_one_document(
+                platform,
+                base_id=base_id,
+                session_id=session_id,
+                request=request,
+                document=document,
+                operation=operation,
+                object_scope_by_code=object_scope_by_code,
+            )
         )
         logger.info(
             "Document %s progress: processed=%s total=%s term_id=%s",
@@ -855,6 +892,42 @@ async def _process_document_pages(
         total_documents,
         total_documents,
     )
+    return _summarize_document_task_status(outcomes)
+
+
+def _summarize_document_task_status(
+    outcomes: list[DocumentTaskStatus],
+) -> DocumentTaskStatus:
+    """Aggregate per-document outcomes into the BE task status contract."""
+    if not outcomes or all(outcome is DocumentTaskStatus.DONE for outcome in outcomes):
+        return DocumentTaskStatus.DONE
+    if all(outcome is DocumentTaskStatus.FAILED for outcome in outcomes):
+        return DocumentTaskStatus.FAILED
+    return DocumentTaskStatus.MIXED
+
+
+async def _safe_update_document_task_status(
+    *,
+    platform: Any,
+    base_id: str,
+    session_id: str,
+    task_status: DocumentTaskStatus,
+) -> None:
+    """Update the external task status without masking document-task failures."""
+    try:
+        await platform.update_task_status(
+            base_id,
+            session_id=session_id,
+            task_status=task_status,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Failed to update document task status: base_id=%s session_id=%s "
+            "task_status=%s",
+            base_id,
+            session_id,
+            task_status,
+        )
 
 
 async def _process_one_document(
@@ -866,7 +939,7 @@ async def _process_one_document(
     document: DocumentObjectItem,
     operation: str,
     object_scope_by_code: dict[str, DocumentEnrichObjectScope] | None = None,
-) -> None:
+) -> DocumentTaskStatus:
     """在分布式锁保护下处理一个文档并记录结果。
 
     未取得锁时只写会话报告 ``skipped_locked``。取得锁后，发现和富化都先把源文档
@@ -888,11 +961,11 @@ async def _process_one_document(
         object_scope_by_code: 前置加载并在本批次复用的对象编码到对象详情映射。
 
     Returns:
-        无返回值。所有业务结果通过状态接口、知识库写动作或会话报告产生副作用。
+        当前文档的任务结果：``done``、``failed`` 或 ``mixed``。
     """
     if object_scope_by_code is None:
         logger.warning("object_scope_by_code is none, skiped")
-        return
+        return DocumentTaskStatus.FAILED
     lock_key = (
         f"datacloud:document:{operation}:{base_id}:"
         f"{document.kb_resource_id}:{document.term_id}"
@@ -914,7 +987,7 @@ async def _process_one_document(
                 file_path=document.file_path,
                 status="skipped_locked",
             )
-            return
+            return DocumentTaskStatus.MIXED
         operation_error_logged = False
         try:
             source_scope = _get_or_resolve_document_object_scope(
@@ -996,6 +1069,7 @@ async def _process_one_document(
                     DocumentProcessingStatus.COMPLETED.value,
                     len(discovery_result.items),
                 )
+                return DocumentTaskStatus.DONE
             else:
                 from datacloud_platform.services.object_action import (
                     invoke_object_write_action,
@@ -1096,6 +1170,11 @@ async def _process_one_document(
                     processing_status.value,
                     enrich_result.status.value,
                 )
+                if enrich_result.status is DocumentEnrichStatus.SUCCESS:
+                    return DocumentTaskStatus.DONE
+                if enrich_result.status is DocumentEnrichStatus.FAILED:
+                    return DocumentTaskStatus.FAILED
+                return DocumentTaskStatus.DONE
         except Exception as exc:  # noqa: BLE001
             if not operation_error_logged:
                 logger.exception(
@@ -1220,6 +1299,7 @@ async def _process_one_document(
                     DocumentProcessingStatus.ORGANIZATION_RETRY.value,
                     exc,
                 )
+            return DocumentTaskStatus.FAILED
 
 
 def _get_or_resolve_document_object_scope(
