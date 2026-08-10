@@ -31,6 +31,13 @@ class DocumentTaskStatus(StrEnum):
     MIXED = "mixed"
 
 
+class DocumentOperation(StrEnum):
+    """Document background-processing operation."""
+
+    DISCOVERY = "discovery"
+    ENRICHMENT = "enrichment"
+
+
 class DocumentEnrichStatus(StrEnum):
     """Outcome of one document-enrichment attempt."""
 

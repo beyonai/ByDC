@@ -49,6 +49,7 @@ from datacloud_platform.models.document import (
     DocumentFragmentResult,
     DocumentObjectItem,
     DocumentObjectPage,
+    DocumentOperation,
     DocumentProcessingStatus,
     DocumentTaskStatus,
     MetadataSearchPage,
@@ -155,31 +156,16 @@ class DocumentMixin:
         Returns:
             无返回值。该方法用于后台任务，处理结果写入会话空间。
         """
-        try:
-            task_status = await _process_document_pages(
-                self,
-                base_id=base_id,
-                session_id=session_id,
-                request=request,
-                statuses=(
-                    DocumentProcessingStatus.PENDING_DISCOVERY,
-                    DocumentProcessingStatus.DISCOVERY_RETRY,
-                ),
-                operation="discovery",
-            )
-        except Exception:  # noqa: BLE001
-            await _safe_update_document_task_status(
-                platform=self,
-                base_id=base_id,
-                session_id=session_id,
-                task_status=DocumentTaskStatus.FAILED,
-            )
-            raise
-        await _safe_update_document_task_status(
+        await _run_document_task(
             platform=self,
             base_id=base_id,
             session_id=session_id,
-            task_status=task_status,
+            request=request,
+            statuses=(
+                DocumentProcessingStatus.PENDING_DISCOVERY,
+                DocumentProcessingStatus.DISCOVERY_RETRY,
+            ),
+            operation=DocumentOperation.DISCOVERY,
         )
 
     async def process_document_enrichment(
@@ -205,37 +191,22 @@ class DocumentMixin:
         Returns:
             无返回值。富化内容及执行结果写入会话空间。
         """
-        try:
-            task_status = await _process_document_pages(
-                self,
-                base_id=base_id,
-                session_id=session_id,
-                request=request,
-                statuses=(
-                    DocumentProcessingStatus.PENDING_ORGANIZATION,
-                    DocumentProcessingStatus.ORGANIZATION_RETRY,
-                ),
-                operation="enrichment",
-                organization_interval_seconds=_optional_int_environment(
-                    _ORGANIZATION_INTERVAL_SECONDS_ENV
-                ),
-                relation_in_out_difference=_optional_int_environment(
-                    _RELATION_IN_OUT_DIFFERENCE_ENV
-                ),
-            )
-        except Exception:  # noqa: BLE001
-            await _safe_update_document_task_status(
-                platform=self,
-                base_id=base_id,
-                session_id=session_id,
-                task_status=DocumentTaskStatus.FAILED,
-            )
-            raise
-        await _safe_update_document_task_status(
+        await _run_document_task(
             platform=self,
             base_id=base_id,
             session_id=session_id,
-            task_status=task_status,
+            request=request,
+            statuses=(
+                DocumentProcessingStatus.PENDING_ORGANIZATION,
+                DocumentProcessingStatus.ORGANIZATION_RETRY,
+            ),
+            operation=DocumentOperation.ENRICHMENT,
+            organization_interval_seconds=_optional_int_environment(
+                _ORGANIZATION_INTERVAL_SECONDS_ENV
+            ),
+            relation_in_out_difference=_optional_int_environment(
+                _RELATION_IN_OUT_DIFFERENCE_ENV
+            ),
         )
 
     @asynccontextmanager
@@ -758,6 +729,45 @@ def resolve_fragment_term_details(
     return details
 
 
+async def _run_document_task(
+    *,
+    platform: Any,
+    base_id: str,
+    session_id: str,
+    request: DocumentAsyncProcessingRequest,
+    statuses: tuple[DocumentProcessingStatus, ...],
+    operation: DocumentOperation,
+    organization_interval_seconds: int | None = None,
+    relation_in_out_difference: int | None = None,
+) -> None:
+    """Run one document batch and always report its final BE task status."""
+    try:
+        task_status = await _process_document_pages(
+            platform,
+            base_id=base_id,
+            session_id=session_id,
+            request=request,
+            statuses=statuses,
+            operation=operation,
+            organization_interval_seconds=organization_interval_seconds,
+            relation_in_out_difference=relation_in_out_difference,
+        )
+    except Exception:  # noqa: BLE001
+        await _safe_update_document_task_status(
+            platform=platform,
+            base_id=base_id,
+            session_id=session_id,
+            task_status=DocumentTaskStatus.FAILED,
+        )
+        raise
+    await _safe_update_document_task_status(
+        platform=platform,
+        base_id=base_id,
+        session_id=session_id,
+        task_status=task_status,
+    )
+
+
 async def _process_document_pages(
     platform: Any,
     *,
@@ -765,7 +775,7 @@ async def _process_document_pages(
     session_id: str,
     request: DocumentAsyncProcessingRequest,
     statuses: tuple[DocumentProcessingStatus, ...],
-    operation: str,
+    operation: DocumentOperation,
     organization_interval_seconds: int | None = None,
     relation_in_out_difference: int | None = None,
 ) -> DocumentTaskStatus:
@@ -795,7 +805,7 @@ async def _process_document_pages(
     documents: list[DocumentObjectItem] = []
     source_object_codes = request.object_codes
     all_object_codes = request.object_codes
-    if operation == "discovery":
+    if operation is DocumentOperation.DISCOVERY:
         source_object_codes = request.source_object_codes
         if not source_object_codes:
             logger.error(
@@ -937,7 +947,7 @@ async def _process_one_document(
     session_id: str,
     request: DocumentAsyncProcessingRequest,
     document: DocumentObjectItem,
-    operation: str,
+    operation: DocumentOperation | str,
     object_scope_by_code: dict[str, DocumentEnrichObjectScope] | None = None,
 ) -> DocumentTaskStatus:
     """在分布式锁保护下处理一个文档并记录结果。
@@ -963,6 +973,7 @@ async def _process_one_document(
     Returns:
         当前文档的任务结果：``done``、``failed`` 或 ``mixed``。
     """
+    operation = DocumentOperation(operation)
     if object_scope_by_code is None:
         logger.warning("object_scope_by_code is none, skiped")
         return DocumentTaskStatus.FAILED
@@ -988,7 +999,6 @@ async def _process_one_document(
                 status="skipped_locked",
             )
             return DocumentTaskStatus.MIXED
-        operation_error_logged = False
         try:
             source_scope = _get_or_resolve_document_object_scope(
                 platform=platform,
@@ -996,310 +1006,298 @@ async def _process_one_document(
                 object_scope_by_code=object_scope_by_code,
                 object_code=document.term_type_code,
             )
-            if operation == "discovery":
-                # 第一次状态调用：源文档进入“发现中”。
-                await _save_document_processing_status(
+            if operation is DocumentOperation.DISCOVERY:
+                return await _process_discovery_document(
                     platform=platform,
                     base_id=base_id,
                     session_id=session_id,
+                    request=request,
                     document=document,
                     object_scope=source_scope,
-                    status=DocumentProcessingStatus.DISCOVERING,
-                )
-                try:
-                    discovery_result = (
-                        await platform.discover_object_instances_unstructured(
-                            base_id,
-                            instance_id=document.term_id,
-                            object_codes=list(request.object_codes),
-                        )
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    operation_error_logged = True
-                    logger.exception(
-                        "discover_object_instances_unstructured failed: "
-                        "base_id=%s term_id=%s kb_resource_id=%s file_path=%s error=%s",
-                        base_id,
-                        document.term_id,
-                        document.kb_resource_id,
-                        document.file_path,
-                        exc,
-                    )
-                    raise
-                (
-                    source_labels,
-                    source_action_result,
-                ) = await _update_discovered_source_document(
-                    platform=platform,
-                    base_id=base_id,
-                    document=document,
-                    object_scope=source_scope,
-                )
-                discovered_document_files = _build_discovered_document_files(
-                    session_id=session_id,
-                    items=discovery_result.items,
                     object_scope_by_code=object_scope_by_code,
                 )
-                # 第二次状态调用：新 Document=待整理，源文档=已完成，批量提交。
-                await _save_document_processing_status(
-                    platform=platform,
-                    base_id=base_id,
-                    session_id=session_id,
-                    document=document,
-                    object_scope=source_scope,
-                    status=DocumentProcessingStatus.COMPLETED,
-                    labels=source_labels,
-                    action_result=source_action_result,
-                    related_object_files=discovered_document_files,
-                )
-                platform.append_document_session_report(
-                    session_id=session_id,
-                    operation=operation,
-                    term_id=document.term_id,
-                    file_path=document.file_path,
-                    status="completed",
-                    entity_count=len(discovery_result.items),
-                )
-                logger.info(
-                    "Document discovery processing finished: term_id=%s "
-                    "kb_resource_id=%s file_path=%s status=%s entity_count=%s",
-                    document.term_id,
-                    document.kb_resource_id,
-                    document.file_path,
-                    DocumentProcessingStatus.COMPLETED.value,
-                    len(discovery_result.items),
-                )
-                return DocumentTaskStatus.DONE
-            else:
-                from datacloud_platform.services.object_action import (
-                    invoke_object_write_action,
-                )
-
-                target_object = source_scope
-                # 富化开始前先抢占状态，防止其他消费者再次选中该文档。
-                await _save_document_processing_status(
-                    platform=platform,
-                    base_id=base_id,
-                    session_id=session_id,
-                    document=document,
-                    object_scope=target_object,
-                    status=DocumentProcessingStatus.ORGANIZING,
-                )
-                try:
-                    enrich_result = await platform.enrich(
-                        base_id,
-                        object_scope=list(object_scope_by_code.values()),
-                        target_object=target_object,
-                        term_id=document.term_id,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    operation_error_logged = True
-                    logger.exception(
-                        "enrich failed: base_id=%s term_id=%s kb_resource_id=%s "
-                        "file_path=%s error=%s",
-                        base_id,
-                        document.term_id,
-                        document.kb_resource_id,
-                        document.file_path,
-                        exc,
-                    )
-                    raise
-                content = enrich_result.enriched_content
-                processing_status = _processing_status_for_enrich_result(
-                    enrich_result.status
-                )
-                action_result: dict[str, Any] | None = None
-                action_labels: dict[str, Any] = {}
-                if content.strip():
-                    # 关系块会在知识库写入层解析为关系标签，front matter 转为业务标签。
-                    content = _append_related_docs_block(
-                        platform=platform,
-                        base_id=base_id,
-                        content=content,
-                        relations=enrich_result.relations,
-                        object_scope_by_code=object_scope_by_code,
-                    )
-                    content_labels = _extract_front_matter_labels(content)
-                    action_labels = {
-                        **content_labels,
-                        "dc_status": processing_status.value,
-                        "dc_failure_reason": enrich_result.exception_info,
-                        "dc_failure_count": document.failure_count
-                        + int(enrich_result.status is DocumentEnrichStatus.FAILED),
-                        "dc_last_organized_at": datetime.now(UTC).isoformat(),
-                    }
-                    action_result = await invoke_object_write_action(
-                        platform=platform,
-                        base_id=base_id,
-                        object_code=target_object.object_code,
-                        content=content,
-                        labels=action_labels,
-                        file_description=f"{document.term_name}富化文档",
-                        source_path=document.file_path,
-                    )
-                elif enrich_result.status is DocumentEnrichStatus.FAILED:
-                    action_labels = _build_failure_processing_labels(
-                        document=document,
-                        status=DocumentProcessingStatus.ORGANIZATION_RETRY,
-                        failure_reason=enrich_result.exception_info,
-                    )
-                    action_result = await _write_source_document_labels(
-                        platform=platform,
-                        base_id=base_id,
-                        document=document,
-                        object_scope=target_object,
-                        labels=action_labels,
-                        file_description=f"{document.term_name}富化失败状态",
-                    )
-                await _save_document_processing_status(
-                    platform=platform,
-                    base_id=base_id,
-                    session_id=session_id,
-                    document=document,
-                    object_scope=target_object,
-                    status=processing_status,
-                    labels=action_labels,
-                    action_result=action_result,
-                )
-                logger.info(
-                    "Document enrichment processing finished: term_id=%s "
-                    "kb_resource_id=%s file_path=%s status=%s enrich_status=%s",
-                    document.term_id,
-                    document.kb_resource_id,
-                    document.file_path,
-                    processing_status.value,
-                    enrich_result.status.value,
-                )
-                if enrich_result.status is DocumentEnrichStatus.SUCCESS:
-                    return DocumentTaskStatus.DONE
-                if enrich_result.status is DocumentEnrichStatus.FAILED:
-                    return DocumentTaskStatus.FAILED
-                return DocumentTaskStatus.DONE
+            return await _process_enrichment_document(
+                platform=platform,
+                base_id=base_id,
+                session_id=session_id,
+                document=document,
+                target_object=source_scope,
+                object_scope_by_code=object_scope_by_code,
+            )
         except Exception as exc:  # noqa: BLE001
-            if not operation_error_logged:
-                logger.exception(
-                    "Document %s processing failed: base_id=%s term_id=%s "
-                    "kb_resource_id=%s file_path=%s error=%s",
-                    operation,
-                    base_id,
-                    document.term_id,
-                    document.kb_resource_id,
-                    document.file_path,
-                    exc,
-                )
-            if operation == "discovery":
-                failure_labels = _build_failure_processing_labels(
-                    document=document,
-                    status=DocumentProcessingStatus.DISCOVERY_RETRY,
-                    failure_reason=str(exc),
-                )
-                failure_action_result: dict[str, Any] | None = None
-                try:
-                    source_scope = _get_or_resolve_document_object_scope(
-                        platform=platform,
-                        base_id=base_id,
-                        object_scope_by_code=object_scope_by_code,
-                        object_code=document.term_type_code,
-                    )
-                    failure_action_result = await _write_source_document_labels(
-                        platform=platform,
-                        base_id=base_id,
-                        document=document,
-                        object_scope=source_scope,
-                        labels=failure_labels,
-                        file_description=f"{document.term_name}对象发现失败状态",
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.exception(
-                        "Failed to write discovery failure labels: %s",
-                        document.term_id,
-                    )
-                try:
-                    await _save_document_processing_status(
-                        platform=platform,
-                        base_id=base_id,
-                        session_id=session_id,
-                        document=document,
-                        object_scope=source_scope,
-                        status=DocumentProcessingStatus.DISCOVERY_RETRY,
-                        labels=failure_labels,
-                        action_result=failure_action_result,
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.exception(
-                        "Failed to persist discovery failure status: %s",
-                        document.term_id,
-                    )
-                platform.append_document_session_report(
-                    session_id=session_id,
-                    operation=operation,
-                    term_id=document.term_id,
-                    file_path=document.file_path,
-                    status="failed",
-                    error=str(exc),
-                )
-                logger.error(
-                    "Document discovery processing finished: term_id=%s "
-                    "kb_resource_id=%s file_path=%s status=%s error=%s",
-                    document.term_id,
-                    document.kb_resource_id,
-                    document.file_path,
-                    DocumentProcessingStatus.DISCOVERY_RETRY.value,
-                    exc,
-                )
-            else:
-                failure_labels = _build_failure_processing_labels(
-                    document=document,
-                    status=DocumentProcessingStatus.ORGANIZATION_RETRY,
-                    failure_reason=str(exc),
-                )
-                failure_action_result = None
-                try:
-                    target_object = _get_or_resolve_document_object_scope(
-                        platform=platform,
-                        base_id=base_id,
-                        object_scope_by_code=object_scope_by_code,
-                        object_code=document.term_type_code,
-                    )
-                    failure_action_result = await _write_source_document_labels(
-                        platform=platform,
-                        base_id=base_id,
-                        document=document,
-                        object_scope=target_object,
-                        labels=failure_labels,
-                        file_description=f"{document.term_name}富化失败状态",
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.exception(
-                        "Failed to write enrichment failure labels: %s",
-                        document.term_id,
-                    )
-                try:
-                    await _save_document_processing_status(
-                        platform=platform,
-                        base_id=base_id,
-                        session_id=session_id,
-                        document=document,
-                        object_scope=target_object,
-                        status=DocumentProcessingStatus.ORGANIZATION_RETRY,
-                        labels=failure_labels,
-                        action_result=failure_action_result,
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.exception(
-                        "Failed to persist enrichment failure status: %s",
-                        document.term_id,
-                    )
-                logger.error(
-                    "Document enrichment processing finished: term_id=%s "
-                    "kb_resource_id=%s file_path=%s status=%s error=%s",
-                    document.term_id,
-                    document.kb_resource_id,
-                    document.file_path,
-                    DocumentProcessingStatus.ORGANIZATION_RETRY.value,
-                    exc,
-                )
+            failed_step = (
+                "discover_object_instances_unstructured"
+                if operation is DocumentOperation.DISCOVERY
+                else "enrich"
+            )
+            logger.exception(
+                "%s failed: base_id=%s term_id=%s "
+                "kb_resource_id=%s file_path=%s error=%s",
+                failed_step,
+                base_id,
+                document.term_id,
+                document.kb_resource_id,
+                document.file_path,
+                exc,
+            )
+            await _handle_document_processing_failure(
+                platform=platform,
+                base_id=base_id,
+                session_id=session_id,
+                document=document,
+                operation=operation,
+                object_scope_by_code=object_scope_by_code,
+                error=exc,
+            )
             return DocumentTaskStatus.FAILED
+
+
+async def _process_discovery_document(
+    *,
+    platform: Any,
+    base_id: str,
+    session_id: str,
+    request: DocumentAsyncProcessingRequest,
+    document: DocumentObjectItem,
+    object_scope: DocumentEnrichObjectScope,
+    object_scope_by_code: dict[str, DocumentEnrichObjectScope],
+) -> DocumentTaskStatus:
+    """Discover instances from one source document and persist its final state."""
+    await _save_document_processing_status(
+        platform=platform,
+        base_id=base_id,
+        session_id=session_id,
+        document=document,
+        object_scope=object_scope,
+        status=DocumentProcessingStatus.DISCOVERING,
+    )
+    discovery_result = await platform.discover_object_instances_unstructured(
+        base_id,
+        instance_id=document.term_id,
+        object_codes=list(request.object_codes),
+    )
+    source_labels, source_action_result = await _update_discovered_source_document(
+        platform=platform,
+        base_id=base_id,
+        document=document,
+        object_scope=object_scope,
+    )
+    discovered_document_files = _build_discovered_document_files(
+        session_id=session_id,
+        items=discovery_result.items,
+        object_scope_by_code=object_scope_by_code,
+    )
+    await _save_document_processing_status(
+        platform=platform,
+        base_id=base_id,
+        session_id=session_id,
+        document=document,
+        object_scope=object_scope,
+        status=DocumentProcessingStatus.COMPLETED,
+        labels=source_labels,
+        action_result=source_action_result,
+        related_object_files=discovered_document_files,
+    )
+    platform.append_document_session_report(
+        session_id=session_id,
+        operation=DocumentOperation.DISCOVERY.value,
+        term_id=document.term_id,
+        file_path=document.file_path,
+        status="completed",
+        entity_count=len(discovery_result.items),
+    )
+    logger.info(
+        "Document discovery processing finished: term_id=%s kb_resource_id=%s "
+        "file_path=%s status=%s entity_count=%s",
+        document.term_id,
+        document.kb_resource_id,
+        document.file_path,
+        DocumentProcessingStatus.COMPLETED.value,
+        len(discovery_result.items),
+    )
+    return DocumentTaskStatus.DONE
+
+
+async def _process_enrichment_document(
+    *,
+    platform: Any,
+    base_id: str,
+    session_id: str,
+    document: DocumentObjectItem,
+    target_object: DocumentEnrichObjectScope,
+    object_scope_by_code: dict[str, DocumentEnrichObjectScope],
+) -> DocumentTaskStatus:
+    """Enrich one document, write its content, and persist the resulting state."""
+    from datacloud_platform.services.object_action import invoke_object_write_action
+
+    await _save_document_processing_status(
+        platform=platform,
+        base_id=base_id,
+        session_id=session_id,
+        document=document,
+        object_scope=target_object,
+        status=DocumentProcessingStatus.ORGANIZING,
+    )
+    enrich_result = await platform.enrich(
+        base_id,
+        object_scope=list(object_scope_by_code.values()),
+        target_object=target_object,
+        term_id=document.term_id,
+    )
+    content = enrich_result.enriched_content
+    processing_status = _processing_status_for_enrich_result(enrich_result.status)
+    action_result: dict[str, Any] | None = None
+    action_labels: dict[str, Any] = {}
+    if content.strip():
+        content = _append_related_docs_block(
+            platform=platform,
+            base_id=base_id,
+            content=content,
+            relations=enrich_result.relations,
+            object_scope_by_code=object_scope_by_code,
+        )
+        action_labels = {
+            **_extract_front_matter_labels(content),
+            "dc_status": processing_status.value,
+            "dc_failure_reason": enrich_result.exception_info,
+            "dc_failure_count": document.failure_count
+            + int(enrich_result.status is DocumentEnrichStatus.FAILED),
+            "dc_last_organized_at": datetime.now(UTC).isoformat(),
+        }
+        action_result = await invoke_object_write_action(
+            platform=platform,
+            base_id=base_id,
+            object_code=target_object.object_code,
+            content=content,
+            labels=action_labels,
+            file_description=f"{document.term_name}富化文档",
+            source_path=document.file_path,
+        )
+    elif enrich_result.status is DocumentEnrichStatus.FAILED:
+        action_labels = _build_failure_processing_labels(
+            document=document,
+            status=DocumentProcessingStatus.ORGANIZATION_RETRY,
+            failure_reason=enrich_result.exception_info,
+        )
+        action_result = await _write_source_document_labels(
+            platform=platform,
+            base_id=base_id,
+            document=document,
+            object_scope=target_object,
+            labels=action_labels,
+            file_description=f"{document.term_name}富化失败状态",
+        )
+    await _save_document_processing_status(
+        platform=platform,
+        base_id=base_id,
+        session_id=session_id,
+        document=document,
+        object_scope=target_object,
+        status=processing_status,
+        labels=action_labels,
+        action_result=action_result,
+    )
+    logger.info(
+        "Document enrichment processing finished: term_id=%s kb_resource_id=%s "
+        "file_path=%s status=%s enrich_status=%s",
+        document.term_id,
+        document.kb_resource_id,
+        document.file_path,
+        processing_status.value,
+        enrich_result.status.value,
+    )
+    if enrich_result.status is DocumentEnrichStatus.FAILED:
+        return DocumentTaskStatus.FAILED
+    return DocumentTaskStatus.DONE
+
+
+async def _handle_document_processing_failure(
+    *,
+    platform: Any,
+    base_id: str,
+    session_id: str,
+    document: DocumentObjectItem,
+    operation: DocumentOperation,
+    object_scope_by_code: dict[str, DocumentEnrichObjectScope],
+    error: Exception,
+) -> None:
+    """Best-effort persistence for one failed discovery/enrichment document."""
+    is_discovery = operation is DocumentOperation.DISCOVERY
+    retry_status = (
+        DocumentProcessingStatus.DISCOVERY_RETRY
+        if is_discovery
+        else DocumentProcessingStatus.ORGANIZATION_RETRY
+    )
+    operation_name = operation.value
+    failure_labels = _build_failure_processing_labels(
+        document=document,
+        status=retry_status,
+        failure_reason=str(error),
+    )
+    object_scope: DocumentEnrichObjectScope | None = None
+    failure_action_result: dict[str, Any] | None = None
+    try:
+        object_scope = _get_or_resolve_document_object_scope(
+            platform=platform,
+            base_id=base_id,
+            object_scope_by_code=object_scope_by_code,
+            object_code=document.term_type_code,
+        )
+        failure_action_result = await _write_source_document_labels(
+            platform=platform,
+            base_id=base_id,
+            document=document,
+            object_scope=object_scope,
+            labels=failure_labels,
+            file_description=(
+                f"{document.term_name}对象发现失败状态"
+                if is_discovery
+                else f"{document.term_name}富化失败状态"
+            ),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Failed to write %s failure labels: %s",
+            operation_name,
+            document.term_id,
+        )
+    if object_scope is not None:
+        try:
+            await _save_document_processing_status(
+                platform=platform,
+                base_id=base_id,
+                session_id=session_id,
+                document=document,
+                object_scope=object_scope,
+                status=retry_status,
+                labels=failure_labels,
+                action_result=failure_action_result,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Failed to persist %s failure status: %s",
+                operation_name,
+                document.term_id,
+            )
+    if is_discovery:
+        platform.append_document_session_report(
+            session_id=session_id,
+            operation=operation.value,
+            term_id=document.term_id,
+            file_path=document.file_path,
+            status="failed",
+            error=str(error),
+        )
+    logger.error(
+        "Document %s processing finished: term_id=%s kb_resource_id=%s "
+        "file_path=%s status=%s error=%s",
+        operation_name,
+        document.term_id,
+        document.kb_resource_id,
+        document.file_path,
+        retry_status.value,
+        error,
+    )
 
 
 def _get_or_resolve_document_object_scope(
