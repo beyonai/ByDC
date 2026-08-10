@@ -760,10 +760,11 @@ async def _process_document_pages(
     page_index = 1
     documents: list[DocumentObjectItem] = []
     source_object_codes = request.object_codes
+    all_object_codes = request.object_codes
     if operation == "discovery":
         source_object_codes = request.source_object_codes
         if not source_object_codes:
-            logger.info(
+            logger.error(
                 "Document %s batch started: base_id=%s session_id=%s total_documents=%s, source_object_codes is null",
                 operation,
                 base_id,
@@ -771,13 +772,9 @@ async def _process_document_pages(
                 0,
             )
             return
-        request = request.model_copy(
-            update={
-                "object_codes": tuple(
+        all_object_codes = tuple(
                     dict.fromkeys((*request.object_codes, *source_object_codes))
                 )
-            }
-        )
     while True:
         page = await platform.query_document_objects(
             base_id,
@@ -808,7 +805,7 @@ async def _process_document_pages(
     scope_codes = list(
         dict.fromkeys(
             (
-                *request.object_codes,
+                *all_object_codes,
                 *(document.term_type_code for document in documents),
             )
         )
@@ -894,14 +891,8 @@ async def _process_one_document(
         无返回值。所有业务结果通过状态接口、知识库写动作或会话报告产生副作用。
     """
     if object_scope_by_code is None:
-        object_scope_by_code = {
-            object_code: _resolve_document_object_scope(
-                platform=platform,
-                base_id=base_id,
-                object_code=object_code,
-            )
-            for object_code in request.object_codes
-        }
+        logger.warning("object_scope_by_code is none, skiped")
+        return
     lock_key = (
         f"datacloud:document:{operation}:{base_id}:"
         f"{document.kb_resource_id}:{document.term_id}"
