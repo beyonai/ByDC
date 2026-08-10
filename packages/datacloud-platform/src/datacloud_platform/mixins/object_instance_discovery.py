@@ -16,8 +16,10 @@ import json
 import logging
 import re
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from functools import partial
+from pathlib import PurePosixPath
 from typing import Any, Protocol
 
 from anyio import to_thread
@@ -27,14 +29,9 @@ from datacloud_knowledge.intent.llm_utils import (
     stream_invoke_with_thinking,
 )
 
-from datacloud_platform.mixins.document import (
-    _build_object_file_status,
-    build_processing_labels,
-)
+from datacloud_platform.mixins.document import build_processing_labels
 from datacloud_platform.models.document import (
     DocumentContentResult,
-    DocumentEnrichObjectScope,
-    DocumentObjectItem,
     DocumentProcessingStatus,
 )
 from datacloud_platform.models.shared import (
@@ -133,6 +130,9 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     async def save_or_update_object_files(
         self, base_id: str, *, object_files: list[dict[str, Any]]
     ) -> Any: ...
+    def get_object_detail(
+        self, base_id: str, object_code: str
+    ) -> dict[str, Any] | None: ...
     def list_vocabulary(self, base_id: str) -> list[str]: ...
     def search_terms(self, base_id: str, **kwargs: Any) -> Any: ...
     def search_terms_batch(self, base_id: str, **kwargs: Any) -> dict[str, Any]: ...
@@ -299,7 +299,7 @@ class ObjectInstanceDiscoveryMixin:
         evidence = candidate.get("evidence")
         evidence_text = str(evidence) if evidence is not None else None
 
-        term_id = await self._create_discovered_instance(
+        term_id, action_result = await self._create_discovered_instance_with_result(
             base_id=base_id,
             object_code=object_code,
             term_name=term_name,
@@ -307,13 +307,14 @@ class ObjectInstanceDiscoveryMixin:
             if candidate.get("raw_type") is not None
             else None,
         )
-        await self._register_object_file(
-            base_id=base_id,
-            object_code=object_code,
-            term_name=term_name,
-            term_id=term_id,
-            action_result={"records": [{"term_id": term_id}]},
-        )
+        if object_code != _AUTO_DISCOVERED_CODE:
+            await self._register_object_file(
+                base_id=base_id,
+                object_code=object_code,
+                term_name=term_name,
+                term_id=term_id,
+                action_result=action_result,
+            )
         self._establish_mention_relation(
             base_id=base_id,
             source_term_id=source_term_id,
@@ -339,7 +340,24 @@ class ObjectInstanceDiscoveryMixin:
         term_name: str,
         raw_type: str | None = None,
     ) -> str:
-        """新实例创建 + term_id 强校验。
+        """Create one discovered instance and return its strict term ID."""
+        term_id, _ = await self._create_discovered_instance_with_result(
+            base_id=base_id,
+            object_code=object_code,
+            term_name=term_name,
+            raw_type=raw_type,
+        )
+        return str(term_id)
+
+    async def _create_discovered_instance_with_result(
+        self: Any,
+        *,
+        base_id: str,
+        object_code: str,
+        term_name: str,
+        raw_type: str | None = None,
+    ) -> tuple[str, dict[str, Any]]:
+        """新实例创建 + term_id 强校验，并保留 write action 响应。
 
         两条通道：
 
@@ -356,7 +374,8 @@ class ObjectInstanceDiscoveryMixin:
             raw_type: LLM 原始类型名（仅 AUTO_DISCOVERED 分支使用）。
 
         Returns:
-            强校验非空的 term_id。
+            ``(term_id, action_result)``。AUTO_DISCOVERED 没有 write action，
+            返回只包含 term_id 的兼容 records。
 
         Raises:
             ObjectInstanceWriteMissingTermIdError: write 响应缺 term_id。
@@ -367,7 +386,7 @@ class ObjectInstanceDiscoveryMixin:
                 term_name=term_name,
                 raw_type=raw_type,
             )
-            return term_id
+            return term_id, {"records": [{"term_id": term_id}]}
         labels = build_processing_labels(
             initial_status=DocumentProcessingStatus.PENDING_ORGANIZATION,
             labels=_PENDING_LABELS,
@@ -387,7 +406,7 @@ class ObjectInstanceDiscoveryMixin:
         term_id = _extract_written_term_id(result)
         # 新实例落库 → 词表已更新 → 飞轮实时（下次 discover 重载词典）
         invalidate_vocabulary_cache()
-        return term_id
+        return term_id, result
 
     def _create_auto_discovered_instance(
         self: _ObjectInstanceDiscoveryPlatform,
@@ -1082,7 +1101,7 @@ class ObjectInstanceDiscoveryMixin:
         term_id: str,
         action_result: dict[str, Any],
     ) -> None:
-        """文件登记：复用 document.py 的 ``_build_object_file_status`` 模式。
+        """按 invokeAction 写动作的对象文件协议登记新实例文件。
 
         登记条目含 sessionId / objectName / objectCode / fileName / filePath /
         version / statusCd（待整理）/ extContent{kb_resource_id, kb_id,
@@ -1095,28 +1114,82 @@ class ObjectInstanceDiscoveryMixin:
             term_id: 强校验后的 term_id（write action 响应）。
             action_result: write action 归一化响应（提供 fileName/termId）。
         """
-        term_name = term_name.strip()
-        file_path = f"/{object_code}/{term_name}.md"
-        document = DocumentObjectItem(
-            termId=term_id,
-            termName=term_name,
-            termCode=term_name,
-            termTypeCode=object_code,
-            filePath=file_path,
-            kbResourceId="",
+        object_detail = self.get_object_detail(base_id, object_code)
+        if object_detail is None:
+            raise KeyError(f"object not found: {object_code}")
+        resolved_object_code = str(
+            object_detail.get("objectCode")
+            or object_detail.get("object_code")
+            or object_code
         )
-        object_scope = DocumentEnrichObjectScope(
-            objectCode=object_code,
-            objectName=term_name,
+        object_name = str(
+            object_detail.get("objectName") or object_detail.get("object_name") or ""
         )
-        object_file = _build_object_file_status(
-            session_id=_current_session_id(),
-            document=document,
-            object_scope=object_scope,
-            status=DocumentProcessingStatus.PENDING_ORGANIZATION,
-            labels=_PENDING_LABELS,
-            action_result=action_result,
+        if not object_name:
+            raise KeyError(f"object name not found: {object_code}")
+        object_ext = object_detail.get("ext_property") or object_detail.get(
+            "extProperty"
         )
+        if not isinstance(object_ext, Mapping):
+            object_ext = {}
+
+        source_path = f"/{object_code}/{term_name.strip()}.md"
+        records = action_result.get("records")
+        first_record = (
+            records[0]
+            if isinstance(records, list) and records and isinstance(records[0], Mapping)
+            else {}
+        )
+        fallback_file_name = PurePosixPath(source_path).name
+        file_name = str(
+            first_record.get("fileName")
+            or first_record.get("file_name")
+            or fallback_file_name
+        )
+        kb_directory = str(
+            object_ext.get("kb_directory") or object_ext.get("kbDirectory") or ""
+        ).strip()
+        if kb_directory and not kb_directory.startswith("/"):
+            kb_directory = f"/{kb_directory}"
+        fallback_directory = f"/{kb_directory.strip('/')}" if kb_directory else "/"
+        fallback_file_path = (
+            f"{fallback_directory.rstrip('/')}/{fallback_file_name}"
+            if fallback_directory != "/"
+            else f"/{fallback_file_name}"
+        )
+        file_path = str(
+            first_record.get("filePath")
+            or first_record.get("file_path")
+            or fallback_file_path
+        )
+        object_file = {
+            "sessionId": _current_session_id(),
+            "objectName": object_name,
+            "objectCode": resolved_object_code,
+            "fileName": file_name,
+            "filePath": file_path,
+            "version": "1",
+            "statusCd": DocumentProcessingStatus.PENDING_ORGANIZATION.value,
+            "extContent": json.dumps(
+                {
+                    "kb_resource_id": str(
+                        object_ext.get("kb_resource_id")
+                        or object_ext.get("kbResourceId")
+                        or ""
+                    ),
+                    "kb_id": str(
+                        object_ext.get("kb_id") or object_ext.get("kbId") or ""
+                    ),
+                    "kb_directory": kb_directory,
+                    "term_id": str(
+                        first_record.get("term_id")
+                        or first_record.get("termId")
+                        or term_id
+                    ),
+                },
+                ensure_ascii=False,
+            ),
+        }
         await self.save_or_update_object_files(base_id, object_files=[object_file])
 
     def _establish_mention_relation(

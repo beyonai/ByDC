@@ -134,6 +134,19 @@ class _FakePlatform(ObjectInstanceDiscoveryMixin):
         )
         self.object_files.append(object_files)
 
+    def get_object_detail(
+        self, _base_id: str, object_code: str
+    ) -> dict[str, Any] | None:
+        return {
+            "objectCode": object_code,
+            "objectName": "商机",
+            "extProperty": {
+                "kb_resource_id": "10001",
+                "kb_id": "201",
+                "kb_directory": "/商机目录",
+            },
+        }
+
     # ── 抽取/直写/裁决/共现协议能力（默认实现；测试用 monkeypatch 覆盖具体行为）──
 
     def get_term_type(
@@ -648,15 +661,27 @@ class TestRegisterObjectFile:
                 term_name="张三",
                 term_id="term-new-1",
                 action_result={
-                    "records": [{"termId": "term-new-1", "fileName": "张三.md"}]
+                    "records": [
+                        {
+                            "termId": "term-new-1",
+                            "fileName": "张三.md",
+                            "filePath": "/实际目录/张三.md",
+                        }
+                    ]
                 },
             )
         assert len(platform.object_files) == 1
         entry = platform.object_files[0][0]
         assert entry["sessionId"] == "session-1"
+        assert entry["objectName"] == "商机"
         assert entry["objectCode"] == "by_opportunity"
+        assert entry["fileName"] == "张三.md"
+        assert entry["filePath"] == "/实际目录/张三.md"
         assert entry["statusCd"] == "待整理"
         ext = json.loads(entry["extContent"])
+        assert ext["kb_resource_id"] == "10001"
+        assert ext["kb_id"] == "201"
+        assert ext["kb_directory"] == "/商机目录"
         assert ext["term_id"] == "term-new-1"
 
     @pytest.mark.asyncio
@@ -903,6 +928,19 @@ class _RpcComboPlatform(ObjectInstanceDiscoveryMixin):
     ) -> None:
         return None
 
+    def get_object_detail(
+        self, _base_id: str, object_code: str
+    ) -> dict[str, Any] | None:
+        return {
+            "objectCode": object_code,
+            "objectName": "商机",
+            "extProperty": {
+                "kb_resource_id": "10001",
+                "kb_id": "201",
+                "kb_directory": "/商机目录",
+            },
+        }
+
     def update_term_co_occurrence(
         self, base_id: str, *, term_id: str, patch: dict[str, int]
     ) -> None:
@@ -1061,6 +1099,19 @@ class _RpcAnchorPlatform(ObjectInstanceDiscoveryMixin):
     ) -> None:
         return None
 
+    def get_object_detail(
+        self, _base_id: str, object_code: str
+    ) -> dict[str, Any] | None:
+        return {
+            "objectCode": object_code,
+            "objectName": "商机",
+            "extProperty": {
+                "kb_resource_id": "10001",
+                "kb_id": "201",
+                "kb_directory": "/商机目录",
+            },
+        }
+
     def update_term_co_occurrence(
         self, base_id: str, *, term_id: str, patch: dict[str, int]
     ) -> None:
@@ -1092,7 +1143,15 @@ class TestDiscoverRpcAnchor:
         ]
 
         async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
-            return {"records": [{"termId": "term-new-1"}]}
+            return {
+                "records": [
+                    {
+                        "termId": "term-new-1",
+                        "fileName": "张三-实际.md",
+                        "filePath": "/实际目录/张三-实际.md",
+                    }
+                ]
+            }
 
         monkeypatch.setattr(
             discovery_module, "invoke_object_write_action", fake_write_action
@@ -2076,10 +2135,8 @@ class TestAutoDiscoveredCreateChannel:
         assert hit.instance_id == "term-ad-1"
         assert hit.object_code == "AUTO_DISCOVERED"
         assert hit.is_new is True
-        # 登记条目含 term_id（强校验值）
-        assert len(platform.object_files) == 1
-        ext = json.loads(platform.object_files[0][0]["extContent"])
-        assert ext["term_id"] == "term-ad-1"
+        # AUTO_DISCOVERED 只参与术语飞轮，不登记对象文件。
+        assert platform.object_files == []
         # 直写后缓存失效（飞轮实时）
         assert discovery_module._cached_vocabulary is None
 
@@ -2149,7 +2206,15 @@ class TestAutoDiscoveredCreateChannel:
         )
 
         async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
-            return {"records": [{"termId": "term-new-1"}]}
+            return {
+                "records": [
+                    {
+                        "termId": "term-new-1",
+                        "fileName": "张三-实际.md",
+                        "filePath": "/实际目录/张三-实际.md",
+                    }
+                ]
+            }
 
         monkeypatch.setattr(
             discovery_module, "invoke_object_write_action", fake_write_action
@@ -2166,6 +2231,8 @@ class TestAutoDiscoveredCreateChannel:
         assert hit.instance_id == "term-new-1"
         assert hit.object_code == "by_opportunity"
         assert not created_terms  # 未走直写通道
+        assert platform.object_files[0][0]["fileName"] == "张三-实际.md"
+        assert platform.object_files[0][0]["filePath"] == "/实际目录/张三-实际.md"
 
     @pytest.mark.asyncio
     async def test_full_flow_creates_auto_discovered_instance(

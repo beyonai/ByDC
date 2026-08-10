@@ -6,9 +6,11 @@ import json
 import logging
 import os
 import re
+import secrets
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import Any, Protocol
+from urllib.parse import quote
 
 import httpx
 
@@ -27,6 +29,50 @@ PROCESSING_METADATA_FIELDS: tuple[str, ...] = (
     "dc_failure_reason",
     "dc_failure_count",
 )
+
+
+def _filename_requires_rfc5987(filename: str) -> bool:
+    """Return whether httpx would alter a meaningful filename character."""
+    return '"' in filename or "\\" in filename
+
+
+def _build_rfc5987_multipart(
+    parts: list[tuple[str, Any]],
+) -> tuple[bytes, str]:
+    """Build multipart with an exact UTF-8 filename carried by filename*."""
+    boundary = f"----ByClaw{secrets.token_hex(16)}"
+    body = bytearray()
+
+    for field_name, value in parts:
+        if any(char in field_name for char in ('"', "\r", "\n")):
+            raise ValueError("multipart field name contains unsupported characters")
+        body.extend(f"--{boundary}\r\n".encode("ascii"))
+
+        if isinstance(value, tuple) and value and value[0] is not None:
+            filename, content, content_type = value[:3]
+            if "\r" in filename or "\n" in filename:
+                raise ValueError("filename cannot contain CR or LF")
+            encoded_filename = quote(filename, safe="", encoding="utf-8")
+            body.extend(
+                (
+                    f'Content-Disposition: form-data; name="{field_name}"; '
+                    f'filename="upload.md"; filename*=UTF-8\'\'{encoded_filename}\r\n'
+                ).encode("ascii")
+            )
+            body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("ascii"))
+            body.extend(content)
+        else:
+            field_value = value[1] if isinstance(value, tuple) else value
+            body.extend(
+                f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode(
+                    "ascii"
+                )
+            )
+            body.extend(str(field_value).encode("utf-8"))
+        body.extend(b"\r\n")
+
+    body.extend(f"--{boundary}--\r\n".encode("ascii"))
+    return bytes(body), f"multipart/form-data; boundary={boundary}"
 
 
 @dataclass(frozen=True)
@@ -634,11 +680,8 @@ class HttpKnowledgeSearchBackend:
                         "fileContent": f"@{filename}",
                     },
                 )
-                resp = await client._upload_with_discovery(
-                    service_name,
-                    update_path,
-                    parts,
-                    headers=upload_headers,
+                resp = await self._upload_by_discovery(
+                    client, service_name, update_path, parts, filename, upload_headers
                 )
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
                 self._ensure_success(body, request.datasource_alias)
@@ -786,11 +829,8 @@ class HttpKnowledgeSearchBackend:
                     ]
                     if request.file_description:
                         parts.append(("fileDescription", (None, request.file_description)))
-                    resp = await client._upload_with_discovery(
-                        service_name,
-                        update_path,
-                        parts,
-                        headers=upload_headers,
+                    resp = await self._upload_by_discovery(
+                        client, service_name, update_path, parts, filename, upload_headers
                     )
                 else:
                     import_path = self._build_import_path(config)
@@ -818,11 +858,8 @@ class HttpKnowledgeSearchBackend:
                     ]
                     if request.file_description:
                         parts.append(("fileDescription", (None, request.file_description)))
-                    resp = await client._upload_with_discovery(
-                        service_name,
-                        import_path,
-                        parts,
-                        headers=upload_headers,
+                    resp = await self._upload_by_discovery(
+                        client, service_name, import_path, parts, filename, upload_headers
                     )
 
                 body = self._parse_discovery_response_body(resp, request.datasource_alias)
@@ -851,6 +888,31 @@ class HttpKnowledgeSearchBackend:
                 "invalid discovery response: root is not object",
             )
         return body
+
+    @staticmethod
+    async def _upload_by_discovery(
+        client: Any,
+        service_name: str,
+        path: str,
+        parts: list[tuple[str, Any]],
+        filename: str,
+        headers: dict[str, str],
+    ) -> Any:
+        """Upload while preserving quotes/backslashes in multipart filenames."""
+        if not _filename_requires_rfc5987(filename):
+            return await client._upload_with_discovery(
+                service_name, path, parts, headers=headers
+            )
+
+        body, content_type = _build_rfc5987_multipart(parts)
+        request_headers = {**headers, "Content-Type": content_type}
+        return await client._request_with_discovery(
+            "POST",
+            service_name,
+            path,
+            headers=request_headers,
+            data=body,
+        )
 
     @staticmethod
     def _ensure_success(body: dict[str, Any], datasource_alias: str) -> None:
