@@ -77,6 +77,7 @@ _MAX_EXTRACT_CHARS = (
 )
 _MAX_JSON_RETRIES = 3  # 非法 JSON 重试次数（≤3 次退避）
 _JSON_RETRY_BACKOFF_SECONDS = 0.5  # 重试退避基数（attempt * 基数）
+_TYPE_DESC_MAX_CHARS = 200  # 类型枚举中对象描述（objectDesc）注入 prompt 的截断上限
 _AUTO_DISCOVERED_CODE = "AUTO_DISCOVERED"  # LLM 自动发现类型（禁用 "UNKNOWN"）
 # 抽取类型不在调用方枚举内时使用的兜底类型（原始类型名保留在 ext_attrs.raw_type）
 _AUTO_DISCOVERED_TYPE_NAME = "自动发现类型"
@@ -158,6 +159,9 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     def update_term_co_occurrence(
         self, base_id: str, *, term_id: str, patch: dict[str, int]
     ) -> None: ...
+    def get_object_detail(
+        self, object_code: str, *, base_id: str = ""
+    ) -> dict[str, Any] | None: ...
 
 
 class ObjectInstanceDiscoveryMixin:
@@ -894,7 +898,9 @@ class ObjectInstanceDiscoveryMixin:
 
         流程：
         1. 类型枚举 = ``object_codes`` 经 ``get_term_type`` 取中文名（library 域限定，
-           缺行回退 term 表对象术语行 term_name，仍无回退原始 code + 日志）
+           缺行回退 term 表对象术语行 term_name，仍无回退原始 code + 日志）；
+           对象描述（objectDesc）经 ``get_object_detail`` 内部获取并注入枚举，
+           帮助 LLM 判定实体类型边界（出入参不变）
         2. 长文 16K 截断单次（不 chunk）
         3. ``build_llm`` + ``stream_invoke_with_thinking``（temp=0 由环境默认）一票抽取
         4. 严格 JSON 解析 + ``<think>`` 剥离 + 非法 JSON 重试（≤3 次退避）
@@ -983,6 +989,9 @@ class ObjectInstanceDiscoveryMixin:
            对象行中文名比 term_type 占位更准（如 "医疗文书" vs Concept）；
         3. 仍无 → 回退原始 code + 日志。
 
+        对象描述（objectDesc）经 ``get_object_detail`` 内部获取（出入参不变），
+        随枚举写入 ``desc`` 字段供抽取 prompt 使用；查询失败或缺描述则无 desc。
+
         Args:
             base_id: 本体库/系统空间标识（即 library 域）。
             object_codes: 调用方传入的优先类型编码列表。
@@ -1013,8 +1022,28 @@ class ObjectInstanceDiscoveryMixin:
                     base_id,
                     code_str,
                 )
-            entries.append({"code": code_str, "name": name})
+            entry: dict[str, str] = {"code": code_str, "name": name}
+            desc = self._object_description(base_id, code_str)
+            if desc:
+                entry["desc"] = desc
+            entries.append(entry)
         return entries
+
+    def _object_description(self: Any, base_id: str, code: str) -> str:
+        """经 get_object_detail 获取对象描述（objectDesc），失败或缺描述返回空串。"""
+        try:
+            detail = self.get_object_detail(code, base_id=base_id) or {}
+        except Exception:
+            logger.warning(
+                "get_object_detail 查询对象描述失败，类型枚举无 desc: "
+                "base_id=%s type_code=%s",
+                base_id,
+                code,
+                exc_info=True,
+            )
+            return ""
+        desc = str(detail.get("objectDesc") or detail.get("object_desc") or "").strip()
+        return desc
 
     def _object_term_name(self: Any, base_id: str, code: str) -> str:
         """按 term_code 精确查 term 表对象行取中文名（term_type_code='object'）。
@@ -1384,18 +1413,29 @@ def _build_extract_prompt(
     （不加前缀，保证长度 ≤ 16K 上限）。
 
     Args:
-        type_entries: 类型枚举 ``[{"code", "name"}]``（TermType 中文名，缺行回退 code）。
+        type_entries: 类型枚举 ``[{"code", "name", "desc"?}]``（TermType 中文名，
+            缺行回退 code；desc 为可选对象描述，用于类型边界判定）。
         content: 已截断的文档正文。
 
     Returns:
         OpenAI 风格消息列表（system + user）。
     """
-    enum_lines = "\n".join(f"{entry['code']}={entry['name']}" for entry in type_entries)
+    enum_lines = "\n".join(
+        f"{entry['code']}={entry['name']}"
+        + (
+            f"（{_truncate_content(entry['desc'], _TYPE_DESC_MAX_CHARS)}）"
+            if entry.get("desc")
+            else ""
+        )
+        for entry in type_entries
+    )
     system = (
         "你是企业知识库对象实例抽取器。请从 user 消息提供的文档正文中，"
         "抽取出现的对象实例（业务实体），输出严格 JSON 数组。\n\n"
-        "优先类型枚举（object_code=类型中文名）：\n"
+        "优先类型枚举（object_code=类型中文名（类型定义说明））：\n"
         f"{enum_lines}\n\n"
+        "判定实体类型时，以枚举中的类型定义说明为边界："
+        "实体含义符合某类型的定义才归入该类型，不要仅凭名称字面相似归类。\n\n"
         "实体类型属于上述枚举时 object_code 填对应编码；不属于上述任何枚举时，"
         f"object_code 固定填 {_AUTO_DISCOVERED_CODE}，并在 raw_type 字段中给出"
         "你识别到的原始类型名。\n\n"
