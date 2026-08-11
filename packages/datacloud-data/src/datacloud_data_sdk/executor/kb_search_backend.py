@@ -844,6 +844,7 @@ class HttpKnowledgeSearchBackend:
                             "resourceId": resource_id,
                             "directoryPath": directory_path,
                             "file": f"@{filename}",
+                            "skipIfDuplicate": "true",
                         },
                     )
                     parts = [
@@ -855,6 +856,7 @@ class HttpKnowledgeSearchBackend:
                         ),
                         ("processFrontMatter", (None, "true")),
                         ("overwrite", (None, "false")),
+                        ("skipIfDuplicate", (None, "true")),
                     ]
                     if request.file_description:
                         parts.append(("fileDescription", (None, request.file_description)))

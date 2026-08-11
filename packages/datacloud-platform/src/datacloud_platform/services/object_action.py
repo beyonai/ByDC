@@ -59,6 +59,7 @@ async def invoke_object_write_action(
             "content": content,
             "labels": labels,
             "file_description": file_description,
+            "ignoreInvalidTerms": True
         },
     )
 

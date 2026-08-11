@@ -96,6 +96,8 @@ async def _invoke_action(
     arguments: dict[str, Any] = params.get("arguments") or {}
     base_id: str = str(params.get("base_id") or DEFAULT_BASE_ID)
     arguments = prepare_action_arguments(action_code=action_code, arguments=arguments)
+    if arguments:
+        arguments["ignoreInvalidTerms"] = True
 
     data = await invoke_object_action(
         platform=platform,
