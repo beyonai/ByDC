@@ -146,6 +146,7 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         invalid_original_yaml: bool = False,
         nested_quote_yaml: bool = False,
         unquoted_reference_yaml: bool = False,
+        internal_original_yaml_fields: bool = False,
     ) -> None:
         self.fail_generation = fail_generation
         self.use_generic_template = use_generic_template
@@ -170,6 +171,17 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                 else 'renewal_date: "2026-12-31"\nlegacy_property: remove-me'
             )
             original_content = f"---\n{original_yaml}\n---\n\n{ORIGINAL_CONTENT}"
+        if internal_original_yaml_fields:
+            original_content = (
+                "---\n"
+                'renewal_date: "2026-12-31"\n'
+                'dc_status: "发现失败-待重试"\n'
+                'dc_failure_reason: "模型服务超时"\n'
+                "dc_failure_count: 1\n"
+                "dc_last_organized_at: null\n"
+                "---\n\n"
+                f"{ORIGINAL_CONTENT}"
+            )
         self.contents = {
             TARGET_TERM_ID: DocumentContentResult(
                 termId=TARGET_TERM_ID,
@@ -971,3 +983,38 @@ async def test_enrich_quotes_unquoted_markdown_references_in_yaml(
         for record in caplog.records
     )
     assert not any("yaml_fallback" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_enrich_filters_internal_fields_from_original_yaml(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.INFO,
+        logger="datacloud_platform.mixins.document_enrich",
+    )
+    platform = FakeDocumentEnrichPlatform(internal_original_yaml_fields=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    prompt = platform.messages[1]["content"]
+    for field_name in (
+        "dc_status",
+        "dc_failure_reason",
+        "dc_failure_count",
+        "dc_last_organized_at",
+    ):
+        assert field_name not in prompt
+        assert field_name not in result.enriched_content
+    assert "renewal_date: '2026-12-31'" in prompt
+    assert any(
+        "original_yaml_filtered" in record.getMessage()
+        and "strategy=parsed" in record.getMessage()
+        for record in caplog.records
+    )

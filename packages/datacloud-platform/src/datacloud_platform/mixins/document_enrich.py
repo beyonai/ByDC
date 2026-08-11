@@ -48,6 +48,14 @@ _MAX_RELATION_CHARS = 10_000
 _MAX_SEMANTIC_CHARS = 8_000
 _MAX_SINGLE_FRAGMENT_CHARS = 2_000
 _QUERY_CHARS = 1_000
+_INTERNAL_DOCUMENT_PROPERTY_CODES = frozenset(
+    {
+        "dc_status",
+        "dc_failure_reason",
+        "dc_failure_count",
+        "dc_last_organized_at",
+    }
+)
 _PARAGRAPH_SPLIT_PATTERN = re.compile(r"\n\s*\n|(?=^#{1,6}\s)", re.MULTILINE)
 _INSTANCE_TEMPLATE_HEADING_PATTERN = re.compile(
     r"(?m)^##\s*5[.．、]?\s*实例卡片模板\s*$"
@@ -268,7 +276,6 @@ class DocumentEnrichMixin:
                     term_id=normalized_term_id,
                     total_started=total_started,
                 )
-            original_content = original.content
             if not original.content.strip():
                 return _log_and_skip(
                     reason=f"document content is empty: term_id={normalized_term_id}",
@@ -278,6 +285,12 @@ class DocumentEnrichMixin:
                     total_started=total_started,
                     enriched_content=original_content,
                 )
+            original_content = _filter_original_yaml_front_matter(
+                original.content,
+                base_id=base_id,
+                object_code=normalized_object_code,
+                term_id=normalized_term_id,
+            )
             _log_enrich_stage(
                 stage=current_stage,
                 status="succeeded",
@@ -358,7 +371,7 @@ class DocumentEnrichMixin:
             target_instance_name = (
                 target_info.term_name
                 if target_info is not None
-                else _document_title(original.content) or normalized_term_id
+                else _document_title(original_content) or normalized_term_id
             )
             target_object_name = _object_name(
                 object_detail,
@@ -379,7 +392,7 @@ class DocumentEnrichMixin:
 
             current_stage = "search_knowledge_fragments"
             query = _build_search_query(
-                original.content,
+                original_content,
                 target_info.term_name if target_info is not None else "",
             )
             stage_started = perf_counter()
@@ -468,7 +481,7 @@ class DocumentEnrichMixin:
             messages = _build_messages(
                 original=_Evidence(
                     label=original_label,
-                    content=_truncate(original.content.strip(), _MAX_ORIGINAL_CHARS),
+                    content=_truncate(original_content.strip(), _MAX_ORIGINAL_CHARS),
                 ),
                 evidence=evidence,
                 document_template=document_template,
@@ -787,6 +800,94 @@ def _strip_yaml_front_matter(content: str) -> str:
     candidate = content.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
     match = _FRONT_MATTER_PATTERN.fullmatch(candidate)
     return match.group("body") if match is not None else candidate
+
+
+def _filter_original_yaml_front_matter(
+    content: str,
+    *,
+    base_id: str,
+    object_code: str,
+    term_id: str,
+) -> str:
+    """Remove internal organization-state fields from original front matter."""
+    candidate = content.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+    match = _FRONT_MATTER_PREFIX_PATTERN.match(candidate)
+    if match is None:
+        return candidate
+
+    yaml_text = match.group("yaml")
+    try:
+        parsed_yaml: object = safe_load(yaml_text)
+    except YAMLError as exc:
+        filtered_yaml_text, removed_fields = _filter_yaml_fields_textually(yaml_text)
+        if not removed_fields:
+            return candidate
+        logger.warning(
+            "document_enrich original_yaml_filtered base_id=%s object_code=%s "
+            "term_id=%s strategy=textual reason=invalid_yaml removed_fields=%s "
+            "error_type=%s error=%s",
+            base_id,
+            object_code,
+            term_id,
+            sorted(removed_fields),
+            type(exc).__name__,
+            exc,
+        )
+        return _replace_front_matter(candidate, match, filtered_yaml_text)
+
+    if not isinstance(parsed_yaml, Mapping):
+        return candidate
+    removed_fields = {
+        str(key) for key in parsed_yaml if str(key) in _INTERNAL_DOCUMENT_PROPERTY_CODES
+    }
+    if not removed_fields:
+        return candidate
+    filtered_yaml = {
+        key: value
+        for key, value in parsed_yaml.items()
+        if str(key) not in _INTERNAL_DOCUMENT_PROPERTY_CODES
+    }
+    filtered_yaml_text = str(
+        safe_dump(
+            filtered_yaml,
+            allow_unicode=True,
+            default_flow_style=False,
+            sort_keys=False,
+        )
+    ).rstrip()
+    logger.info(
+        "document_enrich original_yaml_filtered base_id=%s object_code=%s "
+        "term_id=%s strategy=parsed removed_fields=%s",
+        base_id,
+        object_code,
+        term_id,
+        sorted(removed_fields),
+    )
+    return _replace_front_matter(candidate, match, filtered_yaml_text)
+
+
+def _filter_yaml_fields_textually(yaml_text: str) -> tuple[str, set[str]]:
+    filtered_lines: list[str] = []
+    removed_fields: set[str] = set()
+    skipping_field = False
+    for line in yaml_text.splitlines():
+        if line and not line[0].isspace() and not line.startswith("#"):
+            key_match = re.match(r"^[\"']?(?P<key>[^:\"']+)[\"']?\s*:", line)
+            key = key_match.group("key").strip() if key_match is not None else ""
+            skipping_field = key in _INTERNAL_DOCUMENT_PROPERTY_CODES
+            if skipping_field:
+                removed_fields.add(key)
+        if not skipping_field:
+            filtered_lines.append(line)
+    return "\n".join(filtered_lines).strip() or "{}", removed_fields
+
+
+def _replace_front_matter(
+    content: str,
+    match: re.Match[str],
+    yaml_text: str,
+) -> str:
+    return f"---\n{yaml_text}\n---\n{content[match.end() :]}"
 
 
 def _build_search_query(content: str, term_name: str) -> str:
