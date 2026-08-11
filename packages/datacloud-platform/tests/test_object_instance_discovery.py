@@ -1258,19 +1258,33 @@ class TestDiscoverOrchestration:
         assert new.instance_name == "新实例"
         assert new.relation_name == "提及"
         assert new.evidence == "证据片段"
-        # 登记先于建关系
+        # 关系时序：已有实例的关系创建于登记之前（existing 分支无登记动作）
         call_names = [c[0] for c in platform.calls]
-        assert call_names.index("save_or_update_object_files") < call_names.index(
-            "create_term_relation"
+        assert call_names.index("create_term_relation") < call_names.index(
+            "save_or_update_object_files"
         )
-        # 关系：源=输入实例、目标=新实例（仅一次，无反向）
+        # 新实例登记先于其建关系
+        new_relation_index = next(
+            i
+            for i, c in enumerate(platform.calls)
+            if c[0] == "create_term_relation"
+            and c[1]["relation"]["targetTermId"] == "term-new-1"
+        )
+        assert call_names.index("save_or_update_object_files") < new_relation_index
+        # 关系：源=输入实例；已有实例在前、新实例在后（仅一次，无反向）
         assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "term-existing-1",
+                "relationName": "提及",
+                "relationCategory": "BUSINESS",
+            },
             {
                 "sourceTermId": "term-input",
                 "targetTermId": "term-new-1",
                 "relationName": "提及",
                 "relationCategory": "BUSINESS",
-            }
+            },
         ]
 
     @pytest.mark.asyncio
@@ -1310,6 +1324,48 @@ class TestDiscoverOrchestration:
         )
         assert [h.instance_id for h in result.items] == ["term-new-1"]
         assert result.items[0].is_new is True
+
+    @pytest.mark.asyncio
+    async def test_repeat_discovery_existing_relation_is_idempotent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """重复发现：已有实例的提及关系已存在（第一遍已建）→ 不重复创建（幂等）。"""
+        platform = _FakePlatform()
+        platform.document = _make_document()
+        # 模拟第一遍发现已建立的 源=输入实例 → 目标=已有实例 提及关系
+        platform.relations = [
+            {
+                "relation_name": "提及",
+                "source_term_id": "term-input",
+                "target_term_id": "term-existing-1",
+            }
+        ]
+
+        async def fake_new_instances(*a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+        monkeypatch.setattr(
+            platform, "_discover_new_object_instances", fake_new_instances
+        )
+        monkeypatch.setattr(
+            platform,
+            "_discover_existing_object_instances",
+            lambda *a, **k: discovery_module._AnchorResult(
+                existing=[_term_row("term-existing-1", "已有实例")],
+                ambiguity=[],
+                synonym=[],
+                unanchored=[],
+            ),
+        )
+        result = await platform.discover_object_instances_unstructured(
+            BASE_ID,
+            instance_id="term-input",
+            object_codes=["by_opportunity"],
+        )
+        assert [h.instance_id for h in result.items] == ["term-existing-1"]
+        assert result.items[0].is_new is False
+        # 幂等：重复发现不产生重复提及关系
+        assert platform.created_relations == []
 
     @pytest.mark.asyncio
     async def test_ambiguity_same_entity_merges_alias_not_created(
@@ -1364,8 +1420,16 @@ class TestDiscoverOrchestration:
         alias_call = next(c for c in platform.calls if c[0] == "create_term_name")
         assert alias_call[1]["name"]["termId"] == "t1"
         assert alias_call[1]["name"]["nameText"] == "张三"
-        # 无新实例（不建 term、不建关系）
-        assert all(c[0] != "create_term_relation" for c in platform.calls)
+        # 不建新实例（无 create_term）；归并仍为 canonical 建立提及关系（源=输入实例）
+        assert all(c[0] != "create_term" for c in platform.calls)
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "t1",
+                "relationName": "提及",
+                "relationCategory": "BUSINESS",
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_synonym_same_writes_alias_not_created(
@@ -1411,7 +1475,16 @@ class TestDiscoverOrchestration:
         alias_call = next(c for c in platform.calls if c[0] == "create_term_name")
         assert alias_call[1]["name"]["termId"] == "t1"
         assert alias_call[1]["name"]["nameText"] == "苹果公司"
-        assert all(c[0] != "create_term_relation" for c in platform.calls)
+        # 不建新实例（无 create_term）；归并仍为 canonical 建立提及关系（源=输入实例）
+        assert all(c[0] != "create_term" for c in platform.calls)
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "t1",
+                "relationName": "提及",
+                "relationCategory": "BUSINESS",
+            }
+        ]
 
 
 # ============================================================================
@@ -2357,17 +2430,23 @@ class TestAutoDiscoveredCreateChannel:
         )
         # 发现结果不含 AUTO_DISCOVERED 兜底实例（正常实例照常返回）
         assert [h.instance_id for h in result.items] == ["t-existing"]
-        # 但仍入库：直写创建（词表飞轮）+ 提及关系
+        # 但仍入库：直写创建（词表飞轮）+ 提及关系（已有实例在前、新实例在后）
         assert len(created_terms) == 1
         assert created_terms[0]["term_type_code"] == "AUTO_DISCOVERED"
         assert created_terms[0]["ext_attrs"]["raw_type"] == "未知业务对象"
         assert platform.created_relations == [
             {
                 "sourceTermId": "term-input",
+                "targetTermId": "t-existing",
+                "relationName": "提及",
+                "relationCategory": "BUSINESS",
+            },
+            {
+                "sourceTermId": "term-input",
                 "targetTermId": "term-ad-1",
                 "relationName": "提及",
                 "relationCategory": "BUSINESS",
-            }
+            },
         ]
         # 共现仍计入 AUTO_DISCOVERED 实例（过滤只影响返回，不影响入库副作用）
         co_ids = {
@@ -2413,6 +2492,15 @@ class TestAutoDiscoveredCreateChannel:
         )
         # 输入实例自身被过滤，其余正常返回
         assert [h.instance_id for h in result.items] == ["t-existing"]
+        # 输入实例自身不建立自引用提及关系；其他已有实例正常建立
+        assert platform.created_relations == [
+            {
+                "sourceTermId": "term-input",
+                "targetTermId": "t-existing",
+                "relationName": "提及",
+                "relationCategory": "BUSINESS",
+            }
+        ]
 
 
 # ============================================================================

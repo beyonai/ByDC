@@ -3,8 +3,8 @@
 流程：参数校验 → 输入实例定位并读取知识库文件（get_document_content_by_term_id）
 → LLM 抽取（优先类型列表 + 允许自动发现新类型）→ 词典锚定（快路命中 + 反查兜底）
 → 冲突候选裁决（同名多候选判歧义、子串重叠判同义）→ 新实例创建（write action /
-自动发现直写）→ term_id 强校验 → 文件登记 → 「提及」关系（源→目标，单向幂等）
-→ 返回结果。
+自动发现直写）→ term_id 强校验 → 文件登记 → 「提及」关系（源=输入文档 → 目标=
+发现实例；已有实例复用路径同样建立，单向幂等）→ 返回结果。
 
 无降级：任何异常直接上抛，由 RPC 层统一映射为错误码。
 """
@@ -214,10 +214,19 @@ class ObjectInstanceDiscoveryMixin:
             base_id, mentions=mentions, object_codes=object_codes
         )
 
-        # 全链路串联：已有在前、新在后；未锚定逐项 创建 → 强校验 → 登记 → 提及关系
-        items: list[ObjectInstanceDiscoveryHit] = [
-            _build_existing_hit(row) for row in anchor.existing
-        ]
+        # 全链路串联：已有在前、新在后；已有实例命中 → 组装 + 提及关系（幂等）；
+        # 未锚定逐项 创建 → 强校验 → 登记 → 提及关系
+        items: list[ObjectInstanceDiscoveryHit] = []
+        for row in anchor.existing:
+            existing_term_id = str(row.get("term_id") or row.get("termId") or "")
+            # 输入实例自身（object_codes 含 Document 时锚定回输入）不建自引用关系
+            if existing_term_id and existing_term_id != instance_id:
+                self._establish_mention_relation(
+                    base_id=base_id,
+                    source_term_id=instance_id,
+                    target_term_id=existing_term_id,
+                )
+            items.append(_build_existing_hit(row))
         for candidate in anchor.unanchored:
             items.append(
                 await self._create_new_instance_flow(
@@ -502,7 +511,8 @@ class ObjectInstanceDiscoveryMixin:
 
         结果（temp=0 一票，带上下文）：
         - ``same=true`` / ``same_entity=true`` → ``create_term_name`` 归并别名
-          到主 term（触发器自动进词典，随后缓存失效）；**不建新实例**
+          到主 term（触发器自动进词典，随后缓存失效）；**不建新实例**，但为
+          canonical（已有实例）建立「提及」关系（源=输入实例，幂等）
         - ``false`` → 独立新实例（复用 ``_create_new_instance_flow``；类型规则
           类型规则：mention 自带可定类型 → 该类型，确定不了 → AUTO_DISCOVERED）
 
@@ -510,7 +520,7 @@ class ObjectInstanceDiscoveryMixin:
             base_id: 本体库/系统空间标识。
             ambiguity: 歧义候选列表（同名多候选）。
             synonym: 同义候选列表（子串重叠）。
-            source_term_id: 输入实例 term_id（新实例提及关系源）。
+            source_term_id: 输入实例 term_id（提及关系源：新实例 + 归并 canonical）。
             alias_targets: 可选 out 参数——归并的 canonical term_id 收集
                 （共现：别名 mention 计入 canonical 伙伴集）。
 
@@ -532,6 +542,14 @@ class ObjectInstanceDiscoveryMixin:
                     )
                     if alias_targets is not None:
                         alias_targets.append(canonical)
+                    # 归并 → canonical 为已有实例：同样建立提及关系（幂等）；
+                    # canonical 为输入实例自身时跳过（自引用无意义）
+                    if canonical != source_term_id:
+                        self._establish_mention_relation(
+                            base_id=base_id,
+                            source_term_id=source_term_id,
+                            target_term_id=canonical,
+                        )
             else:
                 hits.append(
                     await self._create_new_instance_flow(
@@ -559,6 +577,14 @@ class ObjectInstanceDiscoveryMixin:
                     )
                     if alias_targets is not None:
                         alias_targets.append(canonical)
+                    # 归并 → canonical 为已有实例：同样建立提及关系（幂等）；
+                    # canonical 为输入实例自身时跳过（自引用无意义）
+                    if canonical != source_term_id:
+                        self._establish_mention_relation(
+                            base_id=base_id,
+                            source_term_id=source_term_id,
+                            target_term_id=canonical,
+                        )
             else:
                 hits.append(
                     await self._create_new_instance_flow(
