@@ -1,6 +1,6 @@
 [project]
 name = "by-datacloud"
-version = "0.3.1"
+version = "0.3.1.dev1"
 description = "Whale DataCloud - A multi-service data platform"
 readme = "README.md"
 requires-python = ">=3.12"
