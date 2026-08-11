@@ -159,9 +159,6 @@ class _ObjectInstanceDiscoveryPlatform(Protocol):
     def update_term_co_occurrence(
         self, base_id: str, *, term_id: str, patch: dict[str, int]
     ) -> None: ...
-    def get_object_detail(
-        self, object_code: str, *, base_id: str = ""
-    ) -> dict[str, Any] | None: ...
 
 
 class ObjectInstanceDiscoveryMixin:
@@ -1051,7 +1048,7 @@ class ObjectInstanceDiscoveryMixin:
     def _object_description(self: Any, base_id: str, code: str) -> str:
         """经 get_object_detail 获取对象描述（objectDesc），失败或缺描述返回空串。"""
         try:
-            detail = self.get_object_detail(code, base_id=base_id) or {}
+            detail = self.get_object_detail(code=code, base_id=base_id) or {}
         except Exception:
             logger.warning(
                 "get_object_detail 查询对象描述失败，类型枚举无 desc: "
