@@ -1470,14 +1470,28 @@ def _load_yaml_front_matter_with_fallback(
     try:
         parsed_yaml: object = safe_load(yaml_text)
     except YAMLError as exc:
+        repaired_yaml, repair_error, repaired_line_count = (
+            _repair_nested_double_quoted_yaml(yaml_text, initial_error=exc)
+        )
+        if repaired_yaml is not None:
+            logger.warning(
+                "document_enrich yaml_repair base_id=%s object_code=%s term_id=%s "
+                "source=llm status=used strategy=normalize_string_quoting "
+                "repaired_line_count=%d",
+                base_id,
+                object_code,
+                term_id,
+                repaired_line_count,
+            )
+            return repaired_yaml
         logger.warning(
             "document_enrich yaml_fallback base_id=%s object_code=%s term_id=%s "
             "source=llm target=original reason=invalid_yaml error_type=%s error=%s",
             base_id,
             object_code,
             term_id,
-            type(exc).__name__,
-            exc,
+            type(repair_error).__name__,
+            repair_error,
         )
     else:
         if isinstance(parsed_yaml, Mapping):
@@ -1536,6 +1550,93 @@ def _load_yaml_front_matter_with_fallback(
         term_id,
     )
     return original_yaml
+
+
+def _repair_nested_double_quoted_yaml(
+    yaml_text: str,
+    *,
+    initial_error: YAMLError,
+) -> tuple[Mapping[object, object] | None, YAMLError, int]:
+    """Repair unescaped nested quotes on parser-reported YAML lines."""
+    lines = yaml_text.splitlines()
+    current_error = initial_error
+    repaired_line_indexes: set[int] = set()
+
+    for _ in range(len(lines)):
+        repaired = False
+        for line_index in _yaml_error_line_indexes(current_error):
+            if not 0 <= line_index < len(lines):
+                continue
+            repaired_line = _repair_yaml_string_quoting(lines[line_index])
+            if repaired_line == lines[line_index]:
+                continue
+            lines[line_index] = repaired_line
+            repaired_line_indexes.add(line_index)
+            repaired = True
+            break
+        if not repaired:
+            break
+
+        try:
+            parsed_yaml: object = safe_load("\n".join(lines))
+        except YAMLError as exc:
+            current_error = exc
+            continue
+        if isinstance(parsed_yaml, Mapping):
+            return parsed_yaml, current_error, len(repaired_line_indexes)
+        break
+
+    return None, current_error, len(repaired_line_indexes)
+
+
+def _yaml_error_line_indexes(error: YAMLError) -> tuple[int, ...]:
+    indexes: dict[int, None] = {}
+    for attribute_name in ("problem_mark", "context_mark"):
+        mark = getattr(error, attribute_name, None)
+        line_index = getattr(mark, "line", None)
+        if isinstance(line_index, int):
+            indexes[line_index] = None
+    return tuple(indexes)
+
+
+def _escape_nested_double_quotes(line: str) -> str:
+    quote_indexes = [
+        index
+        for index, character in enumerate(line)
+        if character == '"' and not _is_escaped_character(line, index)
+    ]
+    if len(quote_indexes) < 3:
+        return line
+
+    nested_quote_indexes = set(quote_indexes[1:-1])
+    return "".join(
+        f"\\{character}" if index in nested_quote_indexes else character
+        for index, character in enumerate(line)
+    )
+
+
+def _repair_yaml_string_quoting(line: str) -> str:
+    repaired_line = _escape_nested_double_quotes(line)
+    if repaired_line != line:
+        return repaired_line
+
+    list_item_match = re.fullmatch(
+        r"(?P<prefix>\s*-\s+)(?P<value>\[[^\n]+\]\([^\n]*\))\s*",
+        line,
+    )
+    if list_item_match is None:
+        return line
+    value = list_item_match.group("value").replace("'", "''")
+    return f"{list_item_match.group('prefix')}'{value}'"
+
+
+def _is_escaped_character(value: str, index: int) -> bool:
+    preceding_backslashes = 0
+    cursor = index - 1
+    while cursor >= 0 and value[cursor] == "\\":
+        preceding_backslashes += 1
+        cursor -= 1
+    return preceding_backslashes % 2 == 1
 
 
 def _normalize_yaml_front_matter(

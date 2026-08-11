@@ -144,6 +144,8 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         template_constraint_violations: bool = False,
         malformed_yaml: bool = False,
         invalid_original_yaml: bool = False,
+        nested_quote_yaml: bool = False,
+        unquoted_reference_yaml: bool = False,
     ) -> None:
         self.fail_generation = fail_generation
         self.use_generic_template = use_generic_template
@@ -155,6 +157,8 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         self.missing_reference_object_code = missing_reference_object_code
         self.template_constraint_violations = template_constraint_violations
         self.malformed_yaml = malformed_yaml
+        self.nested_quote_yaml = nested_quote_yaml
+        self.unquoted_reference_yaml = unquoted_reference_yaml
         self.messages: list[dict[str, str]] = []
         self.loaded_term_ids: list[str] = []
         self.requested_object_codes: list[str] = []
@@ -395,6 +399,18 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
             },
         }
         detail = details.get(object_code)
+        if detail is not None and (
+            self.nested_quote_yaml or self.unquoted_reference_yaml
+        ):
+            properties = detail.get("properties")
+            assert isinstance(properties, list)
+            properties.append(
+                {
+                    "propertyName": "来源引用",
+                    "propertyCode": "source_refs",
+                    "dataType": "STRING",
+                }
+            )
         if detail is not None and self.use_generic_template:
             detail.pop("extProperty", None)
         return detail
@@ -427,6 +443,34 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
             return (
                 "---\n"
                 "renewal_date: [invalid\n"
+                "---\n"
+                "# 客户增长计划\n\n"
+                "客户增长计划聚焦续约。\n\n"
+                "<!--- relation --->\n"
+                "\n"
+                "<!--- relation --->"
+            )
+        if self.nested_quote_yaml:
+            return (
+                "---\n"
+                'renewal_date: "2027-01-01"\n'
+                "source_refs:\n"
+                '  - "[事件/台风"白海豚"](term-typhoon)"\n'
+                '  - "[事件/第13号强台风"白海豚"](term-strong-typhoon)"\n'
+                "---\n"
+                "# 客户增长计划\n\n"
+                "客户增长计划聚焦续约。\n\n"
+                "<!--- relation --->\n"
+                "\n"
+                "<!--- relation --->"
+            )
+        if self.unquoted_reference_yaml:
+            return (
+                "---\n"
+                'renewal_date: "2027-01-01"\n'
+                "source_refs:\n"
+                "  - [事件/7月全国线下消费支付金额同比上涨2.2%]"
+                "(term-consumption)\n"
                 "---\n"
                 "# 客户增长计划\n\n"
                 "客户增长计划聚焦续约。\n\n"
@@ -869,3 +913,61 @@ async def test_enrich_uses_null_yaml_when_original_yaml_is_invalid(
         "source=null status=used reason=invalid_original_yaml" in record.getMessage()
         for record in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_enrich_repairs_nested_double_quotes_in_yaml(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.WARNING,
+        logger="datacloud_platform.mixins.document_enrich",
+    )
+    platform = FakeDocumentEnrichPlatform(nested_quote_yaml=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert '[事件/台风"白海豚"](term-typhoon)' in result.enriched_content
+    assert '[事件/第13号强台风"白海豚"](term-strong-typhoon)' in result.enriched_content
+    assert any(
+        "status=used strategy=normalize_string_quoting repaired_line_count=2"
+        in record.getMessage()
+        for record in caplog.records
+    )
+    assert not any("yaml_fallback" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_enrich_quotes_unquoted_markdown_references_in_yaml(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.WARNING,
+        logger="datacloud_platform.mixins.document_enrich",
+    )
+    platform = FakeDocumentEnrichPlatform(unquoted_reference_yaml=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert (
+        "[事件/7月全国线下消费支付金额同比上涨2.2%](term-consumption)"
+        in result.enriched_content
+    )
+    assert any(
+        "status=used strategy=normalize_string_quoting repaired_line_count=1"
+        in record.getMessage()
+        for record in caplog.records
+    )
+    assert not any("yaml_fallback" in record.getMessage() for record in caplog.records)
