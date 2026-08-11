@@ -531,7 +531,6 @@ class DocumentEnrichMixin:
             normalized_output = _normalize_enriched_output(
                 enriched_content.strip(),
                 property_codes=property_codes,
-                document_template=document_template,
                 allowed_relation_types=allowed_relation_types,
                 entity_references=entity_references,
             )
@@ -1376,7 +1375,6 @@ def _normalize_enriched_output(
     content: str,
     *,
     property_codes: Sequence[str],
-    document_template: str,
     allowed_relation_types: Sequence[tuple[str, str]],
     entity_references: Mapping[str, _EntityReference],
 ) -> _NormalizedEnrichedOutput:
@@ -1416,17 +1414,6 @@ def _normalize_enriched_output(
         entity_references=entity_references,
     )
 
-    if re.search(r"\{\{[^{}\n]+\}\}", body):
-        raise ValueError("LLM output contains unreplaced template placeholders")
-    missing_headings = [
-        heading
-        for heading in _required_template_headings(document_template)
-        if not re.search(rf"(?m)^{re.escape(heading)}\s*$", body)
-    ]
-    if missing_headings:
-        raise ValueError(
-            f"LLM output does not follow document template: missing={missing_headings}"
-        )
     explicit_relations = tuple(
         DocumentEnrichRelation(
             relationName=match.group("relation_name"),
@@ -1578,19 +1565,6 @@ def _deduplicate_relations(
         key = (relation.relation_name, relation.target_term_id)
         deduplicated.setdefault(key, relation)
     return tuple(deduplicated.values())
-
-
-def _required_template_headings(document_template: str) -> tuple[str, ...]:
-    headings: dict[str, None] = {}
-    for line in document_template.splitlines():
-        heading = line.strip()
-        if (
-            re.fullmatch(r"#{1,6}\s+.+", heading)
-            and "{{" not in heading
-            and "}}" not in heading
-        ):
-            headings[heading] = None
-    return tuple(headings)
 
 
 def _invoke_llm(

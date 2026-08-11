@@ -141,6 +141,7 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         invalid_relation_lines: bool = False,
         unknown_body_reference: bool = False,
         missing_reference_object_code: bool = False,
+        template_constraint_violations: bool = False,
     ) -> None:
         self.fail_generation = fail_generation
         self.use_generic_template = use_generic_template
@@ -150,6 +151,7 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         self.invalid_relation_lines = invalid_relation_lines
         self.unknown_body_reference = unknown_body_reference
         self.missing_reference_object_code = missing_reference_object_code
+        self.template_constraint_violations = template_constraint_violations
         self.messages: list[dict[str, str]] = []
         self.loaded_term_ids: list[str] = []
         self.requested_object_codes: list[str] = []
@@ -398,6 +400,18 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         self.messages = messages
         if self.invalid_output:
             return "# 缺少 YAML 和关系区块"
+        if self.template_constraint_violations:
+            return (
+                "---\n"
+                'renewal_date: "2027-01-01"\n'
+                "---\n"
+                "# 客户增长计划\n\n"
+                "正文不包含对象模板规定的章节。\n\n"
+                "{{unreplaced_placeholder}}\n\n"
+                "<!--- relation --->\n"
+                "\n"
+                "<!--- relation --->"
+            )
         if self.use_generic_template:
             return (
                 "---\n"
@@ -757,3 +771,21 @@ async def test_enrich_rejects_output_that_does_not_follow_strict_format() -> Non
         "ValueError: LLM output must start with YAML front matter"
     )
     assert result.enriched_content == ORIGINAL_CONTENT
+
+
+@pytest.mark.asyncio
+async def test_enrich_treats_document_template_as_prompt_guidance_only() -> None:
+    platform = FakeDocumentEnrichPlatform(template_constraint_violations=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert "## 增长目标" not in result.enriched_content
+    assert "## 执行策略" not in result.enriched_content
+    assert "{{unreplaced_placeholder}}" in result.enriched_content
+    assert result.relations == ()
