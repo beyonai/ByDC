@@ -456,7 +456,10 @@ class OntologyWorkspaceMixin:
     ) -> dict[str, list[str]]:
         """检测需要删列的对象，返回 {entity_code: [col, ...]}。"""
         pending: dict[str, list[str]] = {}
-        from datacloud_knowledge.ingestion.workspace_manager import FieldDiff
+        from datacloud_knowledge.ingestion.workspace_manager import (
+            FieldDiff,
+            is_system_field_code,
+        )
 
         for obj_summary in state.get("objects", []):
             entity_code: str = obj_summary["entity_code"]
@@ -467,8 +470,9 @@ class OntologyWorkspaceMixin:
                 continue
             fields = wfm.load_fields(entity_code)
             diff: FieldDiff = wfm.diff_fields(entity_code, fields)
-            if diff.removed:
-                pending[entity_code] = diff.removed
+            removed = [code for code in diff.removed if not is_system_field_code(code)]
+            if removed:
+                pending[entity_code] = removed
         return pending
 
     # ── 内部：批量提交对象 ───────────────────────────────────────────────────

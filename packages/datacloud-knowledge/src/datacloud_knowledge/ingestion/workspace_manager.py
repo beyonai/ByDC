@@ -34,6 +34,12 @@ _WORKSPACE_CODE_RE = re.compile(r"w[a-z0-9]{8,10}")
 _ENTITY_CODE_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 _PUBLISH_ID_RE = re.compile(r"pub_[A-Za-z0-9_-]+")
 _ENTITY_CODE_VERSION = "v2"
+_SYSTEM_FIELD_CODES = frozenset({"id"})
+
+
+def is_system_field_code(value: Any) -> bool:
+    """Return whether a field code is managed by the platform rather than the workspace."""
+    return str(value or "").lower() in _SYSTEM_FIELD_CODES
 
 
 # ── 字段变更描述 ──────────────────────────────────────────────────────────────
@@ -383,7 +389,7 @@ class WorkspaceFileManager:
         definition["submitted_fields"] = [
             {"property_code": f["property_code"], "data_type": f.get("data_type", "STRING")}
             for f in fields
-            if f.get("property_code")
+            if f.get("property_code") and not is_system_field_code(f["property_code"])
         ]
         def_file.write_text(json.dumps(definition, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -404,7 +410,7 @@ class WorkspaceFileManager:
         snapshot = {
             f["property_code"]: f["data_type"]
             for f in self.get_submitted_field_snapshot(entity_code)
-            if f.get("property_code")
+            if f.get("property_code") and not is_system_field_code(f["property_code"])
         }
         if not snapshot:
             # 无快照（尚未提交过）：不产生 diff
@@ -413,10 +419,16 @@ class WorkspaceFileManager:
         current_map = {
             f["property_code"]: f.get("data_type", "STRING")
             for f in current_fields
-            if f.get("property_code")
+            if f.get("property_code") and not is_system_field_code(f["property_code"])
         }
 
-        added = [f for f in current_fields if f.get("property_code") not in snapshot]
+        added = [
+            f
+            for f in current_fields
+            if f.get("property_code")
+            and not is_system_field_code(f["property_code"])
+            and f["property_code"] not in snapshot
+        ]
         removed = [code for code in snapshot if code not in current_map]
         type_changed = [
             (code, snapshot[code], current_map[code])
