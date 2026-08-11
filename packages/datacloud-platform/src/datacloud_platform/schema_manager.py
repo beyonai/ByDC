@@ -10,7 +10,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from datacloud_data_sdk.ddl import table_manager
-from datacloud_knowledge.ingestion.workspace_manager import FieldDiff
+from datacloud_knowledge.ingestion.workspace_manager import (
+    FieldDiff,
+    is_system_field_code,
+)
 from datacloud_platform.publishing import PublishContext
 
 _IDENTIFIER_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,62}")
@@ -159,8 +162,11 @@ class PersonalSqliteSchemaManager:
             )
         if diff.added:
             table_manager.add_columns(entity_code, diff.added)
-        if diff.removed and confirm_drop_columns:
-            table_manager.drop_columns(entity_code, diff.removed)
+        removable_columns = [
+            column for column in diff.removed if not is_system_field_code(column)
+        ]
+        if removable_columns and confirm_drop_columns:
+            table_manager.drop_columns(entity_code, removable_columns)
 
 
 class EnterpriseSqlSchemaManager:
@@ -231,6 +237,8 @@ class EnterpriseSqlSchemaManager:
             )
         if confirm_drop_columns:
             for column in diff.removed:
+                if is_system_field_code(column):
+                    continue
                 _validate_identifier(column)
                 statements.append(
                     (f'ALTER TABLE {qualified} DROP COLUMN "{column}"', {})
