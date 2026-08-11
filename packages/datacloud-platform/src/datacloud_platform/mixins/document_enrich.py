@@ -61,6 +61,10 @@ _FRONT_MATTER_PATTERN = re.compile(
     r"\A---[ \t]*\n(?P<yaml>.*?)\n---[ \t]*\n(?P<body>.*)\Z",
     re.DOTALL,
 )
+_FRONT_MATTER_PREFIX_PATTERN = re.compile(
+    r"\A---[ \t]*\n(?P<yaml>.*?)\n---[ \t]*(?:\n|\Z)",
+    re.DOTALL,
+)
 _LEADING_THINKING_PATTERN = re.compile(
     r"\A\s*(?:<(?:think|thinking|analysis)>.*?</(?:think|thinking|analysis)>\s*)+",
     re.DOTALL | re.IGNORECASE,
@@ -533,6 +537,10 @@ class DocumentEnrichMixin:
                 property_codes=property_codes,
                 allowed_relation_types=allowed_relation_types,
                 entity_references=entity_references,
+                original_content=original_content,
+                base_id=base_id,
+                object_code=normalized_object_code,
+                term_id=normalized_term_id,
             )
             _log_enrich_stage(
                 stage=current_stage,
@@ -1377,6 +1385,10 @@ def _normalize_enriched_output(
     property_codes: Sequence[str],
     allowed_relation_types: Sequence[tuple[str, str]],
     entity_references: Mapping[str, _EntityReference],
+    original_content: str,
+    base_id: str,
+    object_code: str,
+    term_id: str,
 ) -> _NormalizedEnrichedOutput:
     front_matter_match = _FRONT_MATTER_PATTERN.fullmatch(content)
     if front_matter_match is None:
@@ -1384,9 +1396,13 @@ def _normalize_enriched_output(
     yaml_text = front_matter_match.group("yaml").strip()
     document_content = front_matter_match.group("body").strip()
 
-    parsed_yaml: object = safe_load(yaml_text)
-    if not isinstance(parsed_yaml, Mapping):
-        raise ValueError("YAML front matter must be a mapping")
+    parsed_yaml = _load_yaml_front_matter_with_fallback(
+        yaml_text,
+        original_content=original_content,
+        base_id=base_id,
+        object_code=object_code,
+        term_id=term_id,
+    )
     normalized_yaml_text = _normalize_yaml_front_matter(
         parsed_yaml,
         property_codes=property_codes,
@@ -1442,6 +1458,86 @@ def _normalize_enriched_output(
     )
 
 
+def _load_yaml_front_matter_with_fallback(
+    yaml_text: str,
+    *,
+    original_content: str,
+    base_id: str,
+    object_code: str,
+    term_id: str,
+) -> Mapping[object, object]:
+    """Load generated YAML, falling back to the original document or null values."""
+    try:
+        parsed_yaml: object = safe_load(yaml_text)
+    except YAMLError as exc:
+        logger.warning(
+            "document_enrich yaml_fallback base_id=%s object_code=%s term_id=%s "
+            "source=llm target=original reason=invalid_yaml error_type=%s error=%s",
+            base_id,
+            object_code,
+            term_id,
+            type(exc).__name__,
+            exc,
+        )
+    else:
+        if isinstance(parsed_yaml, Mapping):
+            return parsed_yaml
+        logger.warning(
+            "document_enrich yaml_fallback base_id=%s object_code=%s term_id=%s "
+            "source=llm target=original reason=not_mapping actual_type=%s",
+            base_id,
+            object_code,
+            term_id,
+            type(parsed_yaml).__name__,
+        )
+
+    original_match = _FRONT_MATTER_PREFIX_PATTERN.match(original_content.strip())
+    if original_match is None:
+        logger.warning(
+            "document_enrich yaml_fallback base_id=%s object_code=%s term_id=%s "
+            "source=null status=used reason=original_front_matter_missing",
+            base_id,
+            object_code,
+            term_id,
+        )
+        return {}
+
+    original_yaml_text = original_match.group("yaml").strip()
+    try:
+        original_yaml: object = safe_load(original_yaml_text)
+    except YAMLError as exc:
+        logger.warning(
+            "document_enrich yaml_fallback base_id=%s object_code=%s term_id=%s "
+            "source=null status=used reason=invalid_original_yaml "
+            "error_type=%s error=%s",
+            base_id,
+            object_code,
+            term_id,
+            type(exc).__name__,
+            exc,
+        )
+        return {}
+    if not isinstance(original_yaml, Mapping):
+        logger.warning(
+            "document_enrich yaml_fallback base_id=%s object_code=%s term_id=%s "
+            "source=null status=used reason=original_yaml_not_mapping actual_type=%s",
+            base_id,
+            object_code,
+            term_id,
+            type(original_yaml).__name__,
+        )
+        return {}
+
+    logger.warning(
+        "document_enrich yaml_fallback base_id=%s object_code=%s term_id=%s "
+        "source=original status=used",
+        base_id,
+        object_code,
+        term_id,
+    )
+    return original_yaml
+
+
 def _normalize_yaml_front_matter(
     parsed_yaml: Mapping[object, object],
     *,
@@ -1453,7 +1549,7 @@ def _normalize_yaml_front_matter(
     unexpected = sorted(actual_keys - expected_keys)
     if missing or unexpected:
         logger.warning(
-            "Normalized LLM YAML front matter keys: missing=%s unexpected=%s",
+            "Normalized YAML front matter keys: missing=%s unexpected=%s",
             missing,
             unexpected,
         )

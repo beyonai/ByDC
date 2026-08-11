@@ -142,6 +142,8 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         unknown_body_reference: bool = False,
         missing_reference_object_code: bool = False,
         template_constraint_violations: bool = False,
+        malformed_yaml: bool = False,
+        invalid_original_yaml: bool = False,
     ) -> None:
         self.fail_generation = fail_generation
         self.use_generic_template = use_generic_template
@@ -152,15 +154,24 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
         self.unknown_body_reference = unknown_body_reference
         self.missing_reference_object_code = missing_reference_object_code
         self.template_constraint_violations = template_constraint_violations
+        self.malformed_yaml = malformed_yaml
         self.messages: list[dict[str, str]] = []
         self.loaded_term_ids: list[str] = []
         self.requested_object_codes: list[str] = []
+        original_content = ORIGINAL_CONTENT
+        if malformed_yaml:
+            original_yaml = (
+                "renewal_date: [invalid"
+                if invalid_original_yaml
+                else 'renewal_date: "2026-12-31"\nlegacy_property: remove-me'
+            )
+            original_content = f"---\n{original_yaml}\n---\n\n{ORIGINAL_CONTENT}"
         self.contents = {
             TARGET_TERM_ID: DocumentContentResult(
                 termId=TARGET_TERM_ID,
                 kbResourceId="kb-1",
                 filePath="/customers/acme.md",
-                content=ORIGINAL_CONTENT,
+                content=original_content,
             ),
             "term-partner-a": DocumentContentResult(
                 termId="term-partner-a",
@@ -408,6 +419,17 @@ class FakeDocumentEnrichPlatform(DocumentEnrichMixin):
                 "# 客户增长计划\n\n"
                 "正文不包含对象模板规定的章节。\n\n"
                 "{{unreplaced_placeholder}}\n\n"
+                "<!--- relation --->\n"
+                "\n"
+                "<!--- relation --->"
+            )
+        if self.malformed_yaml:
+            return (
+                "---\n"
+                "renewal_date: [invalid\n"
+                "---\n"
+                "# 客户增长计划\n\n"
+                "客户增长计划聚焦续约。\n\n"
                 "<!--- relation --->\n"
                 "\n"
                 "<!--- relation --->"
@@ -789,3 +811,61 @@ async def test_enrich_treats_document_template_as_prompt_guidance_only() -> None
     assert "## 执行策略" not in result.enriched_content
     assert "{{unreplaced_placeholder}}" in result.enriched_content
     assert result.relations == ()
+
+
+@pytest.mark.asyncio
+async def test_enrich_falls_back_to_original_yaml_front_matter(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.WARNING,
+        logger="datacloud_platform.mixins.document_enrich",
+    )
+    platform = FakeDocumentEnrichPlatform(malformed_yaml=True)
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert result.enriched_content.startswith("---\nrenewal_date: '2026-12-31'\n---")
+    assert "legacy_property" not in result.enriched_content
+    assert any(
+        "source=llm target=original reason=invalid_yaml" in record.getMessage()
+        for record in caplog.records
+    )
+    assert any(
+        "source=original status=used" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_enrich_uses_null_yaml_when_original_yaml_is_invalid(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(
+        logging.WARNING,
+        logger="datacloud_platform.mixins.document_enrich",
+    )
+    platform = FakeDocumentEnrichPlatform(
+        malformed_yaml=True,
+        invalid_original_yaml=True,
+    )
+
+    result = await platform.enrich(
+        BASE_ID,
+        object_scope=_object_scope(),
+        target_object=_target_object(),
+        term_id=TARGET_TERM_ID,
+    )
+
+    assert result.status is DocumentEnrichStatus.SUCCESS
+    assert result.enriched_content.startswith("---\nrenewal_date: null\n---")
+    assert any(
+        "source=null status=used reason=invalid_original_yaml" in record.getMessage()
+        for record in caplog.records
+    )
