@@ -1923,6 +1923,10 @@ class RemoteTermBackend:
         """Remote term deletion — not yet implemented."""
         raise NotImplementedError("Remote term deletion not yet implemented")
 
+    def delete_terms_batch(self, *, term_ids: Sequence[str]) -> list[str]:
+        """Remote term batch deletion — not yet implemented."""
+        raise NotImplementedError("Remote term batch deletion not yet implemented")
+
     def query_term_relations(
         self,
         *,

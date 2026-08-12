@@ -117,6 +117,16 @@ class TermMixin(TermSyncHandler):
     def delete_term(self: _HasTermBackend, base_id: str, *, term_id: str) -> None:
         self._term_for(base_id).delete_term(term_id=term_id)
 
+    def delete_terms_batch(
+        self: _HasTermBackend, base_id: str, *, term_ids: list[str]
+    ) -> list[str]:
+        """批量删除术语（单事务级联 + 孤儿词候选收集）。
+
+        等价于逐项 delete_term + remove_term_co_occurrence_partners 的组合，
+        但 SQL 次数与实例数无关；返回孤儿词候选（主名 + 别名，去重）。
+        """
+        return self._term_for(base_id).delete_terms_batch(term_ids=term_ids)
+
     def query_term_relations(
         self: _HasTermBackend, base_id: str, **kwargs: Any
     ) -> dict[str, Any]:
@@ -215,6 +225,34 @@ class TermMixin(TermSyncHandler):
         desc_summary、term_tags 整列替换——本方法为独立 SQL 写路径。
         """
         self._term_for(base_id).update_term_co_occurrence(term_id=term_id, patch=patch)
+
+    def remove_term_co_occurrence_partners(
+        self: _HasTermBackend, base_id: str, *, term_id: str
+    ) -> list[str]:
+        """删除准备：清理其它 term 对 term_id 的 co_occurrence 反向引用。
+
+        delete_term 不清理伙伴引用；FOR UPDATE 读改写模型，幂等
+        （term_id 不存在返回 []）。
+
+        Returns:
+            被清理反向引用的伙伴 term_id 列表。
+        """
+        return self._term_for(base_id).remove_term_co_occurrence_partners(
+            term_id=term_id
+        )
+
+    def delete_orphan_vocabulary_words(
+        self: _HasTermBackend, base_id: str, *, words: Sequence[str]
+    ) -> int:
+        """删除 term_vocabulary 中的孤儿词（term_name/term 删除不联动清理词表时的显式兜底）。
+
+        仅删「无 term_name.name_text 引用且无 term.term_name 引用」的词，
+        共享词不误删，幂等安全。
+
+        Returns:
+            实际删除的词数。
+        """
+        return self._term_for(base_id).delete_orphan_vocabulary_words(words=words)
 
     # ── TermKnowledge ──────────────────────────────────────────────
 
