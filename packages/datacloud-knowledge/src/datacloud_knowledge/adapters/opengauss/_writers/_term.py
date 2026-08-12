@@ -370,7 +370,13 @@ class _TermWriter(_WriterBase):
         if not words:
             return
 
-        word_list = list(words)
+        # 先按原文去重（保序）：WHERE NOT EXISTS 只挡已提交行，同一语句内
+        # unnest 产生的重复词会互相不可见，直接撞唯一索引 idx_vocab_word
+        word_list = list(
+            dict.fromkeys(str(w).strip() for w in words if str(w).strip())
+        )
+        if not word_list:
+            return
         self.session.execute(
             text(
                 "INSERT INTO term_vocabulary (word) "
