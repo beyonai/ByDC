@@ -382,6 +382,43 @@ class _TermWriter(_WriterBase):
             {"words": word_list},
         )
 
+    def delete_orphan_vocabulary_words(self, *, words: Sequence[str]) -> int:
+        """删除 term_vocabulary 中的孤儿词（term_name/term 删除不联动清理词表时的显式兜底）。
+
+        delete_term 不清理 term_vocabulary，且触发器
+        ``trg_term_name_vocab`` 的 DELETE 方向未确认（DDL 外部管理）——
+        本方法显式删除「已无任何引用」的词：
+
+        - 无任何 ``term_name.name_text`` 引用（别名/主名投影源）
+        - 无任何 ``term.term_name`` 引用（主名）
+
+        孤儿判定保证**共享词不被误删**：某词仍被其它 term 的 term_name 或
+        主名引用时，即使它同时是本次候选词，也会被 NOT EXISTS 拦下。
+        因此即使触发器带 DELETE 方向，本方法也是幂等安全的兜底。
+
+        Args:
+            words: 候选词列表（被删实例的主名 + 别名）。
+
+        Returns:
+            实际删除的词数。
+        """
+        if not words:
+            return 0
+        result = self.session.execute(
+            text(
+                "DELETE FROM term_vocabulary tv "
+                "WHERE tv.word = ANY(:words) "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM term_name tn WHERE tn.name_text = tv.word"
+                ") "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM term t WHERE t.term_name = tv.word"
+                ")"
+            ),
+            {"words": list(words)},
+        )
+        return int(result.rowcount or 0)
+
     def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
         """更新 term_tags.co_occurrence（计数版伙伴集合）。
 
@@ -432,6 +469,59 @@ class _TermWriter(_WriterBase):
             text("UPDATE term SET term_tags = :tags WHERE term_id = :term_id"),
             {"term_id": term_id, "tags": json.dumps(tags, ensure_ascii=False)},
         )
+
+    def remove_term_co_occurrence_partners(self, *, term_id: str) -> list[str]:
+        """删除准备：清理其它 term 对 term_id 的 co_occurrence 反向引用。
+
+        delete_term 不清理其它 term 的
+        ``term_tags.co_occurrence`` 中指向被删 term 的伙伴引用）。
+        FOR UPDATE 读改写模型（同 :meth:`update_term_co_occurrence`）：
+
+        1. 读 term_id 自身 ``term_tags.co_occurrence`` 的伙伴 key 集
+        2. 对每个伙伴 term：``SELECT term_tags FOR UPDATE`` → 移除指向
+           term_id 的 key → 整体写回（保留其他 key）
+        3. 返回被清理的伙伴 term_id 列表
+
+        幂等：term_id 不存在或 co_occurrence 为空 → 返回 []，不抛异常
+        （删除接口幂等语义，配合 delete_term 的 rowcount=0 静默）。
+
+        Args:
+            term_id: 即将删除的 term_id。
+
+        Returns:
+            被清理反向引用的伙伴 term_id 列表。
+        """
+        row = self.session.execute(
+            text("SELECT term_tags FROM term WHERE term_id = :term_id"),
+            {"term_id": term_id},
+        ).fetchone()
+        if row is None or not row[0]:
+            return []
+        tags = dict(row[0]) if isinstance(row[0], dict) else {}
+        co = tags.get("co_occurrence")
+        if not isinstance(co, dict):
+            return []
+        partners = [str(key) for key in co]
+
+        for partner in partners:
+            prow = self.session.execute(
+                text("SELECT term_tags FROM term WHERE term_id = :pid FOR UPDATE"),
+                {"pid": partner},
+            ).fetchone()
+            if prow is None or not prow[0]:
+                # 伙伴 term 已不存在（如先被删）——无需清理，跳过
+                continue
+            ptags = dict(prow[0]) if isinstance(prow[0], dict) else {}
+            pco = ptags.get("co_occurrence")
+            if not isinstance(pco, dict) or str(term_id) not in {str(key) for key in pco}:
+                continue
+            pco = {str(key): value for key, value in pco.items() if str(key) != str(term_id)}
+            ptags["co_occurrence"] = pco
+            self.session.execute(
+                text("UPDATE term SET term_tags = :tags WHERE term_id = :pid"),
+                {"pid": partner, "tags": json.dumps(ptags, ensure_ascii=False)},
+            )
+        return partners
 
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
         """读取 term_name 记录上的 search_scope JSONB 字段。"""
@@ -1755,6 +1845,103 @@ class _TermWriter(_WriterBase):
             log.warning("delete_term: term_id=%s not found", term_id)
         else:
             log.info("delete_term: term_id=%s deleted=%d", term_id, rowcount)
+
+    def delete_terms_batch(self, *, term_ids: Sequence[str]) -> list[str]:
+        """批量删除术语（单事务级联 + 孤儿词候选收集）。
+
+        语义等价于逐项 ``delete_term`` + ``remove_term_co_occurrence_partners``
+        的组合，但 SQL 次数与实例数无关（子 term 检查 / 词收集 / 共现清理 /
+        级联删除均为批量或每目标一条 UPDATE）：
+
+        1. 子 term 检查（parent_term_id 命中 → 整体 ValueError，与逐项 409 一致）
+        2. 收集被删实例的主名 + 别名（孤儿词候选，去重保序返回）
+        3. 批量清理其它 term 对目标 term_id 的 co_occurrence 反向引用
+           （jsonb 存在性 ``?`` 与减键 ``-`` 实测 OpenGauss 2.x 支持）
+        4. 级联 DELETE term_name / term_relation / term_knowledge / term
+
+        Args:
+            term_ids: 待删除 term_id 列表（自动去重、保持顺序）。
+
+        Returns:
+            孤儿词候选列表（去重），供调用方 ``delete_orphan_vocabulary_words``
+            做词表清理。
+
+        Raises:
+            ValueError: 任一 term 存在子 term（与 delete_term 的 409 语义一致）。
+        """
+        ids = [str(t) for t in dict.fromkeys(term_ids or [])]
+        if not ids:
+            return []
+
+        # 1. 子 term 检查（等价 delete_term 的 409 语义）
+        children = self.session.execute(
+            text(
+                "SELECT parent_term_id, COUNT(*) FROM term "
+                "WHERE parent_term_id = ANY(:ids) GROUP BY parent_term_id"
+            ),
+            {"ids": ids},
+        ).fetchall()
+        if children:
+            raise ValueError(
+                "Cannot delete term(s): "
+                + ", ".join(str(row[0]) for row in children)
+                + " has child term(s)"
+            )
+
+        # 2. 孤儿词候选收集（主名 + 别名）
+        candidates: list[str] = []
+        for (name,) in self.session.execute(
+            text("SELECT term_name FROM term WHERE term_id = ANY(:ids)"),
+            {"ids": ids},
+        ).fetchall():
+            if name:
+                candidates.append(str(name))
+        for (name_text,) in self.session.execute(
+            text("SELECT name_text FROM term_name WHERE term_id = ANY(:ids)"),
+            {"ids": ids},
+        ).fetchall():
+            if name_text:
+                candidates.append(str(name_text))
+
+        # 3. 共现反向引用批量清理（每目标一条 UPDATE，jsonb 减键）
+        for tid in ids:
+            self.session.execute(
+                text(
+                    "UPDATE term SET term_tags = jsonb_set(term_tags, "
+                    "'{co_occurrence}', (term_tags->'co_occurrence') - :tid) "
+                    "WHERE term_tags ? 'co_occurrence' "
+                    "AND term_tags->'co_occurrence' ? :tid"
+                ),
+                {"tid": tid},
+            )
+
+        # 4. 级联删除（term_relation 双向 / term_name / term_knowledge / term）
+        self.session.execute(
+            text(
+                "DELETE FROM term_relation "
+                "WHERE source_term_id = ANY(:ids) OR target_term_id = ANY(:ids)"
+            ),
+            {"ids": ids},
+        )
+        self.session.execute(
+            text("DELETE FROM term_name WHERE term_id = ANY(:ids)"),
+            {"ids": ids},
+        )
+        self.session.execute(
+            text("DELETE FROM term_knowledge WHERE term_id = ANY(:ids)"),
+            {"ids": ids},
+        )
+        self.session.execute(
+            text("DELETE FROM term WHERE term_id = ANY(:ids)"),
+            {"ids": ids},
+        )
+
+        log.info(
+            "delete_terms_batch: requested=%d candidates=%d",
+            len(ids),
+            len(candidates),
+        )
+        return list(dict.fromkeys(candidates))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
