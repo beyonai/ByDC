@@ -940,6 +940,38 @@ class TermWriter(Protocol):
         """
         ...
 
+    def remove_term_co_occurrence_partners(self, *, term_id: str) -> list[str]:
+        """删除准备：清理其它 term 对 term_id 的 co_occurrence 反向引用。
+
+        delete_term 不清理其它 term 的
+        ``term_tags.co_occurrence`` 中指向被删 term 的伙伴引用）。
+        FOR UPDATE 读改写模型（同 update_term_co_occurrence）：
+        读 term_id 自身 co_occurrence 伙伴集 → 对每个伙伴移除指向 term_id
+        的 key → 写回。幂等：term_id 不存在返回 []。
+
+        Args:
+            term_id: 即将删除的 term_id。
+
+        Returns:
+            被清理反向引用的伙伴 term_id 列表。
+        """
+        ...
+
+    def delete_orphan_vocabulary_words(self, *, words: Sequence[str]) -> int:
+        """删除 term_vocabulary 中的孤儿词（term_name/term 删除不联动清理词表时的显式兜底）。
+
+        仅删除「无 term_name.name_text 引用且无
+        term.term_name 引用」的词——共享词不被误删，即使触发器
+        ``trg_term_name_vocab`` 无 DELETE 方向也安全。
+
+        Args:
+            words: 候选词列表（被删实例的主名 + 别名）。
+
+        Returns:
+            实际删除的词数。
+        """
+        ...
+
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
         """读取 term_name 记录上的 search_scope JSONB 字段。
 
