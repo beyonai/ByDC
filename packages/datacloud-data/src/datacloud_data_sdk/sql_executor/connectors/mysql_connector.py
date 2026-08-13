@@ -65,6 +65,8 @@ class MySQLConnector(BaseSourceConnector):
         try:
             async with self._engine.begin() as conn:
                 result = await conn.execute(text(sql), params or {})
+                if not result.returns_rows:
+                    return []
                 rows = result.fetchall()
                 columns = result.keys()
                 return [dict(zip(columns, row)) for row in rows]
