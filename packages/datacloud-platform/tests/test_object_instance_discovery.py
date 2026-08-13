@@ -2306,6 +2306,35 @@ class TestAutoDiscoveredCreateChannel:
         assert not created_terms  # 未走直写通道
         assert platform.object_files[0][0]["fileName"] == "张三-实际.md"
         assert platform.object_files[0][0]["filePath"] == "/实际目录/张三-实际.md"
+        assert hit.file_name == "/实际目录/张三-实际.md"
+        assert hit.kb_resource_id == "10001"
+        assert hit.kb_id == "201"
+
+    @pytest.mark.asyncio
+    async def test_new_instance_hit_uses_object_kb_directory_when_action_omits_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        platform = _FakePlatform()
+
+        async def fake_write_action(**kwargs: Any) -> dict[str, Any]:
+            return {"records": [{"termId": "term-new-2"}]}
+
+        monkeypatch.setattr(
+            discovery_module, "invoke_object_write_action", fake_write_action
+        )
+        hit = await platform._create_new_instance_flow(
+            base_id=BASE_ID,
+            source_term_id="term-input",
+            candidate={
+                "term_name": "李四",
+                "object_code": "by_opportunity",
+                "evidence": "e",
+            },
+        )
+
+        assert hit.file_name == "/商机目录/李四.md"
+        assert hit.kb_resource_id == "10001"
+        assert hit.kb_id == "201"
 
     @pytest.mark.asyncio
     async def test_full_flow_creates_auto_discovered_instance(

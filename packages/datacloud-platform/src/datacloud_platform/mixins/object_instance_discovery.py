@@ -317,8 +317,9 @@ class ObjectInstanceDiscoveryMixin:
             if candidate.get("raw_type") is not None
             else None,
         )
+        registered_object_file: dict[str, Any] | None = None
         if object_code != _AUTO_DISCOVERED_CODE:
-            await self._register_object_file(
+            registered_object_file = await self._register_object_file(
                 base_id=base_id,
                 object_code=object_code,
                 term_name=term_name,
@@ -330,14 +331,25 @@ class ObjectInstanceDiscoveryMixin:
             source_term_id=source_term_id,
             target_term_id=term_id,
         )
+        registered_ext: Mapping[str, Any] = {}
+        if registered_object_file is not None:
+            raw_ext = registered_object_file.get("extContent")
+            if isinstance(raw_ext, str):
+                parsed_ext = json.loads(raw_ext)
+                if isinstance(parsed_ext, Mapping):
+                    registered_ext = parsed_ext
         return ObjectInstanceDiscoveryHit(
             instance_id=term_id,
             instance_code=term_name,
             instance_name=term_name,
             object_code=object_code,
-            file_name=f"/{object_code}/{term_name}.md",
-            kb_resource_id=None,
-            kb_id=None,
+            file_name=(
+                str(registered_object_file.get("filePath") or "")
+                if registered_object_file is not None
+                else None
+            ),
+            kb_resource_id=(str(registered_ext.get("kb_resource_id") or "") or None),
+            kb_id=str(registered_ext.get("kb_id") or "") or None,
             is_new=True,
             evidence=evidence_text,
         )
@@ -1152,7 +1164,7 @@ class ObjectInstanceDiscoveryMixin:
         term_name: str,
         term_id: str,
         action_result: dict[str, Any],
-    ) -> None:
+    ) -> dict[str, Any]:
         """按 invokeAction 写动作的对象文件协议登记新实例文件。
 
         登记条目含 sessionId / objectName / objectCode / fileName / filePath /
@@ -1243,6 +1255,7 @@ class ObjectInstanceDiscoveryMixin:
             ),
         }
         await self.save_or_update_object_files(base_id, object_files=[object_file])
+        return object_file
 
     def _establish_mention_relation(
         self: _ObjectInstanceDiscoveryPlatform,
