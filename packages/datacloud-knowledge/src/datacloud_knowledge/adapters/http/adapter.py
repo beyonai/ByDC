@@ -1138,6 +1138,18 @@ class HttpTermAdapter:
             "HTTP 后端不支持 update_term_co_occurrence，共现存储仅 OpenGauss 支持"
         )
 
+    def remove_term_co_occurrence_partners(self, *, term_id: str) -> list[str]:
+        """HTTP API 不支持 co_occurrence 反向引用清理（无对应端点）。"""
+        raise NotImplementedError(
+            "HTTP 后端不支持 remove_term_co_occurrence_partners，共现存储仅 OpenGauss 支持"
+        )
+
+    def delete_orphan_vocabulary_words(self, *, words: Sequence[str]) -> int:
+        """HTTP API 不支持分词词典删除（无对应端点）。"""
+        raise NotImplementedError(
+            "HTTP 后端不支持 delete_orphan_vocabulary_words，分词词典仅 OpenGauss 支持"
+        )
+
     def get_name_search_scope(self, *, name_id: str) -> dict[str, object] | None:
         """HTTP API 不支持 name_id 级 search_scope 查询。"""
         raise NotImplementedError("HTTP 后端不支持 get_name_search_scope，请使用 OpenGauss 后端")
@@ -1234,6 +1246,10 @@ class HttpTermAdapter:
     def delete_term(self, *, term_id: str) -> None:
         """HTTP API 不支持术语删除。"""
         raise NotImplementedError("delete_term not implemented in HTTP adapter")
+
+    def delete_terms_batch(self, *, term_ids: Sequence[str]) -> list[str]:
+        """HTTP API 不支持术语批量删除。"""
+        raise NotImplementedError("delete_terms_batch not implemented in HTTP adapter")
 
     # ═════════════════════════════════════════════════════════════════════
     # 上下文管理器（TermWriter 协议要求）

@@ -392,6 +392,15 @@ class TermBackendMixin(DataCloudDataBackendBase):
         with create_writer() as writer:
             writer.delete_term(term_id=term_id)
 
+    def delete_terms_batch(self, *, term_ids: Sequence[str]) -> list[str]:
+        """批量删除术语（单事务级联 + 孤儿词候选收集）。
+
+        等价于逐项 delete_term + remove_term_co_occurrence_partners 的组合，
+        但 SQL 次数与实例数无关；返回孤儿词候选（主名 + 别名，去重）。
+        """
+        with create_writer() as writer:
+            return writer.delete_terms_batch(term_ids=term_ids)
+
     # ── TermSyncHandler 协议实现 ────────────────────────────────────────────
     # 供 term_sync_worker 注入使用，不依赖 BulkImportAdapter。
 
@@ -718,6 +727,36 @@ class TermBackendMixin(DataCloudDataBackendBase):
         """
         with create_writer() as writer:
             writer.update_term_co_occurrence(term_id=term_id, patch=patch)
+
+    def remove_term_co_occurrence_partners(self, *, term_id: str) -> list[str]:
+        """删除准备：清理其它 term 对 term_id 的 co_occurrence 反向引用。
+
+        delete_term 不清理伙伴引用；FOR UPDATE
+        读改写模型，幂等（term_id 不存在返回 []）。
+
+        Args:
+            term_id: 即将删除的 term_id。
+
+        Returns:
+            被清理反向引用的伙伴 term_id 列表。
+        """
+        with create_writer() as writer:
+            return writer.remove_term_co_occurrence_partners(term_id=term_id)
+
+    def delete_orphan_vocabulary_words(self, *, words: Sequence[str]) -> int:
+        """删除 term_vocabulary 中的孤儿词（term_name/term 删除不联动清理词表时的显式兜底）。
+
+        孤儿判定（无 term_name.name_text / term.term_name 引用）保证
+        共享词不误删；幂等安全。
+
+        Args:
+            words: 候选词列表（被删实例的主名 + 别名）。
+
+        Returns:
+            实际删除的词数。
+        """
+        with create_writer() as writer:
+            return writer.delete_orphan_vocabulary_words(words=list(words))
 
 
 # ── 模块级辅助函数 ──────────────────────────────────────────────────────────────

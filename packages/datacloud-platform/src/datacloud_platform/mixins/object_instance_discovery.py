@@ -1008,12 +1008,16 @@ class ObjectInstanceDiscoveryMixin:
                 f"{last_error}"
             )
 
-        # 词表回填：抽到就填（幂等去重），无 confidence/频次门槛
-        words = [
-            str(m["term_name"]).strip()
-            for m in mentions
-            if str(m.get("term_name") or "").strip()
-        ]
+        # 词表回填：抽到就填（幂等去重，无门槛）；先按原文去重——
+        # 同名 mention 重复（如同一文档多处出现同一实体）会触发
+        # batch_create_vocabulary 的唯一索引冲突（idx_vocab_word）
+        words = list(
+            dict.fromkeys(
+                str(m["term_name"]).strip()
+                for m in mentions
+                if str(m.get("term_name") or "").strip()
+            )
+        )
         if words:
             self.batch_create_vocabulary(base_id, words=words)
             # 词表回填 → 词表已更新 → 飞轮实时（下次快路命中回填词）

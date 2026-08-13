@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -199,6 +200,15 @@ class TermBackend(Protocol):
         """
         ...
 
+    def delete_terms_batch(self, *, term_ids: Sequence[str]) -> list[str]:
+        """批量删除术语（单事务级联 + 孤儿词候选收集）。
+
+        等价于逐项 delete_term + remove_term_co_occurrence_partners 的组合，
+        但 SQL 次数与实例数无关，供大批量删除（如 deleteObjectInstances RPC）
+        使用。返回孤儿词候选列表（主名 + 别名，去重）。
+        """
+        ...
+
     def query_term_relations(
         self,
         *,
@@ -331,6 +341,28 @@ class TermBackend(Protocol):
 
         独立 SQL 写路径——**禁止经 update_term**（其 ext_attrs 拼入
         desc_summary 的遗留怪癖、term_tags 整列替换）。
+        """
+        ...
+
+    def remove_term_co_occurrence_partners(self, *, term_id: str) -> list[str]:
+        """删除准备：清理其它 term 对 term_id 的 co_occurrence 反向引用。
+
+        delete_term 不清理伙伴引用；FOR UPDATE
+        读改写模型，幂等（term_id 不存在返回 []）。
+
+        Returns:
+            被清理反向引用的伙伴 term_id 列表。
+        """
+        ...
+
+    def delete_orphan_vocabulary_words(self, *, words: list[str]) -> int:
+        """删除 term_vocabulary 中的孤儿词（term_name/term 删除不联动清理词表时的显式兜底）。
+
+        仅删「无 term_name.name_text 引用且无 term.term_name 引用」的词，
+        共享词不误删，幂等安全。
+
+        Returns:
+            实际删除的词数。
         """
         ...
 
