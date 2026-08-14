@@ -577,6 +577,9 @@ class DocumentMixin:
                     ]
                 }
             )
+        where_conditions.append(
+            {"eq": {"fieldName": "ds_status", "value": "已完成"}}
+        )
         excluded_file_paths = resolve_term_file_paths(
             platform=self,
             base_id=base_id,
