@@ -91,6 +91,12 @@ class WorkspaceTemplatesSubmitRequest(BaseModel):
     publish_id: str | None = Field(default=None)
 
 
+class WorkspaceTemplatesSubmitResponse(BaseModel):
+    code: int = 0
+    message: str = "success"
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
 class WorkspaceObjectCollectRequest(BaseModel):
     workspace_name: str = Field(default="", alias="workspace_name")
     entity_code: str = Field(..., min_length=1, alias="entity_code")
@@ -254,18 +260,20 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
             logger.exception("workspace/batch-submit 失败")
             return {"ok": False, "error": str(exc)}
 
-    @router.post("/templates/submit")
+    @router.post(
+        "/templates/submit", response_model=WorkspaceTemplatesSubmitResponse
+    )
     async def workspace_templates_submit(
         body: WorkspaceTemplatesSubmitRequest,
         request: Request,
         _user_code: str = Depends(_extract_user_code),
-    ) -> Any:
+    ) -> WorkspaceTemplatesSubmitResponse:
         """扫描模板目录，生成并发布全部工作区。"""
         try:
             beyond_token: str | None = request.headers.get("Beyond-Token")
             if beyond_token:
                 hook_ctx.set({"beyond_token": beyond_token})
-            return platform.submit_workspace_templates(
+            result = platform.submit_workspace_templates(
                 user_code=_user_code,
                 template_directory=body.template_directory,
                 tenant_id=request.headers.get("X-Tenant-Id"),
@@ -277,9 +285,12 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
                 confirm_drop_target_tables=body.confirm_drop_target_tables,
                 publish_id=body.publish_id,
             )
+            return WorkspaceTemplatesSubmitResponse(data=result)
         except Exception as exc:
             logger.exception("workspace/templates/submit 失败")
-            return {"ok": False, "error": str(exc)}
+            return WorkspaceTemplatesSubmitResponse(
+                code=500, message=str(exc), data={}
+            )
 
     # ═══════════════════════════════════════════════════════════════════════
     # 对象管理（工作区模式）
