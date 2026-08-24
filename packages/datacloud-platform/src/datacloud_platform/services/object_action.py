@@ -31,6 +31,39 @@ def _get_loader_runtime() -> Any:
     return ref() if callable(ref) else ref
 
 
+def get_object_action_schema(
+    *,
+    platform: DatacloudPlatform,
+    base_id: str,
+    object_code: str,
+    action_code: str,
+) -> dict[str, Any]:
+    """Return the authoritative input/output schema for one object action."""
+    if not object_code.strip():
+        raise ValueError("object_code is required")
+    if not action_code.strip():
+        raise ValueError("action_code is required")
+
+    runtime = _get_loader_runtime()
+    if runtime is not None:
+        loader = runtime.get_loader(base_id, object_codes=[object_code]).loader
+    else:
+        loader = platform._load_ontology_cached(base_id)  # noqa: SLF001
+        if isinstance(loader, OntologyLoader):
+            loader.configure(platform=platform)
+        platform.inject_virtual_actions(base_id, loader)
+
+    target_object = loader.get_object(object_code)
+    schema = target_object.get_action_schema(action_code)
+    if not isinstance(schema, dict):
+        raise TypeError("action schema must be an object")
+    if not isinstance(schema.get("inputSchema"), dict):
+        raise ValueError("action schema is missing inputSchema")
+    if not isinstance(schema.get("outputSchema"), dict):
+        raise ValueError("action schema is missing outputSchema")
+    return schema
+
+
 async def invoke_object_write_action(
     *,
     platform: DatacloudPlatform,

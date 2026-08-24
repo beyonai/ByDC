@@ -1,4 +1,4 @@
-"""Build the enterprise runtime Datasource from DATACLOUD_DB_* settings."""
+"""Build a PostgreSQL/OpenGauss runtime Datasource from DATACLOUD_DB_* settings."""
 
 from __future__ import annotations
 
@@ -39,8 +39,8 @@ class EnterpriseDatabaseSettings:
         )
 
     def to_datasource(self, context: PublishContext) -> Datasource:
-        if context.owner_type != "enterprise":
-            raise ValueError("企业 Datasource 只接受 enterprise 发布上下文")
+        if context.db_type == "SQLITE":
+            raise ValueError("数据库 Datasource 不接受 SQLite 发布上下文")
         if context.schema_name is None:
             raise ValueError("企业 Datasource 缺少租户 schema")
         scheme = context.db_type.lower()
@@ -64,12 +64,12 @@ class EnterpriseDatabaseSettings:
                     },
                 )
             ],
-            ownerType="enterprise",
-            userCode=None,
+            ownerType=context.owner_type,
+            userCode=context.user_code if context.owner_type == "personal" else None,
         )
 
 
 def datasource_from_environment(context: PublishContext) -> Datasource:
-    """Create the persisted Base Datasource for an enterprise publish."""
+    """Create the persisted Base Datasource for a PostgreSQL/OpenGauss publish."""
 
     return EnterpriseDatabaseSettings.from_env().to_datasource(context)

@@ -11,7 +11,9 @@ SDK Generator（代码生成） + TableManager（DDL）。
 from __future__ import annotations
 
 import logging
+import tempfile
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from datacloud_platform.enterprise_datasource import datasource_from_environment
@@ -29,6 +31,11 @@ from datacloud_platform.schema_manager import (
     EnterpriseSqlSchemaManager,
     PersonalSqliteSchemaManager,
     SqlAlchemyEnterpriseExecutor,
+)
+from datacloud_platform.workspace_template import (
+    default_workspace_templates_root,
+    materialize_workspace_template,
+    select_workspace_templates,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +61,15 @@ class OntologyWorkspaceMixin:
         )
 
         return WorkspaceFileManager(user_code, workspace_name)
+
+    @staticmethod
+    def _get_wfm_at_root(user_code: str, workspace_name: str, root: Path) -> Any:
+        """创建使用隔离根目录的工作区管理器。"""
+        from datacloud_knowledge.ingestion.workspace_manager import (
+            WorkspaceFileManager,
+        )
+
+        return WorkspaceFileManager(user_code, workspace_name, root=root)
 
     # ── 工作区 CRUD ──────────────────────────────────────────────────────────
 
@@ -84,6 +100,92 @@ class OntologyWorkspaceMixin:
         except Exception:
             logger.exception("workspace_init 失败: %s/%s", user_code, workspace_name)
             return {"ok": False, "error": f"初始化工作区失败: {workspace_name}"}
+
+    def submit_workspace_templates(
+        self,
+        *,
+        user_code: str,
+        template_directory: str,
+        is_personal: bool,
+        is_sqlite: bool,
+        base_id: str = "",
+        tenant_id: str | None = None,
+        confirm_scope_conversion: bool = False,
+        reuse_target_tables: bool = True,
+        confirm_drop_target_tables: bool = False,
+        publish_id: str | None = None,
+    ) -> dict[str, Any]:
+        """扫描配置目录中的模板，创建并发布全部工作区。"""
+        if not user_code.strip():
+            return {"ok": False, "error": "user_code 不能为空"}
+
+        storage_type = "sqlite" if is_sqlite else "database"
+        normalized_user_code = user_code.strip()
+        try:
+            templates = select_workspace_templates(
+                default_workspace_templates_root(), template_directory
+            )
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+        if not templates:
+            return {"ok": False, "error": "模板目录下没有可用的工作区模板"}
+
+        results: list[dict[str, Any]] = []
+        for template_root in templates:
+            workspace_name = template_root.name
+            try:
+                with tempfile.TemporaryDirectory(
+                    prefix="datacloud-template-publish-"
+                ) as temporary_directory:
+                    temporary_root = Path(temporary_directory) / workspace_name
+                    wfm = self._get_wfm_at_root(
+                        normalized_user_code, workspace_name, temporary_root
+                    )
+                    materialized = materialize_workspace_template(
+                        template_root=template_root,
+                        destination_root=wfm.root,
+                        workspace_name=workspace_name,
+                        user_code=normalized_user_code,
+                        is_personal=is_personal,
+                    )
+                    result = self.workspace_batch_submit(
+                        user_code=normalized_user_code,
+                        workspace_name=workspace_name,
+                        base_id=base_id,
+                        owner_type="personal" if is_personal else "enterprise",
+                        tenant_id=tenant_id,
+                        confirm_scope_conversion=confirm_scope_conversion,
+                        reuse_target_tables=reuse_target_tables,
+                        confirm_drop_target_tables=confirm_drop_target_tables,
+                        publish_id=publish_id,
+                        storage_type=storage_type,
+                        workspace_manager=wfm,
+                    )
+                results.append(
+                    {
+                        **result,
+                        "template": template_root.name,
+                        "workspace_name": workspace_name,
+                        "object_codes": materialized.object_codes,
+                        "action_codes": materialized.action_codes,
+                    }
+                )
+            except (FileExistsError, FileNotFoundError, OSError, ValueError) as exc:
+                results.append(
+                    {"ok": False, "template": template_root.name, "error": str(exc)}
+                )
+
+        succeeded = sum(result.get("ok") is True for result in results)
+        return {
+            "ok": succeeded == len(results),
+            "is_personal": is_personal,
+            "is_sqlite": is_sqlite,
+            "template_directory": template_directory,
+            "total": len(results),
+            "succeeded": succeeded,
+            "failed": len(results) - succeeded,
+            "results": results,
+        }
 
     def workspace_list(self, *, user_code: str) -> dict[str, Any]:
         """列出用户所有工作区及待提交摘要。"""
@@ -239,11 +341,14 @@ class OntologyWorkspaceMixin:
         confirm_scope_conversion: bool = False,
         confirm_drop_target_tables: bool = False,
         publish_id: str | None = None,
+        storage_type: str | None = None,
+        workspace_manager: Any | None = None,
+        reuse_target_tables: bool = False,
     ) -> dict[str, Any]:
         """按统一发布上下文批量提交工作区对象、Action、View 和 Relation。"""
         only_codes = only or []
         try:
-            wfm = self._get_wfm(user_code, workspace_name)
+            wfm = workspace_manager or self._get_wfm(user_code, workspace_name)
             state = wfm.get_workspace_state()
         except FileNotFoundError as exc:
             return {"ok": False, "error": str(exc)}
@@ -258,6 +363,7 @@ class OntologyWorkspaceMixin:
                 base_id=resolved_base_id,
                 publish_id=publish_id,
                 active_publication=active_publication,
+                storage_type=storage_type,
             )
         except PublishConfigurationError as exc:
             return {"ok": False, "code": exc.code, "error": str(exc)}
@@ -328,11 +434,15 @@ class OntologyWorkspaceMixin:
 
         try:
             schema_manager = self._schema_manager(context)
-            target_collisions = self._precheck_target_table_collisions(
-                schema_manager,
-                state,
-                only_codes,
-                scope_conversion=scope_conversion,
+            target_collisions = (
+                []
+                if reuse_target_tables
+                else self._precheck_target_table_collisions(
+                    schema_manager,
+                    state,
+                    only_codes,
+                    scope_conversion=scope_conversion,
+                )
             )
         except Exception as exc:
             logger.exception("batch_submit: 发布数据源预检失败")
@@ -368,6 +478,7 @@ class OntologyWorkspaceMixin:
                 schema_manager,
                 scope_conversion,
                 record,
+                reuse_target_tables=reuse_target_tables,
             )
         )
 
@@ -403,7 +514,7 @@ class OntologyWorkspaceMixin:
     def _schema_manager(
         self, context: PublishContext
     ) -> PersonalSqliteSchemaManager | EnterpriseSqlSchemaManager:
-        if context.owner_type == "personal":
+        if context.db_type == "SQLITE":
             return PersonalSqliteSchemaManager()
         datasource = self._upsert_enterprise_datasource(context)
         executor = SqlAlchemyEnterpriseExecutor.from_datasource(context, datasource)
@@ -488,6 +599,8 @@ class OntologyWorkspaceMixin:
         schema_manager: PersonalSqliteSchemaManager | EnterpriseSqlSchemaManager,
         scope_conversion: bool,
         publication_record: dict[str, Any],
+        *,
+        reuse_target_tables: bool = False,
     ) -> tuple[list[str], list[str], list[dict[str, Any]], dict[str, str]]:
         """提交对象：DDL → CRUD → 术语 → SDK → 状态更新。"""
         from datacloud_knowledge.ingestion.sdk_generator import generate_mapper_sdk
@@ -496,7 +609,7 @@ class OntologyWorkspaceMixin:
         failed: list[dict[str, Any]] = []
         sdk_files: dict[str, str] = {}
 
-        if context.owner_type == "personal":
+        if context.db_type == "SQLITE":
             self._ensure_personal_sqlite_datasource(context.base_id, context.user_code)
 
         for obj_summary in state.get("objects", []):
@@ -529,8 +642,25 @@ class OntologyWorkspaceMixin:
                         *fields,
                     ]
 
-                if scope_conversion or obj_status != "submitted":
-                    if obj_status == "dirty" and not scope_conversion:
+                manage_target_table = scope_conversion or obj_status != "submitted"
+                target_existed = False
+                if reuse_target_tables:
+                    target_existed = schema_manager.target_table_exists(entity_code)
+                    if target_existed:
+                        publication_record["operations"].append(
+                            {"type": "REUSE_TARGET_TABLE", "object_code": entity_code}
+                        )
+                    else:
+                        manage_target_table = True
+                elif manage_target_table:
+                    target_existed = schema_manager.target_table_exists(entity_code)
+
+                if manage_target_table and not (reuse_target_tables and target_existed):
+                    if (
+                        obj_status == "dirty"
+                        and not scope_conversion
+                        and target_existed
+                    ):
                         schema_manager.apply_incremental(
                             entity_code,
                             wfm.diff_fields(entity_code, fields),
@@ -540,7 +670,6 @@ class OntologyWorkspaceMixin:
                             {"type": "ALTER_TARGET_TABLE", "object_code": entity_code}
                         )
                     else:
-                        target_existed = schema_manager.target_table_exists(entity_code)
                         schema_manager.create_or_recreate(
                             entity_code,
                             fields,

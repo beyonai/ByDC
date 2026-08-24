@@ -83,8 +83,9 @@ def _storage_root() -> Path:
 class WorkspaceFileManager:
     """管理服务端工作区文件存储。"""
 
-    def __init__(self, user_code: str, workspace_name: str) -> None:
-        self._root = _storage_root() / user_code / workspace_name
+    def __init__(self, user_code: str, workspace_name: str, *, root: Path | None = None) -> None:
+        self._root = root if root is not None else _storage_root() / user_code / workspace_name
+        self._workspace_scan_root = root.parent if root is not None else _storage_root()
         self._user_code = user_code
         self._workspace_name = workspace_name
 
@@ -158,7 +159,7 @@ class WorkspaceFileManager:
     def _generate_workspace_code(self) -> str:
         """生成全局唯一的短工作区编码。"""
         known_codes: set[str] = set()
-        storage_root = _storage_root()
+        storage_root = self._workspace_scan_root
         if storage_root.exists():
             for ws_file in storage_root.glob("*/*/workspace.json"):
                 try:

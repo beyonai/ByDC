@@ -65,6 +65,7 @@ class PublishTargetResolver:
         base_id: str,
         publish_id: str | None = None,
         active_publication: dict[str, Any] | None = None,
+        storage_type: str | None = None,
     ) -> PublishContext:
         normalized_owner = owner_type.strip().lower()
         if normalized_owner not in {"personal", "enterprise"}:
@@ -74,12 +75,25 @@ class PublishTargetResolver:
         resolved_owner = cast(OwnerType, normalized_owner)
         resolved_publish_id = publish_id or self._new_publish_id()
 
-        if resolved_owner == "personal":
+        normalized_storage = (storage_type or "").strip().lower()
+        if normalized_storage and normalized_storage not in {
+            "sqlite",
+            "database",
+            "opengauss",
+        }:
+            raise PublishConfigurationError(
+                "INVALID_STORAGE_TYPE",
+                "storage_type 必须为 sqlite、database 或 opengauss",
+            )
+
+        if normalized_storage == "sqlite" or (
+            not normalized_storage and resolved_owner == "personal"
+        ):
             return PublishContext(
                 publish_id=resolved_publish_id,
-                owner_type="personal",
+                owner_type=resolved_owner,
                 user_code=user_code,
-                tenant_id=None,
+                tenant_id=None if resolved_owner == "personal" else tenant_id,
                 base_id=base_id,
                 datasource_alias="personal_sqlite",
                 db_type="SQLITE",
@@ -89,14 +103,18 @@ class PublishTargetResolver:
 
         resolved_tenant = (tenant_id or "").strip() or DEFAULT_TENANT_ID
         self._validate_tenant_against_active(resolved_tenant, active_publication)
-        db_type = self._enterprise_db_type()
+        db_type = (
+            "OPENGAUSS"
+            if normalized_storage == "opengauss"
+            else self._enterprise_db_type()
+        )
         return PublishContext(
             publish_id=resolved_publish_id,
-            owner_type="enterprise",
+            owner_type=resolved_owner,
             user_code=user_code,
             tenant_id=resolved_tenant,
             base_id=base_id,
-            datasource_alias=f"enterprise_{db_type.lower()}",
+            datasource_alias=f"{resolved_owner}_{db_type.lower()}",
             db_type=db_type,
             connector_type=db_type,
             schema_name=self.schema_for_tenant(resolved_tenant),

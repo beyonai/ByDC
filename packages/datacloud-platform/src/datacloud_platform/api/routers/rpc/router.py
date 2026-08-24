@@ -17,7 +17,8 @@ from starlette.concurrency import run_in_threadpool
 
 from datacloud_platform.api.deps import extract_beyond_token
 from datacloud_platform.constants import DEFAULT_BASE_ID
-from datacloud_platform.models.common import ok
+from datacloud_platform.errors import ActionNotFoundError
+from datacloud_platform.models.common import fail, ok
 
 if TYPE_CHECKING:
     from datacloud_platform.platform import DatacloudPlatform
@@ -44,6 +45,7 @@ _EXCEPTION_MAP: dict[type[Exception], tuple[int, str]] = {
     KeyError: (HTTP_404, "not_found"),
     ValueError: (HTTP_400, "invalid_params"),
     PermissionError: (HTTP_403, "permission_denied"),
+    ActionNotFoundError: (HTTP_404, "action_not_found"),
     # 501 not_implemented 语义移除（锚定/抽取已落地，占位不再触发）
 }
 
@@ -51,7 +53,7 @@ _EXCEPTION_MAP: dict[type[Exception], tuple[int, str]] = {
 def _wrap_error(exc: Exception) -> Any:
     """Map a Python exception to a unified ok() error response."""
     status_code, err_code = _EXCEPTION_MAP.get(type(exc), (HTTP_500, "internal_error"))
-    return ok(code=status_code, message=str(exc) or err_code, data=None)
+    return fail(code=status_code, message=str(exc) or err_code, data=None)
 
 
 # ── Service → {method → handler} lookup ──────────────────────────────────────
@@ -137,11 +139,11 @@ def create_rpc_router(platform: DatacloudPlatform) -> APIRouter:
 
         svc_registry = registry.get(service)
         if svc_registry is None:
-            return ok(code=HTTP_404, message=f"Unknown service: {service}", data=None)
+            return fail(code=HTTP_404, message=f"Unknown service: {service}", data=None)
 
         handler = svc_registry.get(method)
         if handler is None:
-            return ok(
+            return fail(
                 code=HTTP_404,
                 message=f"Unknown method: {service}/{method}",
                 data=None,
@@ -158,7 +160,7 @@ def create_rpc_router(platform: DatacloudPlatform) -> APIRouter:
             system_code = params.get("system_code")
             if system_code is not None:
                 if "base_id" in params:
-                    return ok(
+                    return fail(
                         code=HTTP_400,
                         message="system_code and base_id are mutually exclusive",
                         data=None,
@@ -182,7 +184,7 @@ def create_rpc_router(platform: DatacloudPlatform) -> APIRouter:
             return _wrap_error(e)
         except Exception:
             logger.exception("RPC handler %s/%s unexpected error", service, method)
-            return ok(code=HTTP_500, message="Internal error", data=None)
+            return fail(code=HTTP_500, message="Internal error", data=None)
 
     # ── Special: multipart file upload (OWL import) ───────────────────────
     _register_import_routes(router, platform)

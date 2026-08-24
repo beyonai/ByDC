@@ -31,3 +31,10 @@ def ok(
     Extra kwargs (e.g. ``totalCount``) become top-level fields in the response.
     """
     return ApiResponse(code=code, success=True, message=message, data=data, **extra)
+
+
+def fail(
+    message: str, code: int = 500, data: object = None, **extra: Any
+) -> ApiResponse[Any]:
+    """Build a unified unsuccessful response while preserving the error message."""
+    return ApiResponse(code=code, success=False, message=message, data=data, **extra)

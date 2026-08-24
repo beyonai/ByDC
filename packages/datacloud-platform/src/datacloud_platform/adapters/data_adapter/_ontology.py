@@ -1344,7 +1344,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         owner_type: str | None = None,
         user_code: str | None = None,
         keyword: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], int]:
         """Get all actions for an object from the entity store with optional filtering.
 
         Args:
@@ -1355,12 +1355,12 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
             keyword: Case-insensitive filter on action_name/code/description.
 
         Returns:
-            List of Action dicts (by_alias=True).
+            Action dicts (by_alias=True) and the filtered total count.
         """
         store = self._entity_store.sub_store(base_id)
         raw = store.get("objects", object_code)
         if raw is None:
-            return []
+            return [], 0
         result = self._raw_actions_to_dicts(raw)
         # Filter by owner_type/user_code
         if owner_type:
@@ -1378,7 +1378,7 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
                 or kw in (a.get("actionCode", "") or "").lower()
                 or kw in (a.get("actionDesc", "") or "").lower()
             ]
-        return result
+        return result, len(result)
 
     def get_action_detail(
         self,
@@ -1397,7 +1397,8 @@ class OntologyBackendMixin(DataCloudDataBackendBase):
         Returns:
             Action dict if found, otherwise None.
         """
-        for a in self.get_actions(object_code, base_id=base_id):
+        actions, _ = self.get_actions(object_code, base_id=base_id)
+        for a in actions:
             if a.get("actionCode") == action_code:
                 return a
         return None

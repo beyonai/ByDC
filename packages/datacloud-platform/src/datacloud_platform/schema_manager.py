@@ -175,8 +175,13 @@ class EnterpriseSqlSchemaManager:
     def __init__(
         self, context: PublishContext, executor: EnterpriseSqlExecutor
     ) -> None:
-        if context.owner_type != "enterprise" or not context.schema_name:
-            raise ValueError("EnterpriseSqlSchemaManager 只接受企业发布上下文")
+        if (
+            context.db_type not in {"POSTGRESQL", "OPENGAUSS"}
+            or not context.schema_name
+        ):
+            raise ValueError(
+                "EnterpriseSqlSchemaManager 只接受带 schema 的 PostgreSQL/OpenGauss 上下文"
+            )
         _validate_identifier(context.schema_name)
         self._context = context
         self._executor = executor
