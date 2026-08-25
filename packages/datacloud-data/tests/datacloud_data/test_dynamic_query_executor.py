@@ -99,6 +99,34 @@ async def test_execute_db_with_filters(
 
 
 @pytest.mark.asyncio
+async def test_execute_db_coerces_filter_values_from_object_field_types(
+    executor_with_data: tuple[DynamicQueryExecutor, OntologyLoader],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SQL 绑定值按对象字段类型转换，而不依赖 Action 入参类型。"""
+    executor, _ = executor_with_data
+    captured_params: dict[str, object] = {}
+
+    class RecordingConnector:
+        async def execute(
+            self, _sql: str, params: dict[str, object] | None = None
+        ) -> list[dict[str, object]]:
+            captured_params.update(params or {})
+            return [{"id": 1, "name": "a", "amount": 10.0}]
+
+    monkeypatch.setattr(executor._ds, "get_connector", lambda _alias: RecordingConnector())
+
+    result = await executor.execute(
+        "test_obj",
+        {"filters": {"id": {"op": "eq", "value": "1"}}},
+    )
+
+    assert result["total"] == 1
+    assert captured_params["p_id"] == 1
+    assert isinstance(captured_params["p_id"], int)
+
+
+@pytest.mark.asyncio
 async def test_execute_db_aggregates_meta_columns(
     executor_with_data: tuple[DynamicQueryExecutor, OntologyLoader],
 ) -> None:

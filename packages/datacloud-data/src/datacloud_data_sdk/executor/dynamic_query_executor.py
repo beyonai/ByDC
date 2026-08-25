@@ -26,6 +26,7 @@ from typing import Any
 
 from datacloud_data_sdk.exceptions import DataSourceUnavailableError
 from datacloud_data_sdk.executor.db_sql_builder import build_select_sql, build_where_clause
+from datacloud_data_sdk.executor.param_coercion import coerce_sql_param
 from datacloud_data_sdk.ontology.loader import OntologyLoader
 from datacloud_data_sdk.sql_executor.data_source_manager import DataSourceManager
 
@@ -50,6 +51,26 @@ def _resolve_source_column(field: Any, datasource_alias: str) -> str:
         if m.source_type == "DB" and m.datasource_alias == datasource_alias:
             return m.source_ref
     return field.field_code
+
+
+def _coerce_filter_values(filters: dict[str, Any], field_map: dict[str, Any]) -> dict[str, Any]:
+    """根据对象字段元数据转换查询条件值。"""
+    coerced_filters: dict[str, Any] = {}
+    for field_code, spec in filters.items():
+        if not isinstance(spec, dict):
+            coerced_filters[field_code] = spec
+            continue
+
+        coerced_spec = dict(spec)
+        op = coerced_spec.get("op")
+        value = coerced_spec.get("value")
+        field = field_map.get(field_code)
+        if op == "in" and isinstance(value, (list, tuple)):
+            coerced_spec["value"] = [coerce_sql_param(item, field) for item in value]
+        elif op in {"eq", "gt", "gte", "lt", "lte"} and value is not None:
+            coerced_spec["value"] = coerce_sql_param(value, field)
+        coerced_filters[field_code] = coerced_spec
+    return coerced_filters
 
 
 def _group_linked_records(
@@ -198,6 +219,8 @@ class DynamicQueryExecutor:
         }
 
         filters = arguments.get("filters") or {}
+        field_map = {f.field_code: f for f in physical_fields}
+        filters = _coerce_filter_values(filters, field_map)
         aggregates = arguments.get("aggregates")
         group_by = arguments.get("group_by") or []
         limit = arguments.get("limit")
