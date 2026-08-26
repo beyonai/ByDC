@@ -171,6 +171,7 @@ class OntologyWorkspaceMixin:
                     }
                 )
             except (FileExistsError, FileNotFoundError, OSError, ValueError) as exc:
+                logger.exception("工作区模板发布失败: %s", template_root.name)
                 results.append(
                     {"ok": False, "template": template_root.name, "error": str(exc)}
                 )

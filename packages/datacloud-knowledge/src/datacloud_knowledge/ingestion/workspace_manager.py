@@ -549,6 +549,13 @@ class WorkspaceFileManager:
         meta = self.load_action_meta(entity_code, action_code)
         if meta is None:
             return None
+        params = meta.get("params")
+        if params and isinstance(params, list):
+            for param in params:
+                if not param.get("param_type"):
+                    param["param_type"] = param.get("type")
+                if not param.get("paramType"):
+                    param["paramType"] = param.get("type")
         script = self.load_action_script(entity_code, action_code) or ""
         return {**meta, "script": script}
 
