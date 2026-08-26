@@ -209,3 +209,9 @@ examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3
 examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
 examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
 examples/deepagent_bi/skills/structured-ontology-manager/by_datacloud-0.1.37-py3-none-any.whl
+
+# AOCI index files (local only)
+aoci.txt
+aoci.meta.txt
+aoci.code.txt
+.aoci/
