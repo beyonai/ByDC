@@ -556,6 +556,8 @@ class WorkspaceFileManager:
                     param["param_type"] = param.get("type")
                 if not param.get("paramType"):
                     param["paramType"] = param.get("type")
+                if not param.get("required"):
+                    param["required"] = param.get("isRequired")
         script = self.load_action_script(entity_code, action_code) or ""
         return {**meta, "script": script}
 

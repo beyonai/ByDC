@@ -41,6 +41,29 @@ from datacloud_platform.workspace_template import (
 logger = logging.getLogger(__name__)
 
 
+def _action_param_term_binding(param: dict[str, Any]) -> dict[str, Any]:
+    term_type_code = param.get("term_type_code") or param.get("termTypeCode")
+    term_data_type = param.get("term_data_type") or param.get("termDataType")
+    if not term_type_code or not term_data_type:
+        return {}
+
+    normalized_data_type = str(term_data_type).upper()
+    master_type = {"DICT_TERM": "dict", "LIST_TERM": "list"}.get(
+        normalized_data_type
+    )
+    result: dict[str, Any] = {
+        "term_type_code": term_type_code,
+        "term_data_type": term_data_type,
+    }
+    if master_type:
+        result["termMeta"] = {
+            "termTypeCode": term_type_code,
+            "termField": "code",
+            "termMasterType": master_type,
+        }
+    return result
+
+
 class OntologyWorkspaceMixin:
     """工作区模式本体管理编排层。
 
@@ -886,6 +909,7 @@ class OntologyWorkspaceMixin:
                         isRequired=1 if p.get("required") else 0,
                         direction=p.get("direction"),
                         mappingPath=p.get("mappingPath", p.get("mapping_path")),
+                        **_action_param_term_binding(p),
                     )
                     for p in a.get("params", [])
                 ],
