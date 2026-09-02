@@ -262,7 +262,7 @@ class ScriptExecutor:
         script: str,
         params: dict[str, Any],
         action_code: str = "<inline>",
-        timeout: float = 30.0,
+        timeout: float = 120.0,
         extra_namespace: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
