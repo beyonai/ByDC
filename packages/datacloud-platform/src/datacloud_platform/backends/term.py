@@ -355,7 +355,7 @@ class TermBackend(Protocol):
         """
         ...
 
-    def delete_orphan_vocabulary_words(self, *, words: list[str]) -> int:
+    def delete_orphan_vocabulary_words(self, *, words: Sequence[str]) -> int:
         """删除 term_vocabulary 中的孤儿词（term_name/term 删除不联动清理词表时的显式兜底）。
 
         仅删「无 term_name.name_text 引用且无 term.term_name 引用」的词，

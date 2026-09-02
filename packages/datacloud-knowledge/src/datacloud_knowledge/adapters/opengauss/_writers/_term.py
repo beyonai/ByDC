@@ -372,9 +372,7 @@ class _TermWriter(_WriterBase):
 
         # 先按原文去重（保序）：WHERE NOT EXISTS 只挡已提交行，同一语句内
         # unnest 产生的重复词会互相不可见，直接撞唯一索引 idx_vocab_word
-        word_list = list(
-            dict.fromkeys(str(w).strip() for w in words if str(w).strip())
-        )
+        word_list = list(dict.fromkeys(str(w).strip() for w in words if str(w).strip()))
         if not word_list:
             return
         self.session.execute(
@@ -423,7 +421,7 @@ class _TermWriter(_WriterBase):
             ),
             {"words": list(words)},
         )
-        return int(result.rowcount or 0)
+        return int(result.rowcount or 0)  # type: ignore[attr-defined]
 
     def update_term_co_occurrence(self, *, term_id: str, patch: dict[str, int]) -> None:
         """更新 term_tags.co_occurrence（计数版伙伴集合）。

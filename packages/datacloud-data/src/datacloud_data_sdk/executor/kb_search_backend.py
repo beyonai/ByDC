@@ -56,7 +56,7 @@ def _build_rfc5987_multipart(
             body.extend(
                 (
                     f'Content-Disposition: form-data; name="{field_name}"; '
-                    f'filename="upload.md"; filename*=UTF-8\'\'{encoded_filename}\r\n'
+                    f"filename=\"upload.md\"; filename*=UTF-8''{encoded_filename}\r\n"
                 ).encode("ascii")
             )
             body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("ascii"))
@@ -64,9 +64,7 @@ def _build_rfc5987_multipart(
         else:
             field_value = value[1] if isinstance(value, tuple) else value
             body.extend(
-                f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode(
-                    "ascii"
-                )
+                f'Content-Disposition: form-data; name="{field_name}"\r\n\r\n'.encode("ascii")
             )
             body.extend(str(field_value).encode("utf-8"))
         body.extend(b"\r\n")
@@ -902,9 +900,7 @@ class HttpKnowledgeSearchBackend:
     ) -> Any:
         """Upload while preserving quotes/backslashes in multipart filenames."""
         if not _filename_requires_rfc5987(filename):
-            return await client._upload_with_discovery(
-                service_name, path, parts, headers=headers
-            )
+            return await client._upload_with_discovery(service_name, path, parts, headers=headers)
 
         body, content_type = _build_rfc5987_multipart(parts)
         request_headers = {**headers, "Content-Type": content_type}

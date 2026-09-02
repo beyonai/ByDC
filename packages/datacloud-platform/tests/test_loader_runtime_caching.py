@@ -69,9 +69,7 @@ class _FakeStore:
     def __init__(self, versions: dict[str, str]) -> None:
         self._versions = versions
 
-    def storage_version(
-        self, entity_type: str, *, base_id: str = ""
-    ) -> str:
+    def storage_version(self, entity_type: str, *, base_id: str = "") -> str:
         return self._versions.get(entity_type, "0")
 
     def sub_store(self, namespace: str) -> _FakeStore:
@@ -190,7 +188,10 @@ class TestLoaderSnapshotCache:
         runtime = _make_runtime(platform)
         runtime.get_loader("base-1", object_codes=["Concept"])
         assert platform.loaded_codes == [("base-1", ["Concept"], None)]
-        assert not hasattr(platform, "legacy_load_called") or not platform.legacy_load_called
+        assert (
+            not hasattr(platform, "legacy_load_called")
+            or not platform.legacy_load_called
+        )
 
     def test_full_path_get_loader_builds_full_loader(self) -> None:
         """无 object_codes（全量路径）→ 走 load_ontology 构建并缓存。"""
@@ -204,9 +205,7 @@ class TestLoaderSnapshotCache:
         """版本指纹查询异常 → 不信任缓存也不写入缓存（保守），直接构建返回。"""
 
         class _BrokenStore(_FakeStore):
-            def storage_version(
-                self, entity_type: str, *, base_id: str = ""
-            ) -> str:
+            def storage_version(self, entity_type: str, *, base_id: str = "") -> str:
                 raise RuntimeError("db down")
 
         platform = _FakePlatform()
@@ -250,7 +249,10 @@ class TestInvokeObjectActionLoaderResolution:
         loader.target = _FakeTargetObject()
 
         def _scoped_load(
-            base_id: str, object_codes: list[str], *, view_codes: list[str] | None = None
+            base_id: str,
+            object_codes: list[str],
+            *,
+            view_codes: list[str] | None = None,
         ) -> _FakeLoader:
             platform.loaded_codes.append((base_id, list(object_codes), view_codes))
             return loader
@@ -290,9 +292,7 @@ class TestInvokeObjectActionLoaderResolution:
                 loader.target = self.target
                 return loader
 
-            def inject_virtual_actions(
-                self, base_id: str, loader: _FakeLoader
-            ) -> None:
+            def inject_virtual_actions(self, base_id: str, loader: _FakeLoader) -> None:
                 self.injected += 1
 
         platform = _LegacyPlatform()

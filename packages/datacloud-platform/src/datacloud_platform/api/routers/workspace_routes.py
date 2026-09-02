@@ -260,9 +260,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
             logger.exception("workspace/batch-submit 失败")
             return {"ok": False, "error": str(exc)}
 
-    @router.post(
-        "/templates/submit", response_model=WorkspaceTemplatesSubmitResponse
-    )
+    @router.post("/templates/submit", response_model=WorkspaceTemplatesSubmitResponse)
     async def workspace_templates_submit(
         body: WorkspaceTemplatesSubmitRequest,
         request: Request,
@@ -288,9 +286,7 @@ def create_workspace_routes(platform: DatacloudPlatform) -> APIRouter:
             return WorkspaceTemplatesSubmitResponse(data=result)
         except Exception as exc:
             logger.exception("workspace/templates/submit 失败")
-            return WorkspaceTemplatesSubmitResponse(
-                code=500, message=str(exc), data={}
-            )
+            return WorkspaceTemplatesSubmitResponse(code=500, message=str(exc), data={})
 
     # ═══════════════════════════════════════════════════════════════════════
     # 对象管理（工作区模式）

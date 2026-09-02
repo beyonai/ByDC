@@ -48,9 +48,7 @@ def _action_param_term_binding(param: dict[str, Any]) -> dict[str, Any]:
         return {}
 
     normalized_data_type = str(term_data_type).upper()
-    master_type = {"DICT_TERM": "dict", "LIST_TERM": "list"}.get(
-        normalized_data_type
-    )
+    master_type = {"DICT_TERM": "dict", "LIST_TERM": "list"}.get(normalized_data_type)
     result: dict[str, Any] = {
         "term_type_code": term_type_code,
         "term_data_type": term_data_type,

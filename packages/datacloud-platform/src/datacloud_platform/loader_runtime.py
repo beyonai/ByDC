@@ -122,7 +122,11 @@ class LoaderRuntimeManager:
         cache_key = _snapshot_cache_key(base_id, object_codes, view_codes)
         fingerprint = self._current_fingerprint(base_id)
         entry = self._snapshot_cache.get(cache_key)
-        if entry is not None and fingerprint is not None and entry.fingerprint == fingerprint:
+        if (
+            entry is not None
+            and fingerprint is not None
+            and entry.fingerprint == fingerprint
+        ):
             self._snapshot_cache.move_to_end(cache_key)
             logger.info(
                 "loader snapshot cache hit: base_id=%s key=%s", base_id, cache_key

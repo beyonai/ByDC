@@ -25,7 +25,7 @@ def _list_actions(
         user_code=params.get("user_code"),
         keyword=params.get("keyword"),
     )
-    items = result[0] if isinstance(result, tuple) else result
+    items = result[0]
     return ok(data=items)
 
 

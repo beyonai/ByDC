@@ -288,7 +288,7 @@ class DocumentMixin:
         )
 
     async def query_document_objects(
-        self: _DocumentPlatform,
+        self: Any,
         base_id: str,
         *,
         request: QueryDocumentObjectsRequest,
@@ -390,7 +390,7 @@ class DocumentMixin:
         )
 
     async def query_related_document_objects(
-        self: _DocumentPlatform,
+        self: Any,
         base_id: str,
         *,
         request: QueryRelatedDocumentObjectsRequest,
@@ -473,7 +473,7 @@ class DocumentMixin:
         )
 
     async def get_document_content_by_term_id(
-        self: _DocumentPlatform, base_id: str, *, term_id: str
+        self: Any, base_id: str, *, term_id: str
     ) -> DocumentContentResult:
         """根据术语 ID 定位并读取完整知识库文件。
 
@@ -510,7 +510,7 @@ class DocumentMixin:
         )
 
     async def search_knowledge_fragments(
-        self: _DocumentPlatform,
+        self: Any,
         base_id: str,
         *,
         request: SearchDocumentFragmentsRequest,
@@ -577,9 +577,7 @@ class DocumentMixin:
                     ]
                 }
             )
-        where_conditions.append(
-            {"eq": {"fieldName": "ds_status", "value": "已完成"}}
-        )
+        where_conditions.append({"eq": {"fieldName": "ds_status", "value": "已完成"}})
         excluded_file_paths = resolve_term_file_paths(
             platform=self,
             base_id=base_id,

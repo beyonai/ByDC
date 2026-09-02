@@ -13,6 +13,7 @@ from datacloud_platform.models.shared import (
 )
 from datacloud_knowledge.adapters import create_reader, create_writer
 from datacloud_knowledge.contracts.term_provider_types import (
+    FilterSpec,
     LabelCondition,
     LabelFilter,
     QueryResult,
@@ -262,7 +263,7 @@ class TermBackendMixin(DataCloudDataBackendBase):
         label_filters: list[LabelFilter] | None = None,
         label_condition: LabelCondition = "or",
         term_type_codes: list[str] | None = None,
-        filters: list[dict[str, Any]] | None = None,
+        filters: list[FilterSpec] | None = None,
         top_k: int = 200,
     ) -> list[dict[str, Any]]:
         """纯标签过滤检索 — 不需要关键词。

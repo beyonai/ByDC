@@ -1132,6 +1132,10 @@ class TermWriter(Protocol):
 
     def delete_term(self, *, term_id: str) -> None: ...
 
+    def delete_terms_batch(self, *, term_ids: Sequence[str]) -> list[str]:
+        """批量删除术语并返回待清理的孤儿词候选。"""
+        ...
+
     # ── Bulk operations ────────────────────────────────────────────
 
     def bulk_upsert_terms_no_library(
