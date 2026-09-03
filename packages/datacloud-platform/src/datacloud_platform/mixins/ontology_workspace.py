@@ -1075,7 +1075,14 @@ class OntologyWorkspaceMixin:
                     dbId="personal_sqlite",
                     dbCode="personal_sqlite",
                     dbType="SQLITE",
-                    dbParams={"user": "gaussdb", "jdbc_url": f"jdbc:sqlite:{os.environ.get("FILE_STORAGE_MINIO_MOUNT_PATH", "")}/byclaw-datacloud/personal_object.db", "password": "Admin@123", "pool_max": 5, "pool_min": 1, "pool_timeout": 30},
+                    dbParams={
+                        "user": "gaussdb",
+                        "jdbc_url": f"jdbc:sqlite:{os.environ.get('FILE_STORAGE_MINIO_MOUNT_PATH', '')}/byclaw-datacloud/personal_object.db",
+                        "password": "Admin@123",
+                        "pool_max": 5,
+                        "pool_min": 1,
+                        "pool_timeout": 30,
+                    },
                 )
             ],
             ownerType="personal",
