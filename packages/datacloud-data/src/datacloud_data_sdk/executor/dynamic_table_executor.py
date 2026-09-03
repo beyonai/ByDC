@@ -52,7 +52,8 @@ class DynamicTableExecutor:
         for raw_record in records:
             if not isinstance(raw_record, dict):
                 raise ValueError("insert record must be an object")
-            record = self._resolve_value_terms(raw_record, field_map)
+            # record = self._resolve_value_terms(raw_record, field_map)
+            record = raw_record
             self._validate_known_fields(record, field_map, "insert")
             columns = [field_map[field_code] for field_code in record if field_code in field_map]
             if not columns:
@@ -97,7 +98,8 @@ class DynamicTableExecutor:
         all_fields = self._readable_fields(cls)
         field_map = {field.field_code: field for field in all_fields}
         writable_map = {field.field_code: field for field in fields}
-        resolved_values = self._resolve_value_terms(values, writable_map)
+        # resolved_values = self._resolve_value_terms(values, writable_map)
+        resolved_values = dict(values)
         self._validate_known_fields(resolved_values, writable_map, "update")
         resolved_filters = self._resolve_filter_terms(filters, field_map)
         db_type = self._get_db_type(cls)
