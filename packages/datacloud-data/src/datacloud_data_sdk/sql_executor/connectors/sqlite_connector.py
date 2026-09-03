@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from typing import Any
 
@@ -16,16 +17,21 @@ class SQLiteConnector(BaseSourceConnector):
         # check_same_thread=False 允许跨线程访问（TestClient 等场景）
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.row_factory = sqlite3.Row
+        self._execute_lock = asyncio.Lock()
 
     @classmethod
     def supported_type(cls) -> str:
         return "SQLITE"
 
     async def execute(self, sql: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        cursor = self._conn.execute(sql, params or [])
-        columns = [desc[0] for desc in cursor.description] if cursor.description else []
-        rows = cursor.fetchall()
-        return [dict(zip(columns, row)) for row in rows]
+        async with self._execute_lock:
+            cursor = self._conn.execute(sql, params or [])
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            rows = cursor.fetchall()
+            self._conn.commit()
+            return [dict(zip(columns, row)) for row in rows]
 
     async def test_connection(self) -> bool:
         try:
